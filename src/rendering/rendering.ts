@@ -69,6 +69,8 @@ class Pingpong {
 export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => AppState) {
   const sketch = (p: p5) => {
 
+    let newRegion: Region | undefined = undefined
+
     p.setup = () => {
       p.createCanvas(1280, 720, canvas)
       // p.noLoop()
@@ -79,7 +81,8 @@ export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => AppSta
       appState().regions.list.forEach((region) => {
         region.draw(p)
       })
-      const activeRegion = appState().regions.list.find((region) => region.isActive)
+      const savedActiveRegion = appState().regions.list.find((region) => region.isActive)
+      const activeRegion = savedActiveRegion || newRegion
       if (activeRegion) {
         p.ellipse(p.mouseX, p.mouseY, 10, 10)
       }
@@ -118,18 +121,22 @@ export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => AppSta
         if (activeRegion) {
           activeRegion.drawMode = 'addingPoint'
         } else {
-          const newRegion = new Region(p)
+          newRegion = new Region(p)
           newRegion.drawMode = 'addingPoint'
-          state.regions.pushItem(newRegion)
         }
       }
       if (p.keyCode === 32) { //spacebar
-        const activeRegion = state.regions.list.find((region) => region.isActive)
+        const savedActiveRegion = state.regions.list.find((region) => region.isActive)
+        const activeRegion = savedActiveRegion || newRegion
         console.log('enter', activeRegion)
         if (activeRegion?.drawMode === 'addingPoint') {
           console.log('adding point', p.mouseX, p.mouseY)
           const newPt = new p5.Vector(p.mouseX, p.mouseY)
-          activeRegion.points.pushItem(newPt)
+          activeRegion.points.list.push(newPt)
+          if (activeRegion.points.list.length == 1) {
+            state.regions.pushItem(activeRegion)
+            newRegion = undefined
+          }
         }
       }
       if (p.keyCode === 27) { //escape
@@ -137,6 +144,7 @@ export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => AppSta
         if (activeRegion) {
           activeRegion.drawMode = 'display'
         }
+        newRegion = undefined
       } 
     }
   }
