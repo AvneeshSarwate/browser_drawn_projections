@@ -105,6 +105,14 @@ export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => AppSta
           }
         }
       }
+      if (p.key === 'p') {
+        const activeRegion = state.regions.list.find((region) => region.isActive)
+        if (activeRegion?.drawMode === 'movingPoint' && activeRegion.grabPointIdx !== undefined) {
+          activeRegion.points.setItem(new p5.Vector(p.mouseX, p.mouseY), activeRegion.grabPointIdx)
+          activeRegion.grabPointIdx = undefined
+          activeRegion.drawMode = 'display'
+        }
+      }
       if (p.key === 'd') {
         const activeRegion = state.regions.list.find((region) => region.isActive)
         if (activeRegion) {
@@ -112,7 +120,7 @@ export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => AppSta
         } else {
           const newRegion = new Region(p)
           newRegion.drawMode = 'addingPoint'
-          state.regions.addItem(newRegion)
+          state.regions.pushItem(newRegion)
         }
       }
       if (p.keyCode === 32) { //spacebar
@@ -121,7 +129,7 @@ export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => AppSta
         if (activeRegion?.drawMode === 'addingPoint') {
           console.log('adding point', p.mouseX, p.mouseY)
           const newPt = new p5.Vector(p.mouseX, p.mouseY)
-          activeRegion.points.addItem(newPt)
+          activeRegion.points.pushItem(newPt)
         }
       }
       if (p.keyCode === 27) { //escape

@@ -141,7 +141,7 @@ function removeListCommandGenerator<T>(list: UndoableList<T>, index: number, isP
   return executeAndAddCommand(command, isPartOfComplexCommand)
 }
 
-function addListCommandGenerator<T>(item: T, list: UndoableList<T>, index: number, isPartOfComplexCommand = false) {
+function addListCommandGenerator<T>(list: UndoableList<T>, index: number, item: T, isPartOfComplexCommand = false) {
   const command: Command = {
     name: `addListCommand ${grabId(item)}`,
     undo: () => list.list.splice(index, 1),
@@ -151,15 +151,14 @@ function addListCommandGenerator<T>(item: T, list: UndoableList<T>, index: numbe
   return executeAndAddCommand(command, isPartOfComplexCommand)
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function replaceListCommandGenerator<T>(list: UndoableList<T>, index: number, newItem: T, isPartOfComplexCommand = false) {
   const oldItem = list.list[index]
 
   //todo - replace this with just array assignment?
   const command: Command = {
     name: `replaceListCommand ${grabId(oldItem)} ${grabId(newItem)}`,
-    undo: () => list.list.splice(index, 1, oldItem),
-    redo: () => list.list.splice(index, 1, newItem)
+    undo: () => { list.list[index] = oldItem },
+    redo: () => { list.list[index] = newItem}
   }
 
   return executeAndAddCommand(command, isPartOfComplexCommand)
@@ -168,7 +167,7 @@ function replaceListCommandGenerator<T>(list: UndoableList<T>, index: number, ne
 function moveListItemCommandGenerator<T>(list: UndoableList<T>, oldIndex: number, newIndex: number) {
   const item = list.list[oldIndex]
   const removeCommand = removeListCommandGenerator<T>(list, oldIndex, true)
-  const addCommand = addListCommandGenerator<T>(item, list, newIndex, true)
+  const addCommand = addListCommandGenerator<T>(list, newIndex, item, true)
   const moveCommand = new CompoundCommand(`moveListItemCommand ${grabId(item)} ${oldIndex} ${newIndex}`, [removeCommand, addCommand])
 
   return executeAndAddCommand(moveCommand, false)
@@ -206,12 +205,12 @@ function modifySnapshotPropEntityCommandGenerator<T>(entity: T, snapshotProp: ke
 export class UndoableList<T> {
   public list: T[] = []
 
-  public addItem(item: T) {
-    addListCommandGenerator<T>(item, this, this.list.length)
+  public pushItem(item: T) {
+    addListCommandGenerator<T>(this, this.list.length, item)
   }
 
-  public insertItem(item: T, index: number) {
-    addListCommandGenerator<T>(item, this, index)
+  public setItem(item: T, index: number) {
+    replaceListCommandGenerator<T>(this, index, item)
   }
 
   public removeItem(index: number) {
@@ -235,14 +234,14 @@ export class EntityList<T extends Entity> extends Entity implements UndoableList
     super(createId)
   }
 
-  public addItem(item: T) {
+  public pushItem(item: T) {
     item.parent = this
-    addListCommandGenerator<T>(item, this, this.list.length)
+    addListCommandGenerator<T>(this, this.list.length, item)
   }
 
-  public insertItem(item: T, index: number) {
+  public setItem(item: T, index: number) {
     item.parent = this
-    addListCommandGenerator<T>(item, this, index)
+    replaceListCommandGenerator<T>(this, index, item)
   }
 
   public removeItem(index: number) {
