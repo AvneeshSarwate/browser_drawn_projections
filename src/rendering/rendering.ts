@@ -112,7 +112,7 @@ export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => AppSta
         } else {
           const newRegion = new Region(p)
           newRegion.drawMode = 'addingPoint'
-          state.regions.list.push(newRegion)
+          state.regions.addItem(newRegion)
         }
       }
       if (p.keyCode === 32) { //spacebar
@@ -121,7 +121,7 @@ export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => AppSta
         if (activeRegion?.drawMode === 'addingPoint') {
           console.log('adding point', p.mouseX, p.mouseY)
           const newPt = new p5.Vector(p.mouseX, p.mouseY)
-          activeRegion.points.push(newPt)
+          activeRegion.points.addItem(newPt)
         }
       }
       if (p.keyCode === 27) { //escape

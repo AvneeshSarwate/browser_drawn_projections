@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { useCheckBoxStore, type AppState } from './stores/stores';
+import { globalStore, commandHistory, type AppState } from './stores/stores';
 import RenderCanvas from './components/RenderCanvas.vue';
 import { provide } from 'vue';
 
 
-const checkStore = useCheckBoxStore()
+const checkStore = globalStore()
 
 const appState = checkStore.appStateRef as AppState
 
@@ -14,6 +14,8 @@ provide('appState', appState)
 
 <template>
   <RenderCanvas ></RenderCanvas>
+  <button @click="commandHistory.undo">Undo</button>
+  <button @click="commandHistory.redo">Redo</button>
 </template>
 
 <style scoped></style>

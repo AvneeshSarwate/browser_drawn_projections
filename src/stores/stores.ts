@@ -127,11 +127,13 @@ function executeAndAddCommand(command: Command, isPartOfComplexCommand: boolean)
   return command
 }
 
-function removeListCommandGenerator<T extends Entity>(list: EntityList<T>, index: number, isPartOfComplexCommand = false) {
+const grabId = (item: any) => item.id ?? 'noId-'+typeof item
+
+function removeListCommandGenerator<T>(list: UndoableList<T>, index: number, isPartOfComplexCommand = false) {
   const item = list.list[index]
 
   const command: Command = {
-    name: `removeListCommand ${item.id}`,
+    name: `removeListCommand ${grabId(item)}`,
     undo: () => list.list.splice(index, 0, item),
     redo: () => list.list.splice(index, 1)
   }
@@ -139,9 +141,9 @@ function removeListCommandGenerator<T extends Entity>(list: EntityList<T>, index
   return executeAndAddCommand(command, isPartOfComplexCommand)
 }
 
-function addListCommandGenerator<T extends Entity>(item: T, list: EntityList<T>, index: number, isPartOfComplexCommand = false) {
+function addListCommandGenerator<T>(item: T, list: UndoableList<T>, index: number, isPartOfComplexCommand = false) {
   const command: Command = {
-    name: `addListCommand ${item.id}`,
+    name: `addListCommand ${grabId(item)}`,
     undo: () => list.list.splice(index, 1),
     redo: () => list.list.splice(index, 0, item)
   }
@@ -150,12 +152,12 @@ function addListCommandGenerator<T extends Entity>(item: T, list: EntityList<T>,
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-function replaceListCommandGenerator<T extends Entity>(list: EntityList<T>, index: number, newItem: T, isPartOfComplexCommand = false) {
+function replaceListCommandGenerator<T>(list: UndoableList<T>, index: number, newItem: T, isPartOfComplexCommand = false) {
   const oldItem = list.list[index]
 
   //todo - replace this with just array assignment?
   const command: Command = {
-    name: `replaceListCommand ${oldItem.id} ${newItem.id}`,
+    name: `replaceListCommand ${grabId(oldItem)} ${grabId(newItem)}`,
     undo: () => list.list.splice(index, 1, oldItem),
     redo: () => list.list.splice(index, 1, newItem)
   }
@@ -163,21 +165,21 @@ function replaceListCommandGenerator<T extends Entity>(list: EntityList<T>, inde
   return executeAndAddCommand(command, isPartOfComplexCommand)
 }
 
-function moveListItemCommandGenerator<T extends Entity>(list: EntityList<T>, oldIndex: number, newIndex: number) {
+function moveListItemCommandGenerator<T>(list: UndoableList<T>, oldIndex: number, newIndex: number) {
   const item = list.list[oldIndex]
   const removeCommand = removeListCommandGenerator<T>(list, oldIndex, true)
   const addCommand = addListCommandGenerator<T>(item, list, newIndex, true)
-  const moveCommand = new CompoundCommand(`moveListItemCommand ${item.id} ${oldIndex} ${newIndex}`, [removeCommand, addCommand])
+  const moveCommand = new CompoundCommand(`moveListItemCommand ${grabId(item)} ${oldIndex} ${newIndex}`, [removeCommand, addCommand])
 
   return executeAndAddCommand(moveCommand, false)
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-function modifyEntityCommandGenerator<T extends Entity>(entity: T, prop: keyof T, value: any, isPartOfComplexCommand = false) {
+function modifyEntityCommandGenerator<T>(entity: T, prop: keyof T, value: any, isPartOfComplexCommand = false) {
   const oldValue = entity[prop]
-  console.log('modifying entity', entity.id, prop, oldValue, value)
+  console.log('modifying entity', grabId(entity), prop, oldValue, value)
   const command: Command = {
-    name: `modifyEntityCommand ${entity.id} ${String(prop)}`,
+    name: `modifyEntityCommand ${grabId(entity)} ${String(prop)}`,
     undo: () => entity[prop] = oldValue,
     redo: () => entity[prop] = value
   }
@@ -186,11 +188,11 @@ function modifyEntityCommandGenerator<T extends Entity>(entity: T, prop: keyof T
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-function modifySnapshotPropEntityCommandGenerator<T extends Entity>(entity: T, snapshotProp: keyof T, liveProp: keyof T, value: any, isPartOfComplexCommand = false) {
+function modifySnapshotPropEntityCommandGenerator<T>(entity: T, snapshotProp: keyof T, liveProp: keyof T, value: any, isPartOfComplexCommand = false) {
   const oldValue = entity[snapshotProp]
-  console.log('modifying entity', entity.id, snapshotProp, oldValue, value)
+  console.log('modifying entity', grabId(entity), snapshotProp, oldValue, value)
   const command: Command = {
-    name: `modifyEntityCommand ${entity.id} ${String(snapshotProp)}`,
+    name: `modifyEntityCommand ${grabId(entity)} ${String(snapshotProp)}`,
     undo: () => entity[snapshotProp] = entity[liveProp] = oldValue,
     redo: () => entity[snapshotProp] = entity[liveProp] = value
   }
@@ -200,7 +202,28 @@ function modifySnapshotPropEntityCommandGenerator<T extends Entity>(entity: T, s
 
 //a collection object still needs to be wrapped in a ref
 //to access it's methods for modifying the collection
-export class EntityList<T extends Entity> extends Entity {
+
+export class UndoableList<T> {
+  public list: T[] = []
+
+  public addItem(item: T) {
+    addListCommandGenerator<T>(item, this, this.list.length)
+  }
+
+  public insertItem(item: T, index: number) {
+    addListCommandGenerator<T>(item, this, index)
+  }
+
+  public removeItem(index: number) {
+    removeListCommandGenerator<T>(this, index)
+  }
+
+  public moveItem(oldIndex: number, newIndex: number) {
+    moveListItemCommandGenerator<T>(this, oldIndex, newIndex)
+  }
+}
+
+export class EntityList<T extends Entity> extends Entity implements UndoableList<T> {
   public type = 'EntityList'
   public list: T[] = []
 
@@ -212,7 +235,7 @@ export class EntityList<T extends Entity> extends Entity {
     super(createId)
   }
 
-  public createItem(item: T) {
+  public addItem(item: T) {
     item.parent = this
     addListCommandGenerator<T>(item, this, this.list.length)
   }
@@ -229,11 +252,6 @@ export class EntityList<T extends Entity> extends Entity {
 
   public moveItem(oldIndex: number, newIndex: number) {
     moveListItemCommandGenerator<T>(this, oldIndex, newIndex)
-  }
-
-  public removeRandom() {
-    const randIndex = Math.floor(Math.random() * this.list.length)
-    this.removeItem(randIndex)
   }
 }
 
@@ -282,7 +300,7 @@ export class Transport {
 export type DrawMode = 'display' | 'addingPoint' | 'movingPoint'
 
 export class Region extends Entity {
-  public points: p5.Vector[] = []
+  public points = new UndoableList<p5.Vector>()
   public color: p5.Color
   public type = 'Region'
   public grabPointIdx: number | undefined = undefined
@@ -309,16 +327,16 @@ export class Region extends Entity {
   }
 
   display(p5Instance: p5) {
-    this.drawPoints(p5Instance, this.points)
+    this.drawPoints(p5Instance, this.points.list)
   }
 
   drawWhileAddingPoint(p5Instance: p5, point: p5.Vector) {
-    const pts = [...this.points, point]
+    const pts = [...this.points.list, point]
     this.drawPoints(p5Instance, pts)
   }
 
   drawWhileMovingPoint(p5Instance: p5, point: p5.Vector, grabbedPointIdx: number) {
-    const pts = this.points.map((p, idx) => idx == grabbedPointIdx ? point : p)
+    const pts = this.points.list.map((p, idx) => idx == grabbedPointIdx ? point : p)
     this.drawPoints(p5Instance, pts)
   }
 
@@ -346,7 +364,7 @@ export function findClosestPointAndRegion(p5Instance: p5, regions: EntityList<Re
   let closestRegion: Region | undefined = undefined
   let closestDistance = Number.MAX_VALUE
   regions.list.forEach((region) => {
-    region.points.forEach((point, idx) => {
+    region.points.list.forEach((point, idx) => {
       const distance = p5Instance.dist(mousePos.x, mousePos.y, point.x, point.y)
       if (distance < closestDistance) {
         closestDistance = distance
@@ -368,14 +386,14 @@ const appState: AppState = {
   regions: new EntityList<Region>(),
 } 
 
-export const useCheckBoxStore = defineStore('checkboxList', () => {
+export const globalStore = defineStore('appState', () => {
   const appStateRef = ref(appState)
 
   return { appStateRef }
 });
 
 if (import.meta.hot) {
-  import.meta.hot.accept(acceptHMRUpdate(useCheckBoxStore, import.meta.hot))
+  import.meta.hot.accept(acceptHMRUpdate(globalStore, import.meta.hot))
 }
 
 
