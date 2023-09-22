@@ -296,45 +296,30 @@ export class Region extends Entity {
     this.color = p5Instance.color(r(), r(), r())
   }
 
-  display(p5Instance: p5) {
+  drawPoints(p5Instance: p5, pts: p5.Vector[]) {
     p5Instance.push()
     p5Instance.stroke(this.color)
     p5Instance.fill(this.color)
     p5Instance.beginShape()
-    for (let i = 0; i < this.points.length; i++) {
-      p5Instance.vertex(this.points[i].x, this.points[i].y)
+    for (let i = 0; i < pts.length; i++) {
+      p5Instance.vertex(pts[i].x, pts[i].y)
     }
     p5Instance.endShape(p5Instance.CLOSE)
     p5Instance.pop()
+  }
+
+  display(p5Instance: p5) {
+    this.drawPoints(p5Instance, this.points)
   }
 
   drawWhileAddingPoint(p5Instance: p5, point: p5.Vector) {
-    p5Instance.push()
-    p5Instance.stroke(this.color)
-    p5Instance.fill(this.color)
-    p5Instance.beginShape()
-    for (let i = 0; i < this.points.length; i++) {
-      p5Instance.vertex(this.points[i].x, this.points[i].y)
-    }
-    p5Instance.vertex(point.x, point.y)
-    p5Instance.endShape(p5Instance.CLOSE)
-    p5Instance.pop()
+    const pts = [...this.points, point]
+    this.drawPoints(p5Instance, pts)
   }
 
   drawWhileMovingPoint(p5Instance: p5, point: p5.Vector, grabbedPointIdx: number) {
-    p5Instance.push()
-    p5Instance.stroke(this.color)
-    p5Instance.fill(this.color)
-    p5Instance.beginShape()
-    for (let i = 0; i < this.points.length; i++) {
-      if (i == grabbedPointIdx) {
-        p5Instance.vertex(point.x, point.y)
-      } else {
-        p5Instance.vertex(this.points[i].x, this.points[i].y)
-      }
-    }
-    p5Instance.endShape(p5Instance.CLOSE)
-    p5Instance.pop()
+    const pts = this.points.map((p, idx) => idx == grabbedPointIdx ? point : p)
+    this.drawPoints(p5Instance, pts)
   }
 
   public draw(p5Instance: p5) {
