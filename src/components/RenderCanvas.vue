@@ -1,8 +1,15 @@
 <script setup lang="ts">
+import { createP5Sketch } from '@/rendering/rendering';
 import type { AppState } from '@/stores/stores';
 import { inject, onMounted, onUnmounted } from 'vue';
 
+
+const appState = inject('appState') as AppState  
+
 onMounted(() => {
+
+  const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
+  createP5Sketch(p5Canvas, () => appState)
 
 })
 
@@ -10,12 +17,6 @@ onUnmounted(() => {
 
 })
 
-//todo - separate playhead and canvas into diff components
-//so you can hot reload playhead without reloading canvas.
-//Could also link render initialization to mounting of this component?
-
-
-const appState = inject('appState') as AppState  
 
 </script>
 

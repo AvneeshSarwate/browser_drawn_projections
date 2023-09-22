@@ -1,4 +1,4 @@
-import { findClosestPointAndRegion, type AppState } from '@/stores/stores'
+import { findClosestPointAndRegion, type AppState, Region } from '@/stores/stores'
 import * as BABYLON from 'babylonjs'
 import p5 from 'p5'
 
@@ -66,7 +66,7 @@ class Pingpong {
 //   }
 // }
 
-function createP5Sketch(canvas: HTMLCanvasElement, appState: () => AppState) {
+export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => AppState) {
   const sketch = (p: p5) => {
 
     p.setup = () => {
@@ -75,12 +75,18 @@ function createP5Sketch(canvas: HTMLCanvasElement, appState: () => AppState) {
     }
 
     p.draw = () => {
+      p.clear(0,0,0,255)
       appState().regions.list.forEach((region) => {
         region.draw(p)
       })
+      const activeRegion = appState().regions.list.find((region) => region.isActive)
+      if (activeRegion) {
+        p.ellipse(p.mouseX, p.mouseY, 10, 10)
+      }
     }
 
     p.keyPressed = () => {
+      console.log("key pressed", p.key, p.keyCode)
       const state = appState()
       if (p.key === 'g') {
         const ptAndRegion = findClosestPointAndRegion(p, state.regions)
@@ -99,11 +105,35 @@ function createP5Sketch(canvas: HTMLCanvasElement, appState: () => AppState) {
           }
         }
       }
+      if (p.key === 'd') {
+        const activeRegion = state.regions.list.find((region) => region.isActive)
+        if (activeRegion) {
+          activeRegion.drawMode = 'addingPoint'
+        } else {
+          const newRegion = new Region(p)
+          newRegion.drawMode = 'addingPoint'
+          state.regions.list.push(newRegion)
+        }
+      }
+      if (p.keyCode === 32) { //spacebar
+        const activeRegion = state.regions.list.find((region) => region.isActive)
+        console.log('enter', activeRegion)
+        if (activeRegion?.drawMode === 'addingPoint') {
+          console.log('adding point', p.mouseX, p.mouseY)
+          const newPt = new p5.Vector(p.mouseX, p.mouseY)
+          activeRegion.points.push(newPt)
+        }
+      }
+      if (p.keyCode === 27) { //escape
+        const activeRegion = state.regions.list.find((region) => region.isActive)
+        if (activeRegion) {
+          activeRegion.drawMode = 'display'
+        }
+      } 
     }
-    return new p5(sketch, canvas)
   }
 
-  return sketch
+  return new p5(sketch, canvas)
 }
 
 

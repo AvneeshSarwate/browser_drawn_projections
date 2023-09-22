@@ -283,10 +283,13 @@ export type DrawMode = 'display' | 'addingPoint' | 'movingPoint'
 
 export class Region extends Entity {
   public points: p5.Vector[] = []
-  public color = new p5.Color()
+  public color: p5.Color
   public type = 'Region'
   public grabPointIdx: number | undefined = undefined
   public drawMode: DrawMode = 'display'
+  public get isActive() {
+    return this.drawMode != 'display'
+  }
   constructor(p5Instance: p5) {
     super()
     const r = () => p5Instance.random(0, 255)
