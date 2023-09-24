@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import { defineStore, acceptHMRUpdate } from 'pinia'
 import p5 from 'p5'
+import type { AnimationSeq } from '@/rendering/planeAnimations'
 
 export class Entity {
   public type = 'Entity'
@@ -304,6 +305,8 @@ export class Region extends Entity {
   public type = 'Region'
   public grabPointIdx: number | undefined = undefined
   public drawMode: DrawMode = 'display'
+  public animationStartTime = -1
+  public animationSeq: AnimationSeq | undefined = undefined
   public get isActive() {
     return this.drawMode != 'display'
   }
@@ -341,11 +344,13 @@ export class Region extends Entity {
   public setStyle(p5Instance: p5) {
     p5Instance.stroke(this.color)
     p5Instance.fill(this.color)
+    p5Instance.strokeWeight(15)
   }
 
   public draw(p5inst: p5) {
     const testComment = `info about the function`
-    if (this.draw2) this.draw2(this, p5inst)
+    // if (this.draw2) this.draw2(this, p5inst)
+    if(this.animationSeq) this.animationSeq.draw(p5inst, this, this.animationStartTime, p5inst.millis()/1000)
     else this.drawBase(p5inst)
   }
 

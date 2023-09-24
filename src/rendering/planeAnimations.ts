@@ -35,18 +35,21 @@ function linePhaseDraw(p5Instance: p5, region: Region, phase: number, points: p5
   p5Instance.pop();
 }
 
-function LtoRLine(p5Instance: p5, region: Region, phase: number) {
-  const points = toLR(region.points.list)
-  return (p5i: p5, r: Region, p: number) => linePhaseDraw(p5i, r, p, points)
+export function lrLine() {
+  return (p5i: p5, r: Region, p: number) => linePhaseDraw(p5i, r, p, toLR(r.points.list))
 }
 
 
-type AnimationSegment = {
-  duration: number
-  phaseDraw: (p5i: p5, region: Region, phase: number) => void
+export class AnimationSegment {
+  duration: number;
+  phaseDraw: (p5i: p5, region: Region, phase: number) => void;
+  constructor(phaseDraw: (p5i: p5, region: Region, phase: number) => void, duration: number) {
+    this.duration = duration;
+    this.phaseDraw = phaseDraw;
+  }
 }
 
-class AnimationSeq {
+export class AnimationSeq {
   public segments: AnimationSegment[]
   constructor(segDefs: AnimationSegment[]) {
     this.segments = segDefs
