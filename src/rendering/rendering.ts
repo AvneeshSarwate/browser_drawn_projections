@@ -12,7 +12,10 @@ export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => AppSta
     }
 
     p.draw = () => {
-      p.clear(0,0,0,255)
+      p.push()  
+        p.fill(0)
+        p.rect(0, 0, p.width, p.height)
+      p.pop()
       appState().regions.list.forEach((region) => {
         region.draw(p)
       })

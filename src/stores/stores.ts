@@ -388,10 +388,12 @@ export function findClosestPointAndRegion(p5Instance: p5, regions: EntityList<Re
 
 export type AppState = {
   regions: EntityList<Region>
+  p5Instance: p5 | undefined
 }
 
 const appState: AppState = {
   regions: new EntityList<Region>(),
+  p5Instance: undefined
 } 
 
 export const globalStore = defineStore('appState', () => {

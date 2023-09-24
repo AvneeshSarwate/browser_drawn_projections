@@ -14,12 +14,7 @@ onMounted(() => {
 
   const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
   const p5Instance = createP5Sketch(p5Canvas, () => appState)
-  // reg(0).draw2 = (reg: Region, p5: p5) => {
-  //   reg.points.list.forEach(p => {
-  //     p5.circle(p.x, p.y, 10)
-  //   })
-  // }
-
+  appState.p5Instance = p5Instance
 })
 
 onUnmounted(() => {
@@ -30,50 +25,16 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div id="playerContainer">
-    <span id="canvasContainer">
-      <div style="width: 100px;"> &ThickSpace; </div>
-      <canvas id="p5Canvas" width="1280" height="720"></canvas>
-    </span>
-  </div>
+  <canvas id="p5Canvas" width="1280" height="720"></canvas>
 </template>
 
 <style scoped>
-#renderCanvas {
-  border: 1px solid black;
-  width: 100%;
-  height: 100%;
-}
 
-#playheadContainer {
-  position: relative;
-  width: 100%;
-  height: 20px;
-  background-color: #ccc;
-}
 
-#playhead {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 10px;
-  height: 100%;
-  background-color: #f00;
-}
-
-#playerContainer {
-  position: relative;
-}
 
 #p5Canvas {
   border: 1px solid black;
   width: 100%;
   height: 100%;
-}
-
-#canvasContainer {
-  display: flex;
-  flex-direction: row;
-  background-color: rgb(0, 0, 0);
 }
 </style>
