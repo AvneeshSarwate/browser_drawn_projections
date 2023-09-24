@@ -70,7 +70,7 @@ export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => AppSta
         if (activeRegion?.drawMode === 'addingPoint') {
           console.log('adding point', p.mouseX, p.mouseY)
           const newPt = new p5.Vector(p.mouseX, p.mouseY)
-          activeRegion.points.list.push(newPt)
+          activeRegion.points.pushItem(newPt)
           if (activeRegion.points.list.length == 1) {
             state.regions.pushItem(activeRegion)
             newRegion = undefined

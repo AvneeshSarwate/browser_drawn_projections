@@ -1,13 +1,10 @@
 <script setup lang="ts">
 import { createP5Sketch } from '@/rendering/rendering';
-import { Region, type AppState } from '@/stores/stores';
-import p5 from 'p5';
+import { type AppState } from '@/stores/stores';
 import { inject, onMounted, onUnmounted } from 'vue';
 
 
 const appState = inject('appState') as AppState  
-
-const reg = (i: number) => appState.regions.list[i]
 
 
 onMounted(() => {

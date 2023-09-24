@@ -3,7 +3,6 @@ import { globalStore, commandHistory, type AppState } from './stores/stores';
 import RenderCanvas from './components/RenderCanvas.vue';
 import LivecodeHolder from './components/LivecodeHolder.vue';
 import { provide } from 'vue';
-import type LivecodeHolderVue from './components/LivecodeHolder.vue';
 
 
 const checkStore = globalStore()
