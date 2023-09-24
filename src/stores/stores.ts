@@ -315,8 +315,7 @@ export class Region extends Entity {
 
   drawPoints(p5Instance: p5, pts: p5.Vector[]) {
     p5Instance.push()
-    p5Instance.stroke(this.color)
-    p5Instance.fill(this.color)
+    this.setStyle(p5Instance)
     p5Instance.beginShape()
     for (let i = 0; i < pts.length; i++) {
       p5Instance.vertex(pts[i].x, pts[i].y)
@@ -339,9 +338,13 @@ export class Region extends Entity {
     this.drawPoints(p5Instance, pts)
   }
 
-
+  public setStyle(p5Instance: p5) {
+    p5Instance.stroke(this.color)
+    p5Instance.fill(this.color)
+  }
 
   public draw(p5inst: p5) {
+    const testComment = `info about the function`
     if (this.draw2) this.draw2(this, p5inst)
     else this.drawBase(p5inst)
   }
@@ -398,6 +401,9 @@ const appState: AppState = {
 
 export const globalStore = defineStore('appState', () => {
   const appStateRef = ref(appState)
+
+  //@ts-ignore
+  window.appState = appState
 
   return { appStateRef }
 });
