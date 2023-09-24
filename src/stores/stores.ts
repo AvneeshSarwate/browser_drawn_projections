@@ -339,7 +339,16 @@ export class Region extends Entity {
     this.drawPoints(p5Instance, pts)
   }
 
-  public draw(p5Instance: p5) {
+
+
+  public draw(p5inst: p5) {
+    if (this.draw2) this.draw2(this, p5inst)
+    else this.drawBase(p5inst)
+  }
+
+  public draw2: ((reg: Region, p5: p5) => void) | undefined
+
+  public drawBase(p5Instance: p5) {
     const mousePos = p5Instance.createVector(p5Instance.mouseX, p5Instance.mouseY)
     switch (this.drawMode) {
       case 'display':

@@ -1,7 +1,7 @@
 import { findClosestPointAndRegion, type AppState, Region } from '@/stores/stores'
 import p5 from 'p5'
 
-export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => AppState) {
+export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => AppState): p5 {
   const sketch = (p: p5) => {
 
     let newRegion: Region | undefined = undefined

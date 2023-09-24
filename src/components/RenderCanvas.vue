@@ -1,15 +1,24 @@
 <script setup lang="ts">
 import { createP5Sketch } from '@/rendering/rendering';
-import type { AppState } from '@/stores/stores';
+import { Region, type AppState } from '@/stores/stores';
+import p5 from 'p5';
 import { inject, onMounted, onUnmounted } from 'vue';
 
 
 const appState = inject('appState') as AppState  
 
+const reg = (i: number) => appState.regions.list[i]
+
+
 onMounted(() => {
 
   const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
-  createP5Sketch(p5Canvas, () => appState)
+  const p5Instance = createP5Sketch(p5Canvas, () => appState)
+  // reg(0).draw2 = (reg: Region, p5: p5) => {
+  //   reg.points.list.forEach(p => {
+  //     p5.circle(p.x, p.y, 10)
+  //   })
+  // }
 
 })
 
