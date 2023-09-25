@@ -45,6 +45,16 @@ onMounted(() => {
 
 })
 
+/*
+more ideas
+- make "blocks" of code undoable?
+ - would involve making property assignments automatically undoable, or
+   having a cleaner api for assigning undoable properties
+   (maybe just setters for props that need undo, with a _ suffix indicating undiability)
+
+
+*/
+
 onUnmounted(() => {
 
 })
