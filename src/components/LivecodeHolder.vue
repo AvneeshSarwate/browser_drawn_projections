@@ -2,7 +2,7 @@
 import { Region, type AppState } from '@/stores/stores';
 import p5 from 'p5';
 import { inject, onMounted, onUnmounted } from 'vue';
-import * as anim from '@/rendering/planeAnimations'
+import * as a from '@/rendering/planeAnimations'
 
 
 const appState = inject('appState') as AppState  
@@ -14,17 +14,23 @@ const cornerPts = (reg: Region, p5: p5) => {
   })
 }
 
+const aseg = (animation: (p5Instance: p5, region: Region, phase: number) => void, duration: number) => {
+  return new a.AnimationSegment(animation, duration)
+}
+
+const aseq = (animations: a.AnimationSegment[]) => {
+  return new a.AnimationSeq(animations)
+}
+
 
 onMounted(() => {
   try {
     if (appState.p5Instance && appState.regions.list.length > 0) {
       // reg(0).draw2 = cornerPts
-      // reg(0).draw2 = undefined
-      const lr = new anim.AnimationSegment(anim.lrLine(), 2.52)
-      // reg(0).animationSeq = new anim.AnimationSeq([lr])
-      const zi = new anim.AnimationSegment(anim.zoomIn(), 2.52)
-      const zo = new anim.AnimationSegment(anim.zoomOut(), 2.52)
-      reg(0).animationSeq = new anim.AnimationSeq([zo, zi, lr])
+      const lr = a.lrLine(2.52)
+      const zi = a.zoomIn(2.52)
+      const zo = a.zoomOut(2.52)
+      reg(0).animationSeq = aseq([zo, zi, lr])
       // reg(0).animationSeq = undefined
     }
   } catch (e) {
