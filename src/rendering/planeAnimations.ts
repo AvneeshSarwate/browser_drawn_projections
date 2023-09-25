@@ -39,6 +39,40 @@ export function lrLine() {
   return (p5i: p5, r: Region, p: number) => linePhaseDraw(p5i, r, p, toLR(r.points.list))
 }
 
+export function rlLine() {
+  return (p5i: p5, r: Region, p: number) => linePhaseDraw(p5i, r, p, toRL(r.points.list))
+}
+
+export function tbLine() {
+  return (p5i: p5, r: Region, p: number) => linePhaseDraw(p5i, r, p, toTB(r.points.list))
+}
+
+export function btLine() {
+  return (p5i: p5, r: Region, p: number) => linePhaseDraw(p5i, r, p, toBT(r.points.list))
+}
+
+function zoom(p5Instance: p5, region: Region, phase: number, out = false) {
+  p5Instance.push();
+  region.setStyle(p5Instance);
+
+  const center = region.points.list.reduce((acc, v) => acc.add(v), p5Instance.createVector(0, 0)).div(region.points.list.length);
+  const lerpPoints = region.points.list.map(v => p5.Vector.lerp(v, center, out ? 1 - phase : phase));
+  
+  p5Instance.beginShape();
+  lerpPoints.forEach(v => p5Instance.vertex(v.x, v.y));
+  p5Instance.endShape(p5Instance.CLOSE);
+
+  p5Instance.pop();
+}
+
+export function zoomIn() {
+  return (p5Instance: p5, region: Region, phase: number) => zoom(p5Instance, region, phase, false);
+}
+
+export function zoomOut() {
+  return (p5Instance: p5, region: Region, phase: number) => zoom(p5Instance, region, phase, true);
+}
+
 
 export class AnimationSegment {
   duration: number;

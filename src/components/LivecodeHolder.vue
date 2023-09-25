@@ -20,9 +20,12 @@ onMounted(() => {
     if (appState.p5Instance && appState.regions.list.length > 0) {
       // reg(0).draw2 = cornerPts
       // reg(0).draw2 = undefined
-      const lr = new anim.AnimationSegment(anim.lrLine(), 0.2)
-      reg(0).animationSeq = new anim.AnimationSeq([lr])
-      reg(0).animationSeq = undefined
+      const lr = new anim.AnimationSegment(anim.lrLine(), 2.52)
+      // reg(0).animationSeq = new anim.AnimationSeq([lr])
+      const zi = new anim.AnimationSegment(anim.zoomIn(), 2.52)
+      const zo = new anim.AnimationSegment(anim.zoomOut(), 2.52)
+      reg(0).animationSeq = new anim.AnimationSeq([zo, zi, lr])
+      // reg(0).animationSeq = undefined
     }
   } catch (e) {
     console.log(e)
