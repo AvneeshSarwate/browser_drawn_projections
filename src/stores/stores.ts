@@ -155,7 +155,6 @@ function addListCommandGenerator<T>(list: UndoableList<T>, index: number, item: 
 function replaceListCommandGenerator<T>(list: UndoableList<T>, index: number, newItem: T, isPartOfComplexCommand = false) {
   const oldItem = list.list[index]
 
-  //todo - replace this with just array assignment?
   const command: Command = {
     name: `replaceListCommand ${grabId(oldItem)} ${grabId(newItem)}`,
     undo: () => { list.list[index] = oldItem },
