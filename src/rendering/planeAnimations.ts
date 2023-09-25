@@ -98,16 +98,19 @@ export class PerimiterDots {
     const totalPerimiter = this.sideLengthsRunningSum[this.sideLengthsRunningSum.length - 1]
     const perimiterPhase = phase * totalPerimiter
     const sideInd = this.sideLengthsRunningSum.findIndex(v => perimiterPhase < v)
-    const sidePhase = (perimiterPhase - this.sideLengthsRunningSum[sideInd - 1]) / this.sideLengths[sideInd]
+    const lastSideSum = this.sideLengthsRunningSum[sideInd - 1] || 0
+    const sidePhase = (perimiterPhase - lastSideSum) / this.sideLengths[sideInd]
     const dot = p5.Vector.lerp(points[sideInd], points[(sideInd + 1) % pointsLen], sidePhase)
     return dot
   }
 
   draw(p5Instance: p5, phase: number) {
+    p5Instance.push()
     for (let i = 0; i < this.numDots; i++) {
       const dot = this.getDot((phase + i / this.numDots) % 1)
-      p5Instance.ellipse(dot.x, dot.y, 5, 5)
+      p5Instance.ellipse(dot.x, dot.y, 15, 15)
     }
+    p5Instance.pop()
   }
 
   public anim(duration: number) {
@@ -115,6 +118,10 @@ export class PerimiterDots {
   }
 }
 
+//negative mod
+function mod(n: number, m: number) {
+  return ((n % m) + m) % m
+}
 
 export class AnimationSegment {
   duration: number

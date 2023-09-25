@@ -7,7 +7,7 @@ import * as a from '@/rendering/planeAnimations'
 
 const appState = inject('appState') as AppState  
 
-const reg = (i: number) => appState.regions.list[i]
+const reg = (i: number) => appState.regions.list[i] || {}
 const cornerPts = (reg: Region, p5: p5) => {
   reg.points.list.forEach(p => {
     p5.circle(p.x, p.y, 10)
@@ -23,11 +23,20 @@ onMounted(() => {
   try {
     if (appState.p5Instance && appState.regions.list.length > 0) {
       // reg(0).draw2 = cornerPts
-      const lr = a.lrLine(2.52)
-      const zi = a.zoomIn(2.52)
-      const zo = a.zoomOut(2.52)
+      const lr = a.lrLine(.52)
+      const rl = a.rlLine(.52)
+      const zi = a.zoomIn(1.52)
+      const zo = a.zoomOut(1.52)
+
+      //todo - need some api for these so you don't have to specify
+      //the region index twice (once on creation and once on assignment)
       const dots = new a.PerimiterDots(reg(0), 10).anim(2.52)
-      reg(0).animationSeq = aseq([zo, zi, lr, dots])
+
+      // const dots2 = new a.PerimiterDots(reg(2), 10).anim(2.52)
+      reg(0).animationSeq = aseq([dots])
+      reg(1).animationSeq = aseq([lr, rl])
+      reg(5).animationSeq = aseq([rl])
+
       // reg(0).animationSeq = undefined
     }
   } catch (e) {
