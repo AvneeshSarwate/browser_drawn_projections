@@ -32,6 +32,7 @@ onMounted(() => {
       const code = () => {
         hideAll()
         reg(0).visible = true
+        reg(1).visible = true
         // reg(0).draw2 = cornerPts
         const lr = a.lrLine(.52)
         const rl = a.rlLine(.52)

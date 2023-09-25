@@ -2,9 +2,9 @@ import { ref } from 'vue'
 import { defineStore, acceptHMRUpdate } from 'pinia'
 import p5 from 'p5'
 import type { AnimationSeq } from '@/rendering/planeAnimations'
-import { storedData0 } from './exportedShapes'
+import { storedData1 } from './exportedShapes'
 
-export class Entity {
+abstract class Entity {
   public type = 'Entity'
   public id = -1 
   protected static idGenerator = 0
@@ -54,23 +54,13 @@ export class Entity {
     return found
   }
 
-  public hydrateParents() {
-    //perform a breadth first search of the tree and for all nodes, set their parent
-    const queue: Entity[] = []
-    queue.push(this)
-    while (queue.length > 0) {
-      const current = queue.shift()
-      if (current) {
-        current.children().forEach((child) => {
-          child.parent = current
-          queue.push(child)
-        })
-      }
-    }
-  }
-
-  public serialize(): string {
-    return JSON.stringify(appState.regions, (key, value) => key == "parent" ? null : value)
+  public abstract serialize(): any //returns someting thats safe to JSON.stringify - i.e minimal needed info and no parent refs
+  public abstract hydrate(serialized: object): void
+  public deserialize(serialized: object): this { //reconnects children to parents
+    this.hydrate(serialized)
+    this.children().forEach(c => c.parent = this)
+    Entity.idGenerator = Math.max(Entity.idGenerator, this.id + 1)
+    return this
   }
 }
 
@@ -242,16 +232,21 @@ export class UndoableList<T> {
   }
 }
 
+
+type Constructor<T> = new (...args: any[]) => T;
+
 export class EntityList<T extends Entity> extends Entity implements UndoableList<T> {
   public type = 'EntityList'
   public list: T[] = []
+  private ctor: Constructor<T>
 
   public children(): Entity[] {
     return this.list
   }
 
-  constructor(createId = true) {  // Added constructor to initialize ctor
+  constructor(ctor: Constructor<T>, createId = true) {  // Added constructor to initialize ctor
     super(createId)
+    this.ctor = ctor
   }
 
   public pushItem(item: T) {
@@ -272,6 +267,26 @@ export class EntityList<T extends Entity> extends Entity implements UndoableList
   public moveItem(oldIndex: number, newIndex: number) {
     moveListItemCommandGenerator<T>(this, oldIndex, newIndex)
   }
+
+  public serialize() {
+    const serialized = this.list.map((item) => item.serialize())
+    return serialized
+  }
+
+  public hydrate(serialized: object) {
+    const parsed = serialized as object[]
+    this.list = parsed.map((item) => {
+      const newItem = new this.ctor()
+      newItem.deserialize(item)
+      return newItem
+    })
+  }
+}
+
+function parseTopLevelArray(serialized: string): string[] {
+  const inner = serialized.slice(1, serialized.length - 1)
+  const split = inner.split(',')
+  return split.map((item) => item.trim())
 }
 
 export class Transport {
@@ -347,21 +362,20 @@ export class Region extends Entity {
     this.color = { r: r(), g: r(), b: r() }
   }
 
-  public serialize(): string {
+  public serialize() {
     const serialized: RegionSerialized = {
       points: this.points.list.map((p) => ({ x: p.x, y: p.y })),
       color: this.color,
       id: this.id
     }
-    return JSON.stringify(serialized)
+    return serialized
   }
 
-  public deserialize(serialized: string) {
-    const parsed = JSON.parse(serialized) as RegionSerialized
+  public hydrate(serialized: object) {
+    const parsed = serialized as RegionSerialized
     this.points.list = parsed.points.map((p) => new p5.Vector(p.x, p.y))
     this.color = parsed.color
     this.id = parsed.id
-    Entity.idGenerator = Math.max(Entity.idGenerator, this.id + 1)
   }
 
 
@@ -453,7 +467,7 @@ export type AppState = {
 }
 
 const appState: AppState = {
-  regions: new EntityList<Region>(),
+  regions: new EntityList(Region).deserialize(storedData1),
   p5Instance: undefined,
   codeStack: [],
   codeStackIndex: 0
