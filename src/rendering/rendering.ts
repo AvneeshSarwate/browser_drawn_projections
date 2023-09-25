@@ -59,7 +59,7 @@ export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => AppSta
         if (activeRegion) {
           activeRegion.drawMode = 'addingPoint'
         } else {
-          newRegion = new Region(p)
+          newRegion = new Region()
           newRegion.drawMode = 'addingPoint'
         }
       }

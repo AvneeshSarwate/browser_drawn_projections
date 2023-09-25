@@ -2,11 +2,12 @@ import { ref } from 'vue'
 import { defineStore, acceptHMRUpdate } from 'pinia'
 import p5 from 'p5'
 import type { AnimationSeq } from '@/rendering/planeAnimations'
+import { storedData0 } from './exportedShapes'
 
 export class Entity {
   public type = 'Entity'
   public id = -1 
-  private static idGenerator = 0
+  protected static idGenerator = 0
   private createId() {
     return this.id = Entity.idGenerator++
   }
@@ -51,6 +52,25 @@ export class Entity {
       }
     }
     return found
+  }
+
+  public hydrateParents() {
+    //perform a breadth first search of the tree and for all nodes, set their parent
+    const queue: Entity[] = []
+    queue.push(this)
+    while (queue.length > 0) {
+      const current = queue.shift()
+      if (current) {
+        current.children().forEach((child) => {
+          child.parent = current
+          queue.push(child)
+        })
+      }
+    }
+  }
+
+  public serialize(): string {
+    return JSON.stringify(appState.regions, (key, value) => key == "parent" ? null : value)
   }
 }
 
@@ -298,9 +318,19 @@ export class Transport {
 
 export type DrawMode = 'display' | 'addingPoint' | 'movingPoint'
 
+type RegionSerialized = {
+  points: ({ x: number, y: number })[]
+  color: {
+    r: number
+    g: number
+    b: number
+  },
+  id: number
+}
+
 export class Region extends Entity {
   public points = new UndoableList<p5.Vector>()
-  public color: p5.Color
+  public color: { r: number, g: number, b: number} //0 to 1
   public type = 'Region'
   public grabPointIdx: number | undefined = undefined
   public drawMode: DrawMode = 'display'
@@ -310,11 +340,30 @@ export class Region extends Entity {
   public get isActive() {
     return this.drawMode != 'display'
   }
-  constructor(p5Instance: p5) {
+
+  constructor() {
     super()
-    const r = () => p5Instance.random(0, 255)
-    this.color = p5Instance.color(r(), r(), r())
+    const r = () => Math.random()
+    this.color = { r: r(), g: r(), b: r() }
   }
+
+  public serialize(): string {
+    const serialized: RegionSerialized = {
+      points: this.points.list.map((p) => ({ x: p.x, y: p.y })),
+      color: this.color,
+      id: this.id
+    }
+    return JSON.stringify(serialized)
+  }
+
+  public deserialize(serialized: string) {
+    const parsed = JSON.parse(serialized) as RegionSerialized
+    this.points.list = parsed.points.map((p) => new p5.Vector(p.x, p.y))
+    this.color = parsed.color
+    this.id = parsed.id
+    Entity.idGenerator = Math.max(Entity.idGenerator, this.id + 1)
+  }
+
 
   drawPoints(p5Instance: p5, pts: p5.Vector[]) {
     p5Instance.push()
@@ -342,8 +391,9 @@ export class Region extends Entity {
   }
 
   public setStyle(p5Instance: p5) {
-    p5Instance.stroke(this.color)
-    p5Instance.fill(this.color)
+    const {r, g, b} = this.color
+    p5Instance.stroke(r*255, g*255, b*255)
+    p5Instance.fill(r*255, g*255, b*255)
     p5Instance.strokeWeight(15)
   }
 
