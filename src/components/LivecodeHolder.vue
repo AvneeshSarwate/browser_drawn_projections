@@ -29,7 +29,7 @@ onMounted(() => {
         const rl = a.rlLine(.52)
         const zi = a.zoomIn(1.52)
         const zo = a.zoomOut(1.52)
-
+        " " //a way to add "spacing" when reading eval'd code
         //todo - need some api for these so you don't have to specify
         //the region index twice (once on creation and once on assignment)
         const dots = new a.PerimiterDots(reg(0), 10).anim(2.52)
@@ -41,10 +41,11 @@ onMounted(() => {
         console.log("code ran")
         // reg(0).animationSeq = undefined
       }
+
       const codeStr = code.toString()
       const decodeAndRun = () => {
         eval(codeStr)()
-        console.log("decoding code")
+        console.log("decoding code", codeStr)
       }
       setTimeout(decodeAndRun, 2000)
     }
@@ -61,6 +62,12 @@ more ideas
    having a cleaner api for assigning undoable properties
    (maybe just setters for props that need undo, with a _ suffix indicating undiability)
 - have undo-tree instead of undo stack and then automatic tree walking sequencers
+- can call some disableAll() function at the start of your script that turns off all regions 
+  so that you can know that your script defines "everything" on the screen
+- can have other types of "drawable objects" that you livecode as well, instead of just 
+  "plane-animations" (eg, like gesture loops)
+- if you can save and recall scripts, they can be like "scenes" - 
+  if you really want, can even snapshot a thumbnail and have a scene selector UI
 
 
 */
