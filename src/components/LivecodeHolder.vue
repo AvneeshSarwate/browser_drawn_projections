@@ -8,6 +8,7 @@ import * as a from '@/rendering/planeAnimations'
 const appState = inject('appState') as AppState  
 
 const reg = (i: number) => appState.regions.list[i] || {}
+
 const cornerPts = (reg: Region, p5: p5) => {
   reg.points.list.forEach(p => {
     p5.circle(p.x, p.y, 10)
@@ -22,22 +23,30 @@ const aseq = (animations: a.AnimationSegment[]) => {
 onMounted(() => {
   try {
     if (appState.p5Instance && appState.regions.list.length > 0) {
-      // reg(0).draw2 = cornerPts
-      const lr = a.lrLine(.52)
-      const rl = a.rlLine(.52)
-      const zi = a.zoomIn(1.52)
-      const zo = a.zoomOut(1.52)
+      const code = () => {
+        // reg(0).draw2 = cornerPts
+        const lr = a.lrLine(.52)
+        const rl = a.rlLine(.52)
+        const zi = a.zoomIn(1.52)
+        const zo = a.zoomOut(1.52)
 
-      //todo - need some api for these so you don't have to specify
-      //the region index twice (once on creation and once on assignment)
-      const dots = new a.PerimiterDots(reg(0), 10).anim(2.52)
+        //todo - need some api for these so you don't have to specify
+        //the region index twice (once on creation and once on assignment)
+        const dots = new a.PerimiterDots(reg(0), 10).anim(2.52)
+        // const dots2 = new a.PerimiterDots(reg(2), 10).anim(2.52)
 
-      // const dots2 = new a.PerimiterDots(reg(2), 10).anim(2.52)
-      reg(0).animationSeq = aseq([dots])
-      reg(1).animationSeq = aseq([lr, rl])
-      reg(5).animationSeq = aseq([rl])
-
-      // reg(0).animationSeq = undefined
+        reg(0).animationSeq = aseq([dots, lr])
+        reg(1).animationSeq = aseq([lr, rl])
+        reg(5).animationSeq = aseq([rl])
+        console.log("code ran")
+        // reg(0).animationSeq = undefined
+      }
+      const codeStr = code.toString()
+      const decodeAndRun = () => {
+        eval(codeStr)()
+        console.log("decoding code")
+      }
+      setTimeout(decodeAndRun, 2000)
     }
   } catch (e) {
     console.log(e)
