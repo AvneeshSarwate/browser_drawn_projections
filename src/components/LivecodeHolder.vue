@@ -19,28 +19,43 @@ const aseq = (animations: a.AnimationSegment[]) => {
   return new a.AnimationSeq(animations)
 }
 
+const hideAll = () => {
+  appState.regions.list.forEach(r => r.visible = false)
+}
+
 
 onMounted(() => {
   try {
     if (appState.p5Instance && appState.regions.list.length > 0) {
+
+
       const code = () => {
+        hideAll()
+        reg(0).visible = true
         // reg(0).draw2 = cornerPts
         const lr = a.lrLine(.52)
         const rl = a.rlLine(.52)
         const zi = a.zoomIn(1.52)
         const zo = a.zoomOut(1.52)
+
         " " //a way to add "spacing" when reading eval'd code
         //todo - need some api for these so you don't have to specify
         //the region index twice (once on creation and once on assignment)
         const dots = new a.PerimiterDots(reg(0), 10).anim(2.52)
         // const dots2 = new a.PerimiterDots(reg(2), 10).anim(2.52)
 
-        reg(0).animationSeq = aseq([dots, lr])
+        reg(0).animationSeq = aseq([dots, rl, lr])
         reg(1).animationSeq = aseq([lr, rl])
         reg(5).animationSeq = aseq([rl])
         console.log("code ran")
         // reg(0).animationSeq = undefined
       }
+
+
+      //can access this from browser console as well to rerun code
+      appState.codeStack.push(code)
+
+
 
       const codeStr = code.toString()
       const decodeAndRun = () => {

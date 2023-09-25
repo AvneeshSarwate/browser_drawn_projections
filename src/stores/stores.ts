@@ -306,6 +306,7 @@ export class Region extends Entity {
   public drawMode: DrawMode = 'display'
   public animationStartTime = -1
   public animationSeq: AnimationSeq | undefined = undefined
+  public visible = true
   public get isActive() {
     return this.drawMode != 'display'
   }
@@ -348,6 +349,7 @@ export class Region extends Entity {
 
   public draw(p5inst: p5) {
     const testComment = `info about the function`
+    if(!this.visible) return
     // if (this.draw2) this.draw2(this, p5inst)
     if(this.animationSeq) this.animationSeq.draw(p5inst, this, this.animationStartTime, p5inst.millis()/1000)
     else this.drawBase(p5inst)
@@ -396,11 +398,15 @@ export function findClosestPointAndRegion(p5Instance: p5, regions: EntityList<Re
 export type AppState = {
   regions: EntityList<Region>
   p5Instance: p5 | undefined
+  codeStack: (() => void)[]
+  codeStackIndex: number
 }
 
 const appState: AppState = {
   regions: new EntityList<Region>(),
-  p5Instance: undefined
+  p5Instance: undefined,
+  codeStack: [],
+  codeStackIndex: 0
 } 
 
 export const globalStore = defineStore('appState', () => {
