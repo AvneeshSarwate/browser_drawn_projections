@@ -73,6 +73,48 @@ export function zoomOut(duration: number) {
   return new AnimationSegment((p5Instance: p5, region: Region, phase: number) => zoom(p5Instance, region, phase, true), duration)
 }
 
+export class PerimiterDots {
+  public region: Region
+  public numDots: number
+  private sideLengthsRunningSum: number[] = [] 
+  private sideLengths: number[] = []
+  constructor(region: Region, numDots: number) {
+    this.region = region
+    this.numDots = numDots
+    this.initMetadata()
+  }
+
+  initMetadata() {
+    const points = this.region.points.list
+    const pointsLen = points.length
+    this.sideLengths = points.map((v, i) => v.dist(points[(i + 1) % pointsLen]))
+    let runningSum = 0
+    this.sideLengthsRunningSum = this.sideLengths.map(v => runningSum += v)
+  }
+
+  getDot(phase: number): p5.Vector {
+    const points = this.region.points.list
+    const pointsLen = points.length
+    const totalPerimiter = this.sideLengthsRunningSum[this.sideLengthsRunningSum.length - 1]
+    const perimiterPhase = phase * totalPerimiter
+    const sideInd = this.sideLengthsRunningSum.findIndex(v => perimiterPhase < v)
+    const sidePhase = (perimiterPhase - this.sideLengthsRunningSum[sideInd - 1]) / this.sideLengths[sideInd]
+    const dot = p5.Vector.lerp(points[sideInd], points[(sideInd + 1) % pointsLen], sidePhase)
+    return dot
+  }
+
+  draw(p5Instance: p5, phase: number) {
+    for (let i = 0; i < this.numDots; i++) {
+      const dot = this.getDot((phase + i / this.numDots) % 1)
+      p5Instance.ellipse(dot.x, dot.y, 5, 5)
+    }
+  }
+
+  public anim(duration: number) {
+    return new AnimationSegment((p5Instance: p5, region: Region, phase: number) => this.draw(p5Instance, phase), duration)
+  }
+}
+
 
 export class AnimationSegment {
   duration: number

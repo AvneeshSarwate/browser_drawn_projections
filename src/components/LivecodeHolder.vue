@@ -14,10 +14,6 @@ const cornerPts = (reg: Region, p5: p5) => {
   })
 }
 
-const aseg = (animation: (p5Instance: p5, region: Region, phase: number) => void, duration: number) => {
-  return new a.AnimationSegment(animation, duration)
-}
-
 const aseq = (animations: a.AnimationSegment[]) => {
   return new a.AnimationSeq(animations)
 }
@@ -30,7 +26,8 @@ onMounted(() => {
       const lr = a.lrLine(2.52)
       const zi = a.zoomIn(2.52)
       const zo = a.zoomOut(2.52)
-      reg(0).animationSeq = aseq([zo, zi, lr])
+      const dots = new a.PerimiterDots(reg(0), 10).anim(2.52)
+      reg(0).animationSeq = aseq([zo, zi, lr, dots])
       // reg(0).animationSeq = undefined
     }
   } catch (e) {
