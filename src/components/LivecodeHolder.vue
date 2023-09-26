@@ -7,7 +7,7 @@ import * as a from '@/rendering/planeAnimations'
 
 const appState = inject('appState') as AppState  
 
-const reg = (i: number) => appState.regions.list[i] || {}
+const reg = (i: number) => appState.regions.list[i] 
 
 const cornerPts = (reg: Region, p5: p5) => {
   reg.points.list.forEach(p => {
@@ -19,8 +19,8 @@ const aseq = (animations: a.AnimationSegment[]) => {
   return new a.AnimationSeq(animations)
 }
 
-const hideAll = () => {
-  appState.regions.list.forEach(r => r.visible = false)
+const resetRegions = () => {
+  appState.regions.list.forEach(r => r.resetDrawState())
 }
 
 
@@ -30,9 +30,9 @@ onMounted(() => {
 
 
       const code = () => {
-        hideAll()
-        reg(0).visible = true
-        reg(1).visible = true
+        resetRegions()
+        reg(0).activate()
+        reg(1).activate()
         // reg(0).draw2 = cornerPts
         const lr = a.lrLine(.52)
         const rl = a.rlLine(.52)
@@ -55,15 +55,16 @@ onMounted(() => {
 
       //can access this from browser console as well to rerun code
       appState.codeStack.push(code)
+      code()
 
 
 
-      const codeStr = code.toString()
-      const decodeAndRun = () => {
-        eval(codeStr)()
-        console.log("decoding code", codeStr)
-      }
-      setTimeout(decodeAndRun, 2000)
+      // const codeStr = code.toString()
+      // const decodeAndRun = () => {
+      //   eval(codeStr)()
+      //   console.log("decoding code", codeStr)
+      // }
+      // setTimeout(decodeAndRun, 2000)
     }
   } catch (e) {
     console.log(e)

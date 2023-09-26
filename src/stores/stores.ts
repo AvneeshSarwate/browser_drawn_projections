@@ -352,12 +352,13 @@ export class Region extends Entity {
   public animationStartTime = -1
   public animationSeq: AnimationSeq | undefined = undefined
   public visible = true
+  public debug = false
   public get isActive() {
     return this.drawMode != 'display'
   }
 
-  constructor() {
-    super()
+  constructor(createId = true) {
+    super(createId)
     const r = () => Math.random()
     this.color = { r: r(), g: r(), b: r() }
   }
@@ -378,30 +379,51 @@ export class Region extends Entity {
     this.id = parsed.id
   }
 
+  drawDebugText(p5Instance: p5) {
+    p5Instance.push()
+    p5Instance.strokeWeight(2)
+    p5Instance.fill(255)
+    const center = this.points.list.reduce((acc, v) => acc.add(v), p5Instance.createVector(0, 0)).div(this.points.list.length)
+    p5Instance.text(`id: ${this.id}`, center.x, center.y)
+    p5Instance.pop()
+  }
 
   drawPoints(p5Instance: p5, pts: p5.Vector[]) {
-    p5Instance.push()
-    this.setStyle(p5Instance)
     p5Instance.beginShape()
     for (let i = 0; i < pts.length; i++) {
       p5Instance.vertex(pts[i].x, pts[i].y)
     }
     p5Instance.endShape(p5Instance.CLOSE)
+  }
+
+  setDebugStyle(p5Instance: p5) {
+    p5Instance.strokeWeight(5)
+    p5Instance.stroke(255, 255, 255)
+    p5Instance.fill(0, 0, 0, 0)
+    p5Instance.textSize(20)
+  }
+
+  drawBaseStyle(p5Instance: p5, pts: p5.Vector[]) {
+    p5Instance.push()
+    if (this.debug) this.setDebugStyle(p5Instance)
+    else this.setStyle(p5Instance)
+    this.drawPoints(p5Instance, pts)
+    if (this.debug) this.drawDebugText(p5Instance)
     p5Instance.pop()
   }
 
   display(p5Instance: p5) {
-    this.drawPoints(p5Instance, this.points.list)
+    this.drawBaseStyle(p5Instance, this.points.list)
   }
 
   drawWhileAddingPoint(p5Instance: p5, point: p5.Vector) {
     const pts = [...this.points.list, point]
-    this.drawPoints(p5Instance, pts)
+    this.drawBaseStyle(p5Instance, pts)
   }
 
   drawWhileMovingPoint(p5Instance: p5, point: p5.Vector, grabbedPointIdx: number) {
     const pts = this.points.list.map((p, idx) => idx == grabbedPointIdx ? point : p)
-    this.drawPoints(p5Instance, pts)
+    this.drawBaseStyle(p5Instance, pts)
   }
 
   public setStyle(p5Instance: p5) {
@@ -411,17 +433,29 @@ export class Region extends Entity {
     p5Instance.strokeWeight(15)
   }
 
+  public resetDrawState() {
+    this.drawMode = 'display'
+    this.grabPointIdx = undefined
+    this.debug = true
+    this.visible = false
+  }
+
+  public activate() {
+    this.visible = true
+    this.debug = false
+  }
+
   public draw(p5inst: p5) {
     const testComment = `info about the function`
-    if(!this.visible) return
+    if (!this.visible) return
     // if (this.draw2) this.draw2(this, p5inst)
-    if(this.animationSeq) this.animationSeq.draw(p5inst, this, this.animationStartTime, p5inst.millis()/1000)
-    else this.drawBase(p5inst)
+    if (this.animationSeq && !this.debug) this.animationSeq.draw(p5inst, this, this.animationStartTime, p5inst.millis() / 1000)
+    else this.drawDefault(p5inst)
   }
 
   public draw2: ((reg: Region, p5: p5) => void) | undefined
 
-  public drawBase(p5Instance: p5) {
+  public drawDefault(p5Instance: p5) {
     const mousePos = p5Instance.createVector(p5Instance.mouseX, p5Instance.mouseY)
     switch (this.drawMode) {
       case 'display':
