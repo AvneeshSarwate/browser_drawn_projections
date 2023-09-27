@@ -3,6 +3,7 @@ import { Region, type AppState } from '@/stores/stores';
 import p5 from 'p5';
 import { inject, onMounted, onUnmounted } from 'vue';
 import * as a from '@/rendering/planeAnimations'
+import { groupedAnimation0 } from '@/rendering/modularizedTransforms';
 
 
 const appState = inject('appState') as AppState  
@@ -34,22 +35,23 @@ onMounted(() => {
         reg(0).activate()
         reg(1).activate()
         // reg(0).draw2 = cornerPts
-        const lr = a.lrLine(.52)
-        const rl = a.rlLine(.52)
-        const zi = a.zoomIn(1.52)
-        const zo = a.zoomOut(1.52)
+
+
+
+        // const lr = a.lrLine(.52)
+        // const rl = a.rlLine(.52)
+        // const zi = a.zoomIn(1.52)
+        // const zo = a.zoomOut(1.52)
+        // //todo - need some api for these so you don't have to specify
+        // //the region index twice (once on creation and once on assignment)
+        // const dots = new a.PerimiterDots(reg(0), 10).anim(2.52)
+        // reg(0).animationSeq = aseq([dots, rl, lr])
+        groupedAnimation0(appState, reg(0)) //the function below holds the above code in a diff file
 
         " " //a way to add "spacing" when reading eval'd code
-        //todo - need some api for these so you don't have to specify
-        //the region index twice (once on creation and once on assignment)
-        const dots = new a.PerimiterDots(reg(0), 10).anim(2.52)
-        // const dots2 = new a.PerimiterDots(reg(2), 10).anim(2.52)
 
-        reg(0).animationSeq = aseq([dots, rl, lr])
-        reg(1).animationSeq = aseq([lr, rl])
-        reg(5).animationSeq = aseq([rl])
+
         console.log("code ran")
-        // reg(0).animationSeq = undefined
       }
 
 
