@@ -24,6 +24,7 @@ export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => AppSta
       if (activeRegion) {
         p.ellipse(p.mouseX, p.mouseY, 10, 10)
       }
+      p.ellipse(p.mouseX, p.mouseY, 130, 130)
     }
 
     p.keyPressed = () => {

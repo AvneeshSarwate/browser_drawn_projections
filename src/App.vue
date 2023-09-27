@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { globalStore, commandHistory, type AppState } from './stores/stores';
-import RenderCanvas from './components/RenderCanvas.vue';
+import SketchInitializer from './components/SketchInitializer.vue';
 import LivecodeHolder from './components/LivecodeHolder.vue';
 import { provide } from 'vue';
 
@@ -14,7 +14,8 @@ provide('appState', appState)
 </script>
 
 <template>
-  <RenderCanvas ></RenderCanvas>
+  <canvas id="p5Canvas" width="1280" height="720" abitrary-prop="somethi"></canvas>
+  <SketchInitializer ></SketchInitializer>
   <LivecodeHolder></LivecodeHolder>
   <button @click="commandHistory.undo">Undo</button>
   <button @click="commandHistory.redo">Redo</button>
