@@ -31,13 +31,4 @@ onUnmounted(() => {
   causing a flicker. -->
 </template>
 
-<style scoped>
-
-
-
-#p5Canvas {
-  border: 1px solid black;
-  width: 100%;
-  height: 100%;
-}
-</style>
+<style scoped></style>

@@ -89,6 +89,11 @@ more ideas
   if you really want, can even snapshot a thumbnail and have a scene selector UI
 
 
+- create a "modal drawing" interface with mouse and keyboard - different keys for different
+  drawing modes, and also a way to record loops of drawing and play them back
+  - also be able to save and load these loops to file, create transformed instances of them
+    - go back to "delta list" format for saving gestures to enable this
+
 */
 
 onUnmounted(() => {

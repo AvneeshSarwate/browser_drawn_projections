@@ -15,5 +15,5 @@ export const groupedAnimation0 = (state: AppState, region: Region) => {
 
   const dots = new a.PerimiterDots(region, 10).anim(2.52)
 
-  region.animationSeq = aseq([rl, lr])
+  region.animationSeq = aseq([zi, zo, rl, lr])
 }

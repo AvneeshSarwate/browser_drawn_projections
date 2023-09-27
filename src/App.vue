@@ -21,4 +21,12 @@ provide('appState', appState)
   <button @click="commandHistory.redo">Redo</button>
 </template>
 
-<style scoped></style>
+<style scoped>
+
+#p5Canvas {
+  border: 1px solid black;
+  width: 100%;
+  height: 100%;
+}
+
+</style>
