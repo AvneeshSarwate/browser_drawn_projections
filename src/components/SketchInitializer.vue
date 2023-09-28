@@ -1,15 +1,39 @@
 <script setup lang="ts">
 import { createP5Sketch } from '@/rendering/rendering';
 import { type AppState } from '@/stores/stores';
+import type p5 from 'p5';
 import { inject, onMounted, onUnmounted } from 'vue';
 
 
 const appState = inject('appState') as AppState  
 
+const neutralizeSketch = (instance: p5) => {
+  instance.noLoop()
+  instance.draw = () => { }
+  instance.mousePressed = () => { }
+  instance.mouseReleased = () => { }
+  instance.mouseDragged = () => { }
+  instance.mouseMoved = () => { }
+  instance.keyPressed = () => { }
+  instance.keyReleased = () => { }
+  instance.keyTyped = () => { }
+  instance.windowResized = () => { }
+  instance.doubleClicked = () => { }
+  instance.mouseWheel = () => { }
+  instance.touchStarted = () => { }
+  instance.touchMoved = () => { }
+  instance.touchEnded = () => { }
+  instance.deviceMoved = () => { }
+  instance.deviceTurned = () => { }
+  instance.deviceShaken = () => { }
+  instance.preload = () => { }
+  instance.setup = () => { }
+}
+
 
 onMounted(() => {
   //explanation - the closest you can get to removing a p5 instance without removing the underlying canvas
-  appState.p5Instance?.noLoop() 
+  if(appState.p5Instance) neutralizeSketch(appState.p5Instance)
 
   const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
   const p5Instance = createP5Sketch(p5Canvas, () => appState)

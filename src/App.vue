@@ -14,19 +14,40 @@ provide('appState', appState)
 </script>
 
 <template>
-  <canvas id="p5Canvas" width="1280" height="720" abitrary-prop="somethi"></canvas>
+  <div id="controlContainer">
+    <button @click="commandHistory.undo">Undo</button>
+    <button @click="commandHistory.redo">Redo</button>
+  </div>
+  <div>
+    <canvas id="p5Canvas" width="1280" height="720" abitrary-prop="somethi"></canvas>
+    <canvas id="threeCanvas" width="1280" height="720" abitrary-prop="somethi"></canvas>
+  </div>
   <SketchInitializer ></SketchInitializer>
   <LivecodeHolder></LivecodeHolder>
-  <button @click="commandHistory.undo">Undo</button>
-  <button @click="commandHistory.redo">Redo</button>
 </template>
 
 <style scoped>
 
+#controlContainer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+}
+
 #p5Canvas {
   border: 1px solid black;
-  width: 100%;
-  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: -1;
+}
+
+#threeCanvas {
+  border: 1px solid black;
+  position: absolute;
+  top: 0;
+  left: 0;
 }
 
 </style>
