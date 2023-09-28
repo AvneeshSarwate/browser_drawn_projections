@@ -94,6 +94,22 @@ more ideas
   - also be able to save and load these loops to file, create transformed instances of them
     - go back to "delta list" format for saving gestures to enable this
 
+- create the equivalent of CHOPs to provide data sources for animations
+  - need to think about rethink the API for animation segments
+    - abstractions shouldn't be too deep for newcomers to author their own 
+    - need to be able to bind more generally to any kind of "drawable object"
+      - or at least, need to provide type-safety so you can't bind to the wrong thing
+  - figure out how to bind chops to fx parameters
+  - figure out how to bind chops to live inputs (mouse, keyboard, midi, etc)
+  - create equivalents for event-chop and timer chop
+
+- think about an API for transport controls
+  - play, pause, stop, loop, etc
+  - also, how to bind to these from chops
+  - also, how to bind to these from live inputs (mouse, keyboard, midi, etc)
+
+- incorporate theater.js for timelining things?
+
 */
 
 onUnmounted(() => {
