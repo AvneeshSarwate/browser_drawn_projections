@@ -107,8 +107,22 @@ more ideas
   - play, pause, stop, loop, etc
   - also, how to bind to these from chops
   - also, how to bind to these from live inputs (mouse, keyboard, midi, etc)
+  - Use tone.js transport?
 
 - incorporate theater.js for timelining things?
+
+- port over Kotlin structured-timing-loops API into typescript
+  - use tone.js transport for reference timing
+  - implement branch() and wait() functions 
+
+- look into using advanced typescript types to provide more robust way to access
+  channel names for things like event chop where you can have arbitrary metadata
+
+- practical steps
+  - make animations triggerable
+    - do this by having animations run off of an event chop?
+      - have animations take an array of phase values instead of a single one, and
+        run their animation for each val - makes them auto-instancing  
 
 */
 
