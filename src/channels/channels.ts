@@ -17,7 +17,8 @@ function branch<T>(block: () => Promise<T>): Promise<T> {
 document.querySelector('body')?.addEventListener('click', async () => {
   await Tone.start()
   Tone.Transport.start()
-	console.log('audio is ready', Tone.Transport.bpm.value)
+  console.log('audio is ready', Tone.Transport.bpm.value)
+  setTimeout(testCancel, 50)
 })
 
 //simplfy writing this with a snippet? https://code.visualstudio.com/docs/editor/userdefinedsnippets
@@ -82,6 +83,30 @@ class CancelablePromisePoxy<T> implements Promise<T> {
 
 //create a wait function based on tonejs transport 
 
+
+
+/* todo - have a launch() function that is like branch2,
+   and then on the timeContext, have a branch method that creates
+   a new timeContext that inherits the time of the parent
+
+  launch(async (ctx) => {
+    await ctx.wait(1)
+    ctx.branch(async (ctx) => {
+      await ctx.wait(1)
+    })
+  }
+
+*/
+
+
+class TimeContext {
+  public wait: (n: number) => Promise<void>
+  public time: number
+  constructor(time: number, wait: (n: number) => Promise<void>) {
+    this.wait = wait
+    this.time = time
+  }
+}
 
 
 function branch2<T>(block: (waitInstance: (n: number) => Promise<void>) => Promise<T>): CancelablePromisePoxy<T> {

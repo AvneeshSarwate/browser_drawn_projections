@@ -53,7 +53,7 @@ onMounted(() => {
 
         " " //a way to add "spacing" when reading eval'd code
 
-        testCancel()
+        // testCancel()
 
 
         // console.log("code ran")

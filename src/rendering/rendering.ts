@@ -29,7 +29,7 @@ export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => AppSta
     }
 
     p.keyPressed = () => {
-      console.log("key pressed", p.key, p.keyCode)
+      // console.log("key pressed", p.key, p.keyCode)
       const state = appState()
       if (p.key === 'g') {
         const ptAndRegion = findClosestPointAndRegion(p, state.regions)
