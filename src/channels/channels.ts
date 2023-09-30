@@ -1,6 +1,5 @@
 import * as Tone from 'tone'
 
-
 //define an async function that waits using setTimeout
 async function wait(ms: number) {
   return new Promise<void>((resolve, reject) => {
@@ -35,7 +34,7 @@ document.querySelector('body')?.addEventListener('click', async () => {
 //to be able to pause/cancel loops, will probable need to do something like
 
 // class CancelablePromise<T> extends Promise<T> {
-//   public cancelMethod: (() => void) 
+//   public cancelMethod: (() => void)
 //   constructor(...args: [...ConstructorParameters<typeof Promise<T>>, () => void]) {
 //     const [executor, cancelMethod] = args
 //     super(executor);
@@ -65,12 +64,17 @@ class CancelablePromisePoxy<T> implements Promise<T> {
   [Symbol.toStringTag]: string = 'CancelablePromisePoxy'
 
   //fwd then method to the underlying promise
-  then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): Promise<TResult1 | TResult2> {
+  then<TResult1 = T, TResult2 = never>(
+    onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null,
+    onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null
+  ): Promise<TResult1 | TResult2> {
     return this.promise!!.then(onfulfilled, onrejected)
   }
 
   //fwd catch method to the underlying promise
-  catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): Promise<T | TResult> {
+  catch<TResult = never>(
+    onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null
+  ): Promise<T | TResult> {
     return this.promise!!.catch(onrejected)
   }
 
@@ -80,10 +84,7 @@ class CancelablePromisePoxy<T> implements Promise<T> {
   }
 }
 
-
-//create a wait function based on tonejs transport 
-
-
+//create a wait function based on tonejs transport
 
 /* todo - have a launch() function that is like branch2,
    and then on the timeContext, have a branch method that creates
@@ -98,37 +99,51 @@ class CancelablePromisePoxy<T> implements Promise<T> {
 
 */
 
-
-class TimeContext {
-  public wait: (n: number) => Promise<void>
-  public time: number
-  constructor(time: number, wait: (n: number) => Promise<void>) {
-    this.wait = wait
-    this.time = time
-  }
+function launch<T>(
+  block: (ctx: TimeContext) => Promise<T>
+): CancelablePromisePoxy<T> {
+  return createAndLaunchContext(block, Tone.now())
 }
 
-
-function branch2<T>(block: (waitInstance: (n: number) => Promise<void>) => Promise<T>): CancelablePromisePoxy<T> {
-  //define an async function that waits using setTimeout
-  const abortController = new AbortController()
-  const promiseProxy = new CancelablePromisePoxy<T>(abortController)
-  async function waitTransport(sec: number) {
+class TimeContext {
+  public abortController: AbortController
+  public async wait(sec: number) {
     return new Promise<void>((resolve, reject) => {
-      abortController.signal.addEventListener('abort', () => { reject() })
-      promiseProxy.cancel = reject
+      this.abortController.signal.addEventListener('abort', () => { reject()})
       // console.log('waitTransport start', Tone.now(), sec)
       Tone.Transport.scheduleOnce(() => {
         // console.log('waitTransport done')
         resolve()
-      }, "+" + sec) //todo: check if the time units here are correct
+      }, '+' + sec) //todo: check if the time units here are correct
     })
   }
+  public time: number
+  constructor(time: number, ab: AbortController) {
+    this.time = time
+    this.abortController = ab
+  }
+
+  public branch2<T>(block: (ctx: TimeContext) => Promise<T>): CancelablePromisePoxy<T> {
+    //define an async function that waits using setTimeout
+    return createAndLaunchContext(block, this.time)
+  }
+}
+
+function createAndLaunchContext<T>(
+  block: (ctx: TimeContext) => Promise<T>,
+  rootTime: number
+) {
+  //define an async function that waits using setTimeout
+  const abortController = new AbortController()
+  const promiseProxy = new CancelablePromisePoxy<T>(abortController)
+  const newContext = new TimeContext(rootTime, abortController)
 
   try {
-    const blockPromise = block(waitTransport)
+    const blockPromise = block(newContext)
     promiseProxy.promise = blockPromise
-    promiseProxy.cancel = () => { abortController.abort() }
+    promiseProxy.cancel = () => {
+      abortController.abort()
+    }
     return promiseProxy
   } catch (e) {
     console.log('error', e)
@@ -140,20 +155,21 @@ function branch2<T>(block: (waitInstance: (n: number) => Promise<void>) => Promi
 
 export const testCancel = async () => {
 
-  const stepVal = 1
+  launch(async (ctx) => {
+    const stepVal = 1
 
-  const start = Tone.now()
-  const res0 = branch2(async (wt) => {
-    for (let i = 0; i < 100; i++) {
-      console.log('start', i, Tone.now()- start)
-      await wt(stepVal)
-    }
-  })
+    const start = Tone.now()
+    const res0 = ctx.branch2(async (ctx) => {
+      for (let i = 0; i < 100; i++) {
+        console.log('start', i, Tone.now() - start)
+        await ctx.wait(stepVal)
+      }
+    })
 
-  branch2(async (wt) => {
-    await wt(stepVal * 10)  
-    console.log('res0 cancel', Tone.now())
-    res0.cancel()
+    ctx.branch2(async (ctx) => {
+      await ctx.wait(stepVal * 10)
+      console.log('res0 cancel', Tone.now())
+      res0.cancel()
+    })
   })
-  
 }
