@@ -40,17 +40,12 @@ function createAndLaunchContext<T>(block: (ctx: TimeContext) => Promise<T>,rootT
   const abortController = new AbortController()
   const promiseProxy = new CancelablePromisePoxy<T>(abortController)
   const newContext = new TimeContext(rootTime, abortController)
-
-  try {
-    const blockPromise = block(newContext)
-    promiseProxy.promise = blockPromise
-    return promiseProxy
-  } catch (e) {
-    console.log('error', e)
-    const promiseProxy = new CancelablePromisePoxy<T>(abortController)
-    promiseProxy.promise = Promise.reject(e)
-    return promiseProxy
-  }
+  const blockPromise = block(newContext)
+  promiseProxy.promise = blockPromise
+  blockPromise.catch((e) => {
+    console.log('promise catch error', e)
+  })
+  return promiseProxy
 }
 
 function launch<T>(block: (ctx: TimeContext) => Promise<T>): CancelablePromisePoxy<T> {
@@ -60,18 +55,28 @@ function launch<T>(block: (ctx: TimeContext) => Promise<T>): CancelablePromisePo
 class TimeContext {
   public abortController: AbortController
   public time: number
+  public isCanceled: boolean = false
 
   constructor(time: number, ab: AbortController) {
     this.time = time
     this.abortController = ab
+    this.abortController.signal.addEventListener('abort', () => {
+      this.isCanceled = true
+      console.log('abort')
+    })
   }
 
   public async wait(sec: number) {
+    if (this.isCanceled) {
+      throw new Error('context is canceled')
+    }
     const ctx = this
     return new Promise<void>((resolve, reject) => {
-      ctx.abortController.signal.addEventListener('abort', () => { reject(); console.log('abort') })
+      const listener = () => { reject(); console.log('abort') }
+      ctx.abortController.signal.addEventListener('abort', listener)
       Tone.Transport.scheduleOnce(() => {
         ctx.time += sec
+        ctx.abortController.signal.removeEventListener('abort', listener)
         resolve()
       }, ctx.time + sec)
     })
