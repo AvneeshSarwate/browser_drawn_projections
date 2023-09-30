@@ -1,15 +1,9 @@
 import * as Tone from 'tone'
 
-document.querySelector('body')?.addEventListener('click', async () => {
-  await Tone.start()
-  Tone.Transport.start()
-  console.log('audio is ready', Tone.Transport.bpm.value, Tone.context.lookAhead)
-  setTimeout(testCancel, 50)
-})
-
 class CancelablePromisePoxy<T> implements Promise<T> {
   public promise?: Promise<T>
   public abortController: AbortController
+
   constructor(ab: AbortController) {
     this.abortController = ab
   }
@@ -41,10 +35,7 @@ class CancelablePromisePoxy<T> implements Promise<T> {
   }
 }
 
-function createAndLaunchContext<T>(
-  block: (ctx: TimeContext) => Promise<T>,
-  rootTime: number
-) {
+function createAndLaunchContext<T>(block: (ctx: TimeContext) => Promise<T>,rootTime: number) {
   //define an async function that waits using setTimeout
   const abortController = new AbortController()
   const promiseProxy = new CancelablePromisePoxy<T>(abortController)
@@ -65,37 +56,41 @@ function createAndLaunchContext<T>(
   }
 }
 
-function launch<T>(
-  block: (ctx: TimeContext) => Promise<T>
-): CancelablePromisePoxy<T> {
+function launch<T>(block: (ctx: TimeContext) => Promise<T>): CancelablePromisePoxy<T> {
   return createAndLaunchContext(block, Tone.now())
 }
 
 class TimeContext {
   public abortController: AbortController
-  public async wait(sec: number) {
-    const ctx = this
-    return new Promise<void>((resolve, reject) => {
-      ctx.abortController.signal.addEventListener('abort', () => { reject(); console.log('abort') })
-      // console.log('waitTransport start', Tone.now(), sec)
-      Tone.Transport.scheduleOnce(() => {
-        // console.log('waitTransport done')
-        ctx.time += sec
-        resolve()
-      }, ctx.time + sec) //todo: check if the time units here are correct
-    })
-  }
   public time: number
+
   constructor(time: number, ab: AbortController) {
     this.time = time
     this.abortController = ab
   }
 
+  public async wait(sec: number) {
+    const ctx = this
+    return new Promise<void>((resolve, reject) => {
+      ctx.abortController.signal.addEventListener('abort', () => { reject(); console.log('abort') })
+      Tone.Transport.scheduleOnce(() => {
+        ctx.time += sec
+        resolve()
+      }, ctx.time + sec)
+    })
+  }
+
   public branch<T>(block: (ctx: TimeContext) => Promise<T>): CancelablePromisePoxy<T> {
-    //define an async function that waits using setTimeout
     return createAndLaunchContext(block, this.time)
   }
 }
+
+document.querySelector('body')?.addEventListener('click', async () => {
+  await Tone.start()
+  Tone.Transport.start()
+  console.log('audio is ready', Tone.Transport.bpm.value, Tone.context.lookAhead)
+  setTimeout(testCancel, 50)
+})
 
 export const testCancel = async () => {
 
