@@ -93,13 +93,13 @@ export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => AppSta
 }
 
 
-const errorImageTexture = new THREE.TextureLoader().load('error.png')
+const errorImageTexture = new THREE.TextureLoader().load('src/assets/error.jpg')
 const defaultRenderTarget = new THREE.WebGLRenderTarget(1280, 720)
-const renderer = new THREE.WebGLRenderer({canvas: document.getElementById('threeCanvas') as HTMLCanvasElement})
+// const renderer = new THREE.WebGLRenderer({canvas: document.getElementById('threeCanvas') as HTMLCanvasElement})
 
 abstract class ShaderEffect {
   abstract setSrcs(fx: (ShaderEffect|HTMLCanvasElement)[]): void
-  abstract render(): void
+  abstract render(renderer: THREE.WebGLRenderer): void
   output: THREE.WebGLRenderTarget = defaultRenderTarget
   width: number = 1280
   height: number = 720
@@ -115,13 +115,13 @@ abstract class ShaderEffect {
       }
     })
   }
-  public renderAll(): void {
+  public renderAll(renderer: THREE.WebGLRenderer): void {
     this.inputs.forEach((input) => {
       if (input instanceof ShaderEffect) {
-        input.renderAll()
+        input.renderAll(renderer)
       }
     })
-    this.render()
+    this.render(renderer)
   }
 }
 
@@ -247,7 +247,7 @@ class CustomShaderEffect extends ShaderEffect {
       this.material.uniforms['text'+i].value = inputVal
     }
   }
-  render(): void {
+  render(renderer: THREE.WebGLRenderer): void {
     //render to the output
     renderer.setRenderTarget(this.output)
     renderer.render(this.scene, this.camera)
@@ -262,7 +262,7 @@ class CustomFeedbackShaderEffect extends CustomShaderEffect {
     this.material.uniforms['backbuffer'].value = this.pingpong.src.texture
   }
 
-  render(): void {
+  render(renderer: THREE.WebGLRenderer): void {
     //render to the output
     renderer.setRenderTarget(this.pingpong.dst)
     renderer.render(this.scene, this.camera)

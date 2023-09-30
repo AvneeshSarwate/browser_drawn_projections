@@ -14,35 +14,41 @@ function branch<T>(block: () => Promise<T>): Promise<T> {
   return block()
 }
 
-//simplfy writing this with a snippet? https://code.visualstudio.com/docs/editor/userdefinedsnippets
-const res = branch(async () => {
-  console.log('start')
-  wait(10)
-  console.log('end')
+document.querySelector('body')?.addEventListener('click', async () => {
+  await Tone.start()
+  Tone.Transport.start()
+	console.log('audio is ready', Tone.Transport.bpm.value)
 })
 
-res.then(() => {
-  console.log('done')
-})
+//simplfy writing this with a snippet? https://code.visualstudio.com/docs/editor/userdefinedsnippets
+// const res = branch(async () => {
+//   console.log('start')
+//   wait(10)
+//   console.log('end')
+// })
+
+// res.then(() => {
+//   console.log('done')
+// })
 
 //to be able to pause/cancel loops, will probable need to do something like
 
-class CancelablePromise<T> extends Promise<T> {
-  public cancelMethod: (() => void) 
-  constructor(...args: [...ConstructorParameters<typeof Promise<T>>, () => void]) {
-    const [executor, cancelMethod] = args
-    super(executor);
+// class CancelablePromise<T> extends Promise<T> {
+//   public cancelMethod: (() => void) 
+//   constructor(...args: [...ConstructorParameters<typeof Promise<T>>, () => void]) {
+//     const [executor, cancelMethod] = args
+//     super(executor);
 
-    this.cancelMethod = cancelMethod;
-  }
+//     this.cancelMethod = cancelMethod;
+//   }
 
-  //cancel the operation
-  public cancel() {
-    if (this.cancelMethod) {
-      this.cancelMethod()
-    }
-  }
-}
+//   //cancel the operation
+//   public cancel() {
+//     if (this.cancelMethod) {
+//       this.cancelMethod()
+//     }
+//   }
+// }
 
 class CancelablePromisePoxy<T> implements Promise<T> {
   public promise?: Promise<T>
@@ -82,13 +88,15 @@ function branch2<T>(block: (waitInstance: (n: number) => Promise<void>) => Promi
   //define an async function that waits using setTimeout
   const abortController = new AbortController()
   const promiseProxy = new CancelablePromisePoxy<T>(abortController)
-  async function waitTransport(ms: number) {
+  async function waitTransport(sec: number) {
     return new Promise<void>((resolve, reject) => {
       abortController.signal.addEventListener('abort', () => { reject() })
       promiseProxy.cancel = reject
+      // console.log('waitTransport start', Tone.now(), sec)
       Tone.Transport.scheduleOnce(() => {
+        // console.log('waitTransport done')
         resolve()
-      }, Tone.now() + ms/1000) //todo: check if the time units here are correct
+      }, Tone.now() + sec) //todo: check if the time units here are correct
     })
   }
 
@@ -105,21 +113,20 @@ function branch2<T>(block: (waitInstance: (n: number) => Promise<void>) => Promi
   }
 }
 
-const testCancel = async () => {
+export const testCancel = async () => {
 
-  const stepVal = 100
+  const stepVal = 0.01
 
-  const res0 = branch2(async (wait) => {
+  const res0 = branch2(async (wt) => {
     for (let i = 0; i < 100; i++) {
-      console.log('start', i)
-      await wait(stepVal)
-      console.log('end', i)
+      console.log('start', i, Tone.now())
+      await wt(stepVal)
     }
   })
 
-  branch2(async (wait) => {
-    await wait(stepVal * 10)  
-    console.log('res0 cancel')
+  branch2(async (wt) => {
+    await wt(stepVal * 10)  
+    console.log('res0 cancel', Tone.now())
     res0.cancel()
   })
   
