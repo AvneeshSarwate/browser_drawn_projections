@@ -121,7 +121,7 @@ function branch2<T>(block: (waitInstance: (n: number) => Promise<void>) => Promi
       Tone.Transport.scheduleOnce(() => {
         // console.log('waitTransport done')
         resolve()
-      }, Tone.now() + sec) //todo: check if the time units here are correct
+      }, "+" + sec) //todo: check if the time units here are correct
     })
   }
 
@@ -140,11 +140,12 @@ function branch2<T>(block: (waitInstance: (n: number) => Promise<void>) => Promi
 
 export const testCancel = async () => {
 
-  const stepVal = 0.01
+  const stepVal = 1
 
+  const start = Tone.now()
   const res0 = branch2(async (wt) => {
     for (let i = 0; i < 100; i++) {
-      console.log('start', i, Tone.now())
+      console.log('start', i, Tone.now()- start)
       await wt(stepVal)
     }
   })
