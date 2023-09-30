@@ -35,7 +35,7 @@ class CancelablePromisePoxy<T> implements Promise<T> {
   }
 }
 
-function createAndLaunchContext<T>(block: (ctx: TimeContext) => Promise<T>,rootTime: number) {
+function createAndLaunchContext<T>(block: (ctx: TimeContext) => Promise<T>,rootTime: number): CancelablePromisePoxy<T> {
   //define an async function that waits using setTimeout
   const abortController = new AbortController()
   const promiseProxy = new CancelablePromisePoxy<T>(abortController)
@@ -44,9 +44,6 @@ function createAndLaunchContext<T>(block: (ctx: TimeContext) => Promise<T>,rootT
   try {
     const blockPromise = block(newContext)
     promiseProxy.promise = blockPromise
-    promiseProxy.cancel = () => {
-      abortController.abort()
-    }
     return promiseProxy
   } catch (e) {
     console.log('error', e)
