@@ -1,54 +1,11 @@
 import * as Tone from 'tone'
 
-//define an async function that waits using setTimeout
-async function wait(ms: number) {
-  return new Promise<void>((resolve, reject) => {
-    setTimeout(() => {
-      resolve()
-    }, ms)
-  })
-}
-
-function branch<T>(block: () => Promise<T>): Promise<T> {
-  return block()
-}
-
 document.querySelector('body')?.addEventListener('click', async () => {
   await Tone.start()
   Tone.Transport.start()
-  console.log('audio is ready', Tone.Transport.bpm.value)
+  console.log('audio is ready', Tone.Transport.bpm.value, Tone.context.lookAhead)
   setTimeout(testCancel, 50)
 })
-
-//simplfy writing this with a snippet? https://code.visualstudio.com/docs/editor/userdefinedsnippets
-// const res = branch(async () => {
-//   console.log('start')
-//   wait(10)
-//   console.log('end')
-// })
-
-// res.then(() => {
-//   console.log('done')
-// })
-
-//to be able to pause/cancel loops, will probable need to do something like
-
-// class CancelablePromise<T> extends Promise<T> {
-//   public cancelMethod: (() => void)
-//   constructor(...args: [...ConstructorParameters<typeof Promise<T>>, () => void]) {
-//     const [executor, cancelMethod] = args
-//     super(executor);
-
-//     this.cancelMethod = cancelMethod;
-//   }
-
-//   //cancel the operation
-//   public cancel() {
-//     if (this.cancelMethod) {
-//       this.cancelMethod()
-//     }
-//   }
-// }
 
 class CancelablePromisePoxy<T> implements Promise<T> {
   public promise?: Promise<T>
@@ -84,51 +41,6 @@ class CancelablePromisePoxy<T> implements Promise<T> {
   }
 }
 
-//create a wait function based on tonejs transport
-
-/* todo - have a launch() function that is like branch2,
-   and then on the timeContext, have a branch method that creates
-   a new timeContext that inherits the time of the parent
-
-  launch(async (ctx) => {
-    await ctx.wait(1)
-    ctx.branch(async (ctx) => {
-      await ctx.wait(1)
-    })
-  }
-
-*/
-
-function launch<T>(
-  block: (ctx: TimeContext) => Promise<T>
-): CancelablePromisePoxy<T> {
-  return createAndLaunchContext(block, Tone.now())
-}
-
-class TimeContext {
-  public abortController: AbortController
-  public async wait(sec: number) {
-    return new Promise<void>((resolve, reject) => {
-      this.abortController.signal.addEventListener('abort', () => { reject()})
-      // console.log('waitTransport start', Tone.now(), sec)
-      Tone.Transport.scheduleOnce(() => {
-        // console.log('waitTransport done')
-        resolve()
-      }, '+' + sec) //todo: check if the time units here are correct
-    })
-  }
-  public time: number
-  constructor(time: number, ab: AbortController) {
-    this.time = time
-    this.abortController = ab
-  }
-
-  public branch2<T>(block: (ctx: TimeContext) => Promise<T>): CancelablePromisePoxy<T> {
-    //define an async function that waits using setTimeout
-    return createAndLaunchContext(block, this.time)
-  }
-}
-
 function createAndLaunchContext<T>(
   block: (ctx: TimeContext) => Promise<T>,
   rootTime: number
@@ -153,22 +65,56 @@ function createAndLaunchContext<T>(
   }
 }
 
+function launch<T>(
+  block: (ctx: TimeContext) => Promise<T>
+): CancelablePromisePoxy<T> {
+  return createAndLaunchContext(block, Tone.now())
+}
+
+class TimeContext {
+  public abortController: AbortController
+  public async wait(sec: number) {
+    const ctx = this
+    return new Promise<void>((resolve, reject) => {
+      ctx.abortController.signal.addEventListener('abort', () => { reject(); console.log('abort') })
+      // console.log('waitTransport start', Tone.now(), sec)
+      Tone.Transport.scheduleOnce(() => {
+        // console.log('waitTransport done')
+        ctx.time += sec
+        resolve()
+      }, ctx.time + sec) //todo: check if the time units here are correct
+    })
+  }
+  public time: number
+  constructor(time: number, ab: AbortController) {
+    this.time = time
+    this.abortController = ab
+  }
+
+  public branch<T>(block: (ctx: TimeContext) => Promise<T>): CancelablePromisePoxy<T> {
+    //define an async function that waits using setTimeout
+    return createAndLaunchContext(block, this.time)
+  }
+}
+
 export const testCancel = async () => {
 
   launch(async (ctx) => {
-    const stepVal = 1
+    const stepVal = 0.2
 
-    const start = Tone.now()
-    const res0 = ctx.branch2(async (ctx) => {
+    const start = ctx.time
+    const start2 = performance.now() + Tone.context.lookAhead*1000
+    const res0 = ctx.branch(async (ctx) => {
       for (let i = 0; i < 100; i++) {
-        console.log('start', i, Tone.now() - start)
+        const [logicalTime, wallTime] = [ctx.time - start, (performance.now() - start2)/1000]
+        console.log('step', i, "logicalTime", logicalTime, "drift", (wallTime - logicalTime).toFixed(3))
         await ctx.wait(stepVal)
       }
     })
 
-    ctx.branch2(async (ctx) => {
+    ctx.branch(async (ctx) => {
       await ctx.wait(stepVal * 10)
-      console.log('res0 cancel', Tone.now())
+      console.log('res0 cancel', performance.now() - start2)
       res0.cancel()
     })
   })
