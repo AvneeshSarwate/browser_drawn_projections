@@ -165,16 +165,20 @@ class ADSR implements Envelope{
   //calculates where the envelope val would have been at queryTime
   //given onTime and offTime. Then, in the relase state, the final
   //lerp is lerp(offVal, relaseLevel, releaseProgress)
+
+  //todo - figure out how touchdesigner deals with triggered vs on/off events wrt attack/release stages
   public val(time?: number): number {
     const queryTime = time ?? Tone.Transport.now()
     if (!this.started) return 0
     else {
       if (this.isHeld) {
-        if (queryTime < this.onTime + this.attack) {
-          const attackProgress = (queryTime - (this.onTime + this.attack)) / this.attack
+        const attackEndTime = this.onTime + this.attack
+        const decayEndTime = attackEndTime + this.decay
+        if (queryTime < attackEndTime) {
+          const attackProgress = (queryTime - (attackEndTime)) / this.attack
           return attackProgress
-        } else if (queryTime < this.onTime + this.attack + this.decay) {
-          const decayProgress = (queryTime - (this.onTime + this.attack + this.decay)) / this.decay
+        } else if (queryTime < decayEndTime) {
+          const decayProgress = (queryTime - (decayEndTime)) / this.decay
           return lerp(1, this.sustain, decayProgress)
         } else {
           return this.sustain
@@ -200,15 +204,24 @@ each CHOP exposes a "channels" list of arrays, and a sample(ind) method that ret
 */
 
 /*
-todo - who manages lifecycle of events? events should probably "run" on their own.
-should events be given a TimeContext to run in to keep all timing tight?
-should events have callbacks - use callback to get EventChop to delete the event
+todo - event lifecycle
+- who manages lifecycle of events? events should probably "run" on their own.
+- should events be given a TimeContext to run in to keep all timing tight?
+  - want events to run w/o Tone.Transport.lookAhead latency, and to simplify things, 
+    they shouldn't need to interact with branching-time context - progression
+    of a single event should be launch-and-forget
+    - can schedule with Tone.Transport.scheduleOnce(Tone.Transport.immediate(), () => { ... })
+- should events have callbacks - use callback to get EventChop to delete the event
 */
 
 /*
 do chops have pull-model rendering? time driven chops like eventCHOP or patternCHOP
-run on their own, but values only get use when chop graph is pulled from?
+run on their own, but values only get used when chop graph is pulled from?
 overall this seems fine, but how does this play with feedback?
+
+the only time this is a problem for feedback is if the time in between "frames"
+is significant for the calculation - (e.g, physics - anything else?)
+- also in general, don't need feedback for most things -  can just ignore it for now
 
 */
 
