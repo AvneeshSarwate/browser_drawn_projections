@@ -129,7 +129,46 @@ interface Envelope {
   off(time?: number): void
   trigger(time?: number): void 
   val(time?: number): number
+  onFinish?: () => void
+  release: number
+  isHeld: boolean
+  onTime: number
+  offTime: number
+  started: boolean
 }
+
+class RampEnv implements Envelope {
+  release = 1
+  isHeld = false
+  onTime = -1
+  offTime = -1
+  started = false
+  constructor() {
+
+  }
+
+  on(time?: number) {
+    this.onTime = time ?? Tone.Transport.immediate()
+    this.isHeld = true
+    this.started = true
+  }
+  off(time?: number) {
+    this.offTime = time ?? Tone.Transport.immediate()
+    this.isHeld = false
+  }
+  trigger(time?: number) {
+    this.offTime = this.onTime = time ?? Tone.Transport.immediate()
+    this.started = true
+    this.isHeld = false
+  }
+  val(time?: number): number {
+    const queryTime = time ?? Tone.Transport.immediate()
+    if (!this.started) return 0
+    else return Math.min(1, (queryTime - this.onTime) / this.release)
+  }
+}
+
+
 
 
 class ADSR implements Envelope{
@@ -147,16 +186,16 @@ class ADSR implements Envelope{
   }
   // get() attackTime => this.onTime + this.attack
   public on(time?: number) {
-    this.onTime = time ?? Tone.Transport.now()
+    this.onTime = time ?? Tone.Transport.immediate()
     this.isHeld = true
     this.started = true
   }
   public off(time?: number) {
-    this.offTime = time ?? Tone.Transport.now()
+    this.offTime = time ?? Tone.Transport.immediate()
     this.isHeld = false
   }
   public trigger(time?: number) {
-    this.offTime = this.onTime = time ?? Tone.Transport.now()
+    this.offTime = this.onTime = time ?? Tone.Transport.immediate()
     this.started = true
     this.isHeld = false
   }
@@ -168,7 +207,7 @@ class ADSR implements Envelope{
 
   //todo - figure out how touchdesigner deals with triggered vs on/off events wrt attack/release stages
   public val(time?: number): number {
-    const queryTime = time ?? Tone.Transport.now()
+    const queryTime = time ?? Tone.Transport.immediate()
     if (!this.started) return 0
     else {
       if (this.isHeld) {
@@ -231,17 +270,16 @@ class EventChop<T> {
   sustain: number = 1
   release: number = 0
   releaseLevel: number = 1
-  public events: ({ evt: ADSR, metadata: T })[] = []
+  public events: ({ evt: Envelope, metadata: T })[] = []
 
-  public newEvt(metadata: T) {
-    const evt = new ADSR()
-    evt.attack = this.attack 
-    evt.decay = this.decay
-    evt.sustain = this.sustain
-    evt.release = this.release
-    evt.releaseLevel = this.releaseLevel
-    evt.trigger()
-    this.events.push({evt, metadata})
+  public newEvt(evt: Envelope, metadata: T) {
+    const evtData = { evt, metadata }
+    this.events.push(evtData)
+    evt.onFinish = () => {
+      const idx = this.events.indexOf(evtData)
+      this.events.splice(idx, 1)
+    }
+    evt.on()
   }
 
   public samples() { //some composite type using keysof 
