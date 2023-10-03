@@ -341,6 +341,19 @@ function testCalls() {
     }
   })
 
+  /**
+   * what people want out of node based systems is to be able to easily see
+   * high level data flow, and to be able to have a formal notion 
+   * of PROGRESSION OF TIME
+   * 
+   * can still have your code-based-node system work with callbacks, 
+   * just name your callbacks and pass in the variables instead of 
+   * defining them all inline. Makes the code cleaner
+   * 
+   * even "opening a menu of a node object" can be simulated by cmd-clicking to 
+   * go to the place where the arguments-variable is defined
+   */
+
 
 
 }
