@@ -308,6 +308,10 @@ class EventChop<T> {
       this.events.splice(idx, 1)
     }
   }
+
+  public ramp(time: number, metadata: T): void {
+    this.newEvt(new Ramp(time).trigger(), metadata)
+  }
   
   public samples(): (T & { evtId: number, val: number })[] { //some composite type using keysof 
     return this.events.map((evtData) => {
@@ -322,12 +326,22 @@ class EventChop<T> {
 
 function testCalls() {
   const ec = new EventChop<{ reg: Region, aseg: a.AnimationSegment }>()
-  const reg = new Region()
-  ec.newEvt(new Ramp(1).trigger(), { reg, aseg: a.lrLine(1) })
+  const regs: Region[] = []
+  ec.newEvt(new Ramp(1).trigger(), { reg: regs[0], aseg: a.lrLine(1) })
 
   ec.samples().forEach((sample) => {
     sample.aseg.phaseDraw(new p5(() => { }), sample.reg, sample.val)
   })
+
+  launch(async (ctx) => {
+    for (let i = 0; i < 10; i++) {
+      ec.ramp(1, { reg: regs[i % 4], aseg: a.lrLine(1) })
+      ec.ramp(1, { reg: regs[(i+2) % 4], aseg: a.rlLine(1) })
+      await ctx.wait(1)
+    }
+  })
+
+
 
 }
 
