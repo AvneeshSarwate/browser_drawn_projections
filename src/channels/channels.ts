@@ -1,5 +1,8 @@
+import { Region } from '@/stores/stores'
 import { lerp } from 'three/src/math/MathUtils.js'
 import * as Tone from 'tone'
+import * as a from '@/rendering/planeAnimations'
+import p5 from 'p5'
 
 class CancelablePromisePoxy<T> implements Promise<T> {
   public promise?: Promise<T>
@@ -48,7 +51,7 @@ function createAndLaunchContext<T>(block: (ctx: TimeContext) => Promise<T>,rootT
   })
   return promiseProxy
 }
-
+//todo - need to register all launches to global state so they can be canceled on hot reload
 function launch<T>(block: (ctx: TimeContext) => Promise<T>): CancelablePromisePoxy<T> {
   return createAndLaunchContext(block, Tone.now())
 }
@@ -125,46 +128,57 @@ export const testCancel = async () => {
 
 
 interface Envelope {
-  on(time?: number): void
-  off(time?: number): void
-  trigger(time?: number): void 
+  hold(time?: number): Envelope
+  release(time?: number): Envelope
+  trigger(time?: number): Envelope 
   val(time?: number): number
   onFinish?: () => void
-  release: number
+  releaseDur: number
   isHeld: boolean
   onTime: number
-  offTime: number
+  releaseTime: number
   started: boolean
 }
 
-class RampEnv implements Envelope {
-  release = 1
+//an envelope that only triggers - no hold/release
+class Ramp implements Envelope {
+  releaseDur = 1
   isHeld = false
   onTime = -1
-  offTime = -1
+  releaseTime = -1
   started = false
-  constructor() {
-
+  constructor(releaseDur: number) {
+    this.releaseDur = releaseDur
   }
 
-  on(time?: number) {
+  scheduleReleaseCallback() {
+    Tone.Transport.scheduleOnce(() => {
+      this.onFinish?.()
+    }, this.onTime + this.releaseDur)
+  }
+  onFinish?: () => void = undefined
+
+  hold(time?: number) {
     this.onTime = time ?? Tone.Transport.immediate()
-    this.isHeld = true
     this.started = true
+    this.scheduleReleaseCallback()
+    return this
   }
-  off(time?: number) {
-    this.offTime = time ?? Tone.Transport.immediate()
-    this.isHeld = false
+  release(time?: number) {
+    this.releaseTime = time ?? Tone.Transport.immediate()
+    return this
   }
   trigger(time?: number) {
-    this.offTime = this.onTime = time ?? Tone.Transport.immediate()
+    this.releaseTime = this.onTime = time ?? Tone.Transport.immediate()
     this.started = true
     this.isHeld = false
+    this.scheduleReleaseCallback()
+    return this
   }
   val(time?: number): number {
     const queryTime = time ?? Tone.Transport.immediate()
     if (!this.started) return 0
-    else return Math.min(1, (queryTime - this.onTime) / this.release)
+    else return Math.min(1, (queryTime - this.onTime) / this.releaseDur)
   }
 }
 
@@ -175,29 +189,42 @@ class ADSR implements Envelope{
   attack: number = 1
   decay: number = 0
   sustain: number = 1
-  release: number = 0
+  releaseDur: number = 0
   releaseLevel: number = 1
   isHeld: boolean = false
   onTime: number = 0
-  offTime: number = 0
+  releaseTime: number = 0
   started: boolean = false
   constructor() {
 
   }
+
+  scheduleReleaseCallback() {
+    Tone.Transport.scheduleOnce(() => {
+      this.onFinish?.()
+    }, this.onTime + this.releaseDur)
+  }
+  onFinish?: () => void = undefined
+
   // get() attackTime => this.onTime + this.attack
-  public on(time?: number) {
+  public hold(time?: number) {
     this.onTime = time ?? Tone.Transport.immediate()
     this.isHeld = true
     this.started = true
+    return this
   }
-  public off(time?: number) {
-    this.offTime = time ?? Tone.Transport.immediate()
+  public release(time?: number) {
+    this.releaseTime = time ?? Tone.Transport.immediate()
     this.isHeld = false
+    this.scheduleReleaseCallback()
+    return this
   }
   public trigger(time?: number) {
-    this.offTime = this.onTime = time ?? Tone.Transport.immediate()
+    this.releaseTime = this.onTime = time ?? Tone.Transport.immediate()
     this.started = true
     this.isHeld = false
+    this.scheduleReleaseCallback()
+    return this
   }
 
   //todo - this might need another intermediate value called offVal that 
@@ -223,7 +250,7 @@ class ADSR implements Envelope{
           return this.sustain
         }
       } else {
-        const releaseProgress = (queryTime - this.offTime) / this.release
+        const releaseProgress = (queryTime - this.releaseTime) / this.releaseDur
         return lerp(this.sustain, this.releaseLevel, releaseProgress)
       }
     }
@@ -270,23 +297,42 @@ class EventChop<T> {
   sustain: number = 1
   release: number = 0
   releaseLevel: number = 1
-  public events: ({ evt: Envelope, metadata: T })[] = []
+  idGen: number = 0
+  public events: ({ evt: Envelope, metadata: T, id: number })[] = []
 
-  public newEvt(evt: Envelope, metadata: T) {
-    const evtData = { evt, metadata }
+  public newEvt(evt: Envelope, metadata: T): void {
+    const evtData = { evt, metadata, id: this.idGen++ }
     this.events.push(evtData)
     evt.onFinish = () => {
       const idx = this.events.indexOf(evtData)
       this.events.splice(idx, 1)
     }
-    evt.on()
   }
-
-  public samples() { //some composite type using keysof 
-
+  
+  public samples(): (T & { evtId: number, val: number })[] { //some composite type using keysof 
+    return this.events.map((evtData) => {
+      return {
+        ...evtData.metadata,
+        evtId: evtData.id,
+        val: evtData.evt.val()
+      }
+    })
   }
+}
+
+function testCalls() {
+  const ec = new EventChop<{ reg: Region, aseg: a.AnimationSegment }>()
+  const reg = new Region()
+  ec.newEvt(new Ramp(1).trigger(), { reg, aseg: a.lrLine(1) })
+
+  ec.samples().forEach((sample) => {
+    sample.aseg.phaseDraw(new p5(() => { }), sample.reg, sample.val)
+  })
 
 }
+
+
+//usage evtChop.newEvt(new ADSR().trigger(), { ... })
 
 /*
 EventCHOP clone design
