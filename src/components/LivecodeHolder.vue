@@ -4,7 +4,7 @@ import p5 from 'p5';
 import { inject, onMounted, onUnmounted } from 'vue';
 import * as a from '@/rendering/planeAnimations'
 import { groupedAnimation0 } from '@/rendering/modularizedTransforms';
-import { testCancel, xyZip, sin, cos } from '@/channels/channels';
+import { testCancel, xyZip, sin, cos, EventChop } from '@/channels/channels';
 
 
 const appState = inject('appState') as AppState  
@@ -46,6 +46,7 @@ const reset = () => {
 
 onMounted(() => {
   try {
+    const p5i = appState.p5Instance!!
     if (appState.p5Instance && appState.regions.list.length > 0) {
 
 
@@ -78,6 +79,25 @@ onMounted(() => {
          * 
          * lets you easily create variations cyclic patterns
          */
+
+        const ec = new EventChop<{x: number}>()
+
+        document.onmousedown = () => {
+          ec.ramp(1, { x:  p5i.mouseX})
+          console.log("mouse down")
+        }
+
+        const chopDraw = (p5: p5) => {
+          ec.samples().forEach((s) => {
+            p5.push()
+            p5.fill(255,0,0)
+            p5.circle(s.x, s.val * 700, 130)
+            p5.pop()
+            console.log("chop draw", s.val)
+          })
+        }
+        appState.drawFunctions.push(chopDraw)
+        
         const patternDraw = (p5: p5) => {
           const sin2 = (p: number) => sin(p*2.5)
           xyZip(Date.now() / 10000, sin2, cos, 20).forEach((pt) => {

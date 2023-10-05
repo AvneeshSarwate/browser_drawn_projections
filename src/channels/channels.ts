@@ -95,7 +95,7 @@ document.querySelector('body')?.addEventListener('click', async () => {
   await Tone.start()
   Tone.Transport.start()
   console.log('audio is ready', Tone.Transport.bpm.value, Tone.context.lookAhead)
-  setTimeout(testCancel, 50)
+  // setTimeout(testCancel, 50)
 })
 
 export const testCancel = async () => {
@@ -291,12 +291,8 @@ is significant for the calculation - (e.g, physics - anything else?)
 
 */
 
-class EventChop<T> {
-  attack: number = 1
-  decay: number = 0
-  sustain: number = 1
-  release: number = 0
-  releaseLevel: number = 1
+export class EventChop<T> {
+
   idGen: number = 0
   public events: ({ evt: Envelope, metadata: T, id: number })[] = []
 
