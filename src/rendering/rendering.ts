@@ -3,6 +3,7 @@ import p5 from 'p5'
 import * as THREE from 'three'
 
 export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => AppState): p5 {
+
   const sketch = (p: p5) => {
 
     let newRegion: Region | undefined = undefined
@@ -13,6 +14,8 @@ export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => AppSta
     }
 
     p.draw = () => {
+      appState().stats.begin()
+
       p.push()  
         p.fill(0)
         p.rect(0, 0, p.width, p.height)
@@ -27,6 +30,8 @@ export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => AppSta
         p.ellipse(p.mouseX, p.mouseY, 10, 10)
       }
       p.ellipse(p.mouseX, p.mouseY, 130, 130)
+
+      appState().stats.end()
     }
 
     p.keyPressed = () => {

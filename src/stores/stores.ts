@@ -4,6 +4,9 @@ import p5 from 'p5'
 import type { AnimationSeq } from '@/rendering/planeAnimations'
 import { storedData1 } from './exportedShapes'
 
+//@ts-ignore
+import Stats from '../../node_modules/stats.js/src/Stats.js'
+
 abstract class Entity {
   public type = 'Entity'
   public id = -1 
@@ -494,12 +497,17 @@ export function findClosestPointAndRegion(p5Instance: p5, regions: EntityList<Re
   }
 }
 
+const stats = new Stats();
+stats.showPanel( 1 ); // 0: fps, 1: ms, 2: mb, 3+: custom
+document.body.appendChild( stats.dom );
+
 export type AppState = {
   regions: EntityList<Region>
   p5Instance: p5 | undefined
   codeStack: (() => void)[]
   codeStackIndex: number
   drawFunctions: ((p5: p5) => void)[]
+  stats: {begin: () => void, end: () => void}
 }
 
 const appState: AppState = {
@@ -507,7 +515,8 @@ const appState: AppState = {
   p5Instance: undefined,
   codeStack: [],
   codeStackIndex: 0,
-  drawFunctions: []
+  drawFunctions: [],
+  stats: stats
 } 
 
 export const globalStore = defineStore('appState', () => {

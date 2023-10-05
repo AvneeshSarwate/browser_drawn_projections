@@ -82,9 +82,11 @@ onMounted(() => {
 
         const ec = new EventChop<{x: number}>()
 
+
+        //todo - create cleaner way to set up mouse/keyboard mappings on p5 sketch
         document.onmousedown = () => {
           ec.ramp(1, { x:  p5i.mouseX})
-          console.log("mouse down")
+          // console.log("mouse down")
         }
 
         const chopDraw = (p5: p5) => {

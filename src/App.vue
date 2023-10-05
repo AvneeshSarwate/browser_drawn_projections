@@ -39,6 +39,7 @@ provide('appState', appState)
   top: 0;
   left: 0;
   z-index: 1;
+  visibility: hidden;
 }
 
 #p5Canvas {
