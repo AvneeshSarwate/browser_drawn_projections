@@ -30,10 +30,13 @@ const reset = () => {
     r.resetDrawState()
 
     /**
-     * todo - should there even be any "retained state" at all, or should all 
+     * todo - should there even be any "persistent state" at all wrt animations, or should all 
      *        behaviors be specified via "pure" function calls in a draw callback?
      *        (probably want some retained state, but have to be conginzant about)
-     *        keeping the "visibile code <=> running animation state" invariant true
+     *        keeping the "visibile code <=> running animation state" invariant true.
+     *        It is trivially true on page load, but can be violated by livecoding, 
+     *        so need to think about what "persistent" objects are and maybe have
+     *        some formal opt-in/out auto-reset functionality for all of them
      */
     r.animationSeq = undefined
   })
