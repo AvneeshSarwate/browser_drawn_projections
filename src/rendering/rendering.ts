@@ -20,6 +20,7 @@ export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => AppSta
       appState().regions.list.forEach((region) => {
         region.draw(p)
       })
+      appState().drawFunctions.forEach(d => d(p))
       const savedActiveRegion = appState().regions.list.find((region) => region.isActive)
       const activeRegion = savedActiveRegion || newRegion
       if (activeRegion) {
@@ -68,9 +69,9 @@ export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => AppSta
       if (p.keyCode === 32) { //spacebar
         const savedActiveRegion = state.regions.list.find((region) => region.isActive)
         const activeRegion = savedActiveRegion || newRegion
-        console.log('enter', activeRegion)
+        // console.log('enter', activeRegion)
         if (activeRegion?.drawMode === 'addingPoint') {
-          console.log('adding point', p.mouseX, p.mouseY)
+          // console.log('adding point', p.mouseX, p.mouseY)
           const newPt = new p5.Vector(p.mouseX, p.mouseY)
           activeRegion.points.pushItem(newPt)
           if (activeRegion.points.list.length == 1) {

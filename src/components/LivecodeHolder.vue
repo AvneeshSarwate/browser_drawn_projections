@@ -4,7 +4,7 @@ import p5 from 'p5';
 import { inject, onMounted, onUnmounted } from 'vue';
 import * as a from '@/rendering/planeAnimations'
 import { groupedAnimation0 } from '@/rendering/modularizedTransforms';
-import { testCancel } from '@/channels/channels';
+import { testCancel, xyZip, sin, cos } from '@/channels/channels';
 
 
 const appState = inject('appState') as AppState  
@@ -19,12 +19,18 @@ const cornerPts = (reg: Region, p5: p5) => {
   })
 }
 
+const norm  = ({x, y}: {x: number, y: number}) => ({x: x * appState.p5Instance!!.width, y: y * appState.p5Instance!!.height})
+
 const aseq = (animations: a.AnimationSegment[]) => {
   return new a.AnimationSeq(animations)
 }
 
-const resetRegions = () => {
-  appState.regions.list.forEach(r => r.resetDrawState())
+const reset = () => {
+  appState.regions.list.forEach(r => {
+    r.resetDrawState()
+    r.animationSeq = undefined
+  })
+  appState.drawFunctions = []
 }
 
 
@@ -34,28 +40,41 @@ onMounted(() => {
 
 
       const code = () => {
-        resetRegions()
-        // reg(0).activate()
-        // reg(1).activate()
+        reset()
+        reg(0).activate().debug = true
+        reg(1).activate()
         // // reg(0).draw2 = cornerPts
 
 
+        // //todo - need some api for these so you don't have to specify
+        // //the region index twice (once on creation and once on assignment)
+        // const dots = new a.PerimiterDots(reg(0), 10).anim(2.52)
+        // reg(0).animationSeq = aseq([dots, rl, lr])
 
-        // // const lr = a.lrLine(.52)
-        // // const rl = a.rlLine(.52)
-        // // const zi = a.zoomIn(1.52)
-        // // const zo = a.zoomOut(1.52)
-        // // //todo - need some api for these so you don't have to specify
-        // // //the region index twice (once on creation and once on assignment)
-        // // const dots = new a.PerimiterDots(reg(0), 10).anim(2.52)
-        // // reg(0).animationSeq = aseq([dots, rl, lr])
-        // groupedAnimation0(appState, reg(0)) //the function below holds the above code in a diff file
+        //modularize creation of a sequence into a function - module can be livecoded
+        groupedAnimation0(appState, reg(1)) 
 
         " " //a way to add "spacing" when reading eval'd code
 
         // testCancel()
 
-
+        /**
+         * todo - need to streamline api for patterns - goal is to be able
+         * to very quickly livecode different x/y streams to change
+         * instancing behavior of dots
+         * 
+         * idea - "patterns" are just functions that take a phase value
+         *        in [0, 1] and return an output [0, 1]
+         * 
+         * lets you easily create variations cyclic patterns
+         */
+        const patternDraw = (p5: p5) => {
+          const sin2 = (p: number) => sin(p*2.5)
+          xyZip(Date.now() / 10000, sin2, cos, 20).forEach((pt) => {
+            p5.circle(norm(pt).x, norm(pt).y, 30)
+          })
+        }
+        appState.drawFunctions.push(patternDraw)
         // console.log("code ran")
       }
 
@@ -128,6 +147,8 @@ more ideas
     - do this by having animations run off of an event chop?
       - have animations take an array of phase values instead of a single one, and
         run their animation for each val - makes them auto-instancing  
+  - don't actuall need a pattern CHOP, just need pattern generating functions
+    with good API/defaults, driven by a phase value
 
 */
 

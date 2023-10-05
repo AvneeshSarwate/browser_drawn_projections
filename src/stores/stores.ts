@@ -443,6 +443,7 @@ export class Region extends Entity {
   public activate() {
     this.visible = true
     this.debug = false
+    return this
   }
 
   public draw(p5inst: p5) {
@@ -498,13 +499,15 @@ export type AppState = {
   p5Instance: p5 | undefined
   codeStack: (() => void)[]
   codeStackIndex: number
+  drawFunctions: ((p5: p5) => void)[]
 }
 
 const appState: AppState = {
   regions: new EntityList(Region).deserialize(storedData1),
   p5Instance: undefined,
   codeStack: [],
-  codeStackIndex: 0
+  codeStackIndex: 0,
+  drawFunctions: []
 } 
 
 export const globalStore = defineStore('appState', () => {

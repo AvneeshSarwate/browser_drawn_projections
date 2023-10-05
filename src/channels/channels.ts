@@ -324,6 +324,8 @@ class EventChop<T> {
   }
 }
 
+
+
 function testCalls() {
   const ec = new EventChop<{ reg: Region, aseg: a.AnimationSegment }>()
   const regs: Region[] = []
@@ -340,30 +342,45 @@ function testCalls() {
       await ctx.wait(1)
     }
   })
-
-  /**
-   * what people want out of node based systems is to be able to easily see
-   * high level data flow, and to be able to have a formal notion 
-   * of PROGRESSION OF TIME
-   * 
-   * can still have your code-based-node system work with callbacks, 
-   * just name your callbacks and pass in the variables instead of 
-   * defining them all inline. Makes the code cleaner
-   * 
-   * even "opening a menu of a node object" can be simulated by cmd-clicking to 
-   * go to the place where the arguments-variable is defined
-   */
-
-
-
 }
 
+/**
+ * what people want out of node based systems is to be able to easily see
+ * high level data flow, and to be able to have a formal notion 
+ * of PROGRESSION OF TIME
+ * 
+ * can still have your code-based-node system work with callbacks, 
+ * just name your callbacks and pass in the variables instead of 
+ * defining them all inline. Makes the code cleaner
+ * 
+ * even "opening a menu of a node object" can be simulated by cmd-clicking to 
+ * go to the place where the arguments-variable is defined
+ */
 
-//usage evtChop.newEvt(new ADSR().trigger(), { ... })
 
-/*
-EventCHOP clone design
-- need an Envelope class 
+type PatternGen = (phase: number, count: number, cycle: number) => number[]
 
+export const sin = (phase: number): number  => {
+  return Math.sin(phase * Math.PI * 2) * 0.5 + 0.5
+}
 
-*/
+export const cos = (phase: number): number  => {
+  return Math.cos(phase * Math.PI * 2) * 0.5 + 0.5
+}
+
+export const tri = (phase: number): number => {
+  return Math.abs((phase + 0.25) % 1 - 0.5) * 2
+}
+
+export const saw = (phase: number): number => {
+  return phase % 1
+}
+
+export const xyZip = (phase: number, xPat: (phase: number) => number, yPat: (phase: number) => number, count: number = 100, cycles = 1): { x: number, y: number }[] => {
+  const out: { x: number, y: number }[] = []
+  for (let i = 0; i < count; i++) {
+    const p = (i / count) * cycles + phase
+    out.push({ x: xPat(p), y: yPat(p) })
+  }
+  return out
+}

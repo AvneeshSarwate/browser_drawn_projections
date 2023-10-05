@@ -3,6 +3,7 @@ import { globalStore, commandHistory, type AppState } from './stores/stores';
 import SketchInitializer from './components/SketchInitializer.vue';
 import LivecodeHolder from './components/LivecodeHolder.vue';
 import { provide } from 'vue';
+import OneshotCode from './components/OneshotCode.vue';
 
 
 const checkStore = globalStore()
@@ -23,7 +24,12 @@ provide('appState', appState)
     <canvas id="threeCanvas" width="1280" height="720" abitrary-prop="somethi"></canvas>
   </div>
   <SketchInitializer ></SketchInitializer>
+  
+  <!-- used for defining "persistent things" aka node graph of stuff -->
   <LivecodeHolder></LivecodeHolder>
+  
+  <!-- used for used for inspection and fixes -->
+  <OneshotCode></OneshotCode>
 </template>
 
 <style scoped>
