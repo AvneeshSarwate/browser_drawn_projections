@@ -346,19 +346,28 @@ function testCalls() {
 
 /**
  * what people want out of node based systems is to be able to easily see
- * high level data flow, and to be able to have a formal notion 
- * of PROGRESSION OF TIME
+ * high level data flow, CORE STATE (eg, separating "things" and "transforms on things"), 
+ * and to be able to have a formal notion of PROGRESSION OF TIME
  * 
- * can still have your code-based-node system work with callbacks, 
+ * can still have your code-based-node system work with callbacks,
+ * (e.g, "fluent api" with chains of provided callbacks at each processing step) 
  * just name your callbacks and pass in the variables instead of 
  * defining them all inline. Makes the code cleaner
+ * 
+ * being able to define functions is auto-componentization - many of the 
+ * nodes in a node graph are getting around things that are 1 line of code.
+ * in building a "node graph like" code system, don't try to duplicate
+ * nodes specifically, try to duplicate the "feel" of the node graph:
+ * - easy to see high level data flow
+ * - easy to see core state
+ * - easy to see progression of time
+ * If you define good APIs for core functions and hooks, as well as good utilities,
+ * you don't actually need to implement many nodes at all
  * 
  * even "opening a menu of a node object" can be simulated by cmd-clicking to 
  * go to the place where the arguments-variable is defined
  */
 
-
-type PatternGen = (phase: number, count: number, cycle: number) => number[]
 
 export const sin = (phase: number): number  => {
   return Math.sin(phase * Math.PI * 2) * 0.5 + 0.5

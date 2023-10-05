@@ -28,6 +28,13 @@ const aseq = (animations: a.AnimationSegment[]) => {
 const reset = () => {
   appState.regions.list.forEach(r => {
     r.resetDrawState()
+
+    /**
+     * todo - should there even be any "retained state" at all, or should all 
+     *        behaviors be specified via "pure" function calls in a draw callback?
+     *        (probably want some retained state, but have to be conginzant about)
+     *        keeping the "visibile code <=> running animation state" invariant true
+     */
     r.animationSeq = undefined
   })
   appState.drawFunctions = []
@@ -51,7 +58,7 @@ onMounted(() => {
         // const dots = new a.PerimiterDots(reg(0), 10).anim(2.52)
         // reg(0).animationSeq = aseq([dots, rl, lr])
 
-        //modularize creation of a sequence into a function - module can be livecoded
+        //modularize creation of a sequence into a function in a DIFFERENT FILE - module can be livecoded
         groupedAnimation0(appState, reg(1)) 
 
         " " //a way to add "spacing" when reading eval'd code
