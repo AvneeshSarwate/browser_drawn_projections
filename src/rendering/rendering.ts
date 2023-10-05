@@ -104,29 +104,31 @@ const defaultRenderTarget = new THREE.WebGLRenderTarget(1280, 720)
 // const renderer = new THREE.WebGLRenderer({canvas: document.getElementById('threeCanvas') as HTMLCanvasElement})
 
 abstract class ShaderEffect {
-  abstract setSrcs(fx: (ShaderEffect|HTMLCanvasElement)[]): void
+  abstract setSrcs(fx: ShaderInputs): void
   abstract render(renderer: THREE.WebGLRenderer): void
   output: THREE.WebGLRenderTarget = defaultRenderTarget
   width: number = 1280
   height: number = 720
-  public inputs: (ShaderEffect | HTMLCanvasElement)[] = []
+  public inputs: ShaderInputs = {}
   public dispose(): void {
     this.output.dispose()
   }
   public disposeAll(): void {
     this.dispose()
-    this.inputs.forEach((input) => {
+    for (const key in this.inputs) {
+      const input = this.inputs[key]
       if (input instanceof ShaderEffect) {
         input.disposeAll()
       }
-    })
+    }
   }
   public renderAll(renderer: THREE.WebGLRenderer): void {
-    this.inputs.forEach((input) => {
+    for (const key in this.inputs) {
+      const input = this.inputs[key]
       if (input instanceof ShaderEffect) {
         input.renderAll(renderer)
       }
-    })
+    }
     this.render(renderer)
   }
 }
@@ -136,27 +138,27 @@ class FeedbackNode extends ShaderEffect {
   public height: number
   public output: THREE.WebGLRenderTarget
 
-  public inputs: ShaderEffect[] = []
+  public inputs: ShaderInputs
   public input: ShaderEffect
   constructor(fx: ShaderEffect) {
     super()
     this.input = fx
-    this.inputs = [fx]
+    this.inputs = {src: fx}
     this.width = fx.width
     this.height = fx.height
     this.output = new THREE.WebGLRenderTarget(this.width, this.height)
   }
 
-  setSrcs(fx: (ShaderEffect | HTMLCanvasElement)[]): void {
-    if (!fx[0]) {
+  setSrcs(fx: {src: ShaderEffect}): void {
+    if (!fx.src) {
       console.log('no input to feedback node')
       return
     }
-    if (!(fx[0] instanceof ShaderEffect)) {
+    if (!(fx.src instanceof ShaderEffect)) {
       console.log('input to feedback node is not a ShaderEffect')
       return
     }
-    this.input = fx[0] as ShaderEffect
+    this.input = fx.src
   }
 
   render(): void { }
@@ -208,16 +210,34 @@ void main() {
   gl_FragColor = texture2D(tex, vUV);
 }`
 
+type ShaderSource = THREE.Texture | THREE.WebGLRenderTarget | HTMLCanvasElement | ShaderEffect;
+type ShaderInputs = {
+  [key: string]: ShaderSource
+};
+type ConcreteShaderInputs = {
+  [key: string]: { value: THREE.Texture | HTMLCanvasElement }
+};
+function getConcreteSource(input: ShaderSource): THREE.Texture | HTMLCanvasElement {
+  if (input instanceof THREE.WebGLRenderTarget) {
+    return input.texture
+  } else if (input instanceof THREE.Texture) {
+    return input
+  } else if (input instanceof ShaderEffect) {
+    return input.output.texture
+  } else {
+    return input
+  }
+}
+
 class CustomShaderEffect extends ShaderEffect {
   output: THREE.WebGLRenderTarget
   width: number
   height: number
   scene: THREE.Scene
   camera: THREE.Camera
-  inputs: (ShaderEffect | HTMLCanvasElement)[] = []
+  inputs: ShaderInputs
   material: THREE.ShaderMaterial
-  inputArgNames: string[] = []
-  constructor(fsString: string, inputArgs: string[], width = 1280, height = 720) {
+  constructor(fsString: string, inputs: ShaderInputs, width = 1280, height = 720) {
     super()
     this.output = new THREE.WebGLRenderTarget(width, height)
     this.width = width
@@ -227,15 +247,13 @@ class CustomShaderEffect extends ShaderEffect {
     this.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
     const geometry = new THREE.PlaneGeometry(2, 2)
     const uniforms: any = {}
-    inputArgs.forEach((argName, i) => {
-      this.inputArgNames.push(argName)
-      uniforms[argName] = { value: errorImageTexture }
-    })
+    this.inputs = inputs
     this.material = new THREE.ShaderMaterial({
       vertexShader: planeVS,
       fragmentShader: fsString,
       uniforms: uniforms
     })
+    this.setMaterialUniformsFromInputs()
     const mesh = new THREE.Mesh(geometry, this.material)
     this.scene.add(mesh)
   }
@@ -245,14 +263,21 @@ class CustomShaderEffect extends ShaderEffect {
     this.material.needsUpdate = true
   }
 
-  setSrcs(fx: (ShaderEffect | HTMLCanvasElement)[]): void {
-    this.inputs = fx
-    for (let i = 0; i < Math.min(4, fx.length); i++) {
-      const input = fx[i] ? fx[i] : errorImageTexture
-      const inputVal = input instanceof ShaderEffect ? (input as ShaderEffect).output.texture : input
-      this.material.uniforms['text'+i].value = inputVal
+  setSrcs(inputs: ShaderInputs): void {
+    for (const key in inputs) {
+      this.inputs[key] = inputs[key]
+    }
+    this.setMaterialUniformsFromInputs()
+  }
+
+  setMaterialUniformsFromInputs(): void {
+    for (const key in this.inputs) {
+      const input = this.inputs[key]
+      const inputVal = getConcreteSource(input)
+      this.material.uniforms[key].value = inputVal
     }
   }
+
   render(renderer: THREE.WebGLRenderer): void {
     //render to the output
     renderer.setRenderTarget(this.output)
@@ -262,7 +287,7 @@ class CustomShaderEffect extends ShaderEffect {
 
 class CustomFeedbackShaderEffect extends CustomShaderEffect {
   pingpong: Pingpong
-  constructor(fsString: string, inputArgs: string[], width = 1280, height = 720) {
+  constructor(fsString: string, inputArgs: ShaderInputs, width = 1280, height = 720) {
     super(fsString, inputArgs, width, height)
     this.pingpong = new Pingpong(this.output, new THREE.WebGLRenderTarget(width, height))
     this.material.uniforms['backbuffer'].value = this.pingpong.src.texture
@@ -278,14 +303,14 @@ class CustomFeedbackShaderEffect extends CustomShaderEffect {
 }
 
 class Passthru extends CustomShaderEffect {
-  constructor(width = 1280, height = 720) {
-    super(passThruFS, ['input'], width, height)
+  constructor(inputs: ShaderInputs,  width = 1280, height = 720) {
+    super(passThruFS, inputs, width, height)
   }
 
-  setSrcs(fx: (ShaderEffect | HTMLCanvasElement)[]): void {
+  setSrcs(fx: {src: ShaderSource}): void {
     this.inputs = fx
-    const input = fx[0] ? fx[0] : errorImageTexture
-    const inputVal = input instanceof ShaderEffect ? (input as ShaderEffect).output.texture : input
+    const input = fx.src ? fx.src : errorImageTexture
+    const inputVal = getConcreteSource(input)
     this.material.uniforms.tex.value = inputVal
   }
 }
