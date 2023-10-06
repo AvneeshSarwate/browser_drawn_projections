@@ -100,8 +100,7 @@ export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => AppSta
 
 
 const errorImageTexture = new THREE.TextureLoader().load('src/assets/error.jpg')
-const defaultRenderTarget = new THREE.WebGLRenderTarget(1280, 720)
-// const renderer = new THREE.WebGLRenderer({canvas: document.getElementById('threeCanvas') as HTMLCanvasElement})
+// const defaultRenderer = new THREE.WebGLRenderer({canvas: document.getElementById('threeCanvas') as HTMLCanvasElement})
 
 abstract class ShaderEffect {
   abstract setSrcs(fx: ShaderInputs): void
@@ -218,8 +217,12 @@ type ThreeMatrix = THREE.Matrix3 | THREE.Matrix4;
 type ThreeColor = THREE.Color;
 type ThreeVectorArray = ThreeVector[];
 type ConcreteShaderSource = THREE.Texture | HTMLCanvasElement
+
+//TODO - redo all uniform setting to account for dynamic uniforms
+type Dynamic<T> = T | (() => T)
+type ShaderUniform = number | number[] | ThreeVector | ThreeMatrix | ThreeColor | ThreeVectorArray | ConcreteShaderSource
 type ShaderUniforms = {
-  [key: string]: number | number[] | ThreeVector | ThreeMatrix | ThreeColor | ThreeVectorArray | ConcreteShaderSource
+  [key: string]: Dynamic<ShaderUniform>
 }
 
 
@@ -271,7 +274,7 @@ class CustomShaderEffect extends ShaderEffect {
   setUniforms(uniforms: ShaderUniforms): void {
     for (const key in uniforms) {
       if (!this.material.uniforms[key]) {
-        this
+        this.material.uniforms[key] = { value: uniforms[key] }
       } else {
         this.material.uniforms[key].value = uniforms[key]
       }
@@ -294,7 +297,11 @@ class CustomShaderEffect extends ShaderEffect {
     for (const key in this.inputs) {
       const input = this.inputs[key]
       const inputVal = getConcreteSource(input)
-      this.material.uniforms[key].value = inputVal
+      if (!this.material.uniforms[key]) {
+        this.material.uniforms[key] = { value: inputVal }
+      } else {
+        this.material.uniforms[key].value = inputVal
+      }
     }
   }
 
@@ -304,7 +311,6 @@ class CustomShaderEffect extends ShaderEffect {
     renderer.render(this.scene, this.camera)
   }
 }
-
 
 class CustomFeedbackShaderEffect extends CustomShaderEffect {
   pingpong: Pingpong
@@ -341,3 +347,44 @@ class Passthru extends CustomShaderEffect {
   }
 }
 
+
+
+//================================================================================================
+//======================================  EFFECTS  ===============================================
+
+const wobbleFS = glsl`
+precision highp float;
+
+uniform float xStrength;
+uniform float yStrength;
+uniform sampler2D tex;
+uniform float time;
+
+varying vec2 vUV;
+
+void main() {
+  vec2 uv = vUV;
+  vec2 uv2 = uv;
+  uv2.x += sin(uv.y * 10.0 + time * 2.0) * xStrength;
+  uv2.y += cos(uv.x * 10.0 + time * 2.0) * yStrength;
+  vec4 color = texture2D(tex, uv2);
+  gl_FragColor = color;
+}`
+
+class Wobble extends CustomShaderEffect {
+  constructor(inputs: ShaderInputs, width = 1280, height = 720) {
+    super(wobbleFS, inputs, width, height)
+    this.setUniforms({xStrength: 0.1, yStrength: 0.1, time: () => Date.now() / 1000})
+  }
+  setUniforms(uniforms: {xStrength: Dynamic<number>, yStrength: Dynamic<number>, time?: Dynamic<number>}): void {
+    super.setUniforms(uniforms)
+  }
+}
+
+const w = new Wobble({ src: errorImageTexture })
+w.setUniforms({ xStrength: 0.1, yStrength: 0.1 })
+
+/**
+ * todo - decide whether to make nullability of uniforms generic on ShaderUniforms, 
+ *        or let each effect specify param by param
+ */
