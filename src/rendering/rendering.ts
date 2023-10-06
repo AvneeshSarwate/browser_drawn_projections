@@ -106,14 +106,13 @@ const defaultRenderTarget = new THREE.WebGLRenderTarget(1280, 720)
 abstract class ShaderEffect {
   abstract setSrcs(fx: ShaderInputs): void
   abstract render(renderer: THREE.WebGLRenderer): void
-  output: THREE.WebGLRenderTarget = defaultRenderTarget
+  abstract setUniforms(uniforms: ShaderUniforms): void
+  abstract output: THREE.WebGLRenderTarget
   width: number = 1280
   height: number = 720
-  public inputs: ShaderInputs = {}
-  public dispose(): void {
-    this.output.dispose()
-  }
-  public disposeAll(): void {
+  inputs: ShaderInputs = {}
+  abstract dispose(): void
+  disposeAll(): void {
     this.dispose()
     for (const key in this.inputs) {
       const input = this.inputs[key]
@@ -122,7 +121,7 @@ abstract class ShaderEffect {
       }
     }
   }
-  public renderAll(renderer: THREE.WebGLRenderer): void {
+  renderAll(renderer: THREE.WebGLRenderer): void {
     for (const key in this.inputs) {
       const input = this.inputs[key]
       if (input instanceof ShaderEffect) {
@@ -134,42 +133,41 @@ abstract class ShaderEffect {
 }
 
 class FeedbackNode extends ShaderEffect {
-  public width: number
-  public height: number
-  public output: THREE.WebGLRenderTarget
+  width: number
+  height: number
+  output: THREE.WebGLRenderTarget
 
-  public inputs: ShaderInputs
-  public input: ShaderEffect
+  inputs: ShaderInputs
   constructor(fx: ShaderEffect) {
     super()
-    this.input = fx
-    this.inputs = {src: fx}
+    this.inputs = {initialState: fx}
     this.width = fx.width
     this.height = fx.height
     this.output = new THREE.WebGLRenderTarget(this.width, this.height)
   }
 
-  setSrcs(fx: {src: ShaderEffect}): void {
-    if (!fx.src) {
+  setSrcs(fx: {initialState: ShaderEffect}): void {
+    if (!fx.initialState) {
       console.log('no input to feedback node')
       return
     }
-    if (!(fx.src instanceof ShaderEffect)) {
+    if (!(fx.initialState instanceof ShaderEffect)) {
       console.log('input to feedback node is not a ShaderEffect')
       return
     }
-    this.input = fx.src
+    this.inputs = fx
   }
 
   render(): void { }
-  public dispose(): void { }
-  public disposeAll(): void { }
+  dispose(): void { }
+  disposeAll(): void { }
+  setUniforms(uniforms: ShaderUniforms): void { }
 }
 
 class Pingpong {
-  public src: THREE.WebGLRenderTarget
-  public dst: THREE.WebGLRenderTarget
-  public swap() {
+  src: THREE.WebGLRenderTarget
+  dst: THREE.WebGLRenderTarget
+  swap() {
     const temp = this.src
     this.src = this.dst
     this.dst = temp
@@ -214,10 +212,18 @@ type ShaderSource = THREE.Texture | THREE.WebGLRenderTarget | HTMLCanvasElement 
 type ShaderInputs = {
   [key: string]: ShaderSource
 };
-type ConcreteShaderInputs = {
-  [key: string]: { value: THREE.Texture | HTMLCanvasElement }
-};
-function getConcreteSource(input: ShaderSource): THREE.Texture | HTMLCanvasElement {
+
+type ThreeVector = THREE.Vector2 | THREE.Vector3 | THREE.Vector4;
+type ThreeMatrix = THREE.Matrix3 | THREE.Matrix4;
+type ThreeColor = THREE.Color;
+type ThreeVectorArray = ThreeVector[];
+type ConcreteShaderSource = THREE.Texture | HTMLCanvasElement
+type ShaderUniforms = {
+  [key: string]: number | number[] | ThreeVector | ThreeMatrix | ThreeColor | ThreeVectorArray | ConcreteShaderSource
+}
+
+
+function getConcreteSource(input: ShaderSource): ConcreteShaderSource {
   if (input instanceof THREE.WebGLRenderTarget) {
     return input.texture
   } else if (input instanceof THREE.Texture) {
@@ -237,9 +243,9 @@ class CustomShaderEffect extends ShaderEffect {
   camera: THREE.Camera
   inputs: ShaderInputs
   material: THREE.ShaderMaterial
-  constructor(fsString: string, inputs: ShaderInputs, width = 1280, height = 720) {
+  constructor(fsString: string, inputs: ShaderInputs, width = 1280, height = 720, customOutput?: THREE.WebGLRenderTarget) {
     super()
-    this.output = new THREE.WebGLRenderTarget(width, height)
+    this.output = customOutput ?? new THREE.WebGLRenderTarget(width, height)
     this.width = width
     this.height = height
     //a scene with an orthographic camera, a single plane, and a shader material
@@ -256,6 +262,20 @@ class CustomShaderEffect extends ShaderEffect {
     this.setMaterialUniformsFromInputs()
     const mesh = new THREE.Mesh(geometry, this.material)
     this.scene.add(mesh)
+  }
+
+  dispose(): void {
+    this.output.dispose()
+  }
+
+  setUniforms(uniforms: ShaderUniforms): void {
+    for (const key in uniforms) {
+      if (!this.material.uniforms[key]) {
+        this
+      } else {
+        this.material.uniforms[key].value = uniforms[key]
+      }
+    }
   }
 
   setShader(fragmentString: string): void {
@@ -285,12 +305,15 @@ class CustomShaderEffect extends ShaderEffect {
   }
 }
 
+
 class CustomFeedbackShaderEffect extends CustomShaderEffect {
   pingpong: Pingpong
+  _passthrough: Passthru
   constructor(fsString: string, inputArgs: ShaderInputs, width = 1280, height = 720) {
     super(fsString, inputArgs, width, height)
-    this.pingpong = new Pingpong(this.output, new THREE.WebGLRenderTarget(width, height))
+    this.pingpong = new Pingpong(new THREE.WebGLRenderTarget(width, height), new THREE.WebGLRenderTarget(width, height))
     this.material.uniforms['backbuffer'].value = this.pingpong.src.texture
+    this._passthrough = new Passthru({src: this.pingpong.src.texture}, width, height, this.output)
   }
 
   render(renderer: THREE.WebGLRenderer): void {
@@ -299,19 +322,22 @@ class CustomFeedbackShaderEffect extends CustomShaderEffect {
     renderer.render(this.scene, this.camera)
     this.pingpong.swap()
     this.material.uniforms['backbuffer'].value = this.pingpong.src.texture
+    
+    this._passthrough.setSrcs({ src: this.pingpong.dst.texture })
+    this._passthrough.render(renderer)
   }
 }
 
 class Passthru extends CustomShaderEffect {
-  constructor(inputs: ShaderInputs,  width = 1280, height = 720) {
-    super(passThruFS, inputs, width, height)
+  constructor(inputs: ShaderInputs,  width = 1280, height = 720, customOutput?: THREE.WebGLRenderTarget) {
+    super(passThruFS, inputs, width, height, customOutput)
   }
 
   setSrcs(fx: {src: ShaderSource}): void {
     this.inputs = fx
     const input = fx.src ? fx.src : errorImageTexture
     const inputVal = getConcreteSource(input)
-    this.material.uniforms.tex.value = inputVal
+    this.material.uniforms['tex'] = { value: inputVal }
   }
 }
 
