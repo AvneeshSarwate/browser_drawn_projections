@@ -385,7 +385,7 @@ void main() {
 }`
 
 class Wobble extends CustomShaderEffect {
-  constructor(inputs: ShaderInputs, width = 1280, height = 720) {
+  constructor(inputs: {src: ShaderSource}, width = 1280, height = 720) {
     super(wobbleFS, inputs, width, height)
     this.setUniforms({xStrength: 0.1, yStrength: 0.1, time: () => Date.now() / 1000})
   }
@@ -400,4 +400,29 @@ w.setUniforms({ xStrength: 0.1, yStrength: () => Math.sin(Date.now() / 1000) * 0
 /**
  * todo - decide whether to make nullability of uniforms generic on ShaderUniforms, 
  *        or let each effect specify param by param
+ */
+
+// const ob = {
+//   f: new CustomShaderEffect(wobbleFS, { src: errorImageTexture }),
+//   t: new CustomShaderEffect(wobbleFS, this.f)
+
+// }
+
+type EffectGraph = {
+  [key: string]: ShaderEffect
+}
+
+const ob: EffectGraph = {}
+ob.f = new Wobble({ src: errorImageTexture })
+ob.t = new CustomShaderEffect(wobbleFS, { src: ob.f })
+
+/**
+ * todo - what type level tricks can you use to define a shader graph and then 
+ * get the graph object with autocomplete available in another file?
+ * 
+ * alternatively, just suck it up and rebuild the graph (an properly dispose of the old one)
+ * on reload - can try to intelligently reuse nodes that haven't changed
+ * - if you keep time/transport stuff consistent across reloads, it is only feedback loop textures
+ *   that need to be recreated - for CustomFeedbackShader, you can compare the fragment shader,
+ *   but for FeedbackNode, you might need to compare the whole graph
  */
