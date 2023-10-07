@@ -106,10 +106,12 @@ abstract class ShaderEffect {
   abstract setSrcs(fx: ShaderInputs): void
   abstract render(renderer: THREE.WebGLRenderer): void
   abstract setUniforms(uniforms: ShaderUniforms): void
+  abstract updateUniforms(): void
   abstract output: THREE.WebGLRenderTarget
   width: number = 1280
   height: number = 720
   inputs: ShaderInputs = {}
+  uniforms: ShaderUniforms = {}
   abstract dispose(): void
   disposeAll(): void {
     this.dispose()
@@ -161,6 +163,7 @@ class FeedbackNode extends ShaderEffect {
   dispose(): void { }
   disposeAll(): void { }
   setUniforms(uniforms: ShaderUniforms): void { }
+  updateUniforms(): void { }
 }
 
 class Pingpong {
@@ -225,6 +228,9 @@ type ShaderUniforms = {
   [key: string]: Dynamic<ShaderUniform>
 }
 
+function extract<T>(dyn: Dynamic<T>): T {
+  return dyn instanceof Function ? dyn() : dyn
+}
 
 function getConcreteSource(input: ShaderSource): ConcreteShaderSource {
   if (input instanceof THREE.WebGLRenderTarget) {
@@ -255,12 +261,12 @@ class CustomShaderEffect extends ShaderEffect {
     this.scene = new THREE.Scene()
     this.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
     const geometry = new THREE.PlaneGeometry(2, 2)
-    const uniforms: any = {}
+    this.uniforms = {}
     this.inputs = inputs
     this.material = new THREE.ShaderMaterial({
       vertexShader: planeVS,
       fragmentShader: fsString,
-      uniforms: uniforms
+      uniforms: {}
     })
     this.setMaterialUniformsFromInputs()
     const mesh = new THREE.Mesh(geometry, this.material)
@@ -273,10 +279,16 @@ class CustomShaderEffect extends ShaderEffect {
 
   setUniforms(uniforms: ShaderUniforms): void {
     for (const key in uniforms) {
+      this.uniforms[key] = uniforms[key]
+    }
+  }
+
+  updateUniforms(): void {
+    for (const key in this.uniforms) {
       if (!this.material.uniforms[key]) {
-        this.material.uniforms[key] = { value: uniforms[key] }
+        this.material.uniforms[key] = { value: extract(this.uniforms[key]) }
       } else {
-        this.material.uniforms[key].value = uniforms[key]
+        this.material.uniforms[key].value = extract(this.uniforms[key])
       }
     }
   }
@@ -307,6 +319,7 @@ class CustomShaderEffect extends ShaderEffect {
 
   render(renderer: THREE.WebGLRenderer): void {
     //render to the output
+    this.updateUniforms()
     renderer.setRenderTarget(this.output)
     renderer.render(this.scene, this.camera)
   }
@@ -318,12 +331,13 @@ class CustomFeedbackShaderEffect extends CustomShaderEffect {
   constructor(fsString: string, inputArgs: ShaderInputs, width = 1280, height = 720) {
     super(fsString, inputArgs, width, height)
     this.pingpong = new Pingpong(new THREE.WebGLRenderTarget(width, height), new THREE.WebGLRenderTarget(width, height))
-    this.material.uniforms['backbuffer'].value = this.pingpong.src.texture
+    this.material.uniforms['backbuffer'] = { value: this.pingpong.src.texture }
     this._passthrough = new Passthru({src: this.pingpong.src.texture}, width, height, this.output)
   }
 
   render(renderer: THREE.WebGLRenderer): void {
     //render to the output
+    this.updateUniforms()
     renderer.setRenderTarget(this.pingpong.dst)
     renderer.render(this.scene, this.camera)
     this.pingpong.swap()
@@ -382,7 +396,7 @@ class Wobble extends CustomShaderEffect {
 }
 
 const w = new Wobble({ src: errorImageTexture })
-w.setUniforms({ xStrength: 0.1, yStrength: 0.1 })
+w.setUniforms({ xStrength: 0.1, yStrength: () => Math.sin(Date.now() / 1000) * 0.1 })
 
 /**
  * todo - decide whether to make nullability of uniforms generic on ShaderUniforms, 
