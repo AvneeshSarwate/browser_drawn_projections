@@ -402,7 +402,14 @@ void main() {
 }`
 
 
-//todo bug - this does not define/map input textures to shaders/uniforms
+/* 
+todo - need a better way to instantiate effects with/without inputs, 
+       but then also make it clear why some nodes aren't rendering if 
+       they haven't been provided the necessary inputs
+*/
+
+//todo - need a way to explore fx graph and inspect the output of each node
+
 class Wobble extends CustomShaderEffect {
   constructor(inputs: {src: ShaderSource}, width = 1280, height = 720) {
     super(wobbleFS, inputs, width, height)
