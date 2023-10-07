@@ -219,9 +219,8 @@ type ThreeVector = THREE.Vector2 | THREE.Vector3 | THREE.Vector4;
 type ThreeMatrix = THREE.Matrix3 | THREE.Matrix4;
 type ThreeColor = THREE.Color;
 type ThreeVectorArray = ThreeVector[];
+//todo - for nodes with a dynamic canvas source, will need to set .needsUpdate on corresponding texture
 type ConcreteShaderSource = THREE.Texture | HTMLCanvasElement
-
-//TODO - redo all uniform setting to account for dynamic uniforms
 type Dynamic<T> = T | (() => T)
 type ShaderUniform = number | number[] | ThreeVector | ThreeMatrix | ThreeColor | ThreeVectorArray | ConcreteShaderSource
 type ShaderUniforms = {
