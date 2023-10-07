@@ -425,4 +425,6 @@ ob.t = new CustomShaderEffect(wobbleFS, { src: ob.f })
  * - if you keep time/transport stuff consistent across reloads, it is only feedback loop textures
  *   that need to be recreated - for CustomFeedbackShader, you can compare the fragment shader,
  *   but for FeedbackNode, you might need to compare the whole graph
+ * - quick and dirty idea - for nodes to save their texture on hot reload, provide a "save key".
+ *   could even be a required argument for FeedbackNode and CustomShaderEffect?
  */
