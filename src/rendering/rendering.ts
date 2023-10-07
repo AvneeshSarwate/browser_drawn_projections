@@ -137,14 +137,22 @@ class FeedbackNode extends ShaderEffect {
   width: number
   height: number
   output: THREE.WebGLRenderTarget
+  _passthru: Passthru
+  feedbackSrc?: ShaderEffect
+  firstRender = false
 
   inputs: ShaderInputs
-  constructor(fx: ShaderEffect) {
+  constructor(startState: ShaderEffect) {
     super()
-    this.inputs = {initialState: fx}
-    this.width = fx.width
-    this.height = fx.height
+    this.inputs = {initialState: startState}
+    this.width = startState.width
+    this.height = startState.height
     this.output = new THREE.WebGLRenderTarget(this.width, this.height)
+    this._passthru = new Passthru({src: startState.output}, this.width, this.height, this.output)
+  }
+
+  setFeedbackSrc(fx: ShaderEffect): void {
+    this.feedbackSrc = fx
   }
 
   setSrcs(fx: {initialState: ShaderEffect}): void {
@@ -159,8 +167,17 @@ class FeedbackNode extends ShaderEffect {
     this.inputs = fx
   }
 
-  render(): void { }
-  dispose(): void { }
+  render(renderer: THREE.WebGLRenderer): void {
+    this._passthru.render(renderer)
+    if (this.firstRender) {
+      this.firstRender = false
+      this._passthru.setSrcs({src: this.feedbackSrc!!.output})
+    }
+  }
+
+  dispose(): void {
+    this._passthru.dispose()
+  }
   disposeAll(): void { }
   setUniforms(uniforms: ShaderUniforms): void { }
   updateUniforms(): void { }
