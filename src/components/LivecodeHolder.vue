@@ -5,7 +5,7 @@ import { inject, onMounted, onUnmounted } from 'vue';
 import * as a from '@/rendering/planeAnimations'
 import { groupedAnimation0 } from '@/rendering/modularizedTransforms';
 import { testCancel, xyZip, sin, cos, EventChop } from '@/channels/channels';
-import { UVDraw } from '@/rendering/rendering';
+import { CanvasPaint, UVDraw } from '@/rendering/rendering';
 
 
 const appState = inject('appState') as AppState  
@@ -113,7 +113,8 @@ onMounted(() => {
 
 
         const uvEffect = new UVDraw()
-        appState.drawFunctions.push(() => uvEffect.render(appState.threeRenderer!!))
+        const canvasPaint = new CanvasPaint({ src: uvEffect })
+        appState.drawFunctions.push(() => canvasPaint.render(appState.threeRenderer!!))
       }
 
 

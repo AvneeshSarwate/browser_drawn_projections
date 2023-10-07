@@ -276,6 +276,7 @@ class CustomShaderEffect extends ShaderEffect {
     //a scene with an orthographic camera, a single plane, and a shader material
     this.scene = new THREE.Scene()
     this.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
+    this.camera.lookAt(new THREE.Vector3(0, 0, 0))
     const geometry = new THREE.PlaneGeometry(2, 2)
     this.uniforms = {}
     this.inputs = inputs
@@ -286,6 +287,7 @@ class CustomShaderEffect extends ShaderEffect {
     })
     this.setMaterialUniformsFromInputs()
     const mesh = new THREE.Mesh(geometry, this.material)
+    mesh.position.set(0, 0, 0.5)
     this.scene.add(mesh)
   }
 
@@ -374,6 +376,24 @@ class Passthru extends CustomShaderEffect {
     const input = fx.src ? fx.src : errorImageTexture
     const inputVal = getConcreteSource(input)
     this.material.uniforms['tex'] = { value: inputVal }
+  }
+}
+
+export class CanvasPaint extends CustomShaderEffect {
+  constructor(inputs: ShaderInputs,  width = 1280, height = 720, customOutput?: THREE.WebGLRenderTarget) {
+    super(passThruFS, inputs, width, height, customOutput)
+  }
+
+  setSrcs(fx: {src: ShaderSource}): void {
+    this.inputs = fx
+    const input = fx.src ? fx.src : errorImageTexture
+    const inputVal = getConcreteSource(input)
+    this.material.uniforms['tex'] = { value: inputVal }
+  }
+
+  render(renderer: THREE.WebGLRenderer): void {
+    renderer.setRenderTarget(null)
+    renderer.render(this.scene, this.camera)
   }
 }
 
