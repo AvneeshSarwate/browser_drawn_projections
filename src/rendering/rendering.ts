@@ -401,6 +401,8 @@ void main() {
   gl_FragColor = color;
 }`
 
+
+//todo bug - this does not define/map input textures to shaders/uniforms
 class Wobble extends CustomShaderEffect {
   constructor(inputs: {src: ShaderSource}, width = 1280, height = 720) {
     super(wobbleFS, inputs, width, height)
