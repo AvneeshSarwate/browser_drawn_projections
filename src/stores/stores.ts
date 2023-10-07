@@ -504,6 +504,7 @@ document.body.appendChild( stats.dom );
 export type AppState = {
   regions: EntityList<Region>
   p5Instance: p5 | undefined
+  threeRenderer: THREE.WebGLRenderer | undefined
   codeStack: (() => void)[]
   codeStackIndex: number
   drawFunctions: ((p5: p5) => void)[]
@@ -513,6 +514,7 @@ export type AppState = {
 const appState: AppState = {
   regions: new EntityList(Region).deserialize(storedData1),
   p5Instance: undefined,
+  threeRenderer: undefined,
   codeStack: [],
   codeStackIndex: 0,
   drawFunctions: [],

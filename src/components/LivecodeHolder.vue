@@ -84,7 +84,8 @@ onMounted(() => {
 
 
         //todo - create cleaner way to set up mouse/keyboard mappings on p5 sketch
-        document.onmousedown = () => {
+        const r = Math.random()
+        document.getElementById("threeCanvas")!!.onmousedown = () => {
           ec.ramp(1, { x:  p5i.mouseX})
           // console.log("mouse down")
         }
@@ -95,7 +96,7 @@ onMounted(() => {
             p5.fill(255,0,0)
             p5.circle(s.x, s.val * 700, 130)
             p5.pop()
-            console.log("chop draw", s.val)
+            // console.log("chop draw", s.val, r)
           })
         }
         appState.drawFunctions.push(chopDraw)

@@ -2,6 +2,7 @@
 import { createP5Sketch } from '@/rendering/rendering';
 import { type AppState } from '@/stores/stores';
 import type p5 from 'p5';
+import * as THREE from 'three';
 import { inject, onMounted, onUnmounted } from 'vue';
 
 
@@ -39,6 +40,8 @@ onMounted(() => {
   const p5Instance = createP5Sketch(p5Canvas, () => appState)
   p5Instance.disableFriendlyErrors = true //explanation - for performance
   appState.p5Instance = p5Instance
+
+  appState.threeRenderer = new THREE.WebGLRenderer({canvas: document.getElementById('threeCanvas') as HTMLCanvasElement})
 })
 
 onUnmounted(() => {

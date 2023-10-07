@@ -155,6 +155,7 @@ class Ramp implements Envelope {
     Tone.Transport.scheduleOnce(() => {
       this.onFinish?.()
     }, this.onTime + this.releaseDur)
+    console.log('scheduled release callback', Tone.Transport.immediate(), this.onTime, this.onTime + this.releaseDur, )
   }
   onFinish?: () => void = undefined
 
@@ -300,6 +301,7 @@ export class EventChop<T> {
     const evtData = { evt, metadata, id: this.idGen++ }
     this.events.push(evtData)
     evt.onFinish = () => {
+      console.log("event finished", evtData.id)
       const idx = this.events.indexOf(evtData)
       this.events.splice(idx, 1)
     }

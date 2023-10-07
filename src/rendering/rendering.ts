@@ -410,7 +410,7 @@ todo - need a better way to instantiate effects with/without inputs,
 
 //todo - need a way to explore fx graph and inspect the output of each node
 
-class Wobble extends CustomShaderEffect {
+export class Wobble extends CustomShaderEffect {
   constructor(inputs: {src: ShaderSource}, width = 1280, height = 720) {
     super(wobbleFS, inputs, width, height)
     this.setUniforms({xStrength: 0.1, yStrength: 0.1, time: () => Date.now() / 1000})
@@ -454,3 +454,19 @@ ob.t = new CustomShaderEffect(wobbleFS, { src: ob.f })
  * - quick and dirty idea - for nodes to save their texture on hot reload, provide a "save key".
  *   could even be a required argument for FeedbackNode and CustomShaderEffect?
  */
+
+const uvShader = glsl`
+precision highp float;
+
+varying vec2 vUV;
+
+void main() {
+  gl_FragColor = vec4(vUV, 1, 1);
+} 
+`
+
+export class UVDraw extends CustomShaderEffect {
+  constructor(width = 1280, height = 720) {
+    super(uvShader, {}, width, height)
+  }
+}
