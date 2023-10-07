@@ -198,13 +198,13 @@ class Pingpong {
 }
 
 //used with the "glsl-literal" vscode plugin to get syntax highlighting for embedded glsl
-const glsl = (x: any): string => x
+const glsl = (x: any): string => x[0]
 
 const planeVS = glsl`
 precision highp float;
 
-attribute vec3 position;
-attribute vec2 uv;
+// attribute vec3 position;
+// attribute vec2 uv;
 
 uniform mat4 worldViewProjection;
 

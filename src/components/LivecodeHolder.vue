@@ -5,6 +5,7 @@ import { inject, onMounted, onUnmounted } from 'vue';
 import * as a from '@/rendering/planeAnimations'
 import { groupedAnimation0 } from '@/rendering/modularizedTransforms';
 import { testCancel, xyZip, sin, cos, EventChop } from '@/channels/channels';
+import { UVDraw } from '@/rendering/rendering';
 
 
 const appState = inject('appState') as AppState  
@@ -109,14 +110,16 @@ onMounted(() => {
         }
         appState.drawFunctions.push(patternDraw)
         // console.log("code ran")
+
+
+        const uvEffect = new UVDraw()
+        appState.drawFunctions.push(() => uvEffect.render(appState.threeRenderer!!))
       }
 
 
       //can access this from browser console as well to rerun code
       appState.codeStack.push(code)
       code()
-
-
 
       // const codeStr = code.toString()
       // const decodeAndRun = () => {
