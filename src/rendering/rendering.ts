@@ -273,9 +273,6 @@ class CustomShaderEffect extends ShaderEffect {
     //a scene with an orthographic camera, a single plane, and a shader material
     this.scene = new THREE.Scene()
     this.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
-    // this.camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000)
-    this.camera.position.set(0, 0, 0)
-    this.camera.lookAt(new THREE.Vector3(0, 0, 0))
     const geometry = new THREE.PlaneGeometry(2, 2)
     this.uniforms = {}
     this.inputs = inputs
@@ -286,7 +283,6 @@ class CustomShaderEffect extends ShaderEffect {
     })
     this.setMaterialUniformsFromInputs()
     const mesh = new THREE.Mesh(geometry, this.material)
-    mesh.position.set(0, 0, 0.5)
     this.scene.add(mesh)
   }
 
@@ -491,7 +487,7 @@ export class UVDraw extends CustomShaderEffect {
 
   render(renderer: THREE.WebGLRenderer): void {
     const planePos = this.scene.children[0].position
-    const zpos = Math.sin(Date.now() / 1000 * 3.14)*5
+    const zpos = 0
     planePos.set(0, 0, zpos)
     this.camera.lookAt(planePos)
     renderer.setRenderTarget(null)
