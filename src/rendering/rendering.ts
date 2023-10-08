@@ -276,6 +276,7 @@ class CustomShaderEffect extends ShaderEffect {
     //a scene with an orthographic camera, a single plane, and a shader material
     this.scene = new THREE.Scene()
     this.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
+    this.camera.position.set(0, 0, -1)
     this.camera.lookAt(new THREE.Vector3(0, 0, 0))
     const geometry = new THREE.PlaneGeometry(2, 2)
     this.uniforms = {}
@@ -287,7 +288,7 @@ class CustomShaderEffect extends ShaderEffect {
     })
     this.setMaterialUniformsFromInputs()
     const mesh = new THREE.Mesh(geometry, this.material)
-    mesh.position.set(0, 0, 0.5)
+    mesh.position.set(0, 0, 0)
     this.scene.add(mesh)
   }
 

@@ -301,7 +301,7 @@ export class EventChop<T> {
     const evtData = { evt, metadata, id: this.idGen++ }
     this.events.push(evtData)
     evt.onFinish = () => {
-      console.log("event finished", evtData.id)
+      console.log("event finished", evtData.id, Tone.Transport.immediate())
       const idx = this.events.indexOf(evtData)
       this.events.splice(idx, 1)
     }
