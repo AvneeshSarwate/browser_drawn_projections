@@ -108,6 +108,7 @@ abstract class ShaderEffect {
   abstract setUniforms(uniforms: ShaderUniforms): void
   abstract updateUniforms(): void
   abstract output: THREE.WebGLRenderTarget
+  effectName: string = "unset"
   width: number = 1280
   height: number = 720
   inputs: ShaderInputs = {}
@@ -218,10 +219,10 @@ precision highp float;
 
 varying vec2 vUV;
 
-uniform sampler2D tex;
+uniform sampler2D src;
 
 void main() {
-  gl_FragColor = texture2D(tex, vUV);
+  gl_FragColor = texture2D(src, vUV);
 }`
 
 type ShaderSource = THREE.Texture | THREE.WebGLRenderTarget | HTMLCanvasElement | ShaderEffect;
@@ -370,11 +371,12 @@ class Passthru extends CustomShaderEffect {
     this.inputs = fx
     const input = fx.src ? fx.src : errorImageTexture
     const inputVal = getConcreteSource(input)
-    this.material.uniforms['tex'] = { value: inputVal }
+    this.material.uniforms['src'] = { value: inputVal }
   }
 }
 
 export class CanvasPaint extends CustomShaderEffect {
+  effectName = "CanvasPaint"
   constructor(inputs: ShaderInputs,  width = 1280, height = 720, customOutput?: THREE.WebGLRenderTarget) {
     super(passThruFS, inputs, width, height, customOutput)
   }
@@ -383,7 +385,7 @@ export class CanvasPaint extends CustomShaderEffect {
     this.inputs = fx
     const input = fx.src ? fx.src : errorImageTexture
     const inputVal = getConcreteSource(input)
-    this.material.uniforms['tex'] = { value: inputVal }
+    this.material.uniforms['src'] = { value: inputVal }
   }
 
   render(renderer: THREE.WebGLRenderer): void {
@@ -481,17 +483,8 @@ void main() {
 `
 
 export class UVDraw extends CustomShaderEffect {
+  effectName = "UVdraw"
   constructor(width = 1280, height = 720) {
     super(uvShader, {}, width, height)
-  }
-
-  render(renderer: THREE.WebGLRenderer): void {
-    const planePos = this.scene.children[0].position
-    const zpos = 0
-    planePos.set(0, 0, zpos)
-    this.camera.lookAt(planePos)
-    renderer.setRenderTarget(null)
-    renderer.render(this.scene, this.camera)
-    console.log("uv render", zpos)
   }
 }
