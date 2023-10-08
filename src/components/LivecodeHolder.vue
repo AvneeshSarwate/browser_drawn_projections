@@ -114,7 +114,7 @@ onMounted(() => {
 
         const uvEffect = new UVDraw()
         const canvasPaint = new CanvasPaint({ src: uvEffect })
-        appState.drawFunctions.push(() => canvasPaint.render(appState.threeRenderer!!))
+        appState.drawFunctions.push(() => uvEffect.render(appState.threeRenderer!!))
       }
 
 

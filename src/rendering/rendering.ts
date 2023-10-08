@@ -288,7 +288,7 @@ class CustomShaderEffect extends ShaderEffect {
     })
     this.setMaterialUniformsFromInputs()
     const mesh = new THREE.Mesh(geometry, this.material)
-    mesh.position.set(0, 0, 0)
+    mesh.position.set(0, 0, 0.5)
     this.scene.add(mesh)
   }
 
@@ -489,5 +489,11 @@ void main() {
 export class UVDraw extends CustomShaderEffect {
   constructor(width = 1280, height = 720) {
     super(uvShader, {}, width, height)
+  }
+
+  render(renderer: THREE.WebGLRenderer): void {
+    renderer.setRenderTarget(null)
+    renderer.render(this.scene, this.camera)
+    console.log("uv render")
   }
 }
