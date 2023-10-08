@@ -201,18 +201,15 @@ class Pingpong {
 const glsl = (x: any): string => x[0]
 
 const planeVS = glsl`
-precision highp float;
 
 // attribute vec3 position;
 // attribute vec2 uv;
-
-uniform mat4 worldViewProjection;
 
 varying vec2 vUV;
 
 void main() {
   vec4 p = vec4(position, 1.);
-  gl_Position = worldViewProjection * p;
+  gl_Position = projectionMatrix * modelViewMatrix * p;
   vUV = uv;
 }`
 
@@ -276,6 +273,7 @@ class CustomShaderEffect extends ShaderEffect {
     //a scene with an orthographic camera, a single plane, and a shader material
     this.scene = new THREE.Scene()
     this.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
+    // this.camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000)
     this.camera.position.set(0, 0, 0)
     this.camera.lookAt(new THREE.Vector3(0, 0, 0))
     const geometry = new THREE.PlaneGeometry(2, 2)
@@ -492,8 +490,12 @@ export class UVDraw extends CustomShaderEffect {
   }
 
   render(renderer: THREE.WebGLRenderer): void {
+    const planePos = this.scene.children[0].position
+    const zpos = Math.sin(Date.now() / 1000 * 3.14)*5
+    planePos.set(0, 0, zpos)
+    this.camera.lookAt(planePos)
     renderer.setRenderTarget(null)
     renderer.render(this.scene, this.camera)
-    console.log("uv render")
+    console.log("uv render", zpos)
   }
 }
