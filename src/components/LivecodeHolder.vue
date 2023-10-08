@@ -114,7 +114,7 @@ onMounted(() => {
 
 
         const uvEffect = new UVDraw()
-        const wobble = new Wobble({src: uvEffect})
+        const wobble = new Wobble({src: p5Canvas})
         const canvasPaint = new CanvasPaint({ src: wobble })
         appState.drawFunctions.push(() => canvasPaint.renderAll(appState.threeRenderer!!))
       }

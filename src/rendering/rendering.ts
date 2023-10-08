@@ -235,9 +235,8 @@ type ThreeMatrix = THREE.Matrix3 | THREE.Matrix4;
 type ThreeColor = THREE.Color;
 type ThreeVectorArray = ThreeVector[];
 //todo - for nodes with a dynamic canvas source, will need to set .needsUpdate on corresponding texture
-type ConcreteShaderSource = THREE.Texture | HTMLCanvasElement
 type Dynamic<T> = T | (() => T)
-type ShaderUniform = number | number[] | ThreeVector | ThreeMatrix | ThreeColor | ThreeVectorArray | ConcreteShaderSource
+type ShaderUniform = number | number[] | ThreeVector | ThreeMatrix | ThreeColor | ThreeVectorArray | THREE.Texture
 type ShaderUniforms = {
   [key: string]: Dynamic<ShaderUniform>
 }
@@ -246,7 +245,7 @@ function extract<T>(dyn: Dynamic<T>): T {
   return dyn instanceof Function ? dyn() : dyn
 }
 
-function getConcreteSource(input: ShaderSource): ConcreteShaderSource {
+function getConcreteSource(input: ShaderSource): THREE.Texture {
   if (input instanceof THREE.WebGLRenderTarget) {
     return input.texture
   } else if (input instanceof THREE.Texture) {
@@ -254,7 +253,7 @@ function getConcreteSource(input: ShaderSource): ConcreteShaderSource {
   } else if (input instanceof ShaderEffect) {
     return input.output.texture
   } else {
-    return input
+    return new THREE.CanvasTexture(input)
   }
 }
 
@@ -282,7 +281,7 @@ class CustomShaderEffect extends ShaderEffect {
       fragmentShader: fsString,
       uniforms: {}
     })
-    this.setMaterialUniformsFromInputs()
+    this._setMaterialUniformsFromInputs()
     const mesh = new THREE.Mesh(geometry, this.material)
     this.scene.add(mesh)
   }
@@ -303,9 +302,10 @@ class CustomShaderEffect extends ShaderEffect {
         this.material.uniforms[key] = { value: extract(this.uniforms[key]) }
       } else {
         this.material.uniforms[key].value = extract(this.uniforms[key])
-        if(this.effectName == "Wobble" && key == "time") {
-          console.log("updating time", this.material.uniforms[key].value)
-        }
+      }
+      if (this.material.uniforms[key].value instanceof THREE.CanvasTexture) {
+        this.material.uniforms[key].value.needsUpdate = true
+        //todo bug - this isn't working
       }
     }
   }
@@ -319,10 +319,11 @@ class CustomShaderEffect extends ShaderEffect {
     for (const key in inputs) {
       this.inputs[key] = inputs[key]
     }
-    this.setMaterialUniformsFromInputs()
+    this._setMaterialUniformsFromInputs()
   }
 
-  setMaterialUniformsFromInputs(): void {
+  //this can create new textures from html5 elements - only use in setups, not draw calls
+  _setMaterialUniformsFromInputs(): void {
     for (const key in this.inputs) {
       const input = this.inputs[key]
       const inputVal = getConcreteSource(input)
@@ -330,6 +331,7 @@ class CustomShaderEffect extends ShaderEffect {
         this.material.uniforms[key] = { value: inputVal }
       } else {
         this.material.uniforms[key].value = inputVal
+        //todo - destory old textures
       }
     }
   }
