@@ -91,12 +91,14 @@ class TimeContext {
   }
 }
 
-document.querySelector('body')?.addEventListener('click', async () => {
+const audioStart = async () => {
   await Tone.start()
   Tone.Transport.start()
   console.log('audio is ready', Tone.Transport.bpm.value, Tone.context.lookAhead)
   // setTimeout(testCancel, 50)
-})
+  document.querySelector('body')?.removeEventListener('click', audioStart)
+}
+document.querySelector('body')?.addEventListener('click', audioStart)
 
 export const testCancel = async () => {
 
