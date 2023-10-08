@@ -5,7 +5,7 @@ import { inject, onMounted, onUnmounted } from 'vue';
 import * as a from '@/rendering/planeAnimations'
 import { groupedAnimation0 } from '@/rendering/modularizedTransforms';
 import { testCancel, xyZip, sin, cos, EventChop } from '@/channels/channels';
-import { CanvasPaint, UVDraw } from '@/rendering/rendering';
+import { CanvasPaint, UVDraw, Wobble } from '@/rendering/rendering';
 
 
 const appState = inject('appState') as AppState  
@@ -48,6 +48,7 @@ const reset = () => {
 onMounted(() => {
   try {
     const p5i = appState.p5Instance!!
+    const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
     if (appState.p5Instance && appState.regions.list.length > 0) {
 
 
@@ -113,7 +114,8 @@ onMounted(() => {
 
 
         const uvEffect = new UVDraw()
-        const canvasPaint = new CanvasPaint({ src: uvEffect })
+        const wobble = new Wobble({src: uvEffect})
+        const canvasPaint = new CanvasPaint({ src: wobble })
         appState.drawFunctions.push(() => canvasPaint.renderAll(appState.threeRenderer!!))
       }
 

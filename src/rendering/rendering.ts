@@ -303,6 +303,9 @@ class CustomShaderEffect extends ShaderEffect {
         this.material.uniforms[key] = { value: extract(this.uniforms[key]) }
       } else {
         this.material.uniforms[key].value = extract(this.uniforms[key])
+        if(this.effectName == "Wobble" && key == "time") {
+          console.log("updating time", this.material.uniforms[key].value)
+        }
       }
     }
   }
@@ -399,13 +402,17 @@ export class CanvasPaint extends CustomShaderEffect {
 //================================================================================================
 //======================================  EFFECTS  ===============================================
 
+//todo - need to be vigitlant about uniform namings - 
+// add runtime check to make sure uniform declarations match uniforms object?
 const wobbleFS = glsl`
 precision highp float;
 
 uniform float xStrength;
 uniform float yStrength;
-uniform sampler2D tex;
+uniform sampler2D src;
 uniform float time;
+
+float sinN(float n) { return sin(n)*0.5 + 0.5; }
 
 varying vec2 vUV;
 
@@ -414,7 +421,8 @@ void main() {
   vec2 uv2 = uv;
   uv2.x += sin(uv.y * 10.0 + time * 2.0) * xStrength;
   uv2.y += cos(uv.x * 10.0 + time * 2.0) * yStrength;
-  vec4 color = texture2D(tex, uv2);
+  vec4 color = texture2D(src, uv2);
+  color.r = abs(sinN(time)-uv.x) < 0.05 ? 1.0 : 0.0; 
   gl_FragColor = color;
 }`
 
@@ -427,18 +435,22 @@ todo - need a better way to instantiate effects with/without inputs,
 
 //todo - need a way to explore fx graph and inspect the output of each node
 
+
+
 export class Wobble extends CustomShaderEffect {
+  effectName = "Wobble"
   constructor(inputs: {src: ShaderSource}, width = 1280, height = 720) {
     super(wobbleFS, inputs, width, height)
-    this.setUniforms({xStrength: 0.1, yStrength: 0.1, time: () => Date.now() / 1000})
+    //todo - need a more robust time function for shaders
+    const timeStart = Date.now()
+    this.setUniforms({xStrength: 0.1, yStrength: 0.1, time: () => (Date.now()-timeStart) / 1000})
   }
   setUniforms(uniforms: {xStrength: Dynamic<number>, yStrength: Dynamic<number>, time?: Dynamic<number>}): void {
     super.setUniforms(uniforms)
   }
 }
 
-const w = new Wobble({ src: errorImageTexture })
-w.setUniforms({ xStrength: 0.1, yStrength: () => Math.sin(Date.now() / 1000) * 0.1 })
+
 
 /**
  * todo - decide whether to make nullability of uniforms generic on ShaderUniforms, 
@@ -451,13 +463,21 @@ w.setUniforms({ xStrength: 0.1, yStrength: () => Math.sin(Date.now() / 1000) * 0
 
 // }
 
-type EffectGraph = {
-  [key: string]: ShaderEffect
-}
 
-const ob: EffectGraph = {}
-ob.f = new Wobble({ src: errorImageTexture })
-ob.t = new CustomShaderEffect(wobbleFS, { src: ob.f })
+const testCalls = () => {
+
+  const w = new Wobble({ src: errorImageTexture })
+  const timeStart = Date.now()
+  w.setUniforms({ xStrength: 0.1, yStrength: () => Math.sin( (Date.now()-timeStart) / 1000) * 0.1 })
+
+  type EffectGraph = {
+    [key: string]: ShaderEffect
+  }
+
+  const ob: EffectGraph = {}
+  ob.f = new Wobble({ src: errorImageTexture })
+  ob.t = new CustomShaderEffect(wobbleFS, { src: ob.f })
+}
 
 /**
  * todo - what type level tricks can you use to define a shader graph and then 
