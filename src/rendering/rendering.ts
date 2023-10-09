@@ -296,6 +296,15 @@ class CustomShaderEffect extends ShaderEffect {
     }
   }
 
+  updateSources(): void {
+    for (const key in this.inputs) {
+      const input = this.inputs[key]
+      if (input instanceof HTMLCanvasElement) {
+        this.material.uniforms[key].value.needsUpdate = true
+      }
+    }
+  }
+
   updateUniforms(): void {
     for (const key in this.uniforms) {
       if (!this.material.uniforms[key]) {
@@ -303,9 +312,9 @@ class CustomShaderEffect extends ShaderEffect {
       } else {
         this.material.uniforms[key].value = extract(this.uniforms[key])
       }
-      if (this.material.uniforms[key].value instanceof THREE.CanvasTexture) {
+      if (this.uniforms[key] instanceof THREE.CanvasTexture) {
         this.material.uniforms[key].value.needsUpdate = true
-        //todo bug - this isn't working
+        console.log('updating canvas texture')
       }
     }
   }
@@ -338,6 +347,7 @@ class CustomShaderEffect extends ShaderEffect {
 
   render(renderer: THREE.WebGLRenderer): void {
     //render to the output
+    this.updateSources()
     this.updateUniforms()
     renderer.setRenderTarget(this.output)
     renderer.render(this.scene, this.camera)
@@ -424,7 +434,7 @@ void main() {
   uv2.x += sin(uv.y * 10.0 + time * 2.0) * xStrength;
   uv2.y += cos(uv.x * 10.0 + time * 2.0) * yStrength;
   vec4 color = texture2D(src, uv2);
-  color.r = abs(sinN(time)-uv.x) < 0.05 ? 1.0 : 0.0; 
+  // color.r = abs(sinN(time)-uv.x) < 0.05 ? 1.0 : 0.0; 
   gl_FragColor = color;
 }`
 
