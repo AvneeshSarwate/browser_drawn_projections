@@ -59,7 +59,8 @@ onMounted(() => {
         // // reg(0).draw2 = cornerPts
 
 
-        // //todo API - need some api for these so you don't have to specify
+        // //todo API - streamline assinging stateful animations to regions (avoid specifying index twice)
+        // //need some api for these so you don't have to specify
         // //the region index twice (once on creation and once on assignment)
         // const dots = new a.PerimiterDots(reg(0), 10).anim(2.52)
         // reg(0).animationSeq = aseq([dots, rl, lr])

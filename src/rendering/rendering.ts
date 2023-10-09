@@ -267,7 +267,7 @@ class CustomShaderEffect extends ShaderEffect {
   material: THREE.ShaderMaterial
   constructor(fsString: string, inputs: ShaderInputs, width = 1280, height = 720, customOutput?: THREE.WebGLRenderTarget) {
     super()
-    //todo hotreload - register object so textures can be cleaned up on reload
+    //todo hotreload - register ShaderEffects so textures can be cleaned up on reload
     this.output = customOutput ?? new THREE.WebGLRenderTarget(width, height)
     this.width = width
     this.height = height
@@ -341,7 +341,7 @@ class CustomShaderEffect extends ShaderEffect {
         this.material.uniforms[key] = { value: inputVal }
       } else {
         this.material.uniforms[key].value = inputVal
-        //todo performance - destory old textures
+        //todo performance - determine if/when to clean up old textures when setting new sources on ShaderEffect
       }
     }
   }
@@ -415,8 +415,7 @@ export class CanvasPaint extends CustomShaderEffect {
 //================================================================================================
 //======================================  EFFECTS  ===============================================
 
-//todo API - need to be vigitlant about uniform namings - 
-// add runtime check to make sure uniform declarations match uniforms object?
+//todo API - glsl/js uniform typos - add runtime check to make sure uniform declarations match uniforms object?
 const wobbleFS = glsl`
 precision highp float;
 
@@ -441,9 +440,8 @@ void main() {
 
 
 /* 
-todo API - need a better way to instantiate effects with/without inputs, 
-       but then also make it clear why some nodes aren't rendering if 
-       they haven't been provided the necessary inputs
+todo API - cleaner api for instantiating fx with/without inputs + indicate when missing
+           (runtime check since theyre all named?)
 */
 
 //todo feature - need a way to explore fx graph and inspect the output of each node
