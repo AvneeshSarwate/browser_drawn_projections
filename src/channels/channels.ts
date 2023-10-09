@@ -57,7 +57,7 @@ function launch<T>(block: (ctx: TimeContext) => Promise<T>): CancelablePromisePo
   return createAndLaunchContext(block, Tone.now(), DateTimeContext)
 }
 
-
+//todo draft - need to test generalized TimeContext implementation in loops
 abstract class TimeContext {
   public abortController: AbortController
   public time: number
@@ -178,10 +178,10 @@ class Ramp implements Envelope {
   }
 
   scheduleReleaseCallback() {
-    Tone.Transport.scheduleOnce(() => {
+    delayFunc(() => {
       this.onFinish?.()
-    }, this.onTime + this.releaseDur)
-    console.log('scheduled release callback', Tone.Transport.immediate(), this.onTime, this.onTime + this.releaseDur, )
+    }, this.onTime, this.releaseDur)
+    console.log('scheduled release callback', Tone.Transport.immediate().toFixed(3), this.onTime.toFixed(3), (this.onTime + this.releaseDur).toFixed(3), )
   }
   onFinish?: () => void = undefined
 
@@ -210,7 +210,19 @@ class Ramp implements Envelope {
 }
 
 
+function toneDelay(callback: () => void, nowTime: number, delayTime: number): void {
+  Tone.Transport.scheduleOnce(() => {
+    callback()
+  }, nowTime + delayTime)
+}
 
+function dateDelay(callback: () => void, nowTime: number, delayTime: number): void {
+  setTimeout(() => {
+    callback()
+  }, delayTime * 1000)
+}
+
+const delayFunc = dateDelay
 
 class ADSR implements Envelope{
   attack: number = 1
@@ -227,9 +239,9 @@ class ADSR implements Envelope{
   }
 
   scheduleReleaseCallback() {
-    Tone.Transport.scheduleOnce(() => {
+    delayFunc(() => {
       this.onFinish?.()
-    }, this.onTime + this.releaseDur)
+    }, this.onTime, this.releaseDur)
   }
   onFinish?: () => void = undefined
 
@@ -327,7 +339,7 @@ export class EventChop<T> {
     const evtData = { evt, metadata, id: this.idGen++ }
     this.events.push(evtData)
     evt.onFinish = () => {
-      console.log("event finished", evtData.id, Tone.Transport.immediate())
+      console.log("event finished", evtData.id, Tone.Transport.immediate().toFixed(3))
       const idx = this.events.indexOf(evtData)
       this.events.splice(idx, 1)
     }
