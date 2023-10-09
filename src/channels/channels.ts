@@ -39,11 +39,12 @@ class CancelablePromisePoxy<T> implements Promise<T> {
   }
 }
 
-function createAndLaunchContext<T>(block: (ctx: TimeContext) => Promise<T>,rootTime: number): CancelablePromisePoxy<T> {
+type Constructor<T> = new (...args: any[]) => T;
+function createAndLaunchContext<T, C extends TimeContext>(block: (ctx: C) => Promise<T>, rootTime: number, ctor: Constructor<C>): CancelablePromisePoxy<T> {
   //define an async function that waits using setTimeout
   const abortController = new AbortController()
   const promiseProxy = new CancelablePromisePoxy<T>(abortController)
-  const newContext = new TimeContext(rootTime, abortController)
+  const newContext = new ctor(rootTime, abortController)
   const blockPromise = block(newContext)
   promiseProxy.promise = blockPromise
   blockPromise.catch((e) => {
@@ -53,10 +54,11 @@ function createAndLaunchContext<T>(block: (ctx: TimeContext) => Promise<T>,rootT
 }
 //todo hotreload - need to register all launches to global state so they can be canceled on hot reload
 function launch<T>(block: (ctx: TimeContext) => Promise<T>): CancelablePromisePoxy<T> {
-  return createAndLaunchContext(block, Tone.now())
+  return createAndLaunchContext(block, Tone.now(), DateTimeContext)
 }
 
-class TimeContext {
+
+abstract class TimeContext {
   public abortController: AbortController
   public time: number
   public isCanceled: boolean = false
@@ -69,7 +71,14 @@ class TimeContext {
       console.log('abort')
     })
   }
+  public branch<T>(block: (ctx: ToneTimeContext) => Promise<T>): CancelablePromisePoxy<T> {
+    return createAndLaunchContext(block, this.time, Object.getPrototypeOf(this).constructor)
+  }
 
+  public abstract wait(sec: number): Promise<void>
+}
+
+class ToneTimeContext extends TimeContext {
   public async wait(sec: number) {
     if (this.isCanceled) {
       throw new Error('context is canceled')
@@ -85,9 +94,24 @@ class TimeContext {
       }, ctx.time + sec)
     })
   }
+}
 
-  public branch<T>(block: (ctx: TimeContext) => Promise<T>): CancelablePromisePoxy<T> {
-    return createAndLaunchContext(block, this.time)
+class DateTimeContext extends TimeContext{
+  public async wait(sec: number) {
+    if (this.isCanceled) {
+      throw new Error('context is canceled')
+    }
+    const ctx = this
+    return new Promise<void>((resolve, reject) => {
+      const listener = () => { reject(); console.log('abort') }
+      ctx.abortController.signal.addEventListener('abort', listener)
+      const waitTime = this.time + sec - performance.now() / 1000
+      setTimeout(() => {
+        ctx.time += sec
+        ctx.abortController.signal.removeEventListener('abort', listener)
+        resolve()
+      }, waitTime * 1000)
+    })
   }
 }
 
