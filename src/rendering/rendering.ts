@@ -234,7 +234,7 @@ type ThreeVector = THREE.Vector2 | THREE.Vector3 | THREE.Vector4;
 type ThreeMatrix = THREE.Matrix3 | THREE.Matrix4;
 type ThreeColor = THREE.Color;
 type ThreeVectorArray = ThreeVector[];
-//todo - for nodes with a dynamic canvas source, will need to set .needsUpdate on corresponding texture
+
 type Dynamic<T> = T | (() => T)
 type ShaderUniform = number | number[] | ThreeVector | ThreeMatrix | ThreeColor | ThreeVectorArray | THREE.Texture
 type ShaderUniforms = {
@@ -267,6 +267,7 @@ class CustomShaderEffect extends ShaderEffect {
   material: THREE.ShaderMaterial
   constructor(fsString: string, inputs: ShaderInputs, width = 1280, height = 720, customOutput?: THREE.WebGLRenderTarget) {
     super()
+    //todo hotreload - register object so textures can be cleaned up on reload
     this.output = customOutput ?? new THREE.WebGLRenderTarget(width, height)
     this.width = width
     this.height = height
@@ -340,7 +341,7 @@ class CustomShaderEffect extends ShaderEffect {
         this.material.uniforms[key] = { value: inputVal }
       } else {
         this.material.uniforms[key].value = inputVal
-        //todo - destory old textures
+        //todo performance - destory old textures
       }
     }
   }
@@ -414,7 +415,7 @@ export class CanvasPaint extends CustomShaderEffect {
 //================================================================================================
 //======================================  EFFECTS  ===============================================
 
-//todo - need to be vigitlant about uniform namings - 
+//todo API - need to be vigitlant about uniform namings - 
 // add runtime check to make sure uniform declarations match uniforms object?
 const wobbleFS = glsl`
 precision highp float;
@@ -440,12 +441,12 @@ void main() {
 
 
 /* 
-todo - need a better way to instantiate effects with/without inputs, 
+todo API - need a better way to instantiate effects with/without inputs, 
        but then also make it clear why some nodes aren't rendering if 
        they haven't been provided the necessary inputs
 */
 
-//todo - need a way to explore fx graph and inspect the output of each node
+//todo feature - need a way to explore fx graph and inspect the output of each node
 
 
 
@@ -453,7 +454,7 @@ export class Wobble extends CustomShaderEffect {
   effectName = "Wobble"
   constructor(inputs: {src: ShaderSource}, width = 1280, height = 720) {
     super(wobbleFS, inputs, width, height)
-    //todo - need a more robust time function for shaders
+    //todo API - need a more robust time function for shaders
     const timeStart = Date.now()
     this.setUniforms({xStrength: 0.1, yStrength: 0.1, time: () => (Date.now()-timeStart) / 1000})
   }
@@ -465,7 +466,7 @@ export class Wobble extends CustomShaderEffect {
 
 
 /**
- * todo - decide whether to make nullability of uniforms generic on ShaderUniforms, 
+ * todo API - decide whether to make nullability of uniforms generic on ShaderUniforms, 
  *        or let each effect specify param by param
  */
 
@@ -492,7 +493,7 @@ const testCalls = () => {
 }
 
 /**
- * todo - what type level tricks can you use to define a shader graph and then 
+ * todo wishlist - what type level tricks can you use to define a shader graph and then 
  * get the graph object with autocomplete available in another file?
  * 
  * alternatively, just suck it up and rebuild the graph (an properly dispose of the old one)
@@ -500,7 +501,8 @@ const testCalls = () => {
  * - if you keep time/transport stuff consistent across reloads, it is only feedback loop textures
  *   that need to be recreated - for CustomFeedbackShader, you can compare the fragment shader,
  *   but for FeedbackNode, you might need to compare the whole graph
- * - quick and dirty idea - for nodes to save their texture on hot reload, provide a "save key".
+ * 
+ * - todo hotreload - quick and dirty idea - for nodes to save their texture on hot reload, provide a "save key".
  *   could even be a required argument for FeedbackNode and CustomShaderEffect?
  */
 

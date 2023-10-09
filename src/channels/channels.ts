@@ -51,7 +51,7 @@ function createAndLaunchContext<T>(block: (ctx: TimeContext) => Promise<T>,rootT
   })
   return promiseProxy
 }
-//todo - need to register all launches to global state so they can be canceled on hot reload
+//todo hotreload - need to register all launches to global state so they can be canceled on hot reload
 function launch<T>(block: (ctx: TimeContext) => Promise<T>): CancelablePromisePoxy<T> {
   return createAndLaunchContext(block, Tone.now())
 }
@@ -230,12 +230,12 @@ class ADSR implements Envelope{
     return this
   }
 
-  //todo - this might need another intermediate value called offVal that 
+  //todo later - this might need another intermediate value called offVal that 
   //calculates where the envelope val would have been at queryTime
   //given onTime and offTime. Then, in the relase state, the final
   //lerp is lerp(offVal, relaseLevel, releaseProgress)
 
-  //todo - figure out how touchdesigner deals with triggered vs on/off events wrt attack/release stages
+  //todo later - figure out how touchdesigner deals with triggered vs on/off events wrt attack/release stages
   public val(time?: number): number {
     const queryTime = time ?? Tone.Transport.immediate()
     if (!this.started) return 0
@@ -261,7 +261,7 @@ class ADSR implements Envelope{
 }
 
 /*
-todo - if you want type inference with feedback loops of chops
+todo later - if you want type inference with feedback loops of chops
 you'll have to have a Feedback node (like with TOPs) where you 
 explicitly give the type (or else inference won't be possible)
 
@@ -273,7 +273,7 @@ each CHOP exposes a "channels" list of arrays, and a sample(ind) method that ret
 */
 
 /*
-todo - event lifecycle
+todo later/deep design - event lifecycle
 - who manages lifecycle of events? events should probably "run" on their own.
 - should events be given a TimeContext to run in to keep all timing tight?
   - want events to run w/o Tone.Transport.lookAhead latency, and to simplify things, 

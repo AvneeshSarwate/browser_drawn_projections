@@ -126,7 +126,7 @@ class CommandHistory {
 export const commandHistory = new CommandHistory()
 
 /**
- * todo - refactor this to be a method on CommandHistory, pass in a CommandHistory instance to each
+ * todo later/API - refactor this to be a method on CommandHistory, pass in a CommandHistory instance to each
  * command generator as an argument. Then, the end of each command function can look like
  * 
  * if (!isPartOfComplexCommand) commandHistory.executeAndAddCommand(command)
@@ -263,7 +263,7 @@ export class EntityList<T extends Entity> extends Entity implements UndoableList
   }
 
   public removeItem(index: number) {
-    //todo - should we remove the parent reference for the removed item?
+    //todo later/API - should we remove the parent reference for the removed item?
     removeListCommandGenerator<T>(this, index)
   }
 

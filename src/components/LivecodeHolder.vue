@@ -31,12 +31,12 @@ const reset = () => {
     r.resetDrawState()
 
     /**
-     * todo - should there even be any "persistent state" at all wrt animations, or should all 
+     * todo deep design - should there even be any "persistent state" at all wrt animations, or should all 
      *        behaviors be specified via "pure" function calls in a draw callback?
-     *        (probably want some retained state, but have to be conginzant about)
+     *        probably want some retained state, but have to be conginzant about
      *        keeping the "visibile code <=> running animation state" invariant true.
      *        It is trivially true on page load, but can be violated by livecoding, 
-     *        so need to think about what "persistent" objects are and maybe have
+     *        so need to think about what the "persistent" objects are and maybe have
      *        some formal opt-in/out auto-reset functionality for all of them
      */
     r.animationSeq = undefined
@@ -59,7 +59,7 @@ onMounted(() => {
         // // reg(0).draw2 = cornerPts
 
 
-        // //todo - need some api for these so you don't have to specify
+        // //todo API - need some api for these so you don't have to specify
         // //the region index twice (once on creation and once on assignment)
         // const dots = new a.PerimiterDots(reg(0), 10).anim(2.52)
         // reg(0).animationSeq = aseq([dots, rl, lr])
@@ -71,21 +71,11 @@ onMounted(() => {
 
         // testCancel()
 
-        /**
-         * todo - need to streamline api for patterns - goal is to be able
-         * to very quickly livecode different x/y streams to change
-         * instancing behavior of dots
-         * 
-         * idea - "patterns" are just functions that take a phase value
-         *        in [0, 1] and return an output [0, 1]
-         * 
-         * lets you easily create variations cyclic patterns
-         */
 
         const ec = new EventChop<{x: number}>()
 
 
-        //todo - create cleaner way to set up mouse/keyboard mappings on p5 sketch
+        //todo API - create cleaner way to set up mouse/keyboard mappings on p5 sketch
         const r = Math.random()
         document.getElementById("threeCanvas")!!.onmousedown = () => {
           ec.ramp(1, { x:  p5i.mouseX})
@@ -102,6 +92,17 @@ onMounted(() => {
           })
         }
         appState.drawFunctions.push(chopDraw)
+
+        /**
+         * todo API - need to streamline api for patterns - goal is to be able
+         * to very quickly livecode different x/y streams to change
+         * instancing behavior of dots
+         * 
+         * idea - "patterns" are just functions that take a phase value
+         *        in [0, 1] and return an output [0, 1]
+         * 
+         * lets you easily create variations cyclic patterns
+         */
         
         const patternDraw = (p5: p5) => {
           const sin2 = (p: number) => sin(p*2.5)
@@ -139,7 +140,7 @@ onMounted(() => {
 
 /*
 more ideas
-- make "blocks" of code undoable?
+- todo wishlist - make "blocks" of code undoable?
  - would involve making property assignments automatically undoable, or
    having a cleaner api for assigning undoable properties
    (maybe just setters for props that need undo, with a _ suffix indicating undiability)
@@ -152,7 +153,7 @@ more ideas
   if you really want, can even snapshot a thumbnail and have a scene selector UI
 
 
-- create a "modal drawing" interface with mouse and keyboard - different keys for different
+- todo wishlist create a "modal drawing" interface with mouse and keyboard - different keys for different
   drawing modes, and also a way to record loops of drawing and play them back
   - also be able to save and load these loops to file, create transformed instances of them
     - go back to "delta list" format for saving gestures to enable this
