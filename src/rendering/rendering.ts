@@ -268,6 +268,12 @@ class CustomShaderEffect extends ShaderEffect {
   constructor(fsString: string, inputs: ShaderInputs, width = 1280, height = 720, customOutput?: THREE.WebGLRenderTarget) {
     super()
     //todo hotreload - register ShaderEffects so textures can be cleaned up on reload
+    /* todo hotreload/deep design - should hotreload safetfy of ShaderEffects be internal, or an external wrapper?
+            external allows reusing this more flexibly, but internal is probs easier?
+            see if hotreloading three.js resources already has a solution in the ecosystem,
+            and if not, see if you can expose a minimal API that is then mostly managed by an outside service
+    */
+
     this.output = customOutput ?? new THREE.WebGLRenderTarget(width, height)
     this.width = width
     this.height = height

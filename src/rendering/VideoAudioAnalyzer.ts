@@ -1,29 +1,43 @@
-class VideoAudioAnalyzer {
+export enum FilterType {
+  LowPass = 'lowpass',
+  BandPass = 'bandpass',
+  HighPass = 'highpass'
+}
+
+export class VideoAudioAnalyzer {
   private videoElement: HTMLVideoElement;
   private context: AudioContext;
   private gainNode: GainNode;
   private analyzerNodes: AnalyserNode[];
   public drawCallback?: (low: number, mid: number, high: number) => void;
   public drawing: boolean = false;
-  private filters: BiquadFilterNode[];
+  private filters: Record<FilterType, BiquadFilterNode>;
 
   constructor(videoElement: HTMLVideoElement) {
     this.videoElement = videoElement;
     this.context = new AudioContext();
     this.gainNode = this.context.createGain();
-    this.filters = ["lowpass", "bandpass", "highpass"].map((type) => {
-      const filter = this.context.createBiquadFilter();
-      filter.type = type as BiquadFilterType;
-      return filter;
-    });
-    this.analyzerNodes = this.filters.map(() => this.context.createAnalyser());
+    this.analyzerNodes = Array(3).fill(null).map(() => this.context.createAnalyser());
+    this.filters = {
+      [FilterType.LowPass]: this.createFilter(FilterType.LowPass),
+      [FilterType.BandPass]: this.createFilter(FilterType.BandPass),
+      [FilterType.HighPass]: this.createFilter(FilterType.HighPass),
+    };
     this.connectVideoToAudioApi();
   }
 
+  private createFilter(type: FilterType): BiquadFilterNode {
+    const filter = this.context.createBiquadFilter();
+    filter.type = type;
+    return filter;
+  }
+
+  //todo hotreload - make connecting video element to audio api hotreload safe
   private connectVideoToAudioApi() {
     const sourceNode = this.context.createMediaElementSource(this.videoElement);
     sourceNode.connect(this.gainNode).connect(this.context.destination);
-    this.filters.forEach((filter, index) => {
+    
+    Object.values(this.filters).forEach((filter, index) => {
       sourceNode.connect(filter).connect(this.analyzerNodes[index]);
     });
   }
@@ -46,14 +60,36 @@ class VideoAudioAnalyzer {
     return this.gainNode.gain.value;
   }
 
+  setFilterFrequency(filterType: FilterType, frequency: number) {
+    const filter = this.filters[filterType];
+    filter.frequency.setValueAtTime(frequency, this.context.currentTime);
+  }
+
+  getFilterFrequency(filterType: FilterType): number {
+    return this.filters[filterType].frequency.value;
+  }
+
+  setFilterQ(filterType: FilterType, Q: number) {
+    const filter = this.filters[filterType];
+    filter.Q.setValueAtTime(Q, this.context.currentTime);
+  }
+
+  getFilterQ(filterType: FilterType): number {
+    return this.filters[filterType].Q.value;
+  }
+
+  public draw(): void {
+    const amplitudes = this.analyzerNodes.map((analyzer) =>
+      this.getAverageAmplitude(analyzer)
+    );
+    this.drawCallback?.(amplitudes[0], amplitudes[1], amplitudes[2])
+  }
+
   private animate() {
     if (!this.drawCallback || !this.drawing) {
       return;
     }
-    const amplitudes = this.analyzerNodes.map((analyzer) =>
-      this.getAverageAmplitude(analyzer)
-    );
-    this.drawCallback(amplitudes[0], amplitudes[1], amplitudes[2]);
+    this.draw();
     requestAnimationFrame(() => this.animate());
   }
 
@@ -63,11 +99,21 @@ class VideoAudioAnalyzer {
   }
 }
 
-// Example usage:
-const videoElement = document.querySelector('video')!;
-const analyzer = new VideoAudioAnalyzer(videoElement);
-analyzer.volume = 0.5;
-analyzer.drawCallback = (low, mid, high) => {
-  console.log(`Low: ${low}, Mid: ${mid}, High: ${high}`);
-};
-analyzer.startAnimating();
+
+const testCalls = () => {
+  // Example usage:
+  const videoElement = document.querySelector('video')!; // Assume the video element exists
+  const analyzer = new VideoAudioAnalyzer(videoElement);
+
+  analyzer.volume = 0.5;
+  analyzer.drawCallback = (low, mid, high) => {
+    console.log(`Low: ${low}, Mid: ${mid}, High: ${high}`);
+  };
+
+  analyzer.setFilterFrequency(FilterType.LowPass, 440);
+  analyzer.setFilterQ(FilterType.LowPass, 1);
+  console.log(`Lowpass filter frequency: ${analyzer.getFilterFrequency(FilterType.LowPass)}`);
+  console.log(`Lowpass filter Q: ${analyzer.getFilterQ(FilterType.LowPass)}`);
+
+  analyzer.startAnimating();
+}

@@ -6,6 +6,7 @@ import * as a from '@/rendering/planeAnimations'
 import { groupedAnimation0 } from '@/rendering/modularizedTransforms';
 import { testCancel, xyZip, sin, cos, EventChop } from '@/channels/channels';
 import { CanvasPaint, UVDraw, Wobble } from '@/rendering/rendering';
+import { VideoAudioAnalyzer } from '@/rendering/VideoAudioAnalyzer';
 
 
 const appState = inject('appState') as AppState  
@@ -44,6 +45,8 @@ const reset = () => {
   appState.drawFunctions = []
 }
 
+const vidAnalysis = new VideoAudioAnalyzer(document.getElementById("video") as HTMLVideoElement)
+
 
 onMounted(() => {
   try {
@@ -80,7 +83,7 @@ onMounted(() => {
         const r = Math.random()
         document.getElementById("threeCanvas")!!.onmousedown = () => {
           ec.ramp(1, { x:  p5i.mouseX})
-          // console.log("mouse down")
+          console.log("mouse down")
         }
 
         const chopDraw = (p5: p5) => {
@@ -114,9 +117,23 @@ onMounted(() => {
         appState.drawFunctions.push(patternDraw)
         // console.log("code ran")
 
+        vidAnalysis.drawCallback = (low, mid, high) => {
+          console.log("vid analysis2", low, mid, high)
+          p5i.push()
+          p5i.fill(255, 0, 0)
+          p5i.rect(300, 0, low * 300, 100)
+          p5i.rect(300, 100, mid * 300, 100)
+          p5i.rect(300, 200, high * 300, 100)
+          p5i.circle(300, 300, 100+high * 300)
+          p5i.pop()
+        }
+        appState.drawFunctions.push(() => vidAnalysis.draw())
 
+
+        //todo api - p5 draw functions called AFTER shader draw don't show up in the shader - fix or warn about this
         const uvEffect = new UVDraw()
-        const wobble = new Wobble({src: p5Canvas})
+        const wobble = new Wobble({ src: p5Canvas })
+        wobble.setUniforms({xStrength: 0.01, yStrength: 0.01})
         const canvasPaint = new CanvasPaint({ src: wobble })
         appState.drawFunctions.push(() => canvasPaint.renderAll(appState.threeRenderer!!))
       }
