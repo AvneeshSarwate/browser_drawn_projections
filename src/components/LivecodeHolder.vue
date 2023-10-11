@@ -120,7 +120,7 @@ onMounted(() => {
         // console.log("code ran")
 
         vidAnalysis.drawCallback = (low, mid, high) => {
-          console.log("vid analysis2", low, mid, high)
+          // console.log("vid analysis2", low, mid, high)
           p5i.push()
           p5i.fill(255, 0, 0)
           p5i.rect(300, 0, low * 300, 100)
@@ -163,6 +163,11 @@ onMounted(() => {
 
 
 onUnmounted(() => {
+  /*todo hotreload - use similar pattern to shaderGraphEndNode?.disposeAll() for hotreloading time loops?
+  can wrap launch() function in something that registers loops to a global store, 
+  so you don't have to make hotreload support part of the implementation of the loop itself
+  */
+
   shaderGraphEndNode?.disposeAll()
 })
 

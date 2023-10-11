@@ -52,9 +52,12 @@ function createAndLaunchContext<T, C extends TimeContext>(block: (ctx: C) => Pro
   })
   return promiseProxy
 }
+
+const USE_TONE = false
 //todo hotreload - need to register all launches to global state so they can be canceled on hot reload
 function launch<T>(block: (ctx: TimeContext) => Promise<T>): CancelablePromisePoxy<T> {
-  return createAndLaunchContext(block, Tone.now(), DateTimeContext)
+  if(USE_TONE) return createAndLaunchContext(block, Tone.Transport.immediate(), ToneTimeContext)
+  else return createAndLaunchContext(block, performance.now()/1000, DateTimeContext)
 }
 
 //todo draft - need to test generalized TimeContext implementation in loops
@@ -119,7 +122,7 @@ const audioStart = async () => {
   await Tone.start()
   Tone.Transport.start()
   console.log('audio is ready', Tone.Transport.bpm.value, Tone.context.lookAhead)
-  // setTimeout(testCancel, 50)
+  setTimeout(testCancel, 50)
   document.querySelector('body')?.removeEventListener('click', audioStart)
 }
 document.querySelector('body')?.addEventListener('click', audioStart)
@@ -130,11 +133,11 @@ export const testCancel = async () => {
     const stepVal = 0.2
 
     const start = ctx.time
-    const start2 = performance.now() + Tone.context.lookAhead * 1000
+    const start2 = performance.now()  + (USE_TONE ? Tone.context.lookAhead * 1000 : 0)
     let drift, lastDrift = 0
     const res0 = ctx.branch(async (ctx) => {
       for (let i = 0; i < 100; i++) {
-        const [logicalTime, wallTime] = [ctx.time - start, (performance.now() - start2) / 1000]
+        const [logicalTime, wallTime] = [ctx.time - start, (performance.now() - start2) / 1000] //todo bug - is this correct?
         drift = wallTime - logicalTime 
         const driftDelta = drift - lastDrift
         console.log('step', i, "logicalTime", logicalTime, "drift", drift.toFixed(3), "driftDelta", driftDelta.toFixed(3))

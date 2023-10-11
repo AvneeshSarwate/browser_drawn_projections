@@ -23,7 +23,10 @@ provide('appState', appState)
     <canvas id="p5Canvas" width="1280" height="720" abitrary-prop="somethi"></canvas>
     <canvas id="threeCanvas" width="1280" height="720" abitrary-prop="somethi"></canvas>
   </div>
-  <video id="video" width="1280" height="720" controls src="/block_rocking.mp4"></video>
+  <video id="video" width="640" height="360" controls src="/block_rocking.mp4"></video>
+  <div id="debugInfo">
+
+  </div>
   <SketchInitializer ></SketchInitializer>
   
   <!-- used for defining "persistent things" aka node graph of stuff -->
