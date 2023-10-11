@@ -102,7 +102,7 @@ export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => AppSta
 const errorImageTexture = new THREE.TextureLoader().load('src/assets/error.jpg')
 // const defaultRenderer = new THREE.WebGLRenderer({canvas: document.getElementById('threeCanvas') as HTMLCanvasElement})
 
-abstract class ShaderEffect {
+export abstract class ShaderEffect {
   abstract setSrcs(fx: ShaderInputs): void
   abstract render(renderer: THREE.WebGLRenderer): void
   abstract setUniforms(uniforms: ShaderUniforms): void
@@ -179,7 +179,6 @@ class FeedbackNode extends ShaderEffect {
   dispose(): void {
     this._passthru.dispose()
   }
-  disposeAll(): void { }
   setUniforms(uniforms: ShaderUniforms): void { }
   updateUniforms(): void { }
 }
@@ -382,6 +381,12 @@ class CustomFeedbackShaderEffect extends CustomShaderEffect {
     this._passthrough.setSrcs({ src: this.pingpong.dst.texture })
     this._passthrough.render(renderer)
   }
+
+  dispose(): void {
+    super.dispose()
+    this.pingpong.src.dispose()
+    this.pingpong.dst.dispose()
+  }
 }
 
 class Passthru extends CustomShaderEffect {
@@ -399,8 +404,8 @@ class Passthru extends CustomShaderEffect {
 
 export class CanvasPaint extends CustomShaderEffect {
   effectName = "CanvasPaint"
-  constructor(inputs: ShaderInputs,  width = 1280, height = 720, customOutput?: THREE.WebGLRenderTarget) {
-    super(passThruFS, inputs, width, height, customOutput)
+  constructor(inputs: ShaderInputs,  width = 1280, height = 720) {
+    super(passThruFS, inputs, width, height, new THREE.WebGLRenderTarget(1, 1))
   }
 
   setSrcs(fx: {src: ShaderSource}): void {

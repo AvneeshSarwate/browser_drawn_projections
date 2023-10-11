@@ -5,7 +5,7 @@ import { inject, onMounted, onUnmounted } from 'vue';
 import * as a from '@/rendering/planeAnimations'
 import { groupedAnimation0 } from '@/rendering/modularizedTransforms';
 import { testCancel, xyZip, sin, cos, EventChop } from '@/channels/channels';
-import { CanvasPaint, UVDraw, Wobble } from '@/rendering/rendering';
+import { CanvasPaint, UVDraw, Wobble, type ShaderEffect } from '@/rendering/rendering';
 import { VideoAudioAnalyzer } from '@/rendering/VideoAudioAnalyzer';
 
 
@@ -26,6 +26,8 @@ const norm  = ({x, y}: {x: number, y: number}) => ({x: x * appState.p5Instance!!
 const aseq = (animations: a.AnimationSegment[]) => {
   return new a.AnimationSeq(animations)
 }
+
+let shaderGraphEndNode: ShaderEffect | undefined = undefined
 
 const reset = () => {
   appState.regions.list.forEach(r => {
@@ -136,6 +138,8 @@ onMounted(() => {
         wobble.setUniforms({xStrength: 0.01, yStrength: 0.01})
         const canvasPaint = new CanvasPaint({ src: wobble })
         appState.drawFunctions.push(() => canvasPaint.renderAll(appState.threeRenderer!!))
+
+        shaderGraphEndNode = canvasPaint
       }
 
 
@@ -154,6 +158,12 @@ onMounted(() => {
     console.log(e)
   }
 
+})
+
+
+
+onUnmounted(() => {
+  shaderGraphEndNode?.disposeAll()
 })
 
 /*
@@ -210,11 +220,6 @@ more ideas
 
 */
 
-onUnmounted(() => {
-
-})
-
-
 </script>
 
 <template>
@@ -222,3 +227,5 @@ onUnmounted(() => {
 </template>
 
 <style scoped></style>
+
+
