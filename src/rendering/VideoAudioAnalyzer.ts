@@ -4,8 +4,8 @@ export enum FilterType {
   HighPass = 'highpass'
 }
 
-export class VideoAudioAnalyzer {
-  private videoElement: HTMLVideoElement;
+export class MediaAudioAnalyzer {
+  private videoElement: HTMLMediaElement;
   private context: AudioContext;
   private gainNode: GainNode;
   private analyzerNodes: AnalyserNode[];
@@ -13,7 +13,7 @@ export class VideoAudioAnalyzer {
   public drawing: boolean = false;
   private filters: Record<FilterType, BiquadFilterNode>;
 
-  constructor(videoElement: HTMLVideoElement) {
+  constructor(videoElement: HTMLMediaElement) {
     this.videoElement = videoElement;
     this.context = new AudioContext();
     this.gainNode = this.context.createGain();
@@ -103,7 +103,7 @@ export class VideoAudioAnalyzer {
 const testCalls = () => {
   // Example usage:
   const videoElement = document.querySelector('video')!; // Assume the video element exists
-  const analyzer = new VideoAudioAnalyzer(videoElement);
+  const analyzer = new MediaAudioAnalyzer(videoElement);
 
   analyzer.volume = 0.5;
   analyzer.drawCallback = (low, mid, high) => {

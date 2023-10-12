@@ -6,7 +6,8 @@ import * as a from '@/rendering/planeAnimations'
 import { groupedAnimation0 } from '@/rendering/modularizedTransforms';
 import { testCancel, xyZip, sin, cos, EventChop } from '@/channels/channels';
 import { CanvasPaint, UVDraw, Wobble, type ShaderEffect } from '@/rendering/rendering';
-import { VideoAudioAnalyzer } from '@/rendering/VideoAudioAnalyzer';
+import { MediaAudioAnalyzer } from '@/rendering/VideoAudioAnalyzer';
+import WaveSurfer from 'wavesurfer.js'
 
 
 const appState = inject('appState') as AppState  
@@ -47,7 +48,21 @@ const reset = () => {
   appState.drawFunctions = []
 }
 
-const vidAnalysis = new VideoAudioAnalyzer(document.getElementById("video") as HTMLVideoElement)
+//todo hotreload - figure out how to initialize MeadiaAudioAnalyzers in a hot-reloadable way
+const vidAudioBands = new MediaAudioAnalyzer(document.getElementById("video") as HTMLVideoElement)
+
+const wavesurfer = WaveSurfer.create({
+  container: '#wavesurferHolder',
+  waveColor: '#4F4A85',
+  progressColor: '#383351',
+  url: '/block_rocking.mp3',
+})
+document.querySelector('#wavesurferPlay')?.addEventListener('click', () => {
+  console.log('play/pause')
+  wavesurfer.playPause()
+})
+
+const waveAudioBands = new MediaAudioAnalyzer(wavesurfer.getMediaElement() as HTMLVideoElement)
 
 
 onMounted(() => {
@@ -119,17 +134,25 @@ onMounted(() => {
         appState.drawFunctions.push(patternDraw)
         // console.log("code ran")
 
-        vidAnalysis.drawCallback = (low, mid, high) => {
-          // console.log("vid analysis2", low, mid, high)
+        vidAudioBands.drawCallback = (low, mid, high) => {
           p5i.push()
           p5i.fill(255, 0, 0)
           p5i.rect(300, 0, low * 300, 100)
           p5i.rect(300, 100, mid * 300, 100)
           p5i.rect(300, 200, high * 300, 100)
-          p5i.circle(300, 300, 100+high * 300)
           p5i.pop()
         }
-        appState.drawFunctions.push(() => vidAnalysis.draw())
+        appState.drawFunctions.push(() => vidAudioBands.draw())
+
+        waveAudioBands.drawCallback = (low, mid, high) => {
+          p5i.push()
+          p5i.fill(0, 255, 0)
+          p5i.rect(600, 0, low * 300, 100)
+          p5i.rect(600, 100, mid * 300, 100)
+          p5i.rect(600, 200, high * 300, 100)
+          p5i.pop()
+        }
+        appState.drawFunctions.push(() => waveAudioBands.draw())
 
 
         //todo api - p5 draw functions called AFTER shader draw don't show up in the shader - fix or warn about this

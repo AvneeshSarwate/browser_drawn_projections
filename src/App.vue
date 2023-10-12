@@ -24,20 +24,21 @@ provide('appState', appState)
     <canvas id="threeCanvas" width="1280" height="720" abitrary-prop="somethi"></canvas>
   </div>
   <video id="video" width="640" height="360" controls src="/block_rocking.mp4"></video>
+  <div id="wavesurferHolder"></div>
+  <button id="wavesurferPlay">Play/Pause</button>
   <div id="debugInfo">
 
   </div>
-  <SketchInitializer ></SketchInitializer>
-  
+  <SketchInitializer></SketchInitializer>
+
   <!-- used for defining "persistent things" aka node graph of stuff -->
   <LivecodeHolder></LivecodeHolder>
-  
+
   <!-- used for used for inspection and fixes -->
   <OneshotCode></OneshotCode>
 </template>
 
 <style scoped>
-
 #controlContainer {
   position: absolute;
   top: 0;
@@ -62,4 +63,7 @@ provide('appState', appState)
   left: 0;
 }
 
+#video {
+  /* display: none; */
+}
 </style>
