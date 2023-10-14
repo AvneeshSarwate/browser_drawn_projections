@@ -122,7 +122,7 @@ void main() {
   vec2 uv = vUV;
   vec4 color = texture2D(src, uv);
   vec4 feedbackColor = texture2D(backbuffer, mix(uv, vec2(0.5), zoom));
-  color = color.r > 0.5 ? color : feedbackColor;
+  color = color.a > 0.5 ? color : feedbackColor;
   gl_FragColor = color;
 }`
 
