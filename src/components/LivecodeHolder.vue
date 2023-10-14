@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Region, type AppState } from '@/stores/stores';
+import { Region, type DevelopmentAppState } from '@/stores/developmentAppState';
 import p5 from 'p5';
 import { inject, onMounted, onUnmounted } from 'vue';
 import * as a from '@/rendering/planeAnimations'
@@ -9,9 +9,10 @@ import { CanvasPaint, type ShaderEffect } from '@/rendering/rendering';
 import { MediaAudioAnalyzer } from '@/rendering/VideoAudioAnalyzer';
 import WaveSurfer from 'wavesurfer.js'
 import { FeedbackZoom, Wobble } from '@/rendering/CustomFX';
+import { midiInputs } from '@/io/midi';
 
 
-const appState = inject('appState') as AppState  
+const appState = inject('appState') as DevelopmentAppState  
 
 const tc = testCancel
 
@@ -87,27 +88,29 @@ onMounted(() => {
         // reg(0).animationSeq = aseq([dots, rl, lr])
 
         //modularize creation of a sequence into a function in a DIFFERENT FILE - module can be livecoded
-        groupedAnimation0(appState, reg(1)) 
+        groupedAnimation0(appState, reg(1))
 
         " " //a way to add "spacing" when reading eval'd code
 
         // testCancel()
 
+        midiInputs
 
-        const ec = new EventChop<{x: number}>()
+
+        const ec = new EventChop<{ x: number }>()
 
 
         //todo API - create cleaner way to set up mouse/keyboard mappings on p5 sketch
         const r = Math.random()
         document.getElementById("threeCanvas")!!.onmousedown = () => {
-          ec.ramp(1, { x:  p5i.mouseX})
+          ec.ramp(1, { x: p5i.mouseX })
           console.log("mouse down")
         }
 
         const chopDraw = (p5: p5) => {
           ec.samples().forEach((s) => {
             p5.push()
-            p5.fill(255,0,0)
+            p5.fill(255, 0, 0)
             p5.circle(s.x, s.val * 700, 130)
             p5.pop()
             // console.log("chop draw", s.val, r)
@@ -125,9 +128,9 @@ onMounted(() => {
          * 
          * lets you easily create variations cyclic patterns
          */
-        
+
         const patternDraw = (p5: p5) => {
-          const sin2 = (p: number) => sin(p*2.5)
+          const sin2 = (p: number) => sin(p * 2.5)
           xyZip(Date.now() / 10000, sin2, cos, 20).forEach((pt) => {
             p5.circle(norm(pt).x, norm(pt).y, 30)
           })
@@ -154,7 +157,10 @@ onMounted(() => {
         //   p5i.pop()
         // }
         // appState.drawFunctions.push(() => waveAudioBands.draw())
-
+        console.log("input exists", midiInputs.get('IAC Driver Bus 1'))
+        midiInputs.get('IAC Driver Bus 1')?.onAllNoteOn((note) => {
+          console.log("note on", note)
+        })
 
         //todo api - p5 draw functions called AFTER shader draw don't show up in the shader - fix or warn about this
         const fdbkZoom = new FeedbackZoom({ src: p5Canvas })
