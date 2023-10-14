@@ -121,8 +121,8 @@ varying vec2 vUV;
 void main() {
   vec2 uv = vUV;
   vec4 color = texture2D(src, uv);
-  vec4 feedbackColor = texture2D(backbuffer, mix(uv, vec2(0.5), zoom));
-  color = color.a > 0.5 ? color : feedbackColor;
+  vec4 bb = texture2D(backbuffer, mix(uv, vec2(0.5), zoom));
+  color = color.a > 0.01 ? color : bb;
   gl_FragColor = color;
 }`
 
@@ -130,7 +130,7 @@ export class FeedbackZoom extends CustomFeedbackShaderEffect {
   effectName = "FeedbackZoom"
   constructor(inputs: {src: ShaderSource}, width = 1280, height = 720) {
     super(feedbackZoomFS, inputs, width, height)
-    this.setUniforms({zoom: 0.001})
+    this.setUniforms({zoom: 0.005})
   }
   setUniforms(uniforms: {zoom: Dynamic<number>}): void {
     super.setUniforms(uniforms)

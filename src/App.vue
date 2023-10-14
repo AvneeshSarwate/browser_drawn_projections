@@ -6,9 +6,9 @@ import { provide } from 'vue';
 import OneshotCode from './components/OneshotCode.vue';
 
 
-const checkStore = globalStore()
+const store = globalStore()
 
-const appState = checkStore.appStateRef as AppState
+const appState = store.appStateRef as AppState
 
 provide('appState', appState)
 
@@ -65,6 +65,7 @@ provide('appState', appState)
   position: absolute;
   top: 0;
   left: 0;
+  visibility: visible;
 }
 
 #video {

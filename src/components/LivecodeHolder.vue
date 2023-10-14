@@ -52,16 +52,16 @@ const reset = () => {
 //todo hotreload - figure out how to initialize MeadiaAudioAnalyzers in a hot-reloadable way
 // const vidAudioBands = new MediaAudioAnalyzer(document.getElementById("video") as HTMLVideoElement)
 
-const wavesurfer = WaveSurfer.create({
-  container: '#wavesurferHolder',
-  waveColor: '#4F4A85',
-  progressColor: '#383351',
-  url: '/block_rocking.mp3',
-})
-document.querySelector('#wavesurferPlay')?.addEventListener('click', () => {
-  console.log('play/pause')
-  wavesurfer.playPause()
-})
+// const wavesurfer = WaveSurfer.create({
+//   container: '#wavesurferHolder',
+//   waveColor: '#4F4A85',
+//   progressColor: '#383351',
+//   url: '/block_rocking.mp3',
+// })
+// document.querySelector('#wavesurferPlay')?.addEventListener('click', () => {
+//   console.log('play/pause')
+//   wavesurfer.playPause()
+// })
 
 // const waveAudioBands = new MediaAudioAnalyzer(wavesurfer.getMediaElement() as HTMLVideoElement)
 
