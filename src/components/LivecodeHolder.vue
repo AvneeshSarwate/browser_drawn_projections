@@ -5,9 +5,10 @@ import { inject, onMounted, onUnmounted } from 'vue';
 import * as a from '@/rendering/planeAnimations'
 import { groupedAnimation0 } from '@/rendering/modularizedTransforms';
 import { testCancel, xyZip, sin, cos, EventChop } from '@/channels/channels';
-import { CanvasPaint, UVDraw, Wobble, type ShaderEffect } from '@/rendering/rendering';
+import { CanvasPaint, type ShaderEffect } from '@/rendering/rendering';
 import { MediaAudioAnalyzer } from '@/rendering/VideoAudioAnalyzer';
 import WaveSurfer from 'wavesurfer.js'
+import { FeedbackZoom, Wobble } from '@/rendering/CustomFX';
 
 
 const appState = inject('appState') as AppState  
@@ -49,7 +50,7 @@ const reset = () => {
 }
 
 //todo hotreload - figure out how to initialize MeadiaAudioAnalyzers in a hot-reloadable way
-const vidAudioBands = new MediaAudioAnalyzer(document.getElementById("video") as HTMLVideoElement)
+// const vidAudioBands = new MediaAudioAnalyzer(document.getElementById("video") as HTMLVideoElement)
 
 const wavesurfer = WaveSurfer.create({
   container: '#wavesurferHolder',
@@ -62,7 +63,7 @@ document.querySelector('#wavesurferPlay')?.addEventListener('click', () => {
   wavesurfer.playPause()
 })
 
-const waveAudioBands = new MediaAudioAnalyzer(wavesurfer.getMediaElement() as HTMLVideoElement)
+// const waveAudioBands = new MediaAudioAnalyzer(wavesurfer.getMediaElement() as HTMLVideoElement)
 
 
 onMounted(() => {
@@ -134,32 +135,32 @@ onMounted(() => {
         appState.drawFunctions.push(patternDraw)
         // console.log("code ran")
 
-        vidAudioBands.drawCallback = (low, mid, high) => {
-          p5i.push()
-          p5i.fill(255, 0, 0)
-          p5i.rect(300, 0, low * 300, 100)
-          p5i.rect(300, 100, mid * 300, 100)
-          p5i.rect(300, 200, high * 300, 100)
-          p5i.pop()
-        }
-        appState.drawFunctions.push(() => vidAudioBands.draw())
+        // vidAudioBands.drawCallback = (low, mid, high) => {
+        //   p5i.push()
+        //   p5i.fill(255, 0, 0)
+        //   p5i.rect(300, 0, low * 300, 100)
+        //   p5i.rect(300, 100, mid * 300, 100)
+        //   p5i.rect(300, 200, high * 300, 100)
+        //   p5i.pop()
+        // }
+        // appState.drawFunctions.push(() => vidAudioBands.draw())
 
-        waveAudioBands.drawCallback = (low, mid, high) => {
-          p5i.push()
-          p5i.fill(0, 255, 0)
-          p5i.rect(600, 0, low * 300, 100)
-          p5i.rect(600, 100, mid * 300, 100)
-          p5i.rect(600, 200, high * 300, 100)
-          p5i.pop()
-        }
-        appState.drawFunctions.push(() => waveAudioBands.draw())
+        // waveAudioBands.drawCallback = (low, mid, high) => {
+        //   p5i.push()
+        //   p5i.fill(0, 255, 0)
+        //   p5i.rect(600, 0, low * 300, 100)
+        //   p5i.rect(600, 100, mid * 300, 100)
+        //   p5i.rect(600, 200, high * 300, 100)
+        //   p5i.pop()
+        // }
+        // appState.drawFunctions.push(() => waveAudioBands.draw())
 
 
         //todo api - p5 draw functions called AFTER shader draw don't show up in the shader - fix or warn about this
-        const uvEffect = new UVDraw()
-        const wobble = new Wobble({ src: p5Canvas })
-        wobble.setUniforms({xStrength: 0.01, yStrength: 0.01})
-        const canvasPaint = new CanvasPaint({ src: wobble })
+        const fdbkZoom = new FeedbackZoom({ src: p5Canvas })
+        // const wobble = new Wobble({ src: p5Canvas })
+        // wobble.setUniforms({xStrength: 0.01, yStrength: 0.01})
+        const canvasPaint = new CanvasPaint({ src: fdbkZoom })
         appState.drawFunctions.push(() => canvasPaint.renderAll(appState.threeRenderer!!))
 
         shaderGraphEndNode = canvasPaint
@@ -190,7 +191,7 @@ onUnmounted(() => {
   can wrap launch() function in something that registers loops to a global store, 
   so you don't have to make hotreload support part of the implementation of the loop itself
   */
-
+  console.log("disposing fx")
   shaderGraphEndNode?.disposeAll()
 })
 
