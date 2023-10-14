@@ -258,3 +258,4 @@ more ideas
 <style scoped></style>
 
 
+@/stores/undoCommands

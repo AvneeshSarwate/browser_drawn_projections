@@ -1,4 +1,4 @@
-import { Region, type AppState } from '@/stores/stores';
+import { Region, type DevelopmentAppState } from '@/stores/developmentAppState';
 import * as a from '@/rendering/planeAnimations'
 
 
@@ -7,7 +7,7 @@ const aseq = (animations: a.AnimationSegment[]) => {
 }
 
 //this function can be live coded
-export const groupedAnimation0 = (state: AppState, region: Region) => {
+export const groupedAnimation0 = (state: DevelopmentAppState, region: Region) => {
   const lr = a.lrLine(.52)
   const rl = a.rlLine(.52)
   const zi = a.zoomIn(1.52)

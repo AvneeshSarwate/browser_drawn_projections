@@ -1,9 +1,9 @@
-import { findClosestPointAndRegion, type AppState, Region } from '@/stores/stores'
+import { findClosestPointAndRegion, type DevelopmentAppState, Region } from '../stores/developmentAppState'
 import p5 from 'p5'
 import * as THREE from 'three'
 import { planeVS } from './vertexShaders'
 
-export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => AppState): p5 {
+export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => DevelopmentAppState): p5 {
 
   const sketch = (p: p5) => {
 
@@ -25,13 +25,15 @@ export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => AppSta
       appState().regions.list.forEach((region) => {
         region.draw(p)
       })
-      appState().drawFunctions.forEach(d => d(p))
+
       const savedActiveRegion = appState().regions.list.find((region) => region.isActive)
       const activeRegion = savedActiveRegion || newRegion
       if (activeRegion) {
         p.ellipse(p.mouseX, p.mouseY, 10, 10)
       }
       p.ellipse(p.mouseX, p.mouseY, 130, 130)
+
+      appState().drawFunctions.forEach(d => d(p))
 
       appState().stats.end()
     }

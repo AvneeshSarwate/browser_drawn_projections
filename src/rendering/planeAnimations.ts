@@ -1,5 +1,5 @@
 
-import type { Region } from '@/stores/stores'
+import type { Region } from '@/stores/undoCommands'
 import p5 from 'p5'
 
 

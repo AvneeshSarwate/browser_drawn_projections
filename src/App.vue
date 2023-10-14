@@ -1,14 +1,16 @@
 <script setup lang="ts">
-import { globalStore, commandHistory, type AppState } from './stores/stores';
+import { commandHistory } from './stores/undoCommands';
 import SketchInitializer from './components/SketchInitializer.vue';
 import LivecodeHolder from './components/LivecodeHolder.vue';
 import { provide } from 'vue';
 import OneshotCode from './components/OneshotCode.vue';
+import { globalStore } from './stores/stateInitializer';
+import type { DevelopmentAppState } from './stores/developmentAppState';
 
 
 const store = globalStore()
 
-const appState = store.appStateRef as AppState
+const appState = store.appStateRef as DevelopmentAppState
 
 provide('appState', appState)
 
@@ -72,3 +74,4 @@ provide('appState', appState)
   /* display: none; */
 }
 </style>
+./stores/undoCommands
