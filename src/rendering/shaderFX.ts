@@ -3,14 +3,26 @@ import { planeVS } from './vertexShaders'
 
 export const errorImageTexture = new THREE.TextureLoader().load('src/assets/error.jpg')
 
-function halfTarget(width: number, height: number): THREE.WebGLRenderTarget {
-  return new THREE.WebGLRenderTarget(width, height, {
-    type: THREE.HalfFloatType,
-    // minFilter: THREE.NearestFilter,
-    // magFilter: THREE.NearestFilter,
-  })
+
+export type ShaderSource = THREE.Texture | THREE.WebGLRenderTarget | HTMLCanvasElement | ShaderEffect;
+type ShaderInputs = {
+  [key: string]: ShaderSource
+};
+
+type ThreeVector = THREE.Vector2 | THREE.Vector3 | THREE.Vector4;
+type ThreeMatrix = THREE.Matrix3 | THREE.Matrix4;
+type ThreeColor = THREE.Color;
+type ThreeVectorArray = ThreeVector[];
+
+export type Dynamic<T> = T | (() => T)
+type ShaderUniform = number | number[] | ThreeVector | ThreeMatrix | ThreeColor | ThreeVectorArray | THREE.Texture
+type ShaderUniforms = {
+  [key: string]: Dynamic<ShaderUniform>
 }
 
+function extract<T>(dyn: Dynamic<T>): T {
+  return dyn instanceof Function ? dyn() : dyn
+}
 
 export abstract class ShaderEffect {
   abstract setSrcs(fx: ShaderInputs): void
@@ -82,6 +94,7 @@ export class FeedbackNode extends ShaderEffect {
     this._passthru.render(renderer)
     if (this.firstRender) {
       this.firstRender = false
+      //todo bug - runtime check to make sure feedbackSrc is set
       this._passthru.setSrcs({src: this.feedbackSrc!!.output})
     }
   }
@@ -94,6 +107,14 @@ export class FeedbackNode extends ShaderEffect {
   setUniforms(_uniforms: ShaderUniforms): void { }
   
   updateUniforms(): void { }
+}
+
+function halfTarget(width: number, height: number): THREE.WebGLRenderTarget {
+  return new THREE.WebGLRenderTarget(width, height, {
+    type: THREE.HalfFloatType,
+    // minFilter: THREE.NearestFilter,
+    // magFilter: THREE.NearestFilter,
+  })
 }
 
 class Pingpong {
@@ -123,26 +144,6 @@ uniform sampler2D src;
 void main() {
   gl_FragColor = texture2D(src, vUV);
 }`
-
-export type ShaderSource = THREE.Texture | THREE.WebGLRenderTarget | HTMLCanvasElement | ShaderEffect;
-type ShaderInputs = {
-  [key: string]: ShaderSource
-};
-
-type ThreeVector = THREE.Vector2 | THREE.Vector3 | THREE.Vector4;
-type ThreeMatrix = THREE.Matrix3 | THREE.Matrix4;
-type ThreeColor = THREE.Color;
-type ThreeVectorArray = ThreeVector[];
-
-export type Dynamic<T> = T | (() => T)
-type ShaderUniform = number | number[] | ThreeVector | ThreeMatrix | ThreeColor | ThreeVectorArray | THREE.Texture
-type ShaderUniforms = {
-  [key: string]: Dynamic<ShaderUniform>
-}
-
-function extract<T>(dyn: Dynamic<T>): T {
-  return dyn instanceof Function ? dyn() : dyn
-}
 
 function getConcreteSource(input: ShaderSource): THREE.Texture {
   if (input instanceof THREE.WebGLRenderTarget) {
