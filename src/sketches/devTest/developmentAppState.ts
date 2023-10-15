@@ -182,7 +182,8 @@ export type DevelopmentAppState = {
   codeStack: (() => void)[]
   codeStackIndex: number
   drawFunctions: ((p5: p5) => void)[]
-  stats: {begin: () => void, end: () => void}
+  stats: { begin: () => void, end: () => void }
+  paused: boolean
 }
 
 export const appState: DevelopmentAppState = {
@@ -192,5 +193,6 @@ export const appState: DevelopmentAppState = {
   codeStack: [],
   codeStackIndex: 0,
   drawFunctions: [],
-  stats: stats
+  stats: stats,
+  paused: false
 } 

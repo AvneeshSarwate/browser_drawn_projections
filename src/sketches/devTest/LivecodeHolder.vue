@@ -1,3 +1,4 @@
+<!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
 import { type DevelopmentAppState } from '@/sketches/devTest/developmentAppState';
 import p5 from 'p5';
@@ -89,16 +90,15 @@ onMounted(() => {
 
         // testCancel()
 
-        midiInputs
-
 
         const ec = new EventChop<{ x: number }>()
 
 
-        //todo API - create cleaner way to set up mouse/keyboard mappings on p5 sketch
-        const r = Math.random()
-        document.getElementById("threeCanvas")!!.onmousedown = () => {
-          ec.ramp(1, { x: p5i.mouseX })
+        //todo API - create cleaner way to set up mouse/keyboard mappings on p5 sketch, make it work with fullscreen
+        const threeCanvas = document.getElementById("threeCanvas")!!
+        threeCanvas.onmousedown = (ev) => {
+          const normalizedX = ev.clientX / threeCanvas.clientWidth
+          ec.ramp(1, { x: normalizedX * p5i.width })
           console.log("mouse down")
         }
 
@@ -123,6 +123,12 @@ onMounted(() => {
          * 
          * lets you easily create variations cyclic patterns
          */
+
+        window.addEventListener('keydown', (ev) => {
+          if (ev.key === 'p') {
+            appState.paused = !appState.paused
+          }
+        })
 
         const patternDraw = (p5: p5) => {
           const sin2 = (p: number) => sin(p * 2.5)

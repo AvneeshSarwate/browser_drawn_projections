@@ -9,29 +9,29 @@ export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => Develo
 
     p.setup = () => {
       p.createCanvas(1280, 720, canvas)
+      p.noSmooth()
       // p.noLoop()
     }
 
     p.draw = () => {
       appState().stats.begin()
-
-      p.push()  
+      if (!appState().paused) {
         p.clear(0, 0, 0, 0)
-        // p.fill(0, 0, 0, 0)
-        // p.rect(0, 0, p.width, p.height)
-      p.pop()
-      appState().regions.list.forEach((region) => {
-        region.draw(p)
-      })
 
-      const savedActiveRegion = appState().regions.list.find((region) => region.isActive)
-      const activeRegion = savedActiveRegion || newRegion
-      if (activeRegion) {
-        p.ellipse(p.mouseX, p.mouseY, 10, 10)
+        appState().regions.list.forEach((region) => {
+          region.draw(p)
+        })
+
+        const savedActiveRegion = appState().regions.list.find((region) => region.isActive)
+        const activeRegion = savedActiveRegion || newRegion
+        
+        if (activeRegion) {
+          //todo bug - this won't work with fullscreen
+          p.ellipse(p.mouseX, p.mouseY, 10, 10)
+        }
+
+        appState().drawFunctions.forEach(d => d(p))
       }
-      p.ellipse(p.mouseX, p.mouseY, 130, 130)
-
-      appState().drawFunctions.forEach(d => d(p))
 
       appState().stats.end()
     }

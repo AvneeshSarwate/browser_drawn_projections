@@ -6,6 +6,8 @@ export const errorImageTexture = new THREE.TextureLoader().load('src/assets/erro
 function halfTarget(width: number, height: number): THREE.WebGLRenderTarget {
   return new THREE.WebGLRenderTarget(width, height, {
     type: THREE.HalfFloatType,
+    // minFilter: THREE.NearestFilter,
+    // magFilter: THREE.NearestFilter,
   })
 }
 
@@ -150,7 +152,7 @@ function getConcreteSource(input: ShaderSource): THREE.Texture {
   } else if (input instanceof ShaderEffect) {
     return input.output.texture
   } else {
-    return new THREE.CanvasTexture(input)
+    return new THREE.CanvasTexture(input, THREE.UVMapping, THREE.ClampToEdgeWrapping, THREE.ClampToEdgeWrapping, THREE.NearestFilter, THREE.NearestFilter)
   }
 }
 
