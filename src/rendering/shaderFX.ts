@@ -3,6 +3,13 @@ import { planeVS } from './vertexShaders'
 
 export const errorImageTexture = new THREE.TextureLoader().load('src/assets/error.jpg')
 
+function halfTarget(width: number, height: number): THREE.WebGLRenderTarget {
+  return new THREE.WebGLRenderTarget(width, height, {
+    type: THREE.HalfFloatType,
+  })
+}
+
+
 export abstract class ShaderEffect {
   abstract setSrcs(fx: ShaderInputs): void
   abstract render(renderer: THREE.WebGLRenderer): void
@@ -95,9 +102,9 @@ class Pingpong {
     this.src = this.dst
     this.dst = temp
   }
-  constructor(src: THREE.WebGLRenderTarget, dst: THREE.WebGLRenderTarget) {
-    this.src = src
-    this.dst = dst
+  constructor(width: number, height: number) {
+    this.src = halfTarget(width, height)
+    this.dst = halfTarget(width, height)
   }
 }
 
@@ -256,7 +263,7 @@ export class CustomFeedbackShaderEffect extends CustomShaderEffect {
   _passthrough: Passthru
   constructor(fsString: string, inputArgs: ShaderInputs, width = 1280, height = 720) {
     super(fsString, inputArgs, width, height)
-    this.pingpong = new Pingpong(new THREE.WebGLRenderTarget(width, height), new THREE.WebGLRenderTarget(width, height))
+    this.pingpong = new Pingpong(width, height)
     this.material.uniforms['backbuffer'] = { value: this.pingpong.src.texture }
     this._passthrough = new Passthru({src: this.pingpong.src.texture}, width, height, this.output)
   }
