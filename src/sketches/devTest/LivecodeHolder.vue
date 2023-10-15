@@ -5,10 +5,10 @@ import { inject, onMounted, onUnmounted } from 'vue';
 import * as a from '@/sketches/devTest/planeAnimations'
 import { groupedAnimation0 } from '@/sketches/devTest/modularizedTransforms';
 import { xyZip, sin, cos, EventChop } from '@/channels/channels';
-import { CanvasPaint, type ShaderEffect } from '@/rendering/rendering';
+import { CanvasPaint, type ShaderEffect } from '@/rendering/shaderFX';
 import { MediaAudioAnalyzer } from '@/rendering/VideoAudioAnalyzer';
 import WaveSurfer from 'wavesurfer.js'
-import { FeedbackZoom, Wobble } from '@/rendering/CustomFX';
+import { FeedbackZoom, Wobble } from '@/rendering/customFX';
 import { midiInputs } from '@/io/midi';
 
 
@@ -257,3 +257,4 @@ more ideas
 </template>
 
 <style scoped></style>
+@/rendering/customFX

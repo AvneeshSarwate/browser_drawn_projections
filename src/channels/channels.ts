@@ -361,6 +361,7 @@ export class EventChop<T> {
 
 
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function testCalls() {
   const ec = new EventChop<{ reg: Region, aseg: a.AnimationSegment }>()
   const regs: Region[] = []

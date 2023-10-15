@@ -1,4 +1,4 @@
-import { CustomShaderEffect, ShaderEffect, errorImageTexture, type Dynamic, type ShaderSource, CustomFeedbackShaderEffect } from "./rendering"
+import { CustomShaderEffect, ShaderEffect, errorImageTexture, type Dynamic, type ShaderSource, CustomFeedbackShaderEffect } from "./shaderFX"
 
 //used with the "glsl-literal" vscode plugin to get syntax highlighting for embedded glsl
 const glsl = (x: any): string => x[0]
@@ -63,6 +63,7 @@ export class Wobble extends CustomShaderEffect {
 // }
 
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const testCalls = () => {
 
   const w = new Wobble({ src: errorImageTexture })

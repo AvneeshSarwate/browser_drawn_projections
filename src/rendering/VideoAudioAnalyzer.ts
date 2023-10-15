@@ -100,6 +100,7 @@ export class MediaAudioAnalyzer {
 }
 
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const testCalls = () => {
   // Example usage:
   const videoElement = document.querySelector('video')!; // Assume the video element exists

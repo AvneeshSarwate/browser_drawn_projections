@@ -277,12 +277,6 @@ export class EntityList<T extends Entity> extends Entity implements UndoableList
   }
 }
 
-function parseTopLevelArray(serialized: string): string[] {
-  const inner = serialized.slice(1, serialized.length - 1)
-  const split = inner.split(',')
-  return split.map((item) => item.trim())
-}
-
 export class Transport {
   public playhead = 0
   public isPlaying = false

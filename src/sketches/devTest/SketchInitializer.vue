@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { createP5Sketch } from '@/rendering/rendering';
-import { type DevelopmentAppState } from '@/sketches/devTest/developmentAppState';
+import { createP5Sketch } from './p5Sketch';
+import { type DevelopmentAppState } from './developmentAppState';
 import type p5 from 'p5';
 import * as THREE from 'three';
 import { inject, onMounted, onUnmounted } from 'vue';

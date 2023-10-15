@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import { commandHistory } from './stores/undoCommands';
-import SketchInitializer from './components/SketchInitializer.vue';
-import LivecodeHolder from './components/LivecodeHolder.vue';
 import { provide } from 'vue';
 import OneshotCode from './components/OneshotCode.vue';
 import { globalStore } from './stores/stateInitializer';
 import type { DevelopmentAppState } from './sketches/devTest/developmentAppState';
+import SketchWrapper from './sketches/devTest/SketchWrapper.vue';
 
 
 const store = globalStore()
@@ -21,20 +20,8 @@ provide('appState', appState)
     <button @click="commandHistory.undo">Undo</button>
     <button @click="commandHistory.redo">Redo</button>
   </div>
-  <div id="canvasContainer">
-    <canvas id="p5Canvas" width="1280" height="720" abitrary-prop="somethi"></canvas>
-    <canvas id="threeCanvas" width="1280" height="720" abitrary-prop="somethi"></canvas>
-  </div>
-  <video id="video" width="640" height="360" controls src="/block_rocking.mp4"></video>
-  <div id="wavesurferHolder"></div>
-  <button id="wavesurferPlay">Play/Pause</button>
-  <div id="debugInfo">
-
-  </div>
-  <SketchInitializer></SketchInitializer>
-
-  <!-- used for defining "persistent things" aka node graph of stuff -->
-  <LivecodeHolder></LivecodeHolder>
+  
+  <SketchWrapper></SketchWrapper>
 
   <!-- used for used for inspection and fixes -->
   <OneshotCode></OneshotCode>
@@ -49,29 +36,5 @@ provide('appState', appState)
   visibility: hidden;
 }
 
-#canvasContainer {
-  background-color: black;
-}
 
-#p5Canvas {
-  border: 1px solid black;
-  /* position: absolute; */
-  top: 0;
-  left: 0;
-  z-index: -1;
-  visibility: hidden;
-}
-
-#threeCanvas {
-  border: 1px solid black;
-  position: absolute;
-  top: 0;
-  left: 0;
-  visibility: visible;
-}
-
-#video {
-  /* display: none; */
-}
 </style>
-./stores/undoCommands./sketches/devTest/developmentAppState
