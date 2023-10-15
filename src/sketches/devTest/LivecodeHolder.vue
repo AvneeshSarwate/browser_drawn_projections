@@ -1,10 +1,10 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
-import { type DevelopmentAppState } from '@/sketches/devTest/developmentAppState';
+import { type DevelopmentAppState } from './developmentAppState';
 import p5 from 'p5';
 import { inject, onMounted, onUnmounted } from 'vue';
-import * as a from '@/sketches/devTest/planeAnimations'
-import { groupedAnimation0 } from '@/sketches/devTest/modularizedTransforms';
+import * as a from './planeAnimations'
+import { groupedAnimation0 } from './modularizedTransforms';
 import { xyZip, sin, cos, EventChop } from '@/channels/channels';
 import { CanvasPaint, type ShaderEffect } from '@/rendering/shaderFX';
 import { MediaAudioAnalyzer } from '@/rendering/VideoAudioAnalyzer';
