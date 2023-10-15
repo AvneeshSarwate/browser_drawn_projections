@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { type AppState } from '@/stores/stores';
+import { type DevelopmentAppState } from '@/sketches/devTest/developmentAppState';
 import { inject, onMounted } from 'vue';
 
 
-const appState = inject('appState') as AppState  
+const appState = inject<DevelopmentAppState>('appState')!!
 
 
 onMounted(() => {
@@ -11,7 +11,7 @@ onMounted(() => {
     if (appState.p5Instance && appState.regions.list.length > 0) {
 
 
-      console.log("one shot action 2")
+      console.log("one shot action 3")
 
     }
   } catch (e) {
@@ -27,4 +27,4 @@ onMounted(() => {
   <div></div>
 </template>
 
-<style scoped></style>@/stores/undoCommands
+<style scoped></style>

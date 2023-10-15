@@ -1,7 +1,7 @@
-import { Region } from '@/stores/developmentAppState'
+import { Region } from '@/sketches/devTest/developmentAppState'
 import { lerp } from 'three/src/math/MathUtils.js'
 import * as Tone from 'tone'
-import * as a from '@/rendering/planeAnimations'
+import * as a from '@/sketches/devTest/planeAnimations'
 import p5 from 'p5'
 
 class CancelablePromisePoxy<T> implements Promise<T> {
@@ -16,9 +16,8 @@ class CancelablePromisePoxy<T> implements Promise<T> {
     this.abortController.abort()
   }
 
-  [Symbol.toStringTag]: string = 'CancelablePromisePoxy'
+  [Symbol.toStringTag]: string = '[object CancelablePromisePoxy]'
 
-  //fwd then method to the underlying promise
   then<TResult1 = T, TResult2 = never>(
     onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null,
     onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null
@@ -26,14 +25,12 @@ class CancelablePromisePoxy<T> implements Promise<T> {
     return this.promise!!.then(onfulfilled, onrejected)
   }
 
-  //fwd catch method to the underlying promise
   catch<TResult = never>(
     onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null
   ): Promise<T | TResult> {
     return this.promise!!.catch(onrejected)
   }
 
-  //fwd finally method to the underlying promise
   finally(onfinally?: (() => void) | undefined | null): Promise<T> {
     return this.promise!!.finally(onfinally)
   }
@@ -41,7 +38,6 @@ class CancelablePromisePoxy<T> implements Promise<T> {
 
 type Constructor<T> = new (...args: any[]) => T;
 function createAndLaunchContext<T, C extends TimeContext>(block: (ctx: C) => Promise<T>, rootTime: number, ctor: Constructor<C>): CancelablePromisePoxy<T> {
-  //define an async function that waits using setTimeout
   const abortController = new AbortController()
   const promiseProxy = new CancelablePromisePoxy<T>(abortController)
   const newContext = new ctor(rootTime, abortController)

@@ -1,4 +1,4 @@
-import { findClosestPointAndRegion, type DevelopmentAppState, Region } from '../stores/developmentAppState'
+import { findClosestPointAndRegion, type DevelopmentAppState, Region } from '../sketches/devTest/developmentAppState'
 import p5 from 'p5'
 import * as THREE from 'three'
 import { planeVS } from './vertexShaders'

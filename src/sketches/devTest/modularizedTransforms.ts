@@ -1,5 +1,5 @@
-import { Region, type DevelopmentAppState } from '@/stores/developmentAppState';
-import * as a from '@/rendering/planeAnimations'
+import { Region, type DevelopmentAppState } from './developmentAppState';
+import * as a from './planeAnimations'
 
 
 const aseq = (animations: a.AnimationSegment[]) => {

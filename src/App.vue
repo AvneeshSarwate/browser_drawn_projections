@@ -5,7 +5,7 @@ import LivecodeHolder from './components/LivecodeHolder.vue';
 import { provide } from 'vue';
 import OneshotCode from './components/OneshotCode.vue';
 import { globalStore } from './stores/stateInitializer';
-import type { DevelopmentAppState } from './stores/developmentAppState';
+import type { DevelopmentAppState } from './sketches/devTest/developmentAppState';
 
 
 const store = globalStore()
@@ -74,4 +74,4 @@ provide('appState', appState)
   /* display: none; */
 }
 </style>
-./stores/undoCommands
+./stores/undoCommands./sketches/devTest/developmentAppState

@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { Region, type DevelopmentAppState } from '@/stores/developmentAppState';
+import { type DevelopmentAppState } from '@/sketches/devTest/developmentAppState';
 import p5 from 'p5';
 import { inject, onMounted, onUnmounted } from 'vue';
-import * as a from '@/rendering/planeAnimations'
-import { groupedAnimation0 } from '@/rendering/modularizedTransforms';
-import { testCancel, xyZip, sin, cos, EventChop } from '@/channels/channels';
+import * as a from '@/sketches/devTest/planeAnimations'
+import { groupedAnimation0 } from '@/sketches/devTest/modularizedTransforms';
+import { xyZip, sin, cos, EventChop } from '@/channels/channels';
 import { CanvasPaint, type ShaderEffect } from '@/rendering/rendering';
 import { MediaAudioAnalyzer } from '@/rendering/VideoAudioAnalyzer';
 import WaveSurfer from 'wavesurfer.js'
@@ -12,17 +12,12 @@ import { FeedbackZoom, Wobble } from '@/rendering/CustomFX';
 import { midiInputs } from '@/io/midi';
 
 
-const appState = inject('appState') as DevelopmentAppState  
 
-const tc = testCancel
+//todo componentization - have each sketch just own their own livecoding and sketchinitialize view componets?
+
+const appState = inject<DevelopmentAppState>('appState')!!
 
 const reg = (i: number) => appState.regions.list[i] 
-
-const cornerPts = (reg: Region, p5: p5) => {
-  reg.points.list.forEach(p => {
-    p5.circle(p.x, p.y, 10)
-  })
-}
 
 const norm  = ({x, y}: {x: number, y: number}) => ({x: x * appState.p5Instance!!.width, y: y * appState.p5Instance!!.height})
 
@@ -262,6 +257,3 @@ more ideas
 </template>
 
 <style scoped></style>
-
-
-@/stores/undoCommands

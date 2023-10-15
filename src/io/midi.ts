@@ -1,9 +1,6 @@
 import { MIDIVal, MIDIValInput } from "@midival/core";
 
-
-
 export const midiInputs: Map<string, MIDIValInput> = new Map();
-
 
 MIDIVal.connect().then((accessObject) => {
   accessObject.inputs.forEach((input) => {
@@ -11,7 +8,6 @@ MIDIVal.connect().then((accessObject) => {
     midiInputs.set(input.name, new MIDIValInput(input));
   });
 });
-
 
 MIDIVal.onInputDeviceConnected((accessObject) => {
   midiInputs.set(accessObject.name, new MIDIValInput(accessObject));

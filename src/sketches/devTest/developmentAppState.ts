@@ -1,6 +1,6 @@
 import p5 from 'p5'
-import type { AnimationSeq } from '@/rendering/planeAnimations'
-import { Entity, EntityList, UndoableList } from './undoCommands'
+import type { AnimationSeq } from '@/sketches/devTest/planeAnimations'
+import { Entity, EntityList, UndoableList } from '../../stores/undoCommands'
 import { storedData1 } from './exportedShapes'
 
 
