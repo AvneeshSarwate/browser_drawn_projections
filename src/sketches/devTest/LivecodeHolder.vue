@@ -12,10 +12,6 @@ import WaveSurfer from 'wavesurfer.js'
 import { FeedbackZoom, Wobble } from '@/rendering/customFX';
 import { midiInputs } from '@/io/midi';
 
-
-
-//todo componentization - have each sketch just own their own livecoding and sketchinitialize view componets?
-
 const appState = inject<DevelopmentAppState>('appState')!!
 
 const reg = (i: number) => appState.regions.list[i] 
