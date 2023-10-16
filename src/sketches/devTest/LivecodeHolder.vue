@@ -163,7 +163,7 @@ onMounted(() => {
         const fdbkZoom = new FeedbackZoom({ src: p5Canvas })
         // const wobble = new Wobble({ src: p5Canvas })
         // wobble.setUniforms({xStrength: 0.01, yStrength: 0.01})
-        const canvasPaint = new CanvasPaint({ src: fdbkZoom })
+        const canvasPaint = new CanvasPaint({ src: fdbkZoom }) //todo bug - feeding a canvas as a source doesn't update properly
         appState.drawFunctions.push(() => canvasPaint.renderAll(appState.threeRenderer!!))
 
         shaderGraphEndNode = canvasPaint
