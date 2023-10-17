@@ -22,8 +22,6 @@ export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => PulseC
       if (!appState().paused) {
         p.clear(0, 0, 0, 0)
 
-        
-
         appState().drawFunctions.forEach(d => d(p))
       }
 

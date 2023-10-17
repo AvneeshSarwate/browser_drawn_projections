@@ -31,6 +31,7 @@ const neutralizeSketch = (instance: p5) => {
   instance.setup = () => { }
 }
 
+//todo api - need a way to set resolution of sketch that automatically propogates to CustomEffects
 
 onMounted(() => {
   //explanation - the closest you can get to removing a p5 instance without removing the underlying canvas
