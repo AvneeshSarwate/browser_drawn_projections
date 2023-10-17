@@ -94,7 +94,7 @@ export class FeedbackNode extends ShaderEffect {
     this._passthru.render(renderer)
     if (this.firstRender) {
       this.firstRender = false
-      //todo bug - runtime check to make sure feedbackSrc is set
+      //todo bug - need runtime check to make sure feedbackSrc is set on FeedbackNode
       this._passthru.setSrcs({src: this.feedbackSrc!!.output})
     }
   }
