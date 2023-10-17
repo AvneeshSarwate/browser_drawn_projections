@@ -158,6 +158,7 @@ interface Envelope {
   trigger(time?: number): Envelope 
   val(time?: number): number
   onFinish?: () => void
+  cancel: () => void
   releaseDur: number
   isHeld: boolean
   onTime: number
@@ -182,7 +183,12 @@ class Ramp implements Envelope {
     }, this.onTime, this.releaseDur)
     console.log('scheduled release callback', Tone.Transport.immediate().toFixed(3), this.onTime.toFixed(3), (this.onTime + this.releaseDur).toFixed(3), )
   }
+
   onFinish?: () => void = undefined
+
+  cancel() {
+    this.onFinish = undefined
+  }
 
   hold(time?: number) {
     this.onTime = time ?? Tone.Transport.immediate()
@@ -242,7 +248,12 @@ class ADSR implements Envelope{
       this.onFinish?.()
     }, this.onTime, this.releaseDur)
   }
+
   onFinish?: () => void = undefined
+
+  cancel() {
+    this.onFinish = undefined
+  }
 
   // get() attackTime => this.onTime + this.attack
   public hold(time?: number) {
