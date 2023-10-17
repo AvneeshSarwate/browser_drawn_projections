@@ -115,6 +115,7 @@ export type PulseCircleAppState = {
   drawFunctions: ((p5: p5) => void)[]
   oneTimeDrawFuncs: ((p5: p5) => void)[]
   drawFuncMap: Map<string, (p5: p5) => void>
+  shaderDrawFunc: (() => void) | undefined
   stats: { begin: () => void, end: () => void }
   paused: boolean
   drawing: boolean
@@ -129,6 +130,7 @@ export const appState: PulseCircleAppState = {
   drawFunctions: [],
   oneTimeDrawFuncs: [],
   drawFuncMap: new Map<string, (p5: p5) => void>(),
+  shaderDrawFunc: undefined,
   stats: stats,
   paused: false,
   drawing: false,

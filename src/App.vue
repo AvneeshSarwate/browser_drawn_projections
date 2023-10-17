@@ -3,13 +3,13 @@ import { commandHistory } from './stores/undoCommands';
 import { provide } from 'vue';
 import OneshotCode from './components/OneshotCode.vue';
 import { globalStore } from './stores/stateInitializer';
-import type { DevelopmentAppState } from './sketches/devTest/developmentAppState';
-import SketchWrapper from './sketches/devTest/SketchWrapper.vue';
+import type { PulseCircleAppState } from './sketches/template/appState';
+import SketchWrapper from './sketches/template/SketchWrapper.vue';
 
 
 const store = globalStore()
 
-const appState = store.appStateRef as DevelopmentAppState
+const appState = store.appStateRef as PulseCircleAppState
 
 provide('appState', appState)
 

@@ -26,6 +26,7 @@ export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => PulseC
         appState().oneTimeDrawFuncs.forEach(d => d(p))
         appState().oneTimeDrawFuncs.length = 0
         appState().drawFuncMap.forEach((d, key) => d(p))
+        appState().shaderDrawFunc?.()
       }
 
       appState().stats.end()

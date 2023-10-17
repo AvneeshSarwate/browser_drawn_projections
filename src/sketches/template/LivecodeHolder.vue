@@ -9,6 +9,7 @@ import type p5 from 'p5';
 const appState = inject<PulseCircleAppState>('appState')!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
 
+//todo template - currently need to change sketch module in App.vue, stateInitializer.ts, and OneShoteCode.vue - can this be consolidated?
 
 onMounted(() => {
   try {
@@ -25,20 +26,22 @@ onMounted(() => {
     const code = () => {
       appState.circles.list.forEach(c => c.debugDraw = true)
 
-      const debugDraw = (p: p5) => {
+      const drawingCursor = (p: p5) => {
         p.push()
-        p.strokeWeight(1)
+        p.strokeWeight(10)
         p.stroke(255, 0, 0)
         p.noFill()
-        p.circle(p5Mouse.x, p5Mouse.y, 10)
+        p.circle(p5Mouse.x, p5Mouse.y, 30)
         p.pop()
+        console.log("drawing cursor")
       }
 
       //todo template - should keyboard events be on the window? can the three canvas be focused?
       singleKeydownEvent('d', (ev) => {
         appState.drawing = !appState.drawing
+        console.log("drawing: " + appState.drawing)
         if (appState.drawing) {
-          appState.drawFuncMap.set("debugDraw", debugDraw)
+          appState.drawFuncMap.set("debugDraw", drawingCursor)
         } else {
           appState.drawFuncMap.delete("debugDraw")
         }
@@ -48,6 +51,7 @@ onMounted(() => {
         if (appState.drawing) {
           const newCircle = new PulseCircle(p5Mouse.x, p5Mouse.y, 100)
           appState.circles.pushItem(newCircle)
+          console.log("adding circle", newCircle)
         }
       }, threeCanvas)
 
@@ -58,7 +62,7 @@ onMounted(() => {
       const canvasPaint = new CanvasPaint({ src: passthru })
 
       shaderGraphEndNode = canvasPaint
-      appState.drawFunctions.push(() => shaderGraphEndNode!!.renderAll(appState.threeRenderer!!))
+      appState.shaderDrawFunc = () => shaderGraphEndNode!!.renderAll(appState.threeRenderer!!)
 
 
       
