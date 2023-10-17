@@ -1,12 +1,12 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
-import { type PulseCircleAppState } from './appState';
+import { type PulseCircleAppState, PulseCircle } from './appState';
 import { inject, onMounted, onUnmounted } from 'vue';
-import { CanvasPaint, type ShaderEffect } from '@/rendering/shaderFX';
-import { clearListeners, keydownEvent } from '@/io/keyboardAndMouse';
+import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
+import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
+import type p5 from 'p5';
 
 const appState = inject<PulseCircleAppState>('appState')!!
-
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
 
 
@@ -17,22 +17,56 @@ onMounted(() => {
     const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
     const threeCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
 
-    if (appState.p5Instance && appState.circles.list.length > 0) {
+    let p5Mouse = { x: 0, y: 0 }
+    mousemoveEvent((ev) => {
+      p5Mouse = targetToP5Coords(ev, p5i, threeCanvas)
+    }, threeCanvas)
 
+    const code = () => {
+      appState.circles.list.forEach(c => c.debugDraw = true)
 
-      const code = () => {
-
-
-
-
-        
-        keydownEvent((ev) => { if (ev.key === 'p') appState.paused = !appState.paused })
+      const debugDraw = (p: p5) => {
+        p.push()
+        p.strokeWeight(1)
+        p.stroke(255, 0, 0)
+        p.noFill()
+        p.circle(p5Mouse.x, p5Mouse.y, 10)
+        p.pop()
       }
 
+      //todo template - should keyboard events be on the window? can the three canvas be focused?
+      singleKeydownEvent('d', (ev) => {
+        appState.drawing = !appState.drawing
+        if (appState.drawing) {
+          appState.drawFuncMap.set("debugDraw", debugDraw)
+        } else {
+          appState.drawFuncMap.delete("debugDraw")
+        }
+      })
 
-      appState.codeStack.push(code)
-      code()
+      mousedownEvent((ev) => {
+        if (appState.drawing) {
+          const newCircle = new PulseCircle(p5Mouse.x, p5Mouse.y, 100)
+          appState.circles.pushItem(newCircle)
+        }
+      }, threeCanvas)
+
+      
+
+
+      const passthru = new Passthru({ src: p5Canvas })
+      const canvasPaint = new CanvasPaint({ src: passthru })
+
+      shaderGraphEndNode = canvasPaint
+      appState.drawFunctions.push(() => shaderGraphEndNode!!.renderAll(appState.threeRenderer!!))
+
+
+      
+      singleKeydownEvent('p', (ev) => { appState.paused = !appState.paused })
     }
+
+    appState.codeStack.push(code)
+    code() 
   } catch (e) {
     console.warn(e)
   }

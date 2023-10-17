@@ -167,7 +167,7 @@ interface Envelope {
 }
 
 //an envelope that only triggers - no hold/release
-class Ramp implements Envelope {
+export class Ramp implements Envelope {
   releaseDur = 1
   isHeld = false
   onTime = -1

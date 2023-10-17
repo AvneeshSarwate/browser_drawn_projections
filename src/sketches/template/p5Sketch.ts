@@ -23,6 +23,9 @@ export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => PulseC
         p.clear(0, 0, 0, 0)
 
         appState().drawFunctions.forEach(d => d(p))
+        appState().oneTimeDrawFuncs.forEach(d => d(p))
+        appState().oneTimeDrawFuncs.length = 0
+        appState().drawFuncMap.forEach((d, key) => d(p))
       }
 
       appState().stats.end()

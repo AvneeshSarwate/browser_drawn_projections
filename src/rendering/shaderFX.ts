@@ -294,7 +294,7 @@ export class CustomFeedbackShaderEffect extends CustomShaderEffect {
 
 export class Passthru extends CustomShaderEffect {
   effectName = "Passthru"
-  constructor(inputs: ShaderInputs,  width = 1280, height = 720, customOutput?: THREE.WebGLRenderTarget) {
+  constructor(inputs: {src: ShaderSource},  width = 1280, height = 720, customOutput?: THREE.WebGLRenderTarget) {
     super(passThruFS, inputs, width, height, customOutput)
   }
 
@@ -308,7 +308,7 @@ export class Passthru extends CustomShaderEffect {
 
 export class CanvasPaint extends CustomShaderEffect {
   effectName = "CanvasPaint"
-  constructor(inputs: ShaderInputs,  width = 1280, height = 720) {
+  constructor(inputs: {src: ShaderSource},  width = 1280, height = 720) {
     super(passThruFS, inputs, width, height, new THREE.WebGLRenderTarget(1, 1))
   }
 

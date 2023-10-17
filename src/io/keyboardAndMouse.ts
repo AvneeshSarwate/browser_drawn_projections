@@ -12,6 +12,16 @@ export function keydownEvent(listener: (ev: KeyboardEvent) => void, target: HTML
   target.addEventListener("keydown", listener)
 }
 
+export function singleKeydownEvent(key: string, listener: (ev: KeyboardEvent) => void, target: HTMLElement = document.body) {
+  const cb = (ev: KeyboardEvent) => {
+    if (ev.key === key) {
+      listener(ev)
+    }
+  }
+  eventListeners.push({ type: "keydown", cb, target })
+  target.addEventListener("keydown", cb)
+}
+
 export function keyupEvent(listener: (ev: KeyboardEvent) => void, target: HTMLElement = document.body) {
   eventListeners.push({ type: "keyup", cb: listener, target })
   target.addEventListener("keyup", listener)

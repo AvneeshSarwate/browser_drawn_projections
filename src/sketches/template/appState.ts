@@ -4,6 +4,7 @@ import { Entity, EntityList } from '@/stores/undoCommands'
 
 //@ts-ignore
 import Stats from 'stats.js/src/Stats'
+import { Ramp } from '@/channels/channels'
 
 
 type PulseCircleSerialized = {
@@ -17,7 +18,7 @@ type PulseCircleSerialized = {
   id: number
 }
 
-class PulseCircle extends Entity {
+export class PulseCircle extends Entity {
   name: string
   x: number
   y: number
@@ -27,6 +28,9 @@ class PulseCircle extends Entity {
     g: number
     b: number
   }
+  debugDraw: boolean = false
+
+  event?: Ramp
 
   public serialize(): PulseCircleSerialized {
     const serialized: PulseCircleSerialized = {
@@ -57,8 +61,6 @@ class PulseCircle extends Entity {
     this.name = 'PulseCircle'
   }
 
-  //todo template - set up debug draw mode/style
-
   setStyle(p: p5) {
     const {r, g, b} = this.color
     p.stroke(r*255, g*255, b*255)
@@ -66,11 +68,37 @@ class PulseCircle extends Entity {
     p.strokeWeight(15)
   }
 
+  setDebugStyle(p: p5) {
+    p.strokeWeight(5)
+    p.stroke(255, 255, 255)
+    p.fill(0, 0, 0, 0)
+    p.textSize(20)
+  }
+
   draw(p: p5) {
-    p.push()
-    this.setStyle(p)
-    p.circle(this.x, this.y, this.rad)
-    p.pop()
+    if (this.debugDraw) {
+      p.push()
+      this.setDebugStyle(p)
+      p.circle(this.x, this.y, this.rad)
+      p.text(`id: ${this.id}`, this.x, this.y)
+      p.pop()
+    } else {
+      if (this.event) {
+        p.push()
+        this.setStyle(p)
+        p.circle(this.x, this.y, this.rad * this.event.val())
+        p.pop()
+      }
+    }
+  }
+
+  trigger() {
+    this.event?.cancel()
+    this.event = new Ramp(1)
+    this.event.onFinish = () => {
+      this.event = undefined
+    }
+    this.event.trigger()
   }
 }
 
@@ -85,8 +113,11 @@ export type PulseCircleAppState = {
   codeStack: (() => void)[]
   codeStackIndex: number
   drawFunctions: ((p5: p5) => void)[]
+  oneTimeDrawFuncs: ((p5: p5) => void)[]
+  drawFuncMap: Map<string, (p5: p5) => void>
   stats: { begin: () => void, end: () => void }
   paused: boolean
+  drawing: boolean
 }
 
 export const appState: PulseCircleAppState = {
@@ -96,6 +127,9 @@ export const appState: PulseCircleAppState = {
   codeStack: [],
   codeStackIndex: 0,
   drawFunctions: [],
+  oneTimeDrawFuncs: [],
+  drawFuncMap: new Map<string, (p5: p5) => void>(),
   stats: stats,
-  paused: false
+  paused: false,
+  drawing: false,
 } 
