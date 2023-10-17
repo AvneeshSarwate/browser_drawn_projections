@@ -69,7 +69,7 @@ export class PulseCircle extends Entity {
   }
 
   setDebugStyle(p: p5) {
-    p.strokeWeight(5)
+    p.strokeWeight(1)
     p.stroke(255, 255, 255)
     p.fill(0, 0, 0, 0)
     p.textSize(20)

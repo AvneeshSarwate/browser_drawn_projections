@@ -2,7 +2,7 @@ import { ref } from 'vue'
 import { defineStore, acceptHMRUpdate } from 'pinia'
 import { appState } from '@/sketches/template/appState';
 
-
+//todo hotreload - save to localStorage to enable refresh when needed
 
 const selectedState = appState;
 
