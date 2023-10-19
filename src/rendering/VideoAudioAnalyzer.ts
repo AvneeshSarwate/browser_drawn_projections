@@ -97,6 +97,11 @@ export class MediaAudioAnalyzer {
     this.drawing = true;
     this.animate();
   }
+
+  public destroy() {
+    this.drawing = false;
+    this.context.close();
+  }
 }
 
 
