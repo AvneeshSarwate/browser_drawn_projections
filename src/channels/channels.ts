@@ -229,6 +229,9 @@ export class Ramp implements Envelope {
   }
 }
 
+/**
+ * note - do not use now() in the calculations for context, only for relative time things
+ */
 
 function toneDelay(callback: () => void, nowTime: number, delayTime: number): void {
   Tone.Transport.scheduleOnce(() => {
@@ -277,19 +280,19 @@ class ADSR implements Envelope{
 
   // get() attackTime => this.onTime + this.attack
   public hold(time?: number) {
-    this.onTime = time ?? Tone.Transport.immediate()
+    this.onTime = time ?? now()
     this.isHeld = true
     this.started = true
     return this
   }
   public release(time?: number) {
-    this.releaseTime = time ?? Tone.Transport.immediate()
+    this.releaseTime = time ?? now()
     this.isHeld = false
     this.scheduleReleaseCallback()
     return this
   }
   public trigger(time?: number) {
-    this.releaseTime = this.onTime = time ?? Tone.Transport.immediate()
+    this.releaseTime = this.onTime = time ?? now()
     this.started = true
     this.isHeld = false
     this.scheduleReleaseCallback()
@@ -303,7 +306,7 @@ class ADSR implements Envelope{
 
   //todo later - figure out how touchdesigner deals with triggered vs on/off events wrt attack/release stages
   public val(time?: number): number {
-    const queryTime = time ?? Tone.Transport.immediate()
+    const queryTime = time ?? now()
     if (!this.started) return 0
     else {
       if (this.isHeld) {
@@ -369,7 +372,7 @@ export class EventChop<T> {
     const evtData = { evt, metadata, id: this.idGen++ }
     this.events.push(evtData)
     evt.onFinish = () => {
-      console.log("event finished", evtData.id, Tone.Transport.immediate().toFixed(3))
+      console.log("event finished", evtData.id, now().toFixed(3))
       const idx = this.events.indexOf(evtData)
       this.events.splice(idx, 1)
     }
