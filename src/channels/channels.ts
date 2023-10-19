@@ -4,7 +4,7 @@ import * as Tone from 'tone'
 import * as a from '@/sketches/devTest/planeAnimations'
 import p5 from 'p5'
 
-class CancelablePromisePoxy<T> implements Promise<T> {
+export class CancelablePromisePoxy<T> implements Promise<T> {
   public promise?: Promise<T>
   public abortController: AbortController
 
@@ -51,13 +51,13 @@ function createAndLaunchContext<T, C extends TimeContext>(block: (ctx: C) => Pro
 
 const USE_TONE = false
 //todo hotreload - need to register all launches to global state so they can be canceled on hot reload
-function launch<T>(block: (ctx: TimeContext) => Promise<T>): CancelablePromisePoxy<T> {
+export function launch<T>(block: (ctx: TimeContext) => Promise<T>): CancelablePromisePoxy<T> {
   if(USE_TONE) return createAndLaunchContext(block, Tone.Transport.immediate(), ToneTimeContext)
   else return createAndLaunchContext(block, performance.now()/1000, DateTimeContext)
 }
 
 //todo draft - need to test generalized TimeContext implementation in loops
-abstract class TimeContext {
+export abstract class TimeContext {
   public abortController: AbortController
   public time: number
   public isCanceled: boolean = false
@@ -75,6 +75,21 @@ abstract class TimeContext {
   }
 
   public abstract wait(sec: number): Promise<void>
+  public waitFrame(): Promise<void> {
+    if (this.isCanceled) {
+      throw new Error('context is canceled')
+    }
+    const ctx = this
+    return new Promise<void>((resolve, reject) => {
+      const listener = () => { reject(); console.log('abort') }
+      ctx.abortController.signal.addEventListener('abort', listener)
+      //resolve the promise on the call to requestanimationframe
+      requestAnimationFrame(() => {
+        ctx.abortController.signal.removeEventListener('abort', listener)
+        resolve()
+      })
+    })
+  }
 }
 
 class ToneTimeContext extends TimeContext {
@@ -181,7 +196,7 @@ export class Ramp implements Envelope {
     delayFunc(() => {
       this.onFinish?.()
     }, this.onTime, this.releaseDur)
-    console.log('scheduled release callback', Tone.Transport.immediate().toFixed(3), this.onTime.toFixed(3), (this.onTime + this.releaseDur).toFixed(3), )
+    // console.log('scheduled release callback', Tone.Transport.immediate().toFixed(3), this.onTime.toFixed(3), (this.onTime + this.releaseDur).toFixed(3), )
   }
 
   onFinish?: () => void = undefined
@@ -220,15 +235,20 @@ function toneDelay(callback: () => void, nowTime: number, delayTime: number): vo
     callback()
   }, nowTime + delayTime)
 }
-
 function dateDelay(callback: () => void, nowTime: number, delayTime: number): void {
   setTimeout(() => {
     callback()
   }, delayTime * 1000)
 }
 
-const delayFunc = dateDelay
+const startTime = performance.now() / 1000
+const dateNow = () => performance.now() / 1000 - startTime
+const toneNow = () => Tone.Transport.immediate()
 
+const now = USE_TONE ? toneNow : dateNow
+const delayFunc = USE_TONE ? toneDelay : dateDelay
+  
+  
 class ADSR implements Envelope{
   attack: number = 1
   decay: number = 0
@@ -386,7 +406,7 @@ function testCalls() {
     for (let i = 0; i < 10; i++) {
       ec.ramp(1, { reg: regs[i % 4], aseg: a.lrLine(1) })
       ec.ramp(1, { reg: regs[(i+2) % 4], aseg: a.rlLine(1) })
-      await ctx.wait(1)
+      await ctx.wait(1) //todo api - should await be inside the wait() call?
     }
   })
 }
