@@ -11,8 +11,10 @@ const appState = inject<PulseCircleAppState>('appState')!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
 let timeLoops: CancelablePromisePoxy<any>[] = []
 
-const launchLoop = (block: (ctx: TimeContext) => Promise<any>) => {
-  timeLoops.push(launch(block))
+const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromisePoxy<any> => {
+  const loop = launch(block)
+  timeLoops.push(loop)
+  return loop
 }
 
 //todo template - currently need to change sketch module in App.vue, stateInitializer.ts, and OneShoteCode.vue - can this be consolidated?
@@ -23,7 +25,10 @@ const clearDrawFuncs = () => {
 }
 
 function circleArr(n: number, rad: number, p: p5) {
-  return xyZip(0, Math.cos, Math.sin, n).map(({ x, y }) => ({x: x*rad, y: y*rad}))
+  const center = { x: p.width / 2, y: p.height / 2 }
+  const sin1 = (x: number) => Math.sin(x * 2 * Math.PI)
+  const cos1 = (x: number) => Math.cos(x * 2 * Math.PI)
+  return xyZip(0, cos1, sin1, n).map(({ x, y }) => ({x: x*rad + center.x, y: y*rad + center.y}))
 }
 
 onMounted(() => {
@@ -65,11 +70,12 @@ onMounted(() => {
       })
 
       let lerpEvt = new Ramp(1)
+      let lerpLoop: CancelablePromisePoxy<any> | undefined = undefined
       singleKeydownEvent('f', (ev) => {
         const basePositions = appState.circles.list.map(c => ({ x: c.x, y: c.y }))
         const targetPositions = circleArr(appState.circles.list.length, 300, p5i)
 
-        //todo bug - lerp logic is wrong
+        //todo - doesn't work properly if retriggered before finished
         const lerp = (t: number) => {
           appState.circles.list.forEach((c, i) => {
             c.x = basePositions[i].x + (targetPositions[i].x - basePositions[i].x) * t
@@ -77,13 +83,21 @@ onMounted(() => {
           })
         }
 
-        lerpEvt = new Ramp(6)
+        lerpLoop?.cancel()
+        lerpEvt = new Ramp(2)
         lerpEvt.trigger()
-        launchLoop(async (ctx) => {
+        lerpLoop = launchLoop(async (ctx) => {
           while (lerpEvt.val() < 1) {
-            lerp(tri(lerpEvt.val()))
+            const triVal = tri(lerpEvt.val())
+            console.log("triVal", triVal)
+            lerp(triVal)
             await ctx.waitFrame()
           }
+          appState.circles.list.forEach((c, i) => {
+            c.x = basePositions[i].x
+            c.y = basePositions[i].y
+          })
+
         })
       })
 

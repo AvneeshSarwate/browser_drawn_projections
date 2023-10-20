@@ -448,7 +448,7 @@ export const cos = (phase: number): number  => {
 }
 
 export const tri = (phase: number): number => {
-  return Math.abs((phase + 0.25) % 1 - 0.5) * 2
+  return 1 - Math.abs((phase % 1) * 2 - 1)
 }
 
 export const saw = (phase: number): number => {
