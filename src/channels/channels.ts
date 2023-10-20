@@ -206,24 +206,24 @@ export class Ramp implements Envelope {
   }
 
   hold(time?: number) {
-    this.onTime = time ?? Tone.Transport.immediate()
+    this.onTime = time ?? now()
     this.started = true
     this.scheduleReleaseCallback()
     return this
   }
   release(time?: number) {
-    this.releaseTime = time ?? Tone.Transport.immediate()
+    this.releaseTime = time ?? now()
     return this
   }
   trigger(time?: number) {
-    this.releaseTime = this.onTime = time ?? Tone.Transport.immediate()
+    this.releaseTime = this.onTime = time ?? now()
     this.started = true
     this.isHeld = false
     this.scheduleReleaseCallback()
     return this
   }
   val(time?: number): number {
-    const queryTime = time ?? Tone.Transport.immediate()
+    const queryTime = time ?? now()
     if (!this.started) return 0
     else return Math.min(1, (queryTime - this.onTime) / this.releaseDur)
   }
@@ -244,9 +244,9 @@ function dateDelay(callback: () => void, nowTime: number, delayTime: number): vo
   }, delayTime * 1000)
 }
 
+const toneNow = () => Tone.Transport.immediate()
 const startTime = performance.now() / 1000
 const dateNow = () => performance.now() / 1000 - startTime
-const toneNow = () => Tone.Transport.immediate()
 
 const now = USE_TONE ? toneNow : dateNow
 const delayFunc = USE_TONE ? toneDelay : dateDelay

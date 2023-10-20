@@ -38,6 +38,8 @@ onMounted(() => {
     const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
     const threeCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
 
+    const initialCiclePos = appState.circles.list.map(c => ({ x: c.x, y: c.y }))
+
     let p5Mouse = { x: 0, y: 0 }
     mousemoveEvent((ev) => {
       p5Mouse = targetToP5Coords(ev, p5i, threeCanvas)
@@ -78,8 +80,8 @@ onMounted(() => {
         //todo - doesn't work properly if retriggered before finished
         const lerp = (t: number) => {
           appState.circles.list.forEach((c, i) => {
-            c.x = basePositions[i].x + (targetPositions[i].x - basePositions[i].x) * t
-            c.y = basePositions[i].y + (targetPositions[i].y - basePositions[i].y) * t
+            c.x = initialCiclePos[i].x + (targetPositions[i].x - initialCiclePos[i].x) * t
+            c.y = initialCiclePos[i].y + (targetPositions[i].y - initialCiclePos[i].y) * t
           })
         }
 
@@ -88,18 +90,20 @@ onMounted(() => {
         lerpEvt.trigger()
         lerpLoop = launchLoop(async (ctx) => {
           while (lerpEvt.val() < 1) {
-            const triVal = tri(lerpEvt.val())
-            console.log("triVal", triVal)
+            const v  =lerpEvt.val()
+            const triVal = tri(v)
+            // console.log("triVal", triVal)
             lerp(triVal)
             await ctx.waitFrame()
           }
           appState.circles.list.forEach((c, i) => {
-            c.x = basePositions[i].x
-            c.y = basePositions[i].y
+            c.x = initialCiclePos[i].x
+            c.y = initialCiclePos[i].y
           })
 
         })
       })
+
 
       //todo template - should keyboard events be on the window? can the three canvas be focused?
       singleKeydownEvent('d', (ev) => {
@@ -118,6 +122,7 @@ onMounted(() => {
           const newCircle = new PulseCircle(p5Mouse.x, p5Mouse.y, 100)
           newCircle.debugDraw = false
           appState.circles.pushItem(newCircle)
+          initialCiclePos.push({ x: newCircle.x, y: newCircle.y })
           console.log("adding circle", newCircle)
         }
       })
