@@ -2,14 +2,17 @@
 import { commandHistory } from './stores/undoCommands';
 import { provide } from 'vue';
 import OneshotCode from './components/OneshotCode.vue';
-import { globalStore } from './stores/stateInitializer';
+import { globalStore, getUrlSketch, type sketchNames } from './stores/stateInitializer';
 import DevSketch from './sketches/devTest/SketchWrapper.vue';
 import TemplateSketch from './sketches/template/SketchWrapper.vue';
 
 
-const compReturn = () => TemplateSketch
+const sketchStates: Record<sketchNames, any> = {
+  devTest: DevSketch,
+  template: TemplateSketch
+}
 
-const comp = compReturn()
+const comp = sketchStates[getUrlSketch()]
 
 const store = globalStore()
 
