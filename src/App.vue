@@ -3,13 +3,17 @@ import { commandHistory } from './stores/undoCommands';
 import { provide } from 'vue';
 import OneshotCode from './components/OneshotCode.vue';
 import { globalStore } from './stores/stateInitializer';
-import type { PulseCircleAppState } from './sketches/template/appState';
-import SketchWrapper from './sketches/template/SketchWrapper.vue';
+import DevSketch from './sketches/devTest/SketchWrapper.vue';
+import TemplateSketch from './sketches/template/SketchWrapper.vue';
 
+
+const compReturn = () => TemplateSketch
+
+const comp = compReturn()
 
 const store = globalStore()
 
-const appState = store.appStateRef as PulseCircleAppState
+const appState = store.appStateRef
 
 provide('appState', appState)
 
@@ -21,7 +25,8 @@ provide('appState', appState)
     <button @click="commandHistory.redo">Redo</button>
   </div>
   
-  <SketchWrapper></SketchWrapper>
+  <!-- <DevSketch></DevSketch> -->
+  <component :is="comp"></component>
 
   <!-- used for used for inspection and fixes -->
   <OneshotCode></OneshotCode>

@@ -3,7 +3,7 @@ import { type PulseCircleAppState } from '@/sketches/template/appState';
 import { inject, onMounted } from 'vue';
 
 
-const appState = inject<PulseCircleAppState>('appState')!!
+// const appState = inject<PulseCircleAppState>('appState')!!
 
 
 onMounted(() => {

@@ -1,10 +1,11 @@
 import { ref } from 'vue'
 import { defineStore, acceptHMRUpdate } from 'pinia'
-import { appState } from '@/sketches/template/appState';
+import { appState as templateAppState} from '@/sketches/template/appState';
+import { appState as devAppState } from '@/sketches/devTest/developmentAppState';
 
 //todo hotreload - save to localStorage to enable refresh when needed
 
-const selectedState = appState;
+const selectedState = templateAppState;
 
 export const globalStore = defineStore('appState', () => {
   const appStateRef = ref(selectedState)
