@@ -43,14 +43,14 @@ function createAndLaunchContext<T, C extends TimeContext>(block: (ctx: C) => Pro
   const newContext = new ctor(rootTime, abortController)
   const blockPromise = block(newContext)
   promiseProxy.promise = blockPromise
-  if (parentContext) {
-    blockPromise.then(() => { //should this be a finally?
-      parentContext.time = Math.max(newContext.time, parentContext.time) //todo bug - see if this fixes problem of parent context time not being updated on branch await
-    })
-  }
-  blockPromise.catch((e) => {
+  const bp = blockPromise.catch((e) => {
     console.log('promise catch error', e)
   })
+  if (parentContext) {
+    bp.finally(() => {
+      parentContext.time = Math.max(newContext.time, parentContext.time) 
+    })
+  }
   return promiseProxy
 }
 
@@ -65,10 +65,15 @@ export function launch<T>(block: (ctx: TimeContext) => Promise<T>): CancelablePr
 export abstract class TimeContext {
   public abortController: AbortController
   public time: number
+  public startTime: number
   public isCanceled: boolean = false
+  public get progTime(): number {
+    return this.time - this.startTime
+  }
 
   constructor(time: number, ab: AbortController) {
     this.time = time
+    this.startTime = time
     this.abortController = ab
     this.abortController.signal.addEventListener('abort', () => {
       this.isCanceled = true
@@ -76,7 +81,7 @@ export abstract class TimeContext {
     })
   }
   public branch<T>(block: (ctx: ToneTimeContext) => Promise<T>): CancelablePromisePoxy<T> {
-    return createAndLaunchContext(block, this.time, Object.getPrototypeOf(this).constructor)
+    return createAndLaunchContext(block, this.time, Object.getPrototypeOf(this).constructor, this)
   }
 
   public abstract wait(sec: number): Promise<void>
@@ -156,17 +161,19 @@ export const testCancel = async () => {
         const [logicalTime, wallTime] = [ctx.time - start, (performance.now() - start2) / 1000] //todo bug - is this correct?
         drift = wallTime - logicalTime 
         const driftDelta = drift - lastDrift
-        console.log('step', i, "logicalTime", logicalTime, "drift", drift.toFixed(3), "driftDelta", driftDelta.toFixed(3))
+        console.log('step', i, "logicalTime", logicalTime.toFixed(3), "wallTime", wallTime.toFixed(3), "drift", drift.toFixed(3), "driftDelta", driftDelta.toFixed(3))
         lastDrift = drift
         await ctx.wait(stepVal)
       }
     })
 
-    ctx.branch(async (ctx) => {
+    await ctx.branch(async (ctx) => {
       await ctx.wait(stepVal * 10)
       console.log('res0 cancel', performance.now() - start2)
       res0.cancel()
     })
+
+    console.log("parent context time elapsed", ctx.progTime.toFixed(3))
   })
 }
 
