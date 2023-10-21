@@ -4,6 +4,8 @@ import * as Tone from 'tone'
 import * as a from '@/sketches/devTest/planeAnimations'
 import p5 from 'p5'
 
+
+//todo api - make then/catch/finally chainable on CancelablePromisePoxy
 export class CancelablePromisePoxy<T> implements Promise<T> {
   public promise?: Promise<T>
   public abortController: AbortController

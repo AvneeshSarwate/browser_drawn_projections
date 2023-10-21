@@ -77,7 +77,6 @@ onMounted(() => {
         const basePositions = appState.circles.list.map(c => ({ x: c.x, y: c.y }))
         const targetPositions = circleArr(appState.circles.list.length, 300, p5i)
 
-        //todo - doesn't work properly if retriggered before finished
         const lerp = (t: number) => {
           appState.circles.list.forEach((c, i) => {
             c.x = initialCiclePos[i].x + (targetPositions[i].x - initialCiclePos[i].x) * t

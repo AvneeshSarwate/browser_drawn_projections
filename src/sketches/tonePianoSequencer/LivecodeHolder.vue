@@ -67,22 +67,6 @@ onMounted(() => {
         p.pop()
       }
 
-      let seqInd = 0
-      // launchLoop(async (ctx) => {
-      //   // eslint-disable-next-line no-constant-condition
-      //   while (true) {
-      //     if (appState.circles.list.length > 0) {
-      //       const randIndex = Math.floor(Math.random() * appState.circles.list.length)
-      //       seqInd = (seqInd + 1) % appState.circles.list.length
-      //       appState.circles.list[seqInd].trigger()
-      //       const randNote = cMajNoteStrings[seqInd % cMajNoteStrings.length]
-      //       console.log("triggering note", randNote, sampler)
-      //       sampler.triggerAttackRelease(randNote, '8n')
-      //     }
-      //     await ctx.wait(0.2)
-      //   }
-      // })
-
       //todo template - should keyboard events be on the window? can the three canvas be focused?
       singleKeydownEvent('d', (ev) => {
         appState.drawing = !appState.drawing
@@ -105,6 +89,38 @@ onMounted(() => {
         }
       })
 
+      let lerpEvt = new Ramp(1)
+      let lerpLoop: CancelablePromisePoxy<any> | undefined = undefined
+      singleKeydownEvent('f', (ev) => {
+        const basePositions = appState.circles.list.map(c => ({ x: c.x, y: c.y }))
+        const targetPositions = circleArr(appState.circles.list.length, 300, p5i)
+
+        const lerp = (t: number) => {
+          appState.circles.list.forEach((c, i) => {
+            c.x = initialCiclePos[i].x + (targetPositions[i].x - initialCiclePos[i].x) * t
+            c.y = initialCiclePos[i].y + (targetPositions[i].y - initialCiclePos[i].y) * t
+          })
+        }
+
+        lerpLoop?.cancel()
+        
+        lerpEvt = new Ramp(2)
+        lerpEvt.trigger()
+        lerpLoop = launchLoop(async (ctx) => {
+          while (lerpEvt.val() < 1) {
+            const v  =lerpEvt.val()
+            const triVal = tri(v)
+            // console.log("triVal", triVal)
+            lerp(triVal)
+            await ctx.waitFrame()
+          }
+          appState.circles.list.forEach((c, i) => {
+            c.x = initialCiclePos[i].x
+            c.y = initialCiclePos[i].y
+          })
+        })
+      })
+
       let playheadIdGen = 0
       mousedownEvent((ev) => {
         const p5Coord = targetToP5Coords(ev, p5i, threeCanvas)
@@ -124,7 +140,6 @@ onMounted(() => {
           })
 
           while (thisX < p5i.width) {
-
             const circlesBetwenFrames = appState.circles.list.filter(c => lastX < c.x && c.x <= thisX)
             const notesBetweenFrames = circlesBetwenFrames.map(c => heightToNote(c.y))
             circlesBetwenFrames.forEach(c => c.trigger())
@@ -138,12 +153,10 @@ onMounted(() => {
           appState.drawFuncMap.delete("playhead" + playheadId)
           
         })
-
       }, threeCanvas)
 
       
       appState.drawFunctions.push((p: p5) => {
-        // console.log("drawing circles", appState.circles.list.length)
         appState.circles.list.forEach(c => c.draw(p))
       })
 
