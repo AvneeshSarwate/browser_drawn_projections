@@ -87,7 +87,12 @@ export class PulseCircle extends Entity {
       if (this.event) {
         p.push()
         this.setStyle(p)
-        p.circle(this.x, this.y, this.rad * (1-this.event.val()))
+        p.circle(this.x, this.y, 10 + this.rad * (1-this.event.val()))
+        p.pop()
+      } else {
+        p.push()
+        this.setStyle(p)
+        p.circle(this.x, this.y, 10)
         p.pop()
       }
     }

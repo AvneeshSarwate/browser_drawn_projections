@@ -4,7 +4,7 @@ import { type ToneSeqAppState, PulseCircle, sampler } from './appState';
 import { inject, onMounted, onUnmounted } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
-import type p5 from 'p5';
+import p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cos, sin, Ramp, tri } from '@/channels/channels';
 
 const appState = inject<ToneSeqAppState>('appState')!!
@@ -31,12 +31,21 @@ function circleArr(n: number, rad: number, p: p5) {
   return xyZip(0, cos1, sin1, n).map(({ x, y }) => ({x: x*rad + center.x, y: y*rad + center.y}))
 }
 
+const cMajNoteStrings = ['C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4', 'C5', 'D5', 'E5', 'F5', 'G5', 'A5', 'B5', 'C6']
+
+
 onMounted(() => {
   try {
 
     const p5i = appState.p5Instance!!
     const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
     const threeCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
+
+    const heightToNote = (height: number) => {
+      const normHeight  = 1 - height / p5i.height
+      const noteIndex = Math.floor(normHeight * cMajNoteStrings.length)
+      return cMajNoteStrings[noteIndex % cMajNoteStrings.length]
+    }
 
     const initialCiclePos = appState.circles.list.map(c => ({ x: c.x, y: c.y }))
 
@@ -59,21 +68,20 @@ onMounted(() => {
       }
 
       let seqInd = 0
-      const cMajNoteStrings = ['C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4', 'C5']
-      launchLoop(async (ctx) => {
-        // eslint-disable-next-line no-constant-condition
-        while (true) {
-          if (appState.circles.list.length > 0) {
-            const randIndex = Math.floor(Math.random() * appState.circles.list.length)
-            seqInd = (seqInd + 1) % appState.circles.list.length
-            appState.circles.list[seqInd].trigger()
-            const randNote = cMajNoteStrings[seqInd % cMajNoteStrings.length]
-            console.log("triggering note", randNote, sampler)
-            sampler.triggerAttackRelease(randNote, '8n')
-          }
-          await ctx.wait(0.2)
-        }
-      })
+      // launchLoop(async (ctx) => {
+      //   // eslint-disable-next-line no-constant-condition
+      //   while (true) {
+      //     if (appState.circles.list.length > 0) {
+      //       const randIndex = Math.floor(Math.random() * appState.circles.list.length)
+      //       seqInd = (seqInd + 1) % appState.circles.list.length
+      //       appState.circles.list[seqInd].trigger()
+      //       const randNote = cMajNoteStrings[seqInd % cMajNoteStrings.length]
+      //       console.log("triggering note", randNote, sampler)
+      //       sampler.triggerAttackRelease(randNote, '8n')
+      //     }
+      //     await ctx.wait(0.2)
+      //   }
+      // })
 
       //todo template - should keyboard events be on the window? can the three canvas be focused?
       singleKeydownEvent('d', (ev) => {
@@ -96,6 +104,42 @@ onMounted(() => {
           console.log("adding circle", newCircle)
         }
       })
+
+      let playheadIdGen = 0
+      mousedownEvent((ev) => {
+        const p5Coord = targetToP5Coords(ev, p5i, threeCanvas)
+        const relativeHeight = p5Coord.y / p5i.height
+        const playheadId = playheadIdGen++
+
+        launchLoop(async (ctx) => {
+          let thisX = p5Coord.x
+          let lastX = p5Coord.x
+
+          appState.drawFuncMap.set("playhead" + playheadId, (p: p5) => {
+            p.push()
+            p.strokeWeight(10)
+            p.stroke(255, 0, 0)
+            p.line(lastX, 0, thisX, p5i.height)
+            p.pop()
+          })
+
+          while (thisX < p5i.width) {
+
+            const circlesBetwenFrames = appState.circles.list.filter(c => lastX < c.x && c.x <= thisX)
+            const notesBetweenFrames = circlesBetwenFrames.map(c => heightToNote(c.y))
+            circlesBetwenFrames.forEach(c => c.trigger())
+            sampler.triggerAttackRelease(notesBetweenFrames, '8n')
+
+            lastX = thisX
+            thisX += 1 * (1 + 1 - relativeHeight)
+            await ctx.wait(0.016)
+          }
+
+          appState.drawFuncMap.delete("playhead" + playheadId)
+          
+        })
+
+      }, threeCanvas)
 
       
       appState.drawFunctions.push((p: p5) => {
