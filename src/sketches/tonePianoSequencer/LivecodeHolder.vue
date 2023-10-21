@@ -1,6 +1,6 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
-import { type ToneSeqAppState, PulseCircle } from './appState';
+import { type ToneSeqAppState, PulseCircle, sampler } from './appState';
 import { inject, onMounted, onUnmounted } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
@@ -59,6 +59,7 @@ onMounted(() => {
       }
 
       let seqInd = 0
+      const cMajNoteStrings = ['C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4', 'C5']
       launchLoop(async (ctx) => {
         // eslint-disable-next-line no-constant-condition
         while (true) {
@@ -66,44 +67,13 @@ onMounted(() => {
             const randIndex = Math.floor(Math.random() * appState.circles.list.length)
             seqInd = (seqInd + 1) % appState.circles.list.length
             appState.circles.list[seqInd].trigger()
+            const randNote = cMajNoteStrings[seqInd % cMajNoteStrings.length]
+            console.log("triggering note", randNote, sampler)
+            sampler.triggerAttackRelease(randNote, '8n')
           }
-          await ctx.waitFrame()
+          await ctx.wait(0.2)
         }
       })
-
-      let lerpEvt = new Ramp(1)
-      let lerpLoop: CancelablePromisePoxy<any> | undefined = undefined
-      singleKeydownEvent('f', (ev) => {
-        const basePositions = appState.circles.list.map(c => ({ x: c.x, y: c.y }))
-        const targetPositions = circleArr(appState.circles.list.length, 300, p5i)
-
-        //todo - doesn't work properly if retriggered before finished
-        const lerp = (t: number) => {
-          appState.circles.list.forEach((c, i) => {
-            c.x = initialCiclePos[i].x + (targetPositions[i].x - initialCiclePos[i].x) * t
-            c.y = initialCiclePos[i].y + (targetPositions[i].y - initialCiclePos[i].y) * t
-          })
-        }
-
-        lerpLoop?.cancel()
-        lerpEvt = new Ramp(2)
-        lerpEvt.trigger()
-        lerpLoop = launchLoop(async (ctx) => {
-          while (lerpEvt.val() < 1) {
-            const v  =lerpEvt.val()
-            const triVal = tri(v)
-            // console.log("triVal", triVal)
-            lerp(triVal)
-            await ctx.waitFrame()
-          }
-          appState.circles.list.forEach((c, i) => {
-            c.x = initialCiclePos[i].x
-            c.y = initialCiclePos[i].y
-          })
-
-        })
-      })
-
 
       //todo template - should keyboard events be on the window? can the three canvas be focused?
       singleKeydownEvent('d', (ev) => {
