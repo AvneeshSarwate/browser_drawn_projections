@@ -5,11 +5,13 @@ import OneshotCode from './components/OneshotCode.vue';
 import { globalStore, getUrlSketch, type sketchNames } from './stores/stateInitializer';
 import DevSketch from './sketches/devTest/SketchWrapper.vue';
 import TemplateSketch from './sketches/template/SketchWrapper.vue';
+import TonePianoSequencer from './sketches/tonePianoSequencer/SketchWrapper.vue';
 
 
 const sketchStates: Record<sketchNames, any> = {
   devTest: DevSketch,
-  template: TemplateSketch
+  template: TemplateSketch,
+  tonePianoSequencer: TonePianoSequencer,
 }
 
 const comp = sketchStates[getUrlSketch()]

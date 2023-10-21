@@ -37,12 +37,17 @@ export class CancelablePromisePoxy<T> implements Promise<T> {
 }
 
 type Constructor<T> = new (...args: any[]) => T;
-function createAndLaunchContext<T, C extends TimeContext>(block: (ctx: C) => Promise<T>, rootTime: number, ctor: Constructor<C>): CancelablePromisePoxy<T> {
+function createAndLaunchContext<T, C extends TimeContext>(block: (ctx: C) => Promise<T>, rootTime: number, ctor: Constructor<C>, parentContext?: C): CancelablePromisePoxy<T> {
   const abortController = new AbortController()
   const promiseProxy = new CancelablePromisePoxy<T>(abortController)
   const newContext = new ctor(rootTime, abortController)
   const blockPromise = block(newContext)
   promiseProxy.promise = blockPromise
+  if (parentContext) {
+    blockPromise.then(() => { //should this be a finally?
+      parentContext.time = Math.max(newContext.time, parentContext.time) //todo bug - see if this fixes problem of parent context time not being updated on branch await
+    })
+  }
   blockPromise.catch((e) => {
     console.log('promise catch error', e)
   })
