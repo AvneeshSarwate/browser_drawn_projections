@@ -1,4 +1,4 @@
-import { findClosestPointAndRegion, type DevelopmentAppState, Region } from './developmentAppState'
+import { findClosestPointAndRegion, type DevelopmentAppState, Region, stats } from './developmentAppState'
 import p5 from 'p5'
 
 export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => DevelopmentAppState): p5 {
@@ -11,10 +11,13 @@ export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => Develo
       p.createCanvas(1280, 720, canvas)
       p.noSmooth()
       // p.noLoop()
+      // appState().stats.begin()
     }
 
     p.draw = () => {
-      appState().stats.begin()
+      // stats.update()
+      stats.begin()
+      // const start = stats.beginTime 
       if (!appState().paused) {
         p.clear(0, 0, 0, 0)
 
@@ -33,7 +36,8 @@ export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => Develo
         appState().drawFunctions.forEach(d => d(p))
       }
 
-      appState().stats.end()
+      const end = stats.end()
+      // console.log('draw time',start, end, end - start)
     }
 
     p.keyPressed = () => {

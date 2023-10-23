@@ -263,7 +263,7 @@ const toneNow = () => Tone.Transport.immediate()
 const startTime = performance.now() / 1000
 const dateNow = () => performance.now() / 1000 - startTime
 
-const now = USE_TONE ? toneNow : dateNow
+export const now = USE_TONE ? toneNow : dateNow
 const delayFunc = USE_TONE ? toneDelay : dateDelay
   
   
@@ -475,6 +475,14 @@ export const xyZip = (phase: number, xPat: (phase: number) => number, yPat: (pha
   for (let i = 0; i < count; i++) {
     const p = (i / count) * cycles + phase
     out.push({ x: xPat(p), y: yPat(p) })
+  }
+  return out
+}
+
+export const steps = (start: number, end: number, count: number): number[] => {
+  const out: number[] = []
+  for (let i = 0; i < count; i++) {
+    out.push(lerp(start, end, i / count))
   }
   return out
 }

@@ -5,7 +5,7 @@ import { storedData1 } from './exportedShapes'
 
 
 //@ts-ignore
-import Stats from 'stats.js/src/Stats'
+import Stats from '@/rendering/Stats'
 
 
 export type DrawMode = 'display' | 'addingPoint' | 'movingPoint'
@@ -171,7 +171,7 @@ export function findClosestPointAndRegion(p5Instance: p5, regions: EntityList<Re
   }
 }
 
-const stats = new Stats();
+export const stats = new Stats();
 stats.showPanel( 1 ); // 0: fps, 1: ms, 2: mb, 3+: custom
 document.body.appendChild( stats.dom );
 
@@ -182,7 +182,7 @@ export type DevelopmentAppState = {
   codeStack: (() => void)[]
   codeStackIndex: number
   drawFunctions: ((p5: p5) => void)[]
-  stats: { begin: () => void, end: () => void }
+  // stats: { begin: () => void, end: () => void, update: () => void }
   paused: boolean
 }
 
@@ -193,6 +193,6 @@ export const appState: DevelopmentAppState = {
   codeStack: [],
   codeStackIndex: 0,
   drawFunctions: [],
-  stats: stats,
+  // stats: stats,
   paused: false
 } 

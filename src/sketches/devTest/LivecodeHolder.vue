@@ -6,7 +6,7 @@ import * as THREE from 'three'
 import { inject, onMounted, onUnmounted } from 'vue';
 import * as a from './planeAnimations'
 import { groupedAnimation0 } from './modularizedTransforms';
-import { xyZip, sin, cos, EventChop } from '@/channels/channels';
+import { xyZip, sin, cos, EventChop, steps, now } from '@/channels/channels';
 import { CanvasPaint, type ShaderEffect } from '@/rendering/shaderFX';
 import { MediaAudioAnalyzer } from '@/rendering/VideoAudioAnalyzer';
 import WaveSurfer from 'wavesurfer.js'
@@ -168,12 +168,16 @@ onMounted(() => {
         // })
 
         appState.drawFunctions.push(() => {
-          three5i!!.setMaterial(new THREE.MeshBasicMaterial({ color: 0xff0000 }))
+          
+          const sinX = steps(0, 1, 100).map((t) => sin(now() + t * 4)*400 + 200)
           for (let i = 0; i < 100; i++) {
-            three5i!!.circle(Math.random() * 1280, Math.random() * 720, 10)
+            const sinColor = (t: number) => [ sin(now() + t * 4) , sin(now() + t * 3), 0]
+            const threeColor = new THREE.Color(...sinColor(i/100))
+            // three5i!!.setMaterial(new THREE.MeshBasicMaterial({ color: threeColor}))
+            three5i!!.circle(i/100 * 1280, sinX[i], 10)
           }
           three5i!!.render(appState.threeRenderer!!)
-          console.log("three5 render")
+          // console.log("three5 render")
         })
 
 
