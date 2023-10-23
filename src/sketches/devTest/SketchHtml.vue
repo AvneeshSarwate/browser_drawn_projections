@@ -33,6 +33,6 @@
 }
 
 #video {
-  /* display: none; */
+  display: none;
 }
 </style>

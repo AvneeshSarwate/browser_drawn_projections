@@ -2,6 +2,7 @@
 <script setup lang="ts">
 import { type DevelopmentAppState } from './developmentAppState';
 import p5 from 'p5';
+import * as THREE from 'three'
 import { inject, onMounted, onUnmounted } from 'vue';
 import * as a from './planeAnimations'
 import { groupedAnimation0 } from './modularizedTransforms';
@@ -11,6 +12,7 @@ import { MediaAudioAnalyzer } from '@/rendering/VideoAudioAnalyzer';
 import WaveSurfer from 'wavesurfer.js'
 import { FeedbackZoom, Wobble } from '@/rendering/customFX';
 import { midiInputs } from '@/io/midi';
+import { Three5 } from '@/rendering/three5';
 
 const appState = inject<DevelopmentAppState>('appState')!!
 
@@ -23,6 +25,8 @@ const aseq = (animations: a.AnimationSegment[]) => {
 }
 
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
+
+let three5i: Three5 | undefined = undefined
 
 const reset = () => {
   appState.regions.list.forEach(r => {
@@ -63,13 +67,17 @@ onMounted(() => {
   try {
     const p5i = appState.p5Instance!!
     const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
+    const threeCanvas = document.getElementById("threeCanvas")!!
+    three5i = new Three5(1280, 720)
+
+
     if (appState.p5Instance && appState.regions.list.length > 0) {
 
 
       const code = () => {
         reset()
-        reg(0).activate().debug = true
-        reg(1).activate()
+        // reg(0).activate().debug = true
+        // reg(1).activate()
         // // reg(0).draw2 = cornerPts
 
 
@@ -87,27 +95,26 @@ onMounted(() => {
         // testCancel()
 
 
-        const ec = new EventChop<{ x: number }>()
+        // const ec = new EventChop<{ x: number }>()
 
 
         //todo API - create cleaner way to set up mouse/keyboard mappings on p5 sketch, make it work with fullscreen
-        const threeCanvas = document.getElementById("threeCanvas")!!
-        threeCanvas.onmousedown = (ev) => {
-          const normalizedX = ev.clientX / threeCanvas.clientWidth
-          ec.ramp(1, { x: normalizedX * p5i.width })
-          console.log("mouse down")
-        }
+        // threeCanvas.onmousedown = (ev) => {
+        //   const normalizedX = ev.clientX / threeCanvas.clientWidth
+        //   ec.ramp(1, { x: normalizedX * p5i.width })
+        //   console.log("mouse down")
+        // }
 
-        const chopDraw = (p5: p5) => {
-          ec.samples().forEach((s) => {
-            p5.push()
-            p5.fill(255, 0, 0)
-            p5.circle(s.x, s.val * 700, 130)
-            p5.pop()
-            // console.log("chop draw", s.val, r)
-          })
-        }
-        appState.drawFunctions.push(chopDraw)
+        // const chopDraw = (p5: p5) => {
+        //   ec.samples().forEach((s) => {
+        //     p5.push()
+        //     p5.fill(255, 0, 0)
+        //     p5.circle(s.x, s.val * 700, 130)
+        //     p5.pop()
+        //     // console.log("chop draw", s.val, r)
+        //   })
+        // }
+        // appState.drawFunctions.push(chopDraw)
 
         /**
          * todo API - need to streamline api for patterns - goal is to be able
@@ -120,19 +127,19 @@ onMounted(() => {
          * lets you easily create variations cyclic patterns
          */
 
-        window.addEventListener('keydown', (ev) => {
-          if (ev.key === 'p') {
-            appState.paused = !appState.paused
-          }
-        })
+        // window.addEventListener('keydown', (ev) => {
+        //   if (ev.key === 'p') {
+        //     appState.paused = !appState.paused
+        //   }
+        // })
 
-        const patternDraw = (p5: p5) => {
-          const sin2 = (p: number) => sin(p * 2.5)
-          xyZip(Date.now() / 10000, sin2, cos, 20).forEach((pt) => {
-            p5.circle(norm(pt).x, norm(pt).y, 30)
-          })
-        }
-        appState.drawFunctions.push(patternDraw)
+        // const patternDraw = (p5: p5) => {
+        //   const sin2 = (p: number) => sin(p * 2.5)
+        //   xyZip(Date.now() / 10000, sin2, cos, 20).forEach((pt) => {
+        //     p5.circle(norm(pt).x, norm(pt).y, 30)
+        //   })
+        // }
+        // appState.drawFunctions.push(patternDraw)
         // console.log("code ran")
 
         // vidAudioBands.drawCallback = (low, mid, high) => {
@@ -154,19 +161,31 @@ onMounted(() => {
         //   p5i.pop()
         // }
         // appState.drawFunctions.push(() => waveAudioBands.draw())
-        console.log("input exists", midiInputs.get('IAC Driver Bus 1'))
-        midiInputs.get('IAC Driver Bus 1')?.onAllNoteOn((note) => {
-          console.log("note on", note)
+
+        // console.log("input exists", midiInputs.get('IAC Driver Bus 1'))
+        // midiInputs.get('IAC Driver Bus 1')?.onAllNoteOn((note) => {
+        //   console.log("note on", note)
+        // })
+
+        appState.drawFunctions.push(() => {
+          three5i!!.setMaterial(new THREE.MeshBasicMaterial({ color: 0xff0000 }))
+          for (let i = 0; i < 100; i++) {
+            three5i!!.circle(Math.random() * 1280, Math.random() * 720, 10)
+          }
+          three5i!!.render(appState.threeRenderer!!)
+          console.log("three5 render")
         })
 
-        //todo api - p5 draw functions called AFTER shader draw don't show up in the shader - fix or warn about this
-        const fdbkZoom = new FeedbackZoom({ src: p5Canvas })
-        // const wobble = new Wobble({ src: p5Canvas })
-        // wobble.setUniforms({xStrength: 0.01, yStrength: 0.01})
-        const canvasPaint = new CanvasPaint({ src: fdbkZoom }) //todo bug - feeding a canvas as a source doesn't update properly
-        appState.drawFunctions.push(() => canvasPaint.renderAll(appState.threeRenderer!!))
 
-        shaderGraphEndNode = canvasPaint
+
+        //todo api - p5 draw functions called AFTER shader draw don't show up in the shader - fix or warn about this
+        // const fdbkZoom = new FeedbackZoom({ src: p5Canvas })
+        // const wobble = new Wobble({ src: three5i!!.output.texture })
+        // wobble.setUniforms({xStrength: 0.01, yStrength: 0.01})
+        // const canvasPaint = new CanvasPaint({ src: wobble }) //todo bug - feeding a canvas as a source doesn't update properly
+        // appState.drawFunctions.push(() => canvasPaint.renderAll(appState.threeRenderer!!))
+
+        // shaderGraphEndNode = canvasPaint
       }
 
 
@@ -196,6 +215,7 @@ onUnmounted(() => {
   */
   console.log("disposing fx")
   shaderGraphEndNode?.disposeAll()
+  three5i?.dispose()
 })
 
 /*
