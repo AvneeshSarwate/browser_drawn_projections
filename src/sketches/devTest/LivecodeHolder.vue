@@ -13,6 +13,9 @@ import WaveSurfer from 'wavesurfer.js'
 import { FeedbackZoom, Wobble } from '@/rendering/customFX';
 import { midiInputs } from '@/io/midi';
 import { Three5 } from '@/rendering/three5';
+import { FPS } from '@/rendering/fps';
+
+const fps = new FPS()
 
 const appState = inject<DevelopmentAppState>('appState')!!
 
@@ -169,15 +172,19 @@ onMounted(() => {
 
         appState.drawFunctions.push(() => {
           
-          const sinX = steps(0, 1, 100).map((t) => sin(now() + t * 4)*400 + 200)
+          const sinX = steps(0, 1, 100).map((t) => sin(now()/20 + t * 4)*400 + 200)
           for (let i = 0; i < 100; i++) {
             const sinColor = (t: number) => [ sin(now() + t * 4) , sin(now() + t * 3), 0]
             const threeColor = new THREE.Color(...sinColor(i/100))
-            // three5i!!.setMaterial(new THREE.MeshBasicMaterial({ color: threeColor}))
+            three5i!!.setMaterial(new THREE.MeshBasicMaterial({ color: threeColor}))
             three5i!!.circle(i/100 * 1280, sinX[i], 10)
           }
           three5i!!.render(appState.threeRenderer!!)
           // console.log("three5 render")
+        })
+
+        appState.drawFunctions.push(() => {
+          fps.frame()
         })
 
 
@@ -220,6 +227,7 @@ onUnmounted(() => {
   console.log("disposing fx")
   shaderGraphEndNode?.disposeAll()
   three5i?.dispose()
+  fps.remove()
 })
 
 /*
