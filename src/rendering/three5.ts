@@ -57,6 +57,11 @@ export class Three5 {
   render(renderer: THREE.WebGLRenderer) {
     renderer.setRenderTarget(null);
     renderer.render(this.scene, this.camera);
+    const meshes = this.scene.children.filter(child => child instanceof THREE.Mesh).map(child => child as THREE.Mesh);
+
+    //@ts-expect-error
+    meshes.forEach(child => (child as THREE.Mesh).material.dispose());
+    
     this.scene.clear();
   }
 

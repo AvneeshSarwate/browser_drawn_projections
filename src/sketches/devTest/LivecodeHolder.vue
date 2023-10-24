@@ -171,13 +171,16 @@ onMounted(() => {
         // })
 
         appState.drawFunctions.push(() => {
-          
-          const sinX = steps(0, 1, 100).map((t) => sin(now()/20 + t * 4)*400 + 200)
-          for (let i = 0; i < 100; i++) {
-            const sinColor = (t: number) => [ sin(now() + t * 4) , sin(now() + t * 3), 0]
-            const threeColor = new THREE.Color(...sinColor(i/100))
-            three5i!!.setMaterial(new THREE.MeshBasicMaterial({ color: threeColor}))
-            three5i!!.circle(i/100 * 1280, sinX[i], 10)
+          const n = 1000
+          const sinX = steps(0, 1, n).map((t) => sin(now()/20 + t * 4)*400 + 200)
+          for (let i = 0; i < n; i++) {
+            const sinColor = (t: number) => [ sin(now()/10 + t * 4) , sin(now()/10 + t * 3), 0]
+            const c1 = new THREE.Color(...sinColor(i / n))
+            const c2 = new THREE.Color(...sinColor((i + 1) / n))
+            // const mat = new THREE.MeshBasicMaterial({color: c1})
+            const mat2 = three5i!!.createGradientMaterial(c1, c2, 0, 10, 0)
+            three5i!!.setMaterial(mat2)
+            three5i!!.circle(i/n * 1280, sinX[i], 40)
           }
           three5i!!.render(appState.threeRenderer!!)
           // console.log("three5 render")
