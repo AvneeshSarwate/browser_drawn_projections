@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { MeshLineGeometry, MeshLineMaterial, raycast } from 'meshline'
 
 import { planeVS } from './vertexShaders';
 
@@ -7,9 +8,17 @@ export class Three5 {
   width: number;
   height: number;
   private camera: THREE.OrthographicCamera;
+
   private circleGeometry: THREE.CircleGeometry; 
+  private circleStrokeGeometry: MeshLineGeometry
+
   private rectGeometry: THREE.PlaneGeometry;
+
   private material: THREE.Material;
+  private strokeMaterial: MeshLineMaterial;
+
+  useStroke = true;
+
   public output: THREE.WebGLRenderTarget;
 
 
@@ -18,21 +27,45 @@ export class Three5 {
     this.height = height;
     this.scene = new THREE.Scene();
     this.camera = new THREE.OrthographicCamera(0, width, height, 0, -1, 1)
+
     this.circleGeometry = new THREE.CircleGeometry(1, 128); //todo performance - have a few diff resolutions for performance?
+    this.circleStrokeGeometry = new MeshLineGeometry();
+    const circlePts = this.circleGeometry.attributes.position.array;
+    const circlePointsJsArray = [];
+    for (let i = 3; i < circlePts.length; i += 3) {
+      circlePointsJsArray.push(new THREE.Vector3(circlePts[i], circlePts[i + 1], circlePts[i + 2]));
+    }
+    this.circleStrokeGeometry.setPoints(circlePointsJsArray);
+    
+      
     this.rectGeometry = new THREE.PlaneGeometry(1, 1);
-    this.output = new THREE.WebGLRenderTarget(width, height);
+
     this.material = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    this.strokeMaterial = new MeshLineMaterial({resolution: new THREE.Vector2(width, height), color: new THREE.Color(0xffffff), lineWidth: .01})
+
+    this.output = new THREE.WebGLRenderTarget(width, height);
   }
 
   setMaterial(material: THREE.Material) {
     this.material = material;
   }
 
-  circle(x: number, y: number, radius: number) {
+  setStrokeMaterial(material: MeshLineMaterial) {
+    this.strokeMaterial = material;
+  }
+
+  circle(x: number, y: number, radius: number, z: number = 0, strokeZ: number = 0.0000001) {
     const mesh = new THREE.Mesh(this.circleGeometry, this.material);
-    mesh.position.set(x, y, 0);
+    mesh.position.set(x, y, z);
     mesh.scale.set(radius, radius, 1);
     this.scene.add(mesh);
+
+    if (this.useStroke) {
+      const meshLine = new THREE.Mesh(this.circleStrokeGeometry, this.strokeMaterial);
+      meshLine.position.set(x, y, z + strokeZ);
+      meshLine.scale.set(radius, radius, 1);
+      this.scene.add(meshLine);
+    }
   }
 
   rect(x: number, y: number, width: number, height: number) {
@@ -57,10 +90,12 @@ export class Three5 {
   render(renderer: THREE.WebGLRenderer) {
     renderer.setRenderTarget(null);
     renderer.render(this.scene, this.camera);
-    const meshes = this.scene.children.filter(child => child instanceof THREE.Mesh).map(child => child as THREE.Mesh);
+    const meshes = this.scene.children.filter(child => child instanceof THREE.Mesh && !(child.geometry instanceof MeshLineGeometry)).map(child => child as THREE.Mesh);
 
     //@ts-expect-error
     meshes.forEach(child => (child as THREE.Mesh).material.dispose());
+
+    //todo performance - need to properly dispose of stroke meshes
     
     this.scene.clear();
   }

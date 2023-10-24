@@ -171,7 +171,7 @@ onMounted(() => {
         // })
 
         appState.drawFunctions.push(() => {
-          const n = 1000
+          const n = 100
           const sinX = steps(0, 1, n).map((t) => sin(now()/20 + t * 4)*400 + 200)
           for (let i = 0; i < n; i++) {
             const sinColor = (t: number) => [ sin(now()/10 + t * 4) , sin(now()/10 + t * 3), 0]
