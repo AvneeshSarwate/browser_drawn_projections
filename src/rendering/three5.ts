@@ -3,6 +3,36 @@ import { MeshLineGeometry, MeshLineMaterial, raycast } from 'meshline'
 
 import { planeVS } from './vertexShaders';
 
+
+type Constructor<T> = new (...args: any[]) => T;
+class ResourcePool<T> {
+  private pool: T[] = [];
+  private ctor: Constructor<T>;
+  private maxSize: number = 1000;
+  private index: number = 0;
+
+  constructor(ctor: Constructor<T>) {
+    this.ctor = ctor;
+  }
+
+  get(): T {
+    if (this.pool.length === this.maxSize) {
+      throw new Error('ResourcePool is full');
+    }
+    if(this.index >= this.pool.length) {
+      this.pool.push(new this.ctor());
+    }
+    const item = this.pool[this.index];
+    this.index++;
+    return item;
+  }
+
+  reset() {
+    this.index = 0;
+  }
+}
+
+
 export class Three5 {
   private scene: THREE.Scene;
   width: number;
@@ -12,6 +42,8 @@ export class Three5 {
   private circleGeometry: THREE.CircleGeometry; 
   private circleStrokeGeometry: MeshLineGeometry
   //todo performance - create pool for MeshLineGeometry instances for better custom shape performance
+
+  private lineGeoPool = new ResourcePool(MeshLineGeometry);
 
   private rectGeometry: THREE.PlaneGeometry;
 
@@ -96,7 +128,7 @@ export class Three5 {
     const points = curve.getPoints(curve.points.length * resolution);
     const vec3Points = points.map(point => new THREE.Vector3(point.x, point.y, 0));
 
-    const lineGeo = new MeshLineGeometry();
+    const lineGeo = this.lineGeoPool.get();
     lineGeo.setPoints(vec3Points);
     const meshLineMat = new MeshLineMaterial({ resolution: new THREE.Vector2(this.width, this.height), color: new THREE.Color(0xffffff), lineWidth: .01 })
     const meshLine = new THREE.Mesh(lineGeo, meshLineMat);
@@ -111,15 +143,16 @@ export class Three5 {
     //todo performance - dispose geometries (base and stroke) for custom curves/shapes, but not for circles/rects/primitives
 
     const meshes = this.scene.children.filter(child => child instanceof THREE.Mesh).map(child => child as THREE.Mesh);
-    const geos = meshes.map(mesh => mesh.geometry).filter(geo => this.cachedLineGeos.has(geo.uuid) === false);
+    // const geos = meshes.map(mesh => mesh.geometry).filter(geo => this.cachedLineGeos.has(geo.uuid) === false);
 
     //@ts-expect-error
     meshes.forEach(child => (child as THREE.Mesh).material.dispose());
-    geos.forEach(geo => geo.dispose());
+    // geos.forEach(geo => geo.dispose());
 
     //todo performance - need to properly dispose of stroke meshes
     
     this.scene.clear(); //todo api - don't clear automatically on render
+    this.lineGeoPool.reset();
   }
 
   createGradientMaterial(color1: THREE.Color, color2: THREE.Color, angle: number, scale: number, offset: number) {
