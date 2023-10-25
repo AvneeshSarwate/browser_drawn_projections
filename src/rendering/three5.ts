@@ -11,6 +11,7 @@ export class Three5 {
 
   private circleGeometry: THREE.CircleGeometry; 
   private circleStrokeGeometry: MeshLineGeometry
+  //todo performance - create pool for MeshLineGeometry instances for better custom shape performance
 
   private rectGeometry: THREE.PlaneGeometry;
 
@@ -90,12 +91,16 @@ export class Three5 {
     this.scene.add(mesh);
   }
 
-  curve(points: THREE.Vec2[]) {
-    const lineGeo = new MeshLineGeometry();
+  curve(rawPts: THREE.Vector2[], resolution: number = 2) {
+    const curve = new THREE.SplineCurve(rawPts)
+    const points = curve.getPoints(curve.points.length * resolution);
     const vec3Points = points.map(point => new THREE.Vector3(point.x, point.y, 0));
+
+    const lineGeo = new MeshLineGeometry();
     lineGeo.setPoints(vec3Points);
     const meshLineMat = new MeshLineMaterial({ resolution: new THREE.Vector2(this.width, this.height), color: new THREE.Color(0xffffff), lineWidth: .01 })
     const meshLine = new THREE.Mesh(lineGeo, meshLineMat);
+
     this.scene.add(meshLine);
   }
 

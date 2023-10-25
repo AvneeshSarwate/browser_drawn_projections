@@ -170,39 +170,37 @@ onMounted(() => {
         //   console.log("note on", note)
         // })
 
+        const n = 100
+        const wave = (t: number) => sin(now() / 20 + t * 4) * 400 + 200
+        const sinColor = (t: number) => [sin(now() / 10 + t * 4), sin(now() / 10 + t * 3), 0]
+        
         appState.drawFunctions.push(() => {
           // return
-          const n = 100
-          const sinX = steps(0, 1, n).map((t) => sin(now() / 20 + t * 4) * 400 + 200)
+          const sinX = steps(0, 1, n).map(wave)
           three5i!!.useStroke = false
           for (let i = 0; i < n; i++) {
-            const sinColor = (t: number) => [ sin(now()/10 + t * 4) , sin(now()/10 + t * 3), 0]
             const c1 = new THREE.Color(...sinColor(i / n))
             const c2 = new THREE.Color(...sinColor((i + 1) / n))
-            // const mat = new THREE.MeshBasicMaterial({color: c1})
+
             const mat2 = three5i!!.createGradientMaterial(c1, c2, 0, 10, 0)
             three5i!!.setMaterial(mat2)
             three5i!!.circle(i/n * 1280, sinX[i], 40)
           }
           // three5i!!.render(appState.threeRenderer!!)
-          // console.log("three5 render")
         })
 
-        appState.drawFunctions.push(() => {
-          // return
-          const n = 100
-          const sinX = steps(0, 1, n).map((t) => sin(now() / 20 + t * 4) * 400 + 200)
-          three5i!!.useStroke = true
-          const curve = new THREE.SplineCurve()
-          for (let i = 0; i < n; i++) {
-            let [x, y] = [i/n * 1280, sinX[i]]
-            curve.points.push(new THREE.Vector2(x, y))
-          }
+        for (let c = 0; c < 5; c++) {
+          appState.drawFunctions.push(() => {
+            // return
+            const sinX = steps(0, 1, n).map(wave)
+            const pts = steps(0, n, n).map(n => Math.round(n)).map(i => new THREE.Vector2(i/n * 1280, sinX[i] - c * 30))
 
-          const points = curve.getPoints(curve.points.length * 2);
-          three5i!!.curve(points)
-          three5i!!.render(appState.threeRenderer!!)
-        })
+            three5i!!.curve(pts)
+            if(c == 4) three5i!!.render(appState.threeRenderer!!)
+          })
+        }
+
+        
 
 
 
