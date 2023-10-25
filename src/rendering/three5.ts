@@ -14,6 +14,8 @@ export class Three5 {
 
   private rectGeometry: THREE.PlaneGeometry;
 
+  private cachedLineGeos = new Map<string, MeshLineGeometry>();
+
   private material: THREE.Material;
   private strokeMaterial: MeshLineMaterial;
 
@@ -36,9 +38,10 @@ export class Three5 {
       circlePointsJsArray.push(new THREE.Vector3(circlePts[i], circlePts[i + 1], circlePts[i + 2]));
     }
     this.circleStrokeGeometry.setPoints(circlePointsJsArray);
-    
       
     this.rectGeometry = new THREE.PlaneGeometry(1, 1);
+
+
 
     this.material = new THREE.MeshBasicMaterial({ color: 0xffffff });
     this.strokeMaterial = new MeshLineMaterial({resolution: new THREE.Vector2(width, height), color: new THREE.Color(0xffffff), lineWidth: .01})
@@ -61,7 +64,7 @@ export class Three5 {
     this.scene.add(mesh);
 
     if (this.useStroke) {
-      const meshLine = new THREE.Mesh(this.circleStrokeGeometry, this.strokeMaterial.clone());
+      const meshLine = new THREE.Mesh(this.circleStrokeGeometry, this.strokeMaterial);
       meshLine.position.set(x, y, z + strokeZ);
       meshLine.scale.set(radius, radius, 1);
       this.scene.add(meshLine);
@@ -103,9 +106,11 @@ export class Three5 {
     //todo performance - dispose geometries (base and stroke) for custom curves/shapes, but not for circles/rects/primitives
 
     const meshes = this.scene.children.filter(child => child instanceof THREE.Mesh).map(child => child as THREE.Mesh);
+    const geos = meshes.map(mesh => mesh.geometry).filter(geo => this.cachedLineGeos.has(geo.uuid) === false);
 
     //@ts-expect-error
     meshes.forEach(child => (child as THREE.Mesh).material.dispose());
+    geos.forEach(geo => geo.dispose());
 
     //todo performance - need to properly dispose of stroke meshes
     
