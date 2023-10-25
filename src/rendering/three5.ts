@@ -17,7 +17,7 @@ export class Three5 {
   private material: THREE.Material;
   private strokeMaterial: MeshLineMaterial;
 
-  useStroke = true;
+  useStroke = false;
 
   public output: THREE.WebGLRenderTarget;
 
@@ -61,7 +61,7 @@ export class Three5 {
     this.scene.add(mesh);
 
     if (this.useStroke) {
-      const meshLine = new THREE.Mesh(this.circleStrokeGeometry, this.strokeMaterial);
+      const meshLine = new THREE.Mesh(this.circleStrokeGeometry, this.strokeMaterial.clone());
       meshLine.position.set(x, y, z + strokeZ);
       meshLine.scale.set(radius, radius, 1);
       this.scene.add(meshLine);
@@ -87,17 +87,29 @@ export class Three5 {
     this.scene.add(mesh);
   }
 
+  curve(points: THREE.Vec2[]) {
+    const lineGeo = new MeshLineGeometry();
+    const vec3Points = points.map(point => new THREE.Vector3(point.x, point.y, 0));
+    lineGeo.setPoints(vec3Points);
+    const meshLineMat = new MeshLineMaterial({ resolution: new THREE.Vector2(this.width, this.height), color: new THREE.Color(0xffffff), lineWidth: .01 })
+    const meshLine = new THREE.Mesh(lineGeo, meshLineMat);
+    this.scene.add(meshLine);
+  }
+
   render(renderer: THREE.WebGLRenderer) {
     renderer.setRenderTarget(null);
     renderer.render(this.scene, this.camera);
-    const meshes = this.scene.children.filter(child => child instanceof THREE.Mesh && !(child.geometry instanceof MeshLineGeometry)).map(child => child as THREE.Mesh);
+
+    //todo performance - dispose geometries (base and stroke) for custom curves/shapes, but not for circles/rects/primitives
+
+    const meshes = this.scene.children.filter(child => child instanceof THREE.Mesh).map(child => child as THREE.Mesh);
 
     //@ts-expect-error
     meshes.forEach(child => (child as THREE.Mesh).material.dispose());
 
     //todo performance - need to properly dispose of stroke meshes
     
-    this.scene.clear();
+    this.scene.clear(); //todo api - don't clear automatically on render
   }
 
   createGradientMaterial(color1: THREE.Color, color2: THREE.Color, angle: number, scale: number, offset: number) {

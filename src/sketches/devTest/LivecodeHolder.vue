@@ -171,8 +171,10 @@ onMounted(() => {
         // })
 
         appState.drawFunctions.push(() => {
+          // return
           const n = 100
-          const sinX = steps(0, 1, n).map((t) => sin(now()/20 + t * 4)*400 + 200)
+          const sinX = steps(0, 1, n).map((t) => sin(now() / 20 + t * 4) * 400 + 200)
+          three5i!!.useStroke = false
           for (let i = 0; i < n; i++) {
             const sinColor = (t: number) => [ sin(now()/10 + t * 4) , sin(now()/10 + t * 3), 0]
             const c1 = new THREE.Color(...sinColor(i / n))
@@ -182,9 +184,28 @@ onMounted(() => {
             three5i!!.setMaterial(mat2)
             three5i!!.circle(i/n * 1280, sinX[i], 40)
           }
-          three5i!!.render(appState.threeRenderer!!)
+          // three5i!!.render(appState.threeRenderer!!)
           // console.log("three5 render")
         })
+
+        appState.drawFunctions.push(() => {
+          // return
+          const n = 100
+          const sinX = steps(0, 1, n).map((t) => sin(now() / 20 + t * 4) * 400 + 200)
+          three5i!!.useStroke = true
+          const curve = new THREE.SplineCurve()
+          for (let i = 0; i < n; i++) {
+            let [x, y] = [i/n * 1280, sinX[i]]
+            curve.points.push(new THREE.Vector2(x, y))
+          }
+
+          const points = curve.getPoints(curve.points.length * 2);
+          three5i!!.curve(points)
+          three5i!!.render(appState.threeRenderer!!)
+        })
+
+
+
 
         appState.drawFunctions.push(() => {
           fps.frame()
