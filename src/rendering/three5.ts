@@ -123,12 +123,14 @@ export class Three5 {
     this.scene.add(mesh);
   }
 
+  private useLinePool = false
+
   curve(rawPts: THREE.Vector2[], resolution: number = 2) {
     const curve = new THREE.SplineCurve(rawPts)
     const points = curve.getPoints(curve.points.length * resolution);
     const vec3Points = points.map(point => new THREE.Vector3(point.x, point.y, 0));
 
-    const lineGeo = this.lineGeoPool.get();
+    const lineGeo = this.useLinePool ? this.lineGeoPool.get() : new MeshLineGeometry();
     lineGeo.setPoints(vec3Points);
     const meshLineMat = new MeshLineMaterial({ resolution: new THREE.Vector2(this.width, this.height), color: new THREE.Color(0xffffff), lineWidth: .01 })
     const meshLine = new THREE.Mesh(lineGeo, meshLineMat);
@@ -143,11 +145,11 @@ export class Three5 {
     //todo performance - dispose geometries (base and stroke) for custom curves/shapes, but not for circles/rects/primitives
 
     const meshes = this.scene.children.filter(child => child instanceof THREE.Mesh).map(child => child as THREE.Mesh);
-    // const geos = meshes.map(mesh => mesh.geometry).filter(geo => this.cachedLineGeos.has(geo.uuid) === false);
+    const geos = meshes.map(mesh => mesh.geometry).filter(geo => this.cachedLineGeos.has(geo.uuid) === false);
 
     //@ts-expect-error
     meshes.forEach(child => (child as THREE.Mesh).material.dispose());
-    // geos.forEach(geo => geo.dispose());
+    if(!this.useLinePool) geos.forEach(geo => geo.dispose());
 
     //todo performance - need to properly dispose of stroke meshes
     

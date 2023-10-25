@@ -186,19 +186,19 @@ onMounted(() => {
             three5i!!.setMaterial(mat2)
             three5i!!.circle(i/n * 1280, sinX[i], 40)
           }
-          // three5i!!.render(appState.threeRenderer!!)
         })
 
         for (let c = 0; c < 5; c++) {
           appState.drawFunctions.push(() => {
             // return
             const sinX = steps(0, 1, n).map(wave)
-            const pts = steps(0, n, n).map(n => Math.round(n)).map(i => new THREE.Vector2(i/n * 1280, sinX[i] - c * 30))
+            const pts = steps(0, n, n).map(n => Math.round(n)).map(i => new THREE.Vector2(i/n * 1280, sinX[i] - c * 10 + 100))
 
             three5i!!.curve(pts)
-            if(c == 4) three5i!!.render(appState.threeRenderer!!)
           })
         }
+
+        appState.drawFunctions.push(_ => three5i!!.render(appState.threeRenderer!!))
 
         
 
