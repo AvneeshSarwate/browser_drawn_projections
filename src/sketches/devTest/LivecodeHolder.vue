@@ -170,12 +170,12 @@ onMounted(() => {
         //   console.log("note on", note)
         // })
 
-        const n = 100
         const wave = (t: number) => sin(now() / 20 + t * 4) * 400 + 200
         const sinColor = (t: number) => [sin(now() / 10 + t * 4), sin(now() / 10 + t * 3), 0]
         
         appState.drawFunctions.push(() => {
-          // return
+          let n = 2
+          // return //todo performance - why does enabling this slow down the framerate so much?
           const sinX = steps(0, 1, n).map(wave)
           three5i!!.useStroke = false
           for (let i = 0; i < n; i++) {
@@ -189,6 +189,7 @@ onMounted(() => {
         })
 
         for (let c = 0; c < 5; c++) {
+          let n = 100
           appState.drawFunctions.push(() => {
             // return
             const sinX = steps(0, 1, n).map(wave)
