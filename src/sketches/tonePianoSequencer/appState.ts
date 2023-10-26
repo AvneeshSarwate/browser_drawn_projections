@@ -145,7 +145,7 @@ export const sampler = new Tone.Sampler({
   "C8": "C8.[mp3|ogg]"
 }, {
   "release": 1,
-  "baseUrl": "/salamander/"
+  "baseUrl": "salamander/"
 }).toDestination();
 
 Tone.Transport.context.lookAhead = 0.01
