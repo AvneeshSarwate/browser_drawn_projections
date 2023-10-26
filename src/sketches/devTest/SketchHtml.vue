@@ -38,6 +38,6 @@ const blockRockingUrl = new URL(`/block_rocking.mp4`, import.meta.url).href
 }
 
 #video {
-  display: none;
+  /* display: none; */
 }
 </style>
