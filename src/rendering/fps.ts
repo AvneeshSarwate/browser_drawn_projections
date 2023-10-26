@@ -49,9 +49,9 @@ export class FPS {
     private lastTime: number = 0
     private frameNumber: number = 0
     private lastFPS: number = 0
-    private meterCanvas: HTMLCanvasElement
-    private meterContext: CanvasRenderingContext2D
-    private fpsSpan: HTMLSpanElement
+    private meterCanvas: HTMLCanvasElement | undefined
+    private meterContext: CanvasRenderingContext2D | undefined
+    private fpsSpan: HTMLSpanElement | undefined
 
     /**
      * @param [options]
@@ -74,7 +74,7 @@ export class FPS {
         this.options = { ...defaultFPSOptions, ...options }
         this.div = document.createElement('div')
         this.findParent(this.options.side || 'bottom-right').appendChild(this.div)
-        this.style(this.div, this.options.styles)
+        this.style(this.div, this.options.styles!!)
         this.createDivFPS()
         if (this.options.meter) {
             this.createDivMeter()
@@ -83,7 +83,7 @@ export class FPS {
 
     /** desired FPS */
     get fps(): number {
-        return this.options.FPS
+        return this.options.FPS!!
     }
     set fps(value) {
         this.options.FPS = value
@@ -96,7 +96,7 @@ export class FPS {
 
     /** meter (the FPS graph) is on or off */
     get meter(): boolean {
-        return this.options.meter
+        return this.options.meter!!
     }
     set meter(value) {
         if (value) {
@@ -109,31 +109,31 @@ export class FPS {
 
     private style(div: HTMLElement, style: Partial<CSSStyleDeclaration>) {
         for (const entry in style) {
-            div.style[entry] = style[entry]
+            div.style[entry] = style[entry]!!
         }
     }
 
     private createDivFPS() {
         const divFPS = document.createElement('div')
-        this.style(divFPS, this.options.stylesFPS)
+        this.style(divFPS, this.options.stylesFPS!!)
         this.div.appendChild(divFPS)
         this.fpsSpan = document.createElement('span')
         divFPS.appendChild(this.fpsSpan)
         const span = document.createElement('span')
         divFPS.appendChild(span)
-        span.innerText = this.options.text
+        span.innerText = this.options.text!!
     }
 
     private createDivMeter() {
         if (!this.meterCanvas) {
             this.meterCanvas = document.createElement('canvas')
             this.div.appendChild(this.meterCanvas)
-            this.meterCanvas.width = this.options.meterWidth
-            this.meterCanvas.height = this.options.meterHeight
+            this.meterCanvas.width = this.options.meterWidth!!
+            this.meterCanvas.height = this.options.meterHeight!!
             this.meterCanvas.style.width = this.options.meterWidth + 'px'
             this.meterCanvas.style.height = this.options.meterHeight + 'px'
-            this.style(this.meterCanvas, this.options.stylesMeter)
-            this.meterContext = this.meterCanvas.getContext('2d', { willReadFrequently: true })
+            this.style(this.meterCanvas, this.options.stylesMeter!!)
+            this.meterContext = this.meterCanvas.getContext('2d', { willReadFrequently: true })!!
         }
         else {
             this.meterCanvas.style.display = 'block'
@@ -149,21 +149,21 @@ export class FPS {
         if (currentTime > 500) {
             if (this.lastTime !== 0) {
                 this.lastFPS = Math.floor(this.frameNumber / (currentTime / 1000))
-                if (this.lastFPS > this.options.FPS ||
+                if (this.lastFPS > this.options.FPS!! ||
                     (
-                        this.lastFPS >= this.options.FPS - this.options.tolerance &&
-                        this.lastFPS <= this.options.FPS + this.options.tolerance
+                        this.lastFPS >= this.options.FPS!! - this.options.tolerance!! &&
+                        this.lastFPS <= this.options.FPS!! + this.options.tolerance!!
                     )
                 ) {
-                    this.lastFPS = this.options.FPS
+                    this.lastFPS = this.options.FPS!!
                 }
             }
             this.lastTime = performance.now()
             this.frameNumber = 0
         }
-        this.fpsSpan.innerText = this.lastFPS === 0 ? '--' : this.lastFPS + ''
+        this.fpsSpan!!.innerText = this.lastFPS === 0 ? '--' : this.lastFPS + ''
         if (this.options.meter && this.lastFPS !== 0) {
-            this.meterUpdate(this.lastFPS / this.options.FPS)
+            this.meterUpdate(this.lastFPS / this.options.FPS!!)
         }
     }
 
@@ -201,17 +201,17 @@ export class FPS {
     }
 
     private meterUpdate(percent: number) {
-        const data = this.meterContext.getImageData(0, 0, this.meterCanvas.width, this.meterCanvas.height)
-        this.meterContext.putImageData(data, -1, 0)
-        this.meterContext.clearRect(this.meterCanvas.width - 1, 0, 1, this.meterCanvas.height)
+        const data = this.meterContext!!.getImageData(0, 0, this.meterCanvas!!.width, this.meterCanvas!!.height)
+        this.meterContext!!.putImageData(data, -1, 0)
+        this.meterContext!!.clearRect(this.meterCanvas!!.width - 1, 0, 1, this.meterCanvas!!.height)
         if (percent <= 0.5) {
-            this.meterContext.fillStyle = this.mix(this.options.colorRed, this.options.colorOrange, 1 - percent * 2)
+            this.meterContext!!.fillStyle = this.mix(this.options.colorRed!!, this.options.colorOrange!!, 1 - percent * 2)
         }
         else {
-            this.meterContext.fillStyle = this.mix(this.options.colorGreen, this.options.colorOrange, (percent - 0.5) * 2)
+            this.meterContext!!.fillStyle = this.mix(this.options.colorGreen!!, this.options.colorOrange!!, (percent - 0.5) * 2)
         }
-        const height = (this.meterCanvas.height - this.options.meterLineHeight) * (1 - percent)
-        this.meterContext.fillRect(this.meterCanvas.width - 1, height, 1, this.options.meterLineHeight)
+        const height = (this.meterCanvas!!.height - this.options.meterLineHeight!!) * (1 - percent)
+        this.meterContext!!.fillRect(this.meterCanvas!!.width - 1, height, 1, this.options.meterLineHeight!!)
     }
 
     /**
@@ -220,22 +220,26 @@ export class FPS {
      * @return {HTMLElement}
      */
     private findParent(side: string): HTMLElement {
-        const styles = []
+        const styles: any[] = []
         let name = 'yy-counter-'
         if (side.indexOf('left') !== -1) {
             name += 'left-'
+            //@ts-ignore
             styles['left'] = 0
         }
         else {
             name += 'right-'
+            //@ts-ignore
             styles['right'] = 0
         }
         if (side.indexOf('top') !== -1) {
             name += 'top'
+            //@ts-ignore
             styles['top'] = 0
         }
         else {
             name += 'bottom'
+            //@ts-ignore
             styles['bottom'] = 0
         }
         const test = document.getElementById(name)
@@ -246,10 +250,10 @@ export class FPS {
         container.id = name
         container.style.overflow = 'hidden'
         container.style.position = 'fixed'
-        container.style.zIndex = this.options.zIndex.toString()
+        container.style.zIndex = this.options.zIndex!!.toString()
         container.style.pointerEvents = 'none'
         container.style.userSelect = 'none'
-        for (let style in styles) {
+        for (const style in styles) {
             container.style[style] = styles[style]
         }
         document.body.appendChild(container)
