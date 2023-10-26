@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import blockRockingUrl from '/block_rocking.mp4';
+// import blockRockingUrl from '/block_rocking.mp4';
+const blockRockingUrl = new URL(`/block_rocking.mp4`, import.meta.url).href
 </script>
 
 <template>
