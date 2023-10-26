@@ -56,7 +56,7 @@ const reset = () => {
 //   container: '#wavesurferHolder',
 //   waveColor: '#4F4A85',
 //   progressColor: '#383351',
-//   url: '/block_rocking.mp3',
+//   url: 'block_rocking.mp3',
 // })
 // document.querySelector('#wavesurferPlay')?.addEventListener('click', () => {
 //   console.log('play/pause')
