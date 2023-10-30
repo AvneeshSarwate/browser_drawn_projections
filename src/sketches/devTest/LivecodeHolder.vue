@@ -174,7 +174,7 @@ onMounted(() => {
         const sinColor = (t: number) => [sin(now() / 10 + t * 4), sin(now() / 10 + t * 3), 0]
         
         appState.drawFunctions.push(() => {
-          let n = 2
+          let n = 100
           // return //todo performance - why does enabling this slow down the framerate so much?
           const sinX = steps(0, 1, n).map(wave)
           three5i!!.useStroke = false

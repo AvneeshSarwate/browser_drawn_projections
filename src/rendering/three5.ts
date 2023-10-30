@@ -147,8 +147,12 @@ export class Three5 {
     const meshes = this.scene.children.filter(child => child instanceof THREE.Mesh).map(child => child as THREE.Mesh);
     const geos = meshes.map(mesh => mesh.geometry).filter(geo => this.cachedLineGeos.has(geo.uuid) === false);
 
-    //@ts-expect-error
-    meshes.forEach(child => (child as THREE.Mesh).material.dispose());
+    
+    setTimeout(() => {
+      //@ts-expect-error
+      meshes.forEach(child => (child as THREE.Mesh).material.dispose());
+    }, 100)
+    
     if(!this.useLinePool) geos.forEach(geo => geo.dispose());
 
     //todo performance - need to properly dispose of stroke meshes
