@@ -15,8 +15,8 @@ type ThreeColor = THREE.Color;
 type ThreeVectorArray = ThreeVector[];
 
 export type Dynamic<T> = T | (() => T)
-type ShaderUniform = number | number[] | ThreeVector | ThreeMatrix | ThreeColor | ThreeVectorArray | THREE.Texture
-type ShaderUniforms = {
+export type ShaderUniform = number | number[] | ThreeVector | ThreeMatrix | ThreeColor | ThreeVectorArray | THREE.Texture
+export type ShaderUniforms = {
   [key: string]: Dynamic<ShaderUniform>
 }
 

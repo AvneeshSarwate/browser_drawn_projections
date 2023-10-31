@@ -49,7 +49,9 @@ export class Three5 {
 
   private cachedLineGeos = new Map<string, MeshLineGeometry>();
 
-  private material: THREE.Material;
+
+  //todo performance - probably want setters/getters to dispose old "reference style" materials when new ones are set
+   private material: THREE.Material;
   private strokeMaterial: MeshLineMaterial;
 
   useStroke = false;
