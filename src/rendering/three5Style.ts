@@ -82,6 +82,7 @@ class Three5Style {
 //is there a way to properly replace symbols in the shader? eg first float detected replaces USER_FLOAT_0 and up to 
 //the user not to pick names that break string-replacement?
 //https://github.com/ShaderFrog/glsl-parser - use this to replace [type][0-3] names?
+//or - detect uniform types and just append those as uniforms into the shader template automatically?
 class LineStyle extends Three5Style {
   public mainString = glsl`
   float time = float0;
