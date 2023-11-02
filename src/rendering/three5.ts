@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { MeshLineGeometry, MeshLineMaterial, raycast } from 'meshline'
 
 import { planeVS } from './vertexShaders';
+import type { Three5Style } from './three5Style';
 
 
 type Constructor<T> = new (...args: any[]) => T;
@@ -49,15 +50,13 @@ export class Three5 {
 
   private cachedLineGeos = new Map<string, MeshLineGeometry>();
 
-
   //todo performance - probably want setters/getters to dispose old "reference style" materials when new ones are set
-   private material: THREE.Material;
+  private material: THREE.Material;
   private strokeMaterial: MeshLineMaterial;
 
   useStroke = false;
 
   public output: THREE.WebGLRenderTarget;
-
 
   constructor(width: number, height: number) {
     this.width = width;
@@ -84,16 +83,32 @@ export class Three5 {
     this.output = new THREE.WebGLRenderTarget(width, height);
   }
 
+  public style: Three5Style | undefined
+  public styleMode: "style" | "material" = "material"
+
+  setStyle(style: Three5Style) {
+    this.style = style
+    this.styleMode = "style"
+  }
+
   setMaterial(material: THREE.Material) {
     this.material = material;
+    this.styleMode = "material"
   }
 
   setStrokeMaterial(material: MeshLineMaterial) {
     this.strokeMaterial = material;
   }
 
+  getMaterial(): THREE.Material {
+    if(this.styleMode === "style") {
+      return this.style!.getMaterial()
+    }
+    return this.material
+  }
+
   circle(x: number, y: number, radius: number, z: number = 0, strokeZ: number = 0.0000001) {
-    const mesh = new THREE.Mesh(this.circleGeometry, this.material);
+    const mesh = new THREE.Mesh(this.circleGeometry, this.getMaterial());
     mesh.position.set(x, y, z);
     mesh.scale.set(radius, radius, 1);
     this.scene.add(mesh);
@@ -107,7 +122,7 @@ export class Three5 {
   }
 
   rect(x: number, y: number, width: number, height: number) {
-    const mesh = new THREE.Mesh(this.rectGeometry, this.material);
+    const mesh = new THREE.Mesh(this.rectGeometry, this.getMaterial());
     mesh.position.set(x, y, 0);
     mesh.scale.set(width, height, 1);
     this.scene.add(mesh);
@@ -118,7 +133,7 @@ export class Three5 {
     const dy = y2 - y1;
     const length = Math.sqrt(dx * dx + dy * dy);
     const angle = Math.atan2(dy, dx);
-    const mesh = new THREE.Mesh(this.rectGeometry, this.material);
+    const mesh = new THREE.Mesh(this.rectGeometry, this.getMaterial());
     mesh.position.set(x1, y1, 0);
     mesh.rotation.set(0, 0, angle);
     mesh.scale.set(length, 1, 1);

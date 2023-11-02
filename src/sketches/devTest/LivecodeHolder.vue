@@ -14,6 +14,7 @@ import { FeedbackZoom, Wobble } from '@/rendering/customFX';
 import { midiInputs } from '@/io/midi';
 import { Three5 } from '@/rendering/three5';
 import { FPS } from '@/rendering/fps';
+import { LineStyle } from '@/rendering/three5Style';
 
 const fps = new FPS()
 
@@ -82,6 +83,8 @@ onMounted(() => {
 
         const wave = (t: number) => sin(now() / 20 + t * 4) * 400 + 200
         const sinColor = (t: number) => [sin(now() / 10 + t * 4), sin(now() / 10 + t * 3), 0]
+
+        const lineStyle = new LineStyle()
         
         appState.drawFunctions.push(() => {
           let n = 100
@@ -92,8 +95,14 @@ onMounted(() => {
             const c1 = new THREE.Color(...sinColor(i / n))
             const c2 = new THREE.Color(...sinColor((i + 1) / n))
 
-            const mat2 = three5i!!.createGradientMaterial(c1, c2, 0, 10, 0)
-            three5i!!.setMaterial(mat2)
+            if (i % 2 == 0) {
+              const mat2 = three5i!!.createGradientMaterial(c1, c2, 0, 10, 0)
+              three5i!!.setMaterial(mat2)
+            } else {
+              lineStyle.uniforms.time = now() + i / n * Math.PI
+              three5i!!.setStyle(lineStyle)
+            }
+           
             three5i!!.circle(i/n * 1280, sinX[i], 40)
           }
         })

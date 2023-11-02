@@ -39,7 +39,7 @@ type ThreeUniforms = {
   [uniform: string]: THREE.IUniform<any>;
 }
 
-class Three5Style {
+export class Three5Style {
 
   public baseFragmentShader = glsl`
     precision highp float;
@@ -55,12 +55,19 @@ class Three5Style {
   
   public uniforms: StaticShaderUniforms = {}
   public mainString = ""
-  public finalShader: string
+  public finalShader = ""
+
+  buildShader() {
+    const mainReplacedString = this.baseFragmentShader.replace("//REPLACE MAIN HERE", this.mainString)
+    console.log("mainString", mainReplacedString, "rep", this.mainString)
+    const uniformReplacedString = mainReplacedString.replace("//REPLACE UNIFORMS HERE", this.buildUniformString())
+    console.log("uniformString", uniformReplacedString, "rep", this.buildUniformString())
+    this.finalShader = uniformReplacedString
+    console.log("finalShader", this.finalShader)
+  }
 
   constructor() {
-    const mainReplacedString = this.baseFragmentShader.replace("//REPLACE MAIN HERE", this.mainString)
-    const uniformReplacedString = mainReplacedString.replace("//REPLACE UNIFORMS HERE", this.buildUniformString())
-    this.finalShader = uniformReplacedString
+    this.buildShader()
   }
 
   public getMaterial(): THREE.Material { //call this "getMaterial()"
@@ -112,16 +119,18 @@ class Three5Style {
 //the user not to pick names that break string-replacement?
 //https://github.com/ShaderFrog/glsl-parser - use this to replace [type][0-3] names?
 //or - detect uniform types and just append those as uniforms into the shader template automatically?
-class LineStyle extends Three5Style {
+export class LineStyle extends Three5Style {
+  constructor() { super(); this.buildShader() } //necessary boilerplate due to typescript inheritance
   public mainString = glsl`
-  gl_FragColor = abs(vUV.x - sinN(time)) < 0.02 ? color0 : color1;
+  gl_FragColor = abs(vUV.x - (sin(time)*0.5+0.5)) < 0.05 ? color0 : color1;
   `
   public uniforms = {
     time: 0,
-    color0: new THREE.Vector4(),
-    color1: new THREE.Vector4()
+    color0: new THREE.Vector4(1, 0, 0, 1),
+    color1: new THREE.Vector4(0, 1, 0, 1),
   }
 }
+//todo api - have a three5style version that takes the mainString/uniforms as arguments to remove inheritance boilerplate
 
 
 
