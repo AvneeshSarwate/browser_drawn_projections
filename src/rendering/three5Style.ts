@@ -6,6 +6,30 @@ import { Three5 } from './three5';
 //used with the "glsl-literal" vscode plugin to get syntax highlighting for embedded glsl
 const glsl = (x: any): string => x[0]
 
+
+function threeTypeToGlsl(val: ShaderUniform) {
+  if(typeof val === "number") return "float"
+  if(val instanceof THREE.Vector2) return "vec2"
+  if(val instanceof THREE.Vector3) return "vec3"
+  if(val instanceof THREE.Vector4) return "vec4"
+  if(val instanceof THREE.Color) return "vec3"
+  if(val instanceof THREE.Matrix3) return "mat3"
+  if(val instanceof THREE.Matrix4) return "mat4"
+  if(val instanceof THREE.Texture) return "sampler2D"
+
+  //arrays of above types
+  if(Array.isArray(val)) {
+    const v = (val as any[])[0]
+    if(v instanceof THREE.Vector2) return "vec2[]"
+    if(v instanceof THREE.Vector3) return "vec3[]"
+    if(v instanceof THREE.Vector4) return "vec4[]"
+    if(v instanceof THREE.Color) return "vec3[]"
+    if(v instanceof THREE.Matrix3) return "mat3[]"
+    if(v instanceof THREE.Matrix4) return "mat4[]"
+    if(v instanceof THREE.Texture) return "sampler2D[]"
+  }
+}
+
 //todo api - make this specific to three5style allowed values
 type StaticShaderUniforms = {
   [key: string]: ShaderUniform
@@ -20,46 +44,26 @@ class Three5Style {
   public baseFragmentShader = glsl`
     precision highp float;
     
-    uniform sampler2D tex0;
-    uniform sampler2D tex1;
-    uniform sampler2D tex2;
-    uniform sampler2D tex3;
-
-    uniform float float0;
-    uniform float float1;
-    uniform float float2;
-    uniform float float3;
-
-    
-    uniform vec3 color0;
-    uniform vec3 color1;
-    uniform vec3 color2;
-    uniform vec3 color3;
+    //REPLACE UNIFORMS HERE
 
     varying vec2 vUV;
 
     void main() {
-      //REPLACE STRING HERE
-      gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
+      //REPLACE MAIN HERE
     }
     `
   
-  public material: THREE.Material
   public uniforms: StaticShaderUniforms = {}
   public mainString = ""
+  public finalShader: string
 
   constructor() {
-
-    this.material = new THREE.ShaderMaterial(
-      {
-        vertexShader: planeVS,
-        fragmentShader: this.baseFragmentShader.replace("Replace String", this.mainString), //todo incomplete
-        uniforms: {}
-      }
-    )
+    const mainReplacedString = this.baseFragmentShader.replace("//REPLACE MAIN HERE", this.mainString)
+    const uniformReplacedString = mainReplacedString.replace("//REPLACE UNIFORMS HERE", this.buildUniformString())
+    this.finalShader = uniformReplacedString
   }
 
-  public clone(): THREE.Material { //call this "getMaterial()"
+  public getMaterial(): THREE.Material { //call this "getMaterial()"
     /*
     push the uniform values from the uniform object into the actual material uniforms, and return the material
     do you need to dispose of these materials? maintain a cache based on shader string?
@@ -74,7 +78,32 @@ class Three5Style {
     - if using a three5style, user can set type-safe properties on the three5style and then three5 will extract an 
       appropriately cloned/managed material when creating a mesh
     */
-      return this.material
+
+    
+    const material = new THREE.ShaderMaterial({
+      uniforms: this.buildThreeUniforms(),
+      vertexShader: planeVS,
+      fragmentShader: this.finalShader,
+    });
+
+    return material
+  }
+
+  buildThreeUniforms(): ThreeUniforms {
+    const uniforms: ThreeUniforms = {}
+    for (const [key, value] of Object.entries(this.uniforms)) {
+      uniforms[key] = {value: value}
+    }
+    return uniforms
+  }
+
+
+  buildUniformString(): string {
+    let uniformString = ""
+    for (const [key, value] of Object.entries(this.uniforms)) {
+      uniformString += `uniform ${threeTypeToGlsl(value)} ${key};\n`
+    }
+    return uniformString
   }
 }
 
@@ -85,7 +114,6 @@ class Three5Style {
 //or - detect uniform types and just append those as uniforms into the shader template automatically?
 class LineStyle extends Three5Style {
   public mainString = glsl`
-  float time = float0;
   gl_FragColor = abs(vUV.x - sinN(time)) < 0.02 ? color0 : color1;
   `
   public uniforms = {
