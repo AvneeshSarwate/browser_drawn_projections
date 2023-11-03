@@ -6,12 +6,14 @@ import { globalStore, getUrlSketch, type sketchNames } from './stores/stateIniti
 import DevSketch from './sketches/devTest/SketchWrapper.vue';
 import TemplateSketch from './sketches/template/SketchWrapper.vue';
 import TonePianoSequencer from './sketches/tonePianoSequencer/SketchWrapper.vue';
+import Three5Example from './sketches/three5Example/SketchWrapper.vue';
 
 
 const sketchStates: Record<sketchNames, any> = {
   devTest: DevSketch,
   template: TemplateSketch,
   tonePianoSequencer: TonePianoSequencer,
+  three5Example: Three5Example
 }
 
 const comp = sketchStates[getUrlSketch()]
@@ -48,3 +50,4 @@ provide('appState', appState)
 
 
 </style>
+./sketches/three5Example/SketchWrapper.vue

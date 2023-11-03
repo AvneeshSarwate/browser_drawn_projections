@@ -3,20 +3,23 @@ import { defineStore, acceptHMRUpdate } from 'pinia'
 import { appState as templateState} from '@/sketches/template/appState';
 import { appState as devTestState } from '@/sketches/devTest/developmentAppState';
 import { appState as tonePianoSequencerState } from '@/sketches/tonePianoSequencer/appState';
+import { appState as three5ExampleState } from '@/sketches/three5Example/appState';
 
 //todo hotreload - save to localStorage to enable refresh when needed
 
 export type sketchNames =
   'template' |
   'devTest' |
-  'tonePianoSequencer'
+  'tonePianoSequencer' |
+  'three5Example'
 
 //todo sketch gallery - pull sketchStates map in App.vue based on menu selection
 //   coordinating hot reload doesn't matter for external gallery
 export const sketchStates: Record<sketchNames, any> = {
   template: ref(templateState),
   devTest: ref(devTestState),
-  tonePianoSequencer: ref(tonePianoSequencerState)
+  tonePianoSequencer: ref(tonePianoSequencerState),
+  three5Example: ref(three5ExampleState),
 }
 
 //todo sketch gallery - have this be a route instead of a query param? vue router?
