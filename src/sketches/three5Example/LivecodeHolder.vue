@@ -1,4 +1,3 @@
-<!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
 import { type Three5ExAppState } from './appState';
 import { inject, onMounted, onUnmounted } from 'vue';

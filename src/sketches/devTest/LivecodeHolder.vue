@@ -15,6 +15,7 @@ import { midiInputs } from '@/io/midi';
 import { Three5 } from '@/rendering/three5';
 import { FPS } from '@/rendering/fps';
 import { LineStyle } from '@/rendering/three5Style';
+import { Scale } from '@/music/scale';
 
 const fps = new FPS()
 
@@ -66,6 +67,15 @@ const reset = () => {
 
 // const waveAudioBands = new MediaAudioAnalyzer(wavesurfer.getMediaElement() as HTMLVideoElement)
 
+
+let scale = new Scale()
+//@ts-ignore
+window.scaleInst = new Scale()
+
+let neg1 = scale.getByIndex(-1)
+let negOct = scale.getByIndex(-8)
+
+let x = 5
 
 onMounted(() => {
   try {
