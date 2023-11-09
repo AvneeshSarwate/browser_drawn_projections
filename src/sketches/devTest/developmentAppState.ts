@@ -182,6 +182,7 @@ export type DevelopmentAppState = {
   codeStack: (() => void)[]
   codeStackIndex: number
   drawFunctions: ((p5: p5) => void)[]
+  drawFuncMap: Map<string, (p5: p5) => void>
   // stats: { begin: () => void, end: () => void, update: () => void }
   paused: boolean
 }
@@ -193,6 +194,7 @@ export const appState: DevelopmentAppState = {
   codeStack: [],
   codeStackIndex: 0,
   drawFunctions: [],
+  drawFuncMap: new Map<string, (p5: p5) => void>(),
   // stats: stats,
   paused: false
 } 

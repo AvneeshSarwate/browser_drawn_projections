@@ -387,14 +387,16 @@ export class EventChop<T> {
     const evtData = { evt, metadata, id: this.idGen++ }
     this.events.push(evtData)
     evt.onFinish = () => {
-      console.log("event finished", evtData.id, now().toFixed(3))
+      // console.log("event finished", evtData.id, now().toFixed(3))
       const idx = this.events.indexOf(evtData)
       this.events.splice(idx, 1)
     }
   }
 
-  public ramp(time: number, metadata: T): void {
-    this.newEvt(new Ramp(time).trigger(), metadata)
+  public ramp(time: number, metadata: T): Ramp {
+    const ramp = new Ramp(time)
+    this.newEvt(ramp.trigger(), metadata)
+    return ramp
   }
   
   public samples(): (T & { evtId: number, val: number })[] { //some composite type using keysof 
@@ -454,12 +456,20 @@ function testCalls() {
  */
 
 
-export const sin = (phase: number): number  => {
+export const sinN = (phase: number): number  => {
   return Math.sin(phase * Math.PI * 2) * 0.5 + 0.5
 }
 
-export const cos = (phase: number): number  => {
+export const cosN = (phase: number): number  => {
   return Math.cos(phase * Math.PI * 2) * 0.5 + 0.5
+}
+
+export const sin = (phase: number): number  => {
+  return Math.sin(phase * Math.PI * 2)
+}
+
+export const cos = (phase: number): number  => {
+  return Math.cos(phase * Math.PI * 2)
 }
 
 export const tri = (phase: number): number => {

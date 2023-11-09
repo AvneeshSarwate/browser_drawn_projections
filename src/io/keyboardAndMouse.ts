@@ -53,7 +53,7 @@ export function targetNormalizedCoords(ev: MouseEvent, target: HTMLElement = doc
 }
 
 export function targetToP5Coords(ev: MouseEvent, p: p5, target: HTMLElement = document.body) {
-  const norm = targetNormalizedCoords(ev, target)
+  const norm = targetNormalizedCoords(ev, target) //todo api - should this just use the target from the event?
   return {
     x: norm.x * p.width,
     y: norm.y * p.height

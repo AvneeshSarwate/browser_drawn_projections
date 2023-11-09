@@ -148,8 +148,6 @@ export const sampler = new Tone.Sampler({
   "baseUrl": "salamander/"
 }).toDestination();
 
-Tone.Transport.context.lookAhead = 0.01
-
 
 export type ToneSeqAppState = {
   circles: EntityList<PulseCircle>

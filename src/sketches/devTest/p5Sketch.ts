@@ -33,6 +33,7 @@ export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => Develo
           p.ellipse(p.mouseX, p.mouseY, 10, 10)
         }
 
+        appState().drawFuncMap.forEach(d => d(p))
         appState().drawFunctions.forEach(d => d(p))
       }
 

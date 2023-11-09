@@ -6,8 +6,8 @@ import * as THREE from 'three'
 import { inject, onMounted, onUnmounted } from 'vue';
 import * as a from './planeAnimations'
 import { groupedAnimation0 } from './modularizedTransforms';
-import { xyZip, sin, cos, EventChop, steps, now } from '@/channels/channels';
-import { CanvasPaint, type ShaderEffect } from '@/rendering/shaderFX';
+import { xyZip, sinN, cosN, EventChop, steps, now, launch, Ramp, sin, cos } from '@/channels/channels';
+import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { MediaAudioAnalyzer } from '@/rendering/VideoAudioAnalyzer';
 import WaveSurfer from 'wavesurfer.js'
 import { FeedbackZoom, Wobble } from '@/rendering/customFX';
@@ -16,6 +16,9 @@ import { Three5 } from '@/rendering/three5';
 import { FPS } from '@/rendering/fps';
 import { LineStyle } from '@/rendering/three5Style';
 import { Scale } from '@/music/scale';
+import { clipToDeltas, listToClip, note } from '@/music/clipPlayback';
+import { sampler } from '@/music/synths';
+import { clearListeners, mousedownEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 
 const fps = new FPS()
 
@@ -77,6 +80,17 @@ let negOct = scale.getByIndex(-8)
 
 let x = 5
 
+let vec2 = (x: number, y: number | undefined) => 5
+let vec3 = (x: number, y: number | undefined, z: number | undefined) => 5 
+let gl_fragCoord = vec2(0, 0)
+
+const shaderFunc = () => {
+  gl_fragCoord = vec2(0, 0) + 5 * vec2(1, 1) 
+}
+
+console.log("shaderFunc", shaderFunc.toString())
+
+
 onMounted(() => {
   try {
     const p5i = appState.p5Instance!!
@@ -87,56 +101,55 @@ onMounted(() => {
 
     if (appState.p5Instance && appState.regions.list.length > 0) {
 
+      const scale = new Scale()
+      
+
+      const evtDur = 0.125
+      const mel = listToClip(scale.getMultiple([1, 3, 5, 6, 8, 10, 12]), evtDur)
+      const circle0 = xyZip(0, cos, sin, mel.length)
+      const rad = 50
+
 
       const code = () => {
         reset()
 
-        const wave = (t: number) => sin(now() / 20 + t * 4) * 400 + 200
-        const sinColor = (t: number) => [sin(now() / 10 + t * 4), sin(now() / 10 + t * 3), 0]
 
-        const lineStyle = new LineStyle()
-        
-        appState.drawFunctions.push(() => {
-          let n = 100
-          const sinX = steps(0, 1, n).map(wave)
-          three5i!!.useStroke = false
-          for (let i = 0; i < n; i++) {
-            const c1 = new THREE.Color(...sinColor(i / n))
-            const c2 = new THREE.Color(...sinColor((i + 1) / n))
+        mousedownEvent(ev => {
 
-            if (i % 2 == 0) {
-              const mat2 = three5i!!.createGradientMaterial(c1, c2, 0, 10, 0)
-              three5i!!.setMaterial(mat2)
-            } else {
-              lineStyle.uniforms.time = now() + i / n * Math.PI
-              three5i!!.setStyle(lineStyle)
-            }
-           
-            three5i!!.circle(i/n * 1280, sinX[i], 40)
-          }
-        })
-
-        for (let c = 0; c < 5; c++) {
-          let n = 100
-          appState.drawFunctions.push(() => {
-            // return
-            const sinX = steps(0, 1, n).map(wave)
-            const pts = steps(0, n, n).map(n => Math.round(n)).map(i => new THREE.Vector2(i/n * 1280, sinX[i] - c * 10 + 100))
-
-            three5i!!.curve(pts)
+          const p5xy = targetToP5Coords(ev, p5i, ev.target as HTMLCanvasElement)
+          const evtChop = new EventChop<{ r: number, g: number, b: number, x: number, y: number }>
+          const durs = clipToDeltas(mel)
+          console.log("durs", durs)
+          const drawFuncId = crypto.randomUUID()
+          appState.drawFuncMap.set(drawFuncId, () => {
+            evtChop.events.forEach(evt => {
+              const { r, g, b, x, y } = evt.metadata
+              p5i.push()
+              p5i.fill(r * 255, g * 255, b * 255)
+              p5i.circle(x, y, 40 * (1 - evt.evt.val()))
+              p5i.pop()
+            })
           })
-        }
 
-        appState.drawFunctions.push(_ => three5i!!.render(appState.threeRenderer!!))
-
-        
-
-
-
-
-        appState.drawFunctions.push(() => {
-          fps.frame()
-        })
+          const r = () => Math.random()
+          
+          
+          launch(async ctx => {
+            for (let i = 0; i < mel.length; i++) {
+              const dur = durs[i]
+              await ctx.wait(dur)
+              const x = circle0[i].x * rad + p5xy.x
+              const y = circle0[i].y * rad + p5xy.y
+              const evtData = { r: p5xy.x/p5i.width, g: p5xy.y/p5i.height, b: r(), x, y }
+              evtChop.ramp(evtDur*4, evtData)
+              const { pitch, duration, velocity } = mel[i]
+              note(sampler, pitch, duration, velocity)
+              console.log("playing note", (Date.now()/1000).toFixed(2), evtData)
+            }
+            await ctx.wait(evtDur*4)
+            appState.drawFuncMap.delete(drawFuncId)
+          })
+        }, threeCanvas)
 
 
 
@@ -144,10 +157,11 @@ onMounted(() => {
         // const fdbkZoom = new FeedbackZoom({ src: p5Canvas })
         // const wobble = new Wobble({ src: three5i!!.output.texture })
         // wobble.setUniforms({xStrength: 0.01, yStrength: 0.01})
-        // const canvasPaint = new CanvasPaint({ src: wobble }) //todo bug - feeding a canvas as a source doesn't update properly
-        // appState.drawFunctions.push(() => canvasPaint.renderAll(appState.threeRenderer!!))
+        const passthru = new Passthru({ src: p5Canvas})
+        const canvasPaint = new CanvasPaint({ src: passthru }) //todo bug - feeding a canvas as a source doesn't update properly
+        appState.drawFunctions.push(() => canvasPaint.renderAll(appState.threeRenderer!!))
 
-        // shaderGraphEndNode = canvasPaint
+        shaderGraphEndNode = canvasPaint
       }
 
 
@@ -178,6 +192,7 @@ onUnmounted(() => {
   console.log("disposing fx")
   shaderGraphEndNode?.disposeAll()
   three5i?.dispose()
+  clearListeners()
   fps.remove()
 })
 

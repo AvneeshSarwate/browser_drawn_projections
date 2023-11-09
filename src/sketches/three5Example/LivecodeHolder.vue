@@ -2,7 +2,7 @@
 import { type Three5ExAppState } from './appState';
 import { inject, onMounted, onUnmounted } from 'vue';
 import { clearListeners, singleKeydownEvent } from '@/io/keyboardAndMouse';
-import { sin, now, steps } from '@/channels/channels';
+import { sinN, now, steps } from '@/channels/channels';
 import { Three5 } from '@/rendering/three5';
 import { LineStyle } from '@/rendering/three5Style';
 import * as THREE from 'three';
@@ -30,8 +30,8 @@ onMounted(() => {
       clearDrawFuncs()
       
 
-      const wave = (t: number) => sin(now() / 20 + t * 4) * 400 + 200
-        const sinColor = (t: number) => [sin(now() / 10 + t * 4), sin(now() / 10 + t * 3), 0]
+      const wave = (t: number) => sinN(now() / 20 + t * 4) * 400 + 200
+        const sinColor = (t: number) => [sinN(now() / 10 + t * 4), sinN(now() / 10 + t * 3), 0]
 
         const lineStyle = new LineStyle()
         

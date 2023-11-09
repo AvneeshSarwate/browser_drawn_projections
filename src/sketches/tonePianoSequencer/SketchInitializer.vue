@@ -3,6 +3,7 @@ import { createP5Sketch } from './p5Sketch';
 import { type ToneSeqAppState } from './appState';
 import type p5 from 'p5';
 import * as THREE from 'three';
+import * as Tone from 'tone'
 import { inject, onMounted, onUnmounted } from 'vue';
 
 
@@ -31,6 +32,7 @@ const neutralizeSketch = (instance: p5) => {
   instance.setup = () => { }
 }
 
+Tone.Transport.context.lookAhead = 0.01
 
 onMounted(() => {
   //explanation - the closest you can get to removing a p5 instance without removing the underlying canvas

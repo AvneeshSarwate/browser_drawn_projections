@@ -3,6 +3,7 @@ import { createP5Sketch } from './p5Sketch';
 import { type DevelopmentAppState } from './developmentAppState';
 import type p5 from 'p5';
 import * as THREE from 'three';
+import * as Tone from 'tone'
 import { inject, onMounted, onUnmounted } from 'vue';
 
 
@@ -30,6 +31,8 @@ const neutralizeSketch = (instance: p5) => {
   instance.preload = () => { }
   instance.setup = () => { }
 }
+
+Tone.Transport.context.lookAhead = 0.01
 
 //todo api - need a way to set resolution of sketch that automatically propogates to CustomEffects
 
