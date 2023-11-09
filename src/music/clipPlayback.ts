@@ -5,8 +5,12 @@ type Instrument = {
   triggerAttackRelease: (pitch: number, duration: number, time?: number, velocity?: number) => void;
 }
 
+function midiToFrequency(midi: number) {
+  return Math.pow(2, (midi - 69) / 12) * 440;
+}
+
 export function note( synth: Instrument, pitch: number, duration: number, velocity: number = 60) {
-  synth.triggerAttackRelease(pitch, duration, undefined, velocity);
+  synth.triggerAttackRelease(midiToFrequency(pitch), duration, undefined, velocity);
 }
 
 export type Clip = {
