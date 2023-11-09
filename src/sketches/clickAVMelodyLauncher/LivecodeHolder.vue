@@ -2,13 +2,15 @@
 <script setup lang="ts">
 import { type PulseCircleAppState, PulseCircle } from './appState';
 import { inject, onMounted, onUnmounted } from 'vue';
-import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
+import { CanvasPaint, FeedbackNode, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords, targetNormalizedCoords } from '@/io/keyboardAndMouse';
-import type p5 from 'p5';
+import p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri, EventChop, cos, sin } from '@/channels/channels';
 import { listToClip, clipToDeltas, note } from '@/music/clipPlayback';
 import { Scale } from '@/music/scale';
 import { sampler } from '@/music/synths';
+import { HorizontalBlur, LayerBlend, VerticalBlur, Transform } from '@/rendering/customFX';
+import { Layer } from 'babylonjs';
 
 const appState = inject<PulseCircleAppState>('appState')!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
@@ -63,14 +65,15 @@ onMounted(() => {
       }, threeCanvas)
 
       //todo bug - xy lines not clearing on hot reload
-      appState.drawFunctions.push((p: p5) => {
-        p.push()
-        p.strokeWeight(2)
-        p.stroke(255, 255, 255)
-        p.line(mousePos.x, 0, mousePos.x, p.height)
-        p.line(0, mousePos.y, p.width, mousePos.y)
-        p.pop()
-      })
+      // sketchTodo - set this after shader passes somehow
+      // appState.drawFunctions.push((p: p5) => {
+      //   p.push()
+      //   p.strokeWeight(2)
+      //   p.stroke(255, 255, 255)
+      //   p.line(mousePos.x, 0, mousePos.x, p.height)
+      //   p.line(0, mousePos.y, p.width, mousePos.y)
+      //   p.pop()
+      // })
 
       const loopMap = new Map<string, CancelablePromisePoxy<any>>()
       const loopIdStack = [] as string[]
@@ -96,16 +99,18 @@ onMounted(() => {
         loopIdStack.push(drawFuncId)
         appState.drawFuncMap.set(drawFuncId, () => {
 
-          p5i.push()
-          p5i.strokeWeight(1)
-          p5i.stroke(255, 255, 255)
-          p5i.noFill()
-          p5i.circle(p5xy.x, p5xy.y, 10)
-          p5i.pop()
+          // sketchTodo - set this after shader passes somehow
+          // p5i.push()
+          // p5i.strokeWeight(1)
+          // p5i.stroke(255, 255, 255)
+          // p5i.noFill()
+          // p5i.circle(p5xy.x, p5xy.y, 10)
+          // p5i.pop()
 
           evtChop.events.forEach(evt => {
             const { r, g, b, x, y } = evt.metadata
             p5i.push()
+            p5i.noStroke()
             p5i.fill(r * 255, g * 255, b * 255)
             p5i.circle(x, y, 40 * (1 - evt.evt.val()))
             p5i.pop()
@@ -137,10 +142,21 @@ onMounted(() => {
 
       }, threeCanvas)
 
-      const passthru = new Passthru({ src: p5Canvas })
-      const canvasPaint = new CanvasPaint({ src: passthru })
-
+      const p5Passthru = new Passthru({ src: p5Canvas })
+      const feedback = new FeedbackNode(p5Passthru)
+      const vertBlur = new VerticalBlur({ src: feedback })
+      const horBlur = new HorizontalBlur({ src: vertBlur })
+      const transform = new Transform({ src: horBlur })
+      const layerOverlay = new LayerBlend({ src1: p5Passthru, src2: transform })
+      feedback.setFeedbackSrc(layerOverlay)
+      const canvasPaint = new CanvasPaint({ src: layerOverlay })
       shaderGraphEndNode = canvasPaint
+
+      transform.setUniforms({ scale: [0.995, 0.995] })
+      vertBlur.setUniforms({ pixels: 2 })
+      horBlur.setUniforms({ pixels: 2 })
+
+
       appState.shaderDrawFunc = () => shaderGraphEndNode!!.renderAll(appState.threeRenderer!!)
 
       singleKeydownEvent('u', (ev) => {

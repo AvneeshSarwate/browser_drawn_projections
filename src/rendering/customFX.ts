@@ -50,6 +50,132 @@ export class Wobble extends CustomShaderEffect {
 }
 
 
+const verticalBlurFs = glsl`
+precision highp float;
+
+uniform sampler2D src;       // The input texture
+uniform int pixels;          // Size of the blur kernel
+
+varying vec2 vUV;            // The texture coordinate, passed from the vertex shader
+
+void main() {
+  vec4 color = vec4(0.0);
+  float total = 0.0;
+  float offset = 1.0 / 720.0; // Hardcoded resolution
+
+  // Calculate the triangular weight
+  for (int i = -pixels; i <= pixels; ++i) {
+    float weight = 1.0 - (abs(float(i)) / float(pixels + 1));
+    color += texture2D(src, vUV + vec2(0.0, offset * float(i))) * weight;
+    total += weight;
+}
+
+  gl_FragColor = color / total;
+}`
+
+export class VerticalBlur extends CustomShaderEffect {
+  effectName = "VerticalBlur"
+  constructor(inputs: {src: ShaderSource}, width = 1280, height = 720) {
+    super(verticalBlurFs, inputs, width, height)
+    this.setUniforms({pixels: 5})
+  }
+  setUniforms(uniforms: {pixels: Dynamic<number>}): void {
+    super.setUniforms(uniforms)
+  }
+}
+
+const horizontalBlurFs = glsl`
+precision highp float;
+
+uniform sampler2D src;       // The input texture
+uniform int pixels;          // Size of the blur kernel
+
+varying vec2 vUV;            // The texture coordinate, passed from the vertex shader
+
+void main() {
+  vec4 color = vec4(0.0);
+  float total = 0.0;
+  float offset = 1.0 / 1280.0; // Hardcoded resolution for width
+
+  // Calculate the triangular weight
+  for (int i = -pixels; i <= pixels; ++i) {
+    float weight = 1.0 - (abs(float(i)) / float(pixels + 1));
+    color += texture2D(src, vUV + vec2(offset * float(i), 0.0)) * weight;
+    total += weight;
+  }
+
+  gl_FragColor = color / total;
+}`
+
+export class HorizontalBlur extends CustomShaderEffect {
+  effectName = "HorizontalBlur"
+  constructor(inputs: {src: ShaderSource}, width = 1280, height = 720) {
+    super(horizontalBlurFs, inputs, width, height)
+    this.setUniforms({pixels: 5})
+  }
+  setUniforms(uniforms: {pixels: Dynamic<number>}): void {
+    super.setUniforms(uniforms)
+  }
+}
+
+//a transform effect that has independent scale on x and y and translate on x and y, and a rotate parameter, and has an anchor point that is a vec2
+const transformFs = glsl`
+precision highp float;
+
+uniform sampler2D src;
+uniform float rotate;
+uniform vec2 anchor;
+uniform vec2 translate;
+uniform vec2 scale;
+
+varying vec2 vUV;
+
+void main() {
+  vec2 uv = vUV;
+  uv -= anchor;
+  uv *= scale;
+  uv = vec2(uv.x * cos(rotate) - uv.y * sin(rotate), uv.x * sin(rotate) + uv.y * cos(rotate));
+  uv += anchor;
+  uv += translate;
+  gl_FragColor = texture2D(src, uv);
+}`
+
+export class Transform extends CustomShaderEffect {
+  effectName = "Transform"
+  constructor(inputs: {src: ShaderSource}, width = 1280, height = 720) {
+    super(transformFs, inputs, width, height)
+    this.setUniforms({rotate: 0, anchor: [0.5, 0.5], translate: [0, 0], scale: [1, 1]})
+  }
+  setUniforms(uniforms: {rotate?: Dynamic<number>, anchor?: Dynamic<[number, number]>, translate?: Dynamic<[number, number]>, scale?: Dynamic<[number, number]>}): void {
+    super.setUniforms(uniforms)
+  }
+}
+
+
+
+//an effect that takes layer 1 and layer 2, and shows layer 2 where layer 1 is transparent
+const layerBlendFs = glsl`
+precision highp float;
+
+uniform sampler2D src1;
+uniform sampler2D src2;
+
+varying vec2 vUV;
+
+void main() {
+  vec2 uv = vUV;
+  vec4 color1 = texture2D(src1, uv);
+  vec4 color2 = texture2D(src2, uv);
+  gl_FragColor = color1.a > 0.01 ? color1 : color2;
+}`
+
+export class LayerBlend extends CustomShaderEffect {
+  effectName = "LayerBlend"
+  constructor(inputs: {src1: ShaderSource, src2: ShaderSource}, width = 1280, height = 720) {
+    super(layerBlendFs, inputs, width, height)
+  }
+}
+
 
 /**
  * todo API - decide whether to make nullability of uniforms generic on ShaderUniforms, 

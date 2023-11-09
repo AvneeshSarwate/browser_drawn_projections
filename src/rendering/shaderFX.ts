@@ -62,7 +62,7 @@ export class FeedbackNode extends ShaderEffect {
   output: THREE.WebGLRenderTarget
   _passthru: Passthru
   feedbackSrc?: ShaderEffect
-  firstRender = false
+  firstRender = true
 
   inputs: ShaderInputs
   constructor(startState: ShaderEffect) {
@@ -70,7 +70,7 @@ export class FeedbackNode extends ShaderEffect {
     this.inputs = {initialState: startState}
     this.width = startState.width
     this.height = startState.height
-    this.output = new THREE.WebGLRenderTarget(this.width, this.height)
+    this.output = halfTarget(this.width, this.height, 'linear')
     this._passthru = new Passthru({src: startState.output}, this.width, this.height, this.output)
   }
 
@@ -91,8 +91,10 @@ export class FeedbackNode extends ShaderEffect {
   }
 
   render(renderer: THREE.WebGLRenderer): void {
+    console.log('feedback render')
     this._passthru.render(renderer)
     if (this.firstRender) {
+      console.log('first render')
       this.firstRender = false
       //todo bug - need runtime check to make sure feedbackSrc is set on FeedbackNode
       this._passthru.setSrcs({src: this.feedbackSrc!!.output})
@@ -109,11 +111,11 @@ export class FeedbackNode extends ShaderEffect {
   updateUniforms(): void { }
 }
 
-function halfTarget(width: number, height: number): THREE.WebGLRenderTarget {
+function halfTarget(width: number, height: number, filterType: ('neareast' | 'linear') = 'neareast'): THREE.WebGLRenderTarget {
   return new THREE.WebGLRenderTarget(width, height, {
     type: THREE.HalfFloatType,
-    // minFilter: THREE.NearestFilter,
-    // magFilter: THREE.NearestFilter,
+    minFilter: filterType == 'neareast' ? THREE.NearestFilter : THREE.LinearFilter,
+    magFilter: filterType == 'neareast' ? THREE.NearestFilter : THREE.LinearFilter,
   })
 }
 
@@ -174,7 +176,7 @@ export class CustomShaderEffect extends ShaderEffect {
             and if not, see if you can expose a minimal API that is then mostly managed by an outside service
     */
 
-    this.output = customOutput ?? new THREE.WebGLRenderTarget(width, height)
+    this.output = customOutput ?? halfTarget(width, height, 'linear')
     this.width = width
     this.height = height
     //a scene with an orthographic camera, a single plane, and a shader material
