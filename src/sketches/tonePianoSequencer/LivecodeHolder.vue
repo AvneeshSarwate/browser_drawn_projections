@@ -78,7 +78,6 @@ onMounted(() => {
         }
       })
 
-      //todo bug - circles not being picked up to draw after being created
       singleKeydownEvent('s', (ev) => {
         if (appState.drawing) {
           const newCircle = new PulseCircle(p5Mouse.x, p5Mouse.y, 100)

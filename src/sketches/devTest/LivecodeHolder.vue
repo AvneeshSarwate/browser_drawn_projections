@@ -158,7 +158,7 @@ onMounted(() => {
         // const wobble = new Wobble({ src: three5i!!.output.texture })
         // wobble.setUniforms({xStrength: 0.01, yStrength: 0.01})
         const passthru = new Passthru({ src: p5Canvas})
-        const canvasPaint = new CanvasPaint({ src: passthru }) //todo bug - feeding a canvas as a source doesn't update properly
+        const canvasPaint = new CanvasPaint({ src: passthru }) 
         appState.drawFunctions.push(() => canvasPaint.renderAll(appState.threeRenderer!!))
 
         shaderGraphEndNode = canvasPaint

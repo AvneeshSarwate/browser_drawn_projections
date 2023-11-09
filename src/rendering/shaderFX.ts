@@ -306,6 +306,7 @@ export class Passthru extends CustomShaderEffect {
   }
 }
 
+//todo bug - feeding a canvas as a source to CanvasPaint doesn't update properly
 export class CanvasPaint extends CustomShaderEffect {
   effectName = "CanvasPaint"
   constructor(inputs: {src: ShaderSource},  width = 1280, height = 720) {

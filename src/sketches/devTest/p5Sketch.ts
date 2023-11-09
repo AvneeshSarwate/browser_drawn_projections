@@ -29,7 +29,7 @@ export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => Develo
         const activeRegion = savedActiveRegion || newRegion
         
         if (activeRegion) {
-          //todo bug - using naive p5 mouse coordinates wont work if threeCanvas is fullscreened
+          //todo refactor - using naive p5 mouse coordinates wont work if threeCanvas is fullscreened, use io utilities
           p.ellipse(p.mouseX, p.mouseY, 10, 10)
         }
 
