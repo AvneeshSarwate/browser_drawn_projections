@@ -3,6 +3,9 @@
     <canvas id="p5Canvas" width="1280" height="720" abitrary-prop="somethi"></canvas>
     <canvas id="threeCanvas" width="1280" height="720" abitrary-prop="somethi"></canvas>
   </div>
+  <div>
+    click anywhere to start a loop. Press the "c" key to clear all loops. Press the "u" key to clear the last loop
+  </div>
   <div id="debugInfo"></div>
 </template>
 

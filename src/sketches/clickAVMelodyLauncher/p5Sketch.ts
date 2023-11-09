@@ -16,7 +16,10 @@ export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => PulseC
       if (!appState().paused) {
         p.clear(0, 0, 0, 0)
 
-        appState().drawFunctions.forEach(d => d(p))
+        appState().drawFunctions.forEach(d => {
+          d(p)
+          console.log(d)
+        })
         appState().oneTimeDrawFuncs.forEach(d => d(p))
         appState().oneTimeDrawFuncs.length = 0
         appState().drawFuncMap.forEach((d, key) => d(p))

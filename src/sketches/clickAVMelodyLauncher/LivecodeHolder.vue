@@ -23,9 +23,11 @@ const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromis
 //todo template - currently need to change sketch module in App.vue, stateInitializer.ts, and OneShoteCode.vue - can this be consolidated?
 
 const clearDrawFuncs = () => {
-  appState.drawFunctions = []
-  appState.drawFuncMap = new Map()
+  appState.drawFunctions.length = 0
+  appState.drawFuncMap.clear()
 }
+
+
 
 function circleArr(n: number, rad: number, p: p5) {
   const center = { x: p.width / 2, y: p.height / 2 }
@@ -41,7 +43,7 @@ onMounted(() => {
     const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
     const threeCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
 
-    const scale = new Scale()
+    const scale = new Scale(undefined, 48)
 
 
     const baseDur = 0.125
@@ -52,12 +54,33 @@ onMounted(() => {
 
     const code = () => {
 
+      const mousePos = { x: 0, y: 0 }
+
+      mousemoveEvent(ev => {
+        const p5xy = targetToP5Coords(ev, p5i, ev.target as HTMLCanvasElement)
+        mousePos.x = p5xy.x
+        mousePos.y = p5xy.y
+      }, threeCanvas)
+
+      //todo bug - xy lines not clearing on hot reload
+      appState.drawFunctions.push((p: p5) => {
+        p.push()
+        p.strokeWeight(2)
+        p.stroke(255, 255, 255)
+        p.line(mousePos.x, 0, mousePos.x, p.height)
+        p.line(0, mousePos.y, p.width, mousePos.y)
+        p.pop()
+      })
+
+      const loopMap = new Map<string, CancelablePromisePoxy<any>>()
+      const loopIdStack = [] as string[]
+
       mousedownEvent(ev => {
 
         const p5xy = targetToP5Coords(ev, p5i, ev.target as HTMLCanvasElement)
         const normCoords = targetNormalizedCoords(ev, ev.target as HTMLCanvasElement)
         
-        const transposition = Math.floor(normCoords.y * 12)
+        const transposition = Math.floor(normCoords.y * 24)
         console.log("transposition", transposition)
         const seq = baseSeq.map(x => x + transposition)
         const evtDur = baseDur + normCoords.x
@@ -70,7 +93,16 @@ onMounted(() => {
         const durs = clipToDeltas(mel)
         console.log("durs", durs)
         const drawFuncId = crypto.randomUUID()
+        loopIdStack.push(drawFuncId)
         appState.drawFuncMap.set(drawFuncId, () => {
+
+          p5i.push()
+          p5i.strokeWeight(1)
+          p5i.stroke(255, 255, 255)
+          p5i.noFill()
+          p5i.circle(p5xy.x, p5xy.y, 10)
+          p5i.pop()
+
           evtChop.events.forEach(evt => {
             const { r, g, b, x, y } = evt.metadata
             p5i.push()
@@ -83,21 +115,26 @@ onMounted(() => {
         const r = () => Math.random()
 
 
-        launch(async ctx => {
-          for (let i = 0; i < mel.length; i++) {
-            const dur = durs[i]
-            await ctx.wait(dur)
-            const x = circle0[i].x * rad + p5xy.x
-            const y = circle0[i].y * rad + p5xy.y
-            const evtData = { r: p5xy.x / p5i.width, g: p5xy.y / p5i.height, b: r(), x, y }
-            evtChop.ramp(evtDur * 4, evtData)
-            const { pitch, duration, velocity } = mel[i]
-            note(sampler, pitch, duration, velocity)
-            // console.log("playing note", (Date.now() / 1000).toFixed(2), evtData)
+        const loop = launch(async ctx => {
+          // eslint-disable-next-line no-constant-condition
+          while (true) {
+            for (let i = 0; i < mel.length; i++) {
+              const dur = durs[i]
+              await ctx.wait(dur)
+              const x = circle0[i].x * rad + p5xy.x
+              const y = circle0[i].y * rad + p5xy.y
+              const evtData = { r: p5xy.x / p5i.width, g: p5xy.y / p5i.height, b: r(), x, y }
+              evtChop.ramp(evtDur * 4, evtData)
+              const { pitch, duration, velocity } = mel[i]
+              note(sampler, pitch, duration, velocity)
+              // console.log("playing note", (Date.now() / 1000).toFixed(2), evtData)
+            }
+            await ctx.wait(evtDur)
           }
-          await ctx.wait(evtDur * 4)
-          appState.drawFuncMap.delete(drawFuncId)
         })
+
+        loopMap.set(drawFuncId, loop)
+
       }, threeCanvas)
 
       const passthru = new Passthru({ src: p5Canvas })
@@ -106,6 +143,24 @@ onMounted(() => {
       shaderGraphEndNode = canvasPaint
       appState.shaderDrawFunc = () => shaderGraphEndNode!!.renderAll(appState.threeRenderer!!)
 
+      singleKeydownEvent('u', (ev) => {
+        const lastId = loopIdStack.pop()
+        if (lastId) {
+          const lastLoop = loopMap.get(lastId)
+          if (lastLoop) {
+            lastLoop.cancel()
+            appState.drawFuncMap.delete(lastId)
+          }
+        }
+      })
+
+      singleKeydownEvent('c', (ev) => {
+        //iterate over keys in loopMap and cancel each
+        for(const [key, loop] of loopMap.entries()) {
+          loop.cancel()
+          appState.drawFuncMap.delete(key)
+        }
+      })
       singleKeydownEvent('p', (ev) => { appState.paused = !appState.paused })
     }
 
