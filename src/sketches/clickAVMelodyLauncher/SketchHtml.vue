@@ -6,6 +6,9 @@
   <div>
     click anywhere to start a loop. Press the "c" key to clear all loops. Press the "u" key to clear the last loop
   </div>
+  <div>
+    The y controls the pitch, and the x coordinate controls the loop speed
+  </div>
   <div id="debugInfo"></div>
 </template>
 
