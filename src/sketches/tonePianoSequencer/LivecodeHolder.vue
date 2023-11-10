@@ -17,8 +17,6 @@ const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromis
   return loop
 }
 
-//todo template - currently need to change sketch module in App.vue, stateInitializer.ts, and OneShoteCode.vue - can this be consolidated?
-
 const clearDrawFuncs = () => {
   appState.drawFunctions = []
   appState.drawFuncMap = new Map()
@@ -67,7 +65,7 @@ onMounted(() => {
         p.pop()
       }
 
-      //todo template - should keyboard events be on the window? can the three canvas be focused?
+      //sketchTodo - make these all focus on threeCanvas
       singleKeydownEvent('d', (ev) => {
         appState.drawing = !appState.drawing
         console.log("drawing: " + appState.drawing)

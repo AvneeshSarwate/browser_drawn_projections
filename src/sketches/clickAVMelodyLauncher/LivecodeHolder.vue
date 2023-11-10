@@ -1,6 +1,6 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
-import { type PulseCircleAppState, PulseCircle } from './appState';
+import { type ClickAVAppState } from './appState';
 import { inject, onMounted, onUnmounted } from 'vue';
 import { CanvasPaint, FeedbackNode, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords, targetNormalizedCoords } from '@/io/keyboardAndMouse';
@@ -10,9 +10,8 @@ import { listToClip, clipToDeltas, note } from '@/music/clipPlayback';
 import { Scale } from '@/music/scale';
 import { sampler } from '@/music/synths';
 import { HorizontalBlur, LayerBlend, VerticalBlur, Transform } from '@/rendering/customFX';
-import { Layer } from 'babylonjs';
 
-const appState = inject<PulseCircleAppState>('appState')!!
+const appState = inject<ClickAVAppState>('appState')!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
 let timeLoops: CancelablePromisePoxy<any>[] = []
 
@@ -22,21 +21,11 @@ const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromis
   return loop
 }
 
-//todo template - currently need to change sketch module in App.vue, stateInitializer.ts, and OneShoteCode.vue - can this be consolidated?
-
 const clearDrawFuncs = () => {
   appState.drawFunctions.length = 0
   appState.drawFuncMap.clear()
 }
 
-
-
-function circleArr(n: number, rad: number, p: p5) {
-  const center = { x: p.width / 2, y: p.height / 2 }
-  const sin1 = (x: number) => Math.sin(x * 2 * Math.PI)
-  const cos1 = (x: number) => Math.cos(x * 2 * Math.PI)
-  return xyZip(0, cos1, sin1, n).map(({ x, y }) => ({ x: x * rad + center.x, y: y * rad + center.y }))
-}
 
 onMounted(() => {
   try {
@@ -64,7 +53,6 @@ onMounted(() => {
         mousePos.y = p5xy.y
       }, threeCanvas)
 
-      //todo bug - xy lines not clearing on hot reload
       // sketchTodo - set this after shader passes somehow
       // appState.drawFunctions.push((p: p5) => {
       //   p.push()
@@ -191,6 +179,7 @@ onMounted(() => {
 
 
 onUnmounted(() => {
+  clearDrawFuncs()
   console.log("disposing livecoded resources")
   shaderGraphEndNode?.disposeAll()
   clearListeners()

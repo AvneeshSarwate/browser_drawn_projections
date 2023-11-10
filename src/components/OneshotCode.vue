@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { type PulseCircleAppState } from '@/sketches/template/appState';
+import { type TemplateAppState } from '@/sketches/template/appState';
 import { inject, onMounted } from 'vue';
 
 

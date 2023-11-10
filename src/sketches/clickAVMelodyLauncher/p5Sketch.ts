@@ -1,7 +1,7 @@
-import { type PulseCircleAppState } from './appState'
+import { type ClickAVAppState } from './appState'
 import p5 from 'p5'
 
-export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => PulseCircleAppState): p5 {
+export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => ClickAVAppState): p5 {
 
   const sketch = (p: p5) => {
 

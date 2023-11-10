@@ -1,13 +1,13 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
-import { type PulseCircleAppState, PulseCircle } from './appState';
+import { type TemplateAppState, PulseCircle } from './appState';
 import { inject, onMounted, onUnmounted } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
 
-const appState = inject<PulseCircleAppState>('appState')!!
+const appState = inject<TemplateAppState>('appState')!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
 let timeLoops: CancelablePromisePoxy<any>[] = []
 
@@ -16,8 +16,6 @@ const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromis
   timeLoops.push(loop)
   return loop
 }
-
-//todo template - currently need to change sketch module in App.vue, stateInitializer.ts, and OneShoteCode.vue - can this be consolidated?
 
 const clearDrawFuncs = () => {
   appState.drawFunctions = []
@@ -104,7 +102,7 @@ onMounted(() => {
       })
 
 
-      //todo template - should keyboard events be on the window? can the three canvas be focused?
+      //sketchTodo - make all of these listen on threeCanvas
       singleKeydownEvent('d', (ev) => {
         appState.drawing = !appState.drawing
         console.log("drawing: " + appState.drawing)
