@@ -90,6 +90,7 @@ onMounted(() => {
 
       let lerpEvt = new Ramp(1)
       let lerpLoop: CancelablePromisePoxy<any> | undefined = undefined
+      //todo bug - lerped circles not triggering properly when crossing playhead
       singleKeydownEvent('f', (ev) => {
         const basePositions = appState.circles.list.map(c => ({ x: c.x, y: c.y }))
         const targetPositions = circleArr(appState.circles.list.length, 300, p5i)
