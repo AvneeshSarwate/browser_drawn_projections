@@ -91,10 +91,8 @@ export class FeedbackNode extends ShaderEffect {
   }
 
   render(renderer: THREE.WebGLRenderer): void {
-    console.log('feedback render')
     this._passthru.render(renderer)
     if (this.firstRender) {
-      console.log('first render')
       this.firstRender = false
       //todo bug - need runtime check to make sure feedbackSrc is set on FeedbackNode
       this._passthru.setSrcs({src: this.feedbackSrc!!.output})

@@ -34,10 +34,10 @@ onMounted(() => {
     const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
     const threeCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
 
-    const scale = new Scale(undefined, 48)
+    const scale = new Scale(undefined, 24)
 
 
-    const baseDur = 0.125
+    const baseDur = 0.125 / 2
     const baseSeq = [1, 3, 5, 6, 8, 10, 12]
     const circle0 = xyZip(0, cos, sin, baseSeq.length)
     const rad = 50
@@ -71,10 +71,10 @@ onMounted(() => {
         const p5xy = targetToP5Coords(ev, p5i, ev.target as HTMLCanvasElement)
         const normCoords = targetNormalizedCoords(ev, ev.target as HTMLCanvasElement)
         
-        const transposition = Math.floor(normCoords.y * 24)
+        const transposition = Math.floor((1-normCoords.y) * 36)
         console.log("transposition", transposition)
         const seq = baseSeq.map(x => x + transposition)
-        const evtDur = baseDur + normCoords.x
+        const evtDur = baseDur * Math.pow(2, (1-normCoords.x) * 4)
 
         const pitches = scale.getMultiple(seq)
         console.log("pitches", pitches)
