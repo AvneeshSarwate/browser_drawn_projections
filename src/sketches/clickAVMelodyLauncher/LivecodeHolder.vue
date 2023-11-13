@@ -108,7 +108,7 @@ onMounted(() => {
         const r = () => Math.random()
 
 
-        const loop = launch(async ctx => {
+        const loop = launchLoop(async ctx => {
           // eslint-disable-next-line no-constant-condition
           while (true) {
             for (let i = 0; i < mel.length; i++) {
