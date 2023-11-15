@@ -1,0 +1,172 @@
+<!-- eslint-disable @typescript-eslint/no-unused-vars -->
+<script setup lang="ts">
+import { type ClickAVAppState } from './appState';
+import { inject, onMounted, onUnmounted } from 'vue';
+import { CanvasPaint, FeedbackNode, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
+import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords, targetNormalizedCoords } from '@/io/keyboardAndMouse';
+import p5 from 'p5';
+import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri, EventChop, cos, sin } from '@/channels/channels';
+import { listToClip, clipToDeltas, note } from '@/music/clipPlayback';
+import { Scale } from '@/music/scale';
+import { sampler } from '@/music/synths';
+import { HorizontalBlur, LayerBlend, VerticalBlur, Transform } from '@/rendering/customFX';
+import { PianoRoll } from '@/music/pianoRoll';
+
+const appState = inject<ClickAVAppState>('appState')!!
+let shaderGraphEndNode: ShaderEffect | undefined = undefined
+let timeLoops: CancelablePromisePoxy<any>[] = []
+
+const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromisePoxy<any> => {
+  const loop = launch(block)
+  timeLoops.push(loop)
+  return loop
+}
+
+const clearDrawFuncs = () => {
+  appState.drawFunctions.length = 0
+  appState.drawFuncMap.clear()
+}
+
+
+onMounted(() => {
+  try {
+
+    const pianoRoll = new PianoRoll("pianoRollHolder", () => null, () => null)
+
+    const p5i = appState.p5Instance!!
+    const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
+    const threeCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
+
+    const scale = new Scale(undefined, 24)
+
+
+    const baseDur = 0.125 / 2
+    const baseSeq = [1, 3, 5, 6, 8, 10, 12]
+    const circle0 = xyZip(0, cos, sin, baseSeq.length)
+    const rad = 50
+
+
+    const code = () => {
+
+      const mousePos = { x: 0, y: 0 }
+
+      mousemoveEvent(ev => {
+        const p5xy = targetToP5Coords(ev, p5i, ev.target as HTMLCanvasElement)
+        mousePos.x = p5xy.x
+        mousePos.y = p5xy.y
+      }, threeCanvas)
+
+      const loopMap = new Map<string, CancelablePromisePoxy<any>>()
+      const loopIdStack = [] as string[]
+
+      mousedownEvent(ev => {
+
+        const p5xy = targetToP5Coords(ev, p5i, ev.target as HTMLCanvasElement)
+        const normCoords = targetNormalizedCoords(ev, ev.target as HTMLCanvasElement)
+        
+        const transposition = Math.floor((1-normCoords.y) * 36)
+        console.log("transposition", transposition)
+        const seq = baseSeq.map(x => x + transposition)
+        const evtDur = baseDur * Math.pow(2, (1-normCoords.x) * 4)
+
+        const pitches = scale.getMultiple(seq)
+        console.log("pitches", pitches)
+        const mel = listToClip(pitches, evtDur)
+
+        const evtChop = new EventChop<{ r: number, g: number, b: number, x: number, y: number }>
+        const durs = clipToDeltas(mel)
+        console.log("durs", durs)
+        const drawFuncId = crypto.randomUUID()
+        loopIdStack.push(drawFuncId)
+        appState.drawFuncMap.set(drawFuncId, () => {
+
+          evtChop.events.forEach(evt => {
+            const { r, g, b, x, y } = evt.metadata
+            p5i.push()
+            p5i.noStroke()
+            p5i.fill(r * 255, g * 255, b * 255)
+            p5i.circle(x, y, 40 * (1 - evt.evt.val()))
+            p5i.pop()
+          })
+        })
+
+        const r = () => Math.random()
+
+
+        const loop = launchLoop(async ctx => {
+          // eslint-disable-next-line no-constant-condition
+          while (true) {
+            for (let i = 0; i < mel.length; i++) {
+              const dur = durs[i]
+              await ctx.wait(dur)
+              const x = circle0[i].x * rad + p5xy.x
+              const y = circle0[i].y * rad + p5xy.y
+              const evtData = { r: p5xy.x / p5i.width, g: p5xy.y / p5i.height, b: r(), x, y }
+              evtChop.ramp(evtDur * 4, evtData)
+              const { pitch, duration, velocity } = mel[i]
+              note(sampler, pitch, duration, velocity)
+              // console.log("playing note", (Date.now() / 1000).toFixed(2), evtData)
+            }
+            await ctx.wait(evtDur)
+          }
+        })
+
+        loopMap.set(drawFuncId, loop)
+
+      }, threeCanvas)
+
+      const p5Passthru = new Passthru({ src: p5Canvas })
+      
+      const canvasPaint = new CanvasPaint({ src: p5Passthru })
+      shaderGraphEndNode = canvasPaint
+
+
+
+      appState.shaderDrawFunc = () => shaderGraphEndNode!!.renderAll(appState.threeRenderer!!)
+
+      singleKeydownEvent('u', (ev) => {
+        const lastId = loopIdStack.pop()
+        if (lastId) {
+          const lastLoop = loopMap.get(lastId)
+          if (lastLoop) {
+            lastLoop.cancel()
+            appState.drawFuncMap.delete(lastId)
+          }
+        }
+      })
+
+      singleKeydownEvent('c', (ev) => {
+        //iterate over keys in loopMap and cancel each
+        for(const [key, loop] of loopMap.entries()) {
+          loop.cancel()
+          appState.drawFuncMap.delete(key)
+        }
+      })
+      singleKeydownEvent('p', (ev) => { appState.paused = !appState.paused })
+    }
+
+    appState.codeStack.push(code)
+    code()
+  } catch (e) {
+    console.warn(e)
+  }
+
+})
+
+
+
+onUnmounted(() => {
+  clearDrawFuncs()
+  console.log("disposing livecoded resources")
+  shaderGraphEndNode?.disposeAll()
+  clearListeners()
+  timeLoops.forEach(tl => tl.cancel())
+})
+
+</script>
+
+<template>
+  <div></div>
+</template>
+
+<style scoped></style>
