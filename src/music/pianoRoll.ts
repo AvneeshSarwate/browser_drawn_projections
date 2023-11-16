@@ -729,7 +729,7 @@ export class PianoRoll {
   }
 
   snapshotNoteState(){
-    console.log('snapshot', this.historyList.length, this.historyListIndex);
+    // console.log('snapshot', this.historyList.length, this.historyListIndex);
     const noteState = Object.values(this.notes).map(note => Object.assign({}, note.info));
     if (this.historyListIndex == this.historyList.length-1){
       this.historyList.push(noteState);
