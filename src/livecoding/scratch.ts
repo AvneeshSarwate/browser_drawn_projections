@@ -1,6 +1,10 @@
 import * as TS from 'typescript'
 import * as acorn from 'acorn'
 
+
+
+// adding types to monaco editor - https://stackoverflow.com/a/52294684
+
 export function testCalls() {
   const funcString = TS.transpileModule(
     `
