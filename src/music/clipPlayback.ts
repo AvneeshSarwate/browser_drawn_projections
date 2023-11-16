@@ -20,12 +20,17 @@ export type Clip = {
   velocity: number;
 }[]
 
-export function clipToDeltas(clip: Clip) {
+export function clipToDeltas(clip: Clip, totalTime?: number) {
   const interNoteTimeDeltas: number[] = [];
   clip.forEach((note, i) => {
     const delta = i === 0 ? note.time : note.time - clip[i - 1].time
     interNoteTimeDeltas.push(delta);
   });
+  if (totalTime) { 
+    const lastNote = clip[clip.length - 1];
+    const lastNoteDelta = totalTime - lastNote.time;
+    interNoteTimeDeltas.push(lastNoteDelta);
+  }
   return interNoteTimeDeltas;
 }
 

@@ -49,7 +49,6 @@ onMounted(() => {
 
     const baseDur = 0.125 / 2
     const baseSeq = [1, 3, 5, 6, 8, 10, 12]
-    const circle0 = xyZip(0, cos, sin, baseSeq.length)
     const rad = 50
 
 
@@ -71,17 +70,16 @@ onMounted(() => {
         const p5xy = targetToP5Coords(ev, p5i, ev.target as HTMLCanvasElement)
         const normCoords = targetNormalizedCoords(ev, ev.target as HTMLCanvasElement)
         
-        const transposition = Math.floor((1-normCoords.y) * 36)
-        console.log("transposition", transposition)
-        const seq = baseSeq.map(x => x + transposition)
+
         const evtDur = baseDur * Math.pow(2, (1-normCoords.x) * 4)
 
-        const pitches = scale.getMultiple(seq)
-        console.log("pitches", pitches)
-        const mel = listToClip(pitches, evtDur)
+        const mel = pianoRoll.getNoteData().map(n => ({ time: n.position, pitch: n.pitch, duration: n.duration, velocity: 0.5 }))
+        const mel2 = mel.map(i => i)
+        mel2.sort((a, b) => (a.time+a.duration) - (b.time+b.duration))
+        const melDuration = mel2[mel2.length - 1].time + mel2[mel2.length - 1].duration
 
         const evtChop = new EventChop<{ r: number, g: number, b: number, x: number, y: number }>
-        const durs = clipToDeltas(mel)
+        const durs = clipToDeltas(mel, melDuration)
         console.log("durs", durs)
         const drawFuncId = crypto.randomUUID()
         loopIdStack.push(drawFuncId)
@@ -105,16 +103,17 @@ onMounted(() => {
           while (true) {
             for (let i = 0; i < mel.length; i++) {
               const dur = durs[i]
-              await ctx.wait(dur)
-              const x = circle0[i].x * rad + p5xy.x
-              const y = circle0[i].y * rad + p5xy.y
+              const phase = mel[i].time / melDuration
+              await ctx.wait(dur * evtDur)
+              const x = cos(phase) * rad + p5xy.x
+              const y = sin(phase) * rad + p5xy.y
               const evtData = { r: p5xy.x / p5i.width, g: p5xy.y / p5i.height, b: r(), x, y }
               evtChop.ramp(evtDur * 4, evtData)
               const { pitch, duration, velocity } = mel[i]
               note(sampler, pitch, duration, velocity)
               // console.log("playing note", (Date.now() / 1000).toFixed(2), evtData)
             }
-            await ctx.wait(evtDur)
+            await ctx.wait(durs[durs.length - 1] * evtDur)
           }
         })
 
