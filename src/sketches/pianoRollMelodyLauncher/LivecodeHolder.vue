@@ -31,13 +31,20 @@ const clearDrawFuncs = () => {
 onMounted(() => {
   try {
 
+    const scale = new Scale(undefined, 48)
+
+    const pitches = scale.getMultiple([1, 3, 5, 6, 8, 10, 12])
+    const notes = pitches.map((p, i) => ({ pitch: p, duration: 1, position: i }))
+
     const pianoRoll = new PianoRoll("pianoRollHolder", () => null, () => null)
+    pianoRoll.setNoteData(notes)
+    pianoRoll.setViewportToShowAllNotes()
+
+
 
     const p5i = appState.p5Instance!!
     const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
     const threeCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
-
-    const scale = new Scale(undefined, 24)
 
 
     const baseDur = 0.125 / 2

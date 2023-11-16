@@ -73,11 +73,7 @@ type NoteInfo = {pitch: number, position: number, duration: number}
 
 type Note = {
   elem: Rect,
-  info: {
-    pitch: number,
-    position: number,
-    duration: number
-  },
+  info: NoteInfo,
   label: Text,
   handles: {
     start: Circle,
@@ -376,13 +372,49 @@ export class PianoRoll {
     note.handles.end.remove();
   }
 
-  deleteNotes(elements: Set<Rect>){
+  deleteElements(elements: Set<Rect>){
     //for selected notes - delete svg elements, remove entries from 'notes' objects
     elements.forEach((elem)=>{
       this.deleteElement(elem);
       delete this.notes[elem.id()];
     });
     this.snapshotNoteState();
+  }
+
+  getNoteData(){
+    return Object.values(this.notes).map(note => ({ ...note.info }));
+  }
+
+  setNoteData(noteData: NoteInfo[]) {
+    this.deleteElements(new Set(Object.values(this.notes).map(note => note.elem)))
+    this.notes = {};
+    noteData.forEach((noteInfo) => {
+      this.addNote(
+        noteInfo.pitch,
+        noteInfo.position,
+        noteInfo.duration,
+        true
+      );
+    });
+    this.snapshotNoteState();
+  }
+
+  setViewportToShowAllNotes() {
+    const noteData = Object.values(this.notes).map(note => note.info);
+    const minNoteStartPos = Math.min(...noteData.map(info => info.position));
+    const maxNoteEndPos = Math.max(...noteData.map(info => info.position + info.duration));
+    const notePosRange = maxNoteEndPos - minNoteStartPos;
+
+    const minNoteStartPitch = Math.min(...noteData.map(info => info.pitch));
+    const maxNoteEndPitch = Math.max(...noteData.map(info => info.pitch + 1));
+    const notePitchRange = maxNoteEndPitch - minNoteStartPitch;
+
+    const vbX = minNoteStartPos * this.quarterNoteWidth;
+    const vbY = (127 - maxNoteEndPitch) * this.noteHeight;
+    const vbWidth = notePosRange * this.quarterNoteWidth;
+    const vbHeight = notePitchRange * this.noteHeight;
+    
+    this.svgRoot.viewbox(vbX, vbY, vbWidth, vbHeight);
   }
 
   //update underlying note info from SVG element change
@@ -535,7 +567,7 @@ export class PianoRoll {
       this.containerElement!!.addEventListener('mousemove', this.temporaryMouseMoveHandler);
     }
     if (event.key == 'Backspace'){
-      this.deleteNotes(this.selectedElements);
+      this.deleteElements(this.selectedElements);
     }
     if (event.key === 'z' && event.metaKey){
       if (this.shiftKeyDown) this.executeRedo();
@@ -1046,7 +1078,7 @@ export class PianoRoll {
     // });
 
     noteElement.on('dblclick', (event)=>{
-      this.deleteNotes(new Set([this.rawSVGElementToWrapper[(event.target!! as HTMLElement).id]]));
+      this.deleteElements(new Set([this.rawSVGElementToWrapper[(event.target!! as HTMLElement).id]]));
     })
   }
 
