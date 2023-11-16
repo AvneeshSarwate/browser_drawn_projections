@@ -413,7 +413,7 @@ export class PianoRoll {
     const vbY = (127 - maxNoteEndPitch) * this.noteHeight;
     const vbWidth = notePosRange * this.quarterNoteWidth;
     const vbHeight = notePitchRange * this.noteHeight;
-    
+
     this.svgRoot.viewbox(vbX, vbY, vbWidth, vbHeight);
   }
 
@@ -608,7 +608,42 @@ export class PianoRoll {
       const noteInfo = this.svgXYtoPitchPosQuant(this.mousePosition.x, this.mousePosition.y);
       const keyNum = parseFloat(event.code[5]);
       const dur = 2**(keyNum-1) * (this.shiftKeyDown ? 2 : 1) * 0.25;
-      this.addNote(noteInfo.pitch, noteInfo.position, dur);
+      const newNoteId = this.addNote(noteInfo.pitch, noteInfo.position, dur, true);
+      //truncate or delete old note as appropriate
+      const notesAtPitch = Object.values(this.notes).filter(n => n.info.pitch == noteInfo.pitch);
+      const samePitch = notesAtPitch.filter(n => n.info.position < noteInfo.position + dur && noteInfo.position < n.info.position + n.info.duration);
+      //todo - refactor this logic into a function
+      samePitch.forEach(note => {
+        console.log('checking', note.elem.id());
+        if(newNoteId == note.elem.id()) return;
+        //if new note interests with start of old note, delete old note
+        if (noteInfo.position <= note.info.position && note.info.position < noteInfo.position + dur) {
+          console.log('delete intersect', note.elem.id());
+          this.deleteElement(note.elem);
+          delete this.notes[note.elem.id()];
+        }
+        //if new note intersects with end of old note, truncate old note
+        else if (noteInfo.position < note.info.position + note.info.duration && note.info.position + note.info.duration <= noteInfo.position + dur) {
+          console.log('truncate end', note.elem.id());
+          const newNoteDuration = note.info.position - noteInfo.position;
+          this.updateNoteElement(note, note.info.position, note.info.pitch, newNoteDuration);
+        }
+        //if new note is contained in old note, truncate old note
+        else if (note.info.position <= noteInfo.position && noteInfo.position + dur <= note.info.position + note.info.duration) {
+          console.log('truncate contained', note.elem.id());
+          const newNoteDuration = noteInfo.position - note.info.position;
+          this.updateNoteElement(note, note.info.position, note.info.pitch, newNoteDuration);
+        }
+        //if new note contains old note, delete old note
+        else if (noteInfo.position <= note.info.position && note.info.position + note.info.duration <= noteInfo.position + dur) {
+          console.log('delete contains', note.elem.id());
+          this.deleteElement(note.elem);
+          delete this.notes[note.elem.id()];
+        } else {
+          console.log('no change', note.elem.id());
+        }
+      });
+      this.snapshotNoteState();
     }
     // if (event.key == 'q'){ 
     //   this.getNotesAtPosition(this.cursorPosition+0.01).map(n => this.playHandler(n.info.pitch));
@@ -897,7 +932,7 @@ export class PianoRoll {
 
 
 
-  populateSpatialNoteTracker(){
+  populateSpatialNoteTracker(){ //todo - probably don't need this - just query directly for notes of a pitch
     this.spatialNoteTracker = {};
     Object.values(this.notes).forEach((note)=>{
       if (this.spatialNoteTracker[note.info.pitch]){
