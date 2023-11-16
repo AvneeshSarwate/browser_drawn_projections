@@ -449,7 +449,7 @@ export class PianoRoll {
     this.updateNoteElemScreenCoords(nt, xPos, yPos, width);
   }
 
-  updateNoteElemScreenCoords(nt: Note, x?: number, y?: number, width?: number, calledFromBatchUpdate: boolean = true) {
+  updateNoteElemScreenCoords(nt: Note, x?: number, y?: number, width?: number, persistData: boolean = true, calledFromBatchUpdate: boolean = true) {
     x = x ?? nt.elem.x().valueOf() as number;
     y = y ?? nt.elem.y().valueOf() as number;
     width = width ?? nt.elem.width().valueOf() as number;
@@ -466,7 +466,7 @@ export class PianoRoll {
     
     nt.elem.width(width);
     nt.handles.end.x(x + width - this.handleRad / 2);
-    this.updateNoteInfo(nt, calledFromBatchUpdate);
+    if(persistData) this.updateNoteInfo(nt, calledFromBatchUpdate);
   }
 
   // Get point in global SVG space from mousemove event
@@ -975,7 +975,7 @@ export class PianoRoll {
                 note.handles.start.show();
                 note.handles.end.show();
                 const width = (selectedNote.info.position - note.info.position) * this.quarterNoteWidth
-                this.updateNoteElemScreenCoords(note, undefined, undefined, width);
+                this.updateNoteElemScreenCoords(note, undefined, undefined, width, false);
               //deleting the non-selected note
               } else if (selectedNote.info.position <= note.info.position && note.info.position < selectedNote.info.position+selectedNote.info.duration) {
                 currentlyModifiedNotes.add(note.elem.id());
