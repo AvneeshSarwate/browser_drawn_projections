@@ -117,3 +117,34 @@ export declare const cos: (phase: number) => number;
 export declare const tri: (phase: number) => number;
 export declare const saw: (phase: number) => number;
 `
+
+/*
+chatGPT explanation for why export needs to be removed:
+
+question: in the monaco editor, when using a d.ts file to add typings via the 
+  method monaco.languages.typescript.typescriptDefaults.addExtraLib(), having 
+  the export statement before the declare doesn't work. why would this be?
+
+Answer:
+
+The behavior you're experiencing in the Monaco Editor, where using an `export` statement before `declare` in a `.d.ts` file added via `monaco.languages.typescript.typescriptDefaults.addExtraLib()` doesn't work as expected, is likely due to the way Monaco Editor handles modules and global declarations.
+
+In TypeScript, there is a distinction between module and global scope:
+
+1. **Module Scope**: If a file contains top-level `import` or `export` statements, TypeScript treats it as a module. Everything in a module is scoped to that module unless explicitly exported.
+
+2. **Global Scope**: If a file does not have top-level `import` or `export` statements, TypeScript treats it as a global script file. Declarations in this file are in the global scope.
+
+When you use `monaco.languages.typescript.typescriptDefaults.addExtraLib()` to add a `.d.ts` file, it's generally intended to declare global types, interfaces, or functions that should be available across the entire scope of the Monaco Editor instance. This means they are expected to be in the global scope.
+
+By adding an `export` statement:
+
+- You shift the context of the file to a module scope.
+- Consequently, the types or interfaces declared in this file are no longer injected into the global namespace, but rather, they are scoped to the module represented by this file.
+- This behavior results in the declarations not being globally accessible as you might expect when used in Monaco Editor.
+
+If you need to use module-scoped declarations (with `export`), you would typically import them explicitly in the parts of your code where they are required. However, this might not align well with how Monaco Editor is used, especially if it's meant to provide a global set of types for a broader range of scripts.
+
+For global declarations in Monaco Editor, you would typically omit the `export` keyword, ensuring the declarations are in the global scope and accessible across all scripts in the editor without needing an import statement.
+
+*/
