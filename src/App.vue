@@ -9,6 +9,7 @@ import TonePianoSequencer from './sketches/tonePianoSequencer/SketchWrapper.vue'
 import Three5Example from './sketches/three5Example/SketchWrapper.vue';
 import ClickAVMelodyLauncher from './sketches/clickAVMelodyLauncher/SketchWrapper.vue';
 import PianoRollMelodyLauncher from './sketches/pianoRollMelodyLauncher/SketchWrapper.vue';
+import PianoRollLivecoding from './sketches/pianoRollLivecoding/SketchWrapper.vue';
 
 
 const sketchStates: Record<sketchNames, any> = {
@@ -18,6 +19,7 @@ const sketchStates: Record<sketchNames, any> = {
   three5Example: Three5Example,
   clickAVMelodyLauncher: ClickAVMelodyLauncher,
   pianoRollMelodyLauncher: PianoRollMelodyLauncher,
+  pianoRollLivecoding: PianoRollLivecoding,
 }
 
 const comp = sketchStates[getUrlSketch()]

@@ -6,6 +6,7 @@ import { appState as tonePianoSequencerState } from '@/sketches/tonePianoSequenc
 import { appState as three5ExampleState } from '@/sketches/three5Example/appState';
 import { appState as clickAVMelodyLauncherState } from '@/sketches/clickAVMelodyLauncher/appState';
 import { appState as pianoRollMelodyLauncherState } from '@/sketches/pianoRollMelodyLauncher/appState';
+import { appState as pianoRollLivecodingState } from '@/sketches/pianoRollLivecoding/appState';
 
 //todo hotreload - save to localStorage to enable refresh when needed
 
@@ -15,7 +16,8 @@ export type sketchNames =
   'tonePianoSequencer' |
   'three5Example' |
   'clickAVMelodyLauncher' |
-  'pianoRollMelodyLauncher'
+  'pianoRollMelodyLauncher' |
+  'pianoRollLivecoding'
 
 //todo sketch gallery - pull sketchStates map in App.vue based on menu selection
 //   coordinating hot reload doesn't matter for external gallery
@@ -26,6 +28,7 @@ export const sketchStates: Record<sketchNames, any> = {
   three5Example: ref(three5ExampleState),
   clickAVMelodyLauncher: ref(clickAVMelodyLauncherState),
   pianoRollMelodyLauncher: ref(pianoRollMelodyLauncherState),
+  pianoRollLivecoding: ref(pianoRollLivecodingState),
 }
 
 //todo sketch gallery - have this be a route instead of a query param? vue router?
