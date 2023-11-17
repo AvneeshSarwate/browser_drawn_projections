@@ -63,7 +63,7 @@ onMounted(() => {
     const stepVal = 0.2
 
     const start = ctx.time
-    const start2 = performance.now()  + (USE_TONE ? Tone.context.lookAhead * 1000 : 0)
+    const start2 = performance.now()
     let drift, lastDrift = 0
     const res0 = ctx.branch(async (ctx) => {
       for (let i = 0; i < 100; i++) {
