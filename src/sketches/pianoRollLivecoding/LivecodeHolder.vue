@@ -44,46 +44,49 @@ const clearDrawFuncs = () => {
 onMounted(() => {
   try {
 
-
-
-
-
+    // validation settings
     monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
-      noSemanticValidation: false,
+      noSemanticValidation: true,
       noSyntaxValidation: false,
     });
 
+    // compiler options
+    monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
+      target: monaco.languages.typescript.ScriptTarget.ES2015,
+      allowNonTsExtensions: true,
+    });
 
-    const channelUri = "ts:filename/channel.ts"
+
+    const channelUri = "ts:filename/channels.d.ts"
     monaco.languages.typescript.typescriptDefaults.addExtraLib(channelSrc, channelUri)
     monaco.editor.createModel(channelSrc, "typescript", monaco.Uri.parse(channelUri))
 
     const tsSource = `
-    launch(async (ctx) => {
-    const stepVal = 0.2
+launch(async (ctx) => {
+  const stepVal = 0.2
 
-    const start = ctx.time
-    const start2 = performance.now()
-    let drift, lastDrift = 0
-    const res0 = ctx.branch(async (ctx) => {
-      for (let i = 0; i < 100; i++) {
-        const [logicalTime, wallTime] = [ctx.time - start, (performance.now() - start2) / 1000] //todo bug - is this correct?
-        drift = wallTime - logicalTime 
-        const driftDelta = drift - lastDrift
-        console.log('step', i, "logicalTime", logicalTime.toFixed(3), "wallTime", wallTime.toFixed(3), "drift", drift.toFixed(3), "driftDelta", driftDelta.toFixed(3))
-        lastDrift = drift
-        await ctx.wait(stepVal)
-      }
-    })
-
-    await ctx.branch(async (ctx) => {
-      await ctx.wait(stepVal * 10)
-      console.log('res0 cancel', performance.now() - start2)
-      res0.cancel()
-    })
-
-    console.log("parent context time elapsed", ctx.progTime.toFixed(3))
+  const start = ctx.time
+  const start2 = performance.now()
+  let drift, lastDrift = 0
+  const res0 = ctx.branch(async (ctx) => {
+    for (let i = 0; i < 100; i++) {
+      const [logicalTime, wallTime] = [ctx.time - start, (performance.now() - start2) / 1000] //todo bug - is this correct?
+      drift = wallTime - logicalTime 
+      const driftDelta = drift - lastDrift
+      console.log('step', i, "logicalTime", logicalTime.toFixed(3), "wallTime", wallTime.toFixed(3), "drift", drift.toFixed(3), "driftDelta", driftDelta.toFixed(3))
+      lastDrift = drift
+      await ctx.wait(stepVal)
+    }
   })
+
+  await ctx.branch(async (ctx) => {
+    await ctx.wait(stepVal * 10)
+    console.log('res0 cancel', performance.now() - start2)
+    res0.cancel()
+  })
+
+  console.log("parent context time elapsed", ctx.progTime.toFixed(3))
+})
     `
 
     const editor = monaco.editor.create(document.getElementById('monacoHolder')!!, {
@@ -135,13 +138,13 @@ onMounted(() => {
 
         const p5xy = targetToP5Coords(ev, p5i, ev.target as HTMLCanvasElement)
         const normCoords = targetNormalizedCoords(ev, ev.target as HTMLCanvasElement)
-        
 
-        const evtDur = baseDur * Math.pow(2, (1-normCoords.x) * 4)
+
+        const evtDur = baseDur * Math.pow(2, (1 - normCoords.x) * 4)
 
         const mel = pianoRoll.getNoteData().map(n => ({ time: n.position, pitch: n.pitch, duration: n.duration, velocity: 0.5 }))
         const mel2 = mel.map(i => i)
-        mel2.sort((a, b) => (a.time+a.duration) - (b.time+b.duration))
+        mel2.sort((a, b) => (a.time + a.duration) - (b.time + b.duration))
         const melDuration = mel2[mel2.length - 1].time + mel2[mel2.length - 1].duration
 
         const evtChop = new EventChop<{ r: number, g: number, b: number, x: number, y: number }>
@@ -188,7 +191,7 @@ onMounted(() => {
       }, threeCanvas)
 
       const p5Passthru = new Passthru({ src: p5Canvas })
-      
+
       const canvasPaint = new CanvasPaint({ src: p5Passthru })
       shaderGraphEndNode = canvasPaint
 
@@ -209,7 +212,7 @@ onMounted(() => {
 
       singleKeydownEvent('c', (ev) => {
         //iterate over keys in loopMap and cancel each
-        for(const [key, loop] of loopMap.entries()) {
+        for (const [key, loop] of loopMap.entries()) {
           loop.cancel()
           appState.drawFuncMap.delete(key)
         }

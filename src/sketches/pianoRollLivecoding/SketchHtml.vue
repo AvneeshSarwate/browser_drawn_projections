@@ -14,6 +14,7 @@
       instructions for manipulating the piano roll are below the piano roll
     </li>
   </ul>
+  <div id="monacoHolder"></div>
   <div id="pianoRollHolder"></div>
   <div>
   <ul id="pianoRollInstructions">
@@ -57,7 +58,6 @@
     </li>
   </ul>
   </div>
-  <div id="monacoHolder"></div>
   <div id="debugInfo"></div>
 </template>
 
