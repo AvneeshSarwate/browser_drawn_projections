@@ -496,3 +496,14 @@ export const steps = (start: number, end: number, count: number): number[] => {
   }
   return out
 }
+
+export const chanExports = {
+  CancelablePromisePoxy,
+  launch,
+  testCancel,
+  EventChop,
+  Ramp,
+  sinN,
+}
+
+export const chanExpandString = `const { ${Object.keys(chanExports).join(', ')} } = chanExports`

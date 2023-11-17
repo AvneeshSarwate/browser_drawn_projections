@@ -5,7 +5,7 @@ import { inject, onMounted, onUnmounted } from 'vue';
 import { CanvasPaint, FeedbackNode, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords, targetNormalizedCoords } from '@/io/keyboardAndMouse';
 import p5 from 'p5';
-import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri, EventChop, cos, sin } from '@/channels/channels';
+import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, tri, EventChop, cos, sin, chanExports, chanExpandString } from '@/channels/channels';
 import { listToClip, clipToDeltas, note } from '@/music/clipPlayback';
 import { Scale } from '@/music/scale';
 import { sampler } from '@/music/synths';
@@ -17,9 +17,8 @@ import TsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
 import { channelDefs, channelSrc } from './chanelSrc';
 import { buildFuncTS, buildFuncJS } from '@/livecoding/scratch';
 import { transform } from "sucrase";
-import * as TS from 'typescript'
+import ts, * as TS from 'typescript'
 import * as acorn from 'acorn'
-
 
 declare function defineCallback<T>(cb: (block: (ctx: TimeContext) => Promise<T>) => CancelablePromisePoxy<T>): void;
 
@@ -73,7 +72,7 @@ onMounted(() => {
     editorModel = monaco.editor.createModel(infoSrc, "typescript", monaco.Uri.parse(channelUri))
 
     const tsSource = `
-defineCallback((launch) => {
+  console.log("livecode launch", launch)
   launch(async (ctx) => {
     const stepVal = 0.2
 
@@ -99,21 +98,32 @@ defineCallback((launch) => {
 
     console.log("parent context time elapsed", ctx.progTime.toFixed(3))
   })
-})
     `
-    const sucraseFunc = transform(tsSource, { transforms: ['typescript'] }).code
-    console.log("sucraseFunc", sucraseFunc)
+
+    
+
+    // const sucraseFunc = transform(tsSource, { transforms: ['typescript'] }).code
+    // console.log("sucraseFunc", sucraseFunc)
 
     // const func = buildFuncJS(tsSource)
     // func(launch)
 
-    const acParse = acorn.parse(sucraseFunc, { ecmaVersion: 2020, sourceType: 'module' })
+    const libAddedSrc = `
+    ${chanExpandString}
+
+    ${tsSource}
+    `
+
+    // const acParse = acorn.parse(sucraseFunc, { ecmaVersion: 2020, sourceType: 'module' })
 
     //@ts-ignore
-    const livecodeBody = acParse.body[0].expression.arguments[0].body.body[0]
-    const bodyString = sucraseFunc.substring(livecodeBody.start, livecodeBody.end)
-    const livecodeFunc = Function('launch', bodyString)
-    livecodeFunc(launch)
+    // const livecodeBody = acParse.body[0].expression.arguments[0].body.body[0]
+    // const bodyString = sucraseFunc.substring(livecodeBody.start, livecodeBody.end)
+    // const livecodeFunc = Function('launch', bodyString)
+    // livecodeFunc(launch)
+
+    const livecodeFunc = Function('chanExports', libAddedSrc)
+    livecodeFunc(chanExports)
 
 
     editor = monaco.editor.create(document.getElementById('monacoHolder')!!, {

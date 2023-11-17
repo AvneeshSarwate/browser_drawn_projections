@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { MeshLineGeometry, MeshLineMaterial, raycast } from 'meshline'
+import { MeshLineGeometry, MeshLineMaterial } from 'meshline'
 
 import { planeVS } from './vertexShaders';
 import type { Three5Style } from './three5Style';
