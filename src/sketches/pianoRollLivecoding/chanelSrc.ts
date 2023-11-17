@@ -1,7 +1,10 @@
 
+//todo note - for some reason, you need to remove the export that precedes the declare
+// in order for it to work. I think this is because the export is not part of the
+// declaration, but rather a separate statement that is not allowed in a declaration?
 
 export const channelSrc = `
-export declare class CancelablePromisePoxy<T> implements Promise<T> {
+ declare class CancelablePromisePoxy<T> implements Promise<T> {
   promise?: Promise<T>;
   abortController: AbortController;
   constructor(ab: AbortController);
@@ -11,8 +14,8 @@ export declare class CancelablePromisePoxy<T> implements Promise<T> {
   catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): Promise<T | TResult>;
   finally(onfinally?: (() => void) | undefined | null): Promise<T>;
 }
-export declare function launch<T>(block: (ctx: TimeContext) => Promise<T>): CancelablePromisePoxy<T>;
-export declare abstract class TimeContext {
+ declare function launch<T>(block: (ctx: TimeContext) => Promise<T>): CancelablePromisePoxy<T>;
+ declare abstract class TimeContext {
   abortController: AbortController;
   time: number;
   startTime: number;
@@ -26,7 +29,7 @@ export declare abstract class TimeContext {
 declare class ToneTimeContext extends TimeContext {
   wait(sec: number): Promise<void>;
 }
-export declare const testCancel: () => Promise<void>;
+ declare const testCancel: () => Promise<void>;
 interface Envelope {
   hold(time?: number): Envelope;
   release(time?: number): Envelope;
@@ -40,7 +43,7 @@ interface Envelope {
   releaseTime: number;
   started: boolean;
 }
-export declare class Ramp implements Envelope {
+ declare class Ramp implements Envelope {
   releaseDur: number;
   isHeld: boolean;
   onTime: number;
@@ -55,8 +58,8 @@ export declare class Ramp implements Envelope {
   trigger(time?: number): this;
   val(time?: number): number;
 }
-export declare const now: () => number;
-export declare class EventChop<T> {
+ declare const now: () => number;
+ declare class EventChop<T> {
   idGen: number;
   events: ({
       evt: Envelope;
@@ -93,16 +96,24 @@ export declare class EventChop<T> {
 * even "opening a menu of a node object" can be simulated by cmd-clicking to
 * go to the place where the arguments-variable is defined
 */
+ declare const sinN: (phase: number) => number;
+ declare const cosN: (phase: number) => number;
+ declare const sin: (phase: number) => number;
+ declare const cos: (phase: number) => number;
+ declare const tri: (phase: number) => number;
+ declare const saw: (phase: number) => number;
+ declare const xyZip: (phase: number, xPat: (phase: number) => number, yPat: (phase: number) => number, count?: number, cycles?: number) => {
+  x: number;
+  y: number;
+}[];
+ declare const steps: (start: number, end: number, count: number) => number[];
+ {};
+`
+export const channelSrc2 = `
 export declare const sinN: (phase: number) => number;
 export declare const cosN: (phase: number) => number;
 export declare const sin: (phase: number) => number;
 export declare const cos: (phase: number) => number;
 export declare const tri: (phase: number) => number;
 export declare const saw: (phase: number) => number;
-export declare const xyZip: (phase: number, xPat: (phase: number) => number, yPat: (phase: number) => number, count?: number, cycles?: number) => {
-  x: number;
-  y: number;
-}[];
-export declare const steps: (start: number, end: number, count: number) => number[];
-export {};
 `
