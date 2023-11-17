@@ -14,7 +14,14 @@ import { PianoRoll } from '@/music/pianoRoll';
 import * as monaco from 'monaco-editor';
 import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
 import TsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
-import { channelSrc } from './chanelSrc';
+import { channelDefs, channelSrc } from './chanelSrc';
+import { buildFuncTS, buildFuncJS } from '@/livecoding/scratch';
+import { transform } from "sucrase";
+import * as TS from 'typescript'
+import * as acorn from 'acorn'
+
+
+declare function defineCallback<T>(cb: (block: (ctx: TimeContext) => Promise<T>) => CancelablePromisePoxy<T>): void;
 
 self.MonacoEnvironment = {
   getWorker(_, label) {
@@ -40,6 +47,9 @@ const clearDrawFuncs = () => {
   appState.drawFuncMap.clear()
 }
 
+let editor: monaco.editor.IStandaloneCodeEditor | undefined = undefined
+let editorModel: monaco.editor.ITextModel | undefined = undefined
+
 
 onMounted(() => {
   try {
@@ -56,40 +66,57 @@ onMounted(() => {
       allowNonTsExtensions: true,
     });
 
+    const infoSrc = channelDefs
 
     const channelUri = "ts:filename/channels.d.ts"
-    monaco.languages.typescript.typescriptDefaults.addExtraLib(channelSrc, channelUri)
-    monaco.editor.createModel(channelSrc, "typescript", monaco.Uri.parse(channelUri))
+    monaco.languages.typescript.typescriptDefaults.addExtraLib(infoSrc, channelUri)
+    editorModel = monaco.editor.createModel(infoSrc, "typescript", monaco.Uri.parse(channelUri))
 
     const tsSource = `
-launch(async (ctx) => {
-  const stepVal = 0.2
+defineCallback((launch) => {
+  launch(async (ctx) => {
+    const stepVal = 0.2
 
-  const start = ctx.time
-  const start2 = performance.now()
-  let drift, lastDrift = 0
-  const res0 = ctx.branch(async (ctx) => {
-    for (let i = 0; i < 100; i++) {
-      const [logicalTime, wallTime] = [ctx.time - start, (performance.now() - start2) / 1000] //todo bug - is this correct?
-      drift = wallTime - logicalTime 
-      const driftDelta = drift - lastDrift
-      console.log('step', i, "logicalTime", logicalTime.toFixed(3), "wallTime", wallTime.toFixed(3), "drift", drift.toFixed(3), "driftDelta", driftDelta.toFixed(3))
-      lastDrift = drift
-      await ctx.wait(stepVal)
-    }
+    const start = ctx.time
+    const start2 = performance.now()
+    let drift = 0, lastDrift = 0
+    const res0 = ctx.branch(async (ctx) => {
+      for (let i = 0; i < 100; i++) {
+        const [logicalTime, wallTime] = [ctx.time - start, (performance.now() - start2) / 1000] //todo bug - is this correct?
+        drift = wallTime - logicalTime 
+        const driftDelta = drift - lastDrift
+        console.log('step', i, "logicalTime", logicalTime.toFixed(3), "wallTime", wallTime.toFixed(3), "drift", drift.toFixed(3), "driftDelta", driftDelta.toFixed(3))
+        lastDrift = drift
+        await ctx.wait(stepVal)
+      }
+    })
+
+    await ctx.branch(async (ctx) => {
+      await ctx.wait(stepVal * 10)
+      console.log('res0 cancel', performance.now() - start2)
+      res0.cancel()
+    })
+
+    console.log("parent context time elapsed", ctx.progTime.toFixed(3))
   })
-
-  await ctx.branch(async (ctx) => {
-    await ctx.wait(stepVal * 10)
-    console.log('res0 cancel', performance.now() - start2)
-    res0.cancel()
-  })
-
-  console.log("parent context time elapsed", ctx.progTime.toFixed(3))
 })
     `
+    const sucraseFunc = transform(tsSource, { transforms: ['typescript'] }).code
+    console.log("sucraseFunc", sucraseFunc)
 
-    const editor = monaco.editor.create(document.getElementById('monacoHolder')!!, {
+    // const func = buildFuncJS(tsSource)
+    // func(launch)
+
+    const acParse = acorn.parse(sucraseFunc, { ecmaVersion: 2020, sourceType: 'module' })
+
+    //@ts-ignore
+    const livecodeBody = acParse.body[0].expression.arguments[0].body.body[0]
+    const bodyString = sucraseFunc.substring(livecodeBody.start, livecodeBody.end)
+    const livecodeFunc = Function('launch', bodyString)
+    livecodeFunc(launch)
+
+
+    editor = monaco.editor.create(document.getElementById('monacoHolder')!!, {
       value: tsSource,
       language: 'typescript',
       theme: 'vs-dark',
@@ -237,6 +264,8 @@ onUnmounted(() => {
   clearListeners()
   timeLoops.forEach(tl => tl.cancel())
   document.getElementById('pianoRollHolder')!!.innerHTML = ''
+  editorModel?.dispose()
+  editor?.dispose()
 })
 
 </script>

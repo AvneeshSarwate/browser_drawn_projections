@@ -266,7 +266,7 @@ const dateNow = () => performance.now() / 1000 - startTime
 export const now = USE_TONE ? toneNow : dateNow
 const delayFunc = USE_TONE ? toneDelay : dateDelay
   
-  
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 class ADSR implements Envelope{
   attack: number = 1
   decay: number = 0
