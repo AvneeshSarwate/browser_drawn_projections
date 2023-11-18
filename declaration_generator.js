@@ -3,18 +3,18 @@ const path = require("path");
 const fs = require("fs");
 
 function generateDtsFiles(filePaths, targetFolder) {
-    // Resolve file paths and target folder to absolute paths
-    const resolvedFilePaths = filePaths.map(fp => path.resolve(fp));
-    const resolvedTargetFolder = path.resolve(targetFolder);
-
-    console.log("Resolved File Paths:", resolvedFilePaths);
-    console.log("Resolved Target Folder:", resolvedTargetFolder);
-
+    // Compiler options with esModuleInterop enabled
     const options = {
         declaration: true,
         emitDeclarationOnly: true,
-        noEmitOnError: true
+        noEmitOnError: true,
+        baseUrl: ".", // Base URL for non-absolute module names
+        paths: { "@/*": ["src/*"] }, // Path alias "@" for "src"
+        esModuleInterop: true
     };
+
+    const resolvedFilePaths = filePaths.map(fp => path.resolve(fp));
+    const resolvedTargetFolder = path.resolve(targetFolder);
 
     if (!fs.existsSync(resolvedTargetFolder)) {
         fs.mkdirSync(resolvedTargetFolder, { recursive: true });
@@ -42,9 +42,9 @@ function generateDtsFiles(filePaths, targetFolder) {
 }
 
 const filePaths = [
-    'src/channels/channels.ts',
+    'src/channels/channels.ts', // Updated file path
     // ... more file paths
 ];
 
-const targetFolder = 'src/assets/types';
+const targetFolder = 'src/assets/types'; // Target folder for .d.ts files
 generateDtsFiles(filePaths, targetFolder);
