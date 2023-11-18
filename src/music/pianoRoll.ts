@@ -99,18 +99,18 @@ type Box = {
 }
 
 export class PianoRoll {
-  svgRoot!: Svg;
+  private svgRoot!: Svg;
   noteModStartReference: { [key: string]: { x: number, y: number, width: number, height: number } };
-  notes: {[key: string]: Note};
-  spatialNoteTracker: {[key: string]: Note[]};
-  selectedElements: Set<Rect>;
+  private notes: {[key: string]: Note};
+  private spatialNoteTracker: {[key: string]: Note[]};
+  private selectedElements: Set<Rect>;
   selectedNoteIds: string[];
   selectRect: any;
   cursorElement: any;
   cursorPosition: number;
   cursorWidth: number;
   playCursorElement: any;
-  backgroundElements: Set<Element> = new Set();
+  private backgroundElements: Set<Element> = new Set();
   quarterNoteWidth: number;
   noteHeight: number;
   handleRad: number;
@@ -148,11 +148,11 @@ export class PianoRoll {
   count: number;
   draggingActive: boolean;
   quantDragActivated: boolean;
-  dragTarget?: Rect;
+  private dragTarget?: Rect;
   resizingActive: boolean;
   quantResizingActivated: boolean;
-  resizeTarget?: Rect;
-  rawSVGElementToWrapper: {[key: string]: Rect}
+  private resizeTarget?: Rect;
+  private rawSVGElementToWrapper: {[key: string]: Rect}
   copiedNoteBuffer: NoteInfo[];
   containerElement: HTMLElement | null;
   containerElementId: any;
@@ -161,8 +161,8 @@ export class PianoRoll {
   playHandler: any;
   noteOnOffHandler: any;
   wIsDown: any;
-  debugCircle0: Circle
-  debugCircle1: Circle
+  private debugCircle0: Circle
+  private debugCircle1: Circle
   constructor(containerElementId: string, playHandler: () => void, noteOnOffHandler: () => void){
     this.svgRoot; //the svg root element
 
@@ -363,7 +363,7 @@ export class PianoRoll {
     return rect.id();
   }
 
-  deleteElement(elem: Rect){
+  private deleteElement(elem: Rect){
     // elem.selectize(false);
     elem.remove();
     const note = this.notes[elem.id()]
@@ -372,7 +372,7 @@ export class PianoRoll {
     note.handles.end.remove();
   }
 
-  deleteElements(elements: Set<Rect>){
+  private deleteElements(elements: Set<Rect>){
     //for selected notes - delete svg elements, remove entries from 'notes' objects
     elements.forEach((elem)=>{
       this.deleteElement(elem);
@@ -418,7 +418,7 @@ export class PianoRoll {
   }
 
   //update underlying note info from SVG element change
-  updateNoteInfo(note: Note, calledFromBatchUpdate: boolean){
+  private updateNoteInfo(note: Note, calledFromBatchUpdate: boolean){
     if (note.elem.visible()) {
       const pitch = this.svgYtoPitch(note.elem.y().valueOf() as number);
       const position = this.svgXtoPosition(note.elem.x().valueOf() as number);
@@ -432,13 +432,13 @@ export class PianoRoll {
   }
 
   //a separate function so that batch note changes are saved in the undo history as a single event
-  updateNoteInfoMultiple(notes: Note[]){
+  private updateNoteInfoMultiple(notes: Note[]){
     notes.forEach(note => this.updateNoteInfo(note, true));
     this.snapshotNoteState();
   }
 
   //update note SVG element from underlying info change
-  updateNoteElement(nt: Note, position: number, pitch: number, duration: number){
+  private updateNoteElement(nt: Note, position: number, pitch: number, duration: number){
     nt.elem.show();
     nt.label.show();
     nt.handles.start.show();
@@ -449,7 +449,7 @@ export class PianoRoll {
     this.updateNoteElemScreenCoords(nt, xPos, yPos, width);
   }
 
-  updateNoteElemScreenCoords(nt: Note, x?: number, y?: number, width?: number, persistData: boolean = true, calledFromBatchUpdate: boolean = true) {
+  private updateNoteElemScreenCoords(nt: Note, x?: number, y?: number, width?: number, persistData: boolean = true, calledFromBatchUpdate: boolean = true) {
     x = x ?? nt.elem.x().valueOf() as number;
     y = y ?? nt.elem.y().valueOf() as number;
     width = width ?? nt.elem.width().valueOf() as number;
@@ -784,26 +784,26 @@ export class PianoRoll {
   }
 
 
-  getNotesAtPosition(pos: number){
+  private getNotesAtPosition(pos: number){
     const notesAtPos = Object.values(this.notes).filter(n => n.info.position <= pos && pos <= n.info.position+n.info.duration);
     return notesAtPos;
   }
 
   //used to differentiate between 'clicks' and 'drags' from a user perspective
   //to stop miniscule changes from being added to undo history
-  checkIfNoteMovedSignificantly(noteElement: Rect, thresh: number){
+  private checkIfNoteMovedSignificantly(noteElement: Rect, thresh: number){
     return Math.abs(noteElement.x().valueOf() as number - this.noteModStartReference[noteElement.id()].x) > thresh || Math.abs(noteElement.y().valueOf() as number - this.noteModStartReference[noteElement.id()].y) > thresh;
     //todo refactor check all these valueOf() calls
   }
 
   //used to differentiate between 'clicks' and 'resize' from a user perspective 
   //to stop miniscule changes from being added to undo history
-  checkIfNoteResizedSignificantly(noteElement: Rect, thresh: number){
+  private checkIfNoteResizedSignificantly(noteElement: Rect, thresh: number){
     return Math.abs(noteElement.width().valueOf() as number - this.noteModStartReference[noteElement.id()].width) > thresh;
     //todo refactor check all these valueOf() calls
   }
 
-  initializeNoteModificationAction(element?: Rect){
+  private initializeNoteModificationAction(element?: Rect){
     this.selectedNoteIds = Array.from(this.selectedElements).map(elem => elem.id());
     this.nonSelectedModifiedNotes.clear();
     // console.log('mousedown', element, !this.selectedNoteIds.includes(element.id()));
@@ -895,7 +895,7 @@ export class PianoRoll {
   // attaches the appropriate handlers to the mouse event allowing to to 
   // start a multi-select gesture (and later draw mode)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  attachHandlersOnBackground(backgroundElements_: Set<Element>, _: Svg){ 
+  private attachHandlersOnBackground(backgroundElements_: Set<Element>, _: Svg){ 
     // need to listen on window so select gesture ends even if released outside the 
     // bounds of the root svg element or browser
     window.addEventListener('mouseup', () => {
@@ -1011,7 +1011,7 @@ export class PianoRoll {
   }
 
   // sets event handlers on each note element for position/resize multi-select changes
-  attachHandlersOnNote(note: Note, svgParentObj: Svg){
+  private attachHandlersOnNote(note: Note, svgParentObj: Svg){
     
     /* Performs the same drag deviation done on the clicked element to 
      * the other selected elements
@@ -1118,7 +1118,7 @@ export class PianoRoll {
   }
 
 
-  selectNote(noteElem: Rect){
+  private selectNote(noteElem: Rect){
     if (!this.selectedElements.has(noteElem)) {
       this.selectedElements.add(noteElem);
       noteElem.fill(this.selectedNoteColor);
@@ -1126,7 +1126,7 @@ export class PianoRoll {
     }
   }
 
-  deselectNote(noteElem: Rect){
+  private deselectNote(noteElem: Rect){
     if (this.selectedElements.has(noteElem)) {
       this.selectedElements.delete(noteElem);
       noteElem.fill(this.noteColor);
@@ -1134,7 +1134,7 @@ export class PianoRoll {
   }
 
   // calculates if a note intersects with the mouse-multiselect rectangle
-  selectRectIntersection(noteElem: Rect){
+  private selectRectIntersection(noteElem: Rect){
     //top-left and bottom right of bounding rect. done this way b/c getBBox doesnt account for line thickness
     const noteBox = {
       tl: {x: noteElem.x().valueOf() as number, y: noteElem.y().valueOf() as number - this.noteHeight/2},  

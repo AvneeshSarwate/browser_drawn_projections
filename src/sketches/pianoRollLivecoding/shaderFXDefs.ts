@@ -1,4 +1,4 @@
-const shaderFXDefs = `
+export const shaderFXDefs = `
 import * as THREE from 'three';
 export declare const errorImageTexture: THREE.Texture;
 export type ShaderSource = THREE.Texture | THREE.WebGLRenderTarget | HTMLCanvasElement | ShaderEffect;
@@ -99,7 +99,106 @@ export declare class CanvasPaint extends CustomShaderEffect {
 }
 `;
 
-const customFXDefs = `
+export const shaderFXGlobalDefs = `
+type ShaderSource = THREE.Texture | THREE.WebGLRenderTarget | HTMLCanvasElement | ShaderEffect;
+type ShaderInputs = {
+    [key: string]: ShaderSource;
+};
+type ThreeVector = THREE.Vector2 | THREE.Vector3 | THREE.Vector4;
+type ThreeMatrix = THREE.Matrix3 | THREE.Matrix4;
+type ThreeColor = THREE.Color;
+type ThreeVectorArray = ThreeVector[];
+type Dynamic<T> = T | (() => T);
+type ShaderUniform = number | number[] | ThreeVector | ThreeMatrix | ThreeColor | ThreeVectorArray | THREE.Texture;
+type ShaderUniforms = {
+    [key: string]: Dynamic<ShaderUniform>;
+};
+declare abstract class ShaderEffect {
+    abstract setSrcs(fx: ShaderInputs): void;
+    abstract render(renderer: THREE.WebGLRenderer): void;
+    abstract setUniforms(uniforms: ShaderUniforms): void;
+    abstract updateUniforms(): void;
+    abstract output: THREE.WebGLRenderTarget;
+    effectName: string;
+    width: number;
+    height: number;
+    inputs: ShaderInputs;
+    uniforms: ShaderUniforms;
+    abstract dispose(): void;
+    disposeAll(): void;
+    renderAll(renderer: THREE.WebGLRenderer): void;
+}
+declare class FeedbackNode extends ShaderEffect {
+    width: number;
+    height: number;
+    output: THREE.WebGLRenderTarget;
+    _passthru: Passthru;
+    feedbackSrc?: ShaderEffect;
+    firstRender: boolean;
+    inputs: ShaderInputs;
+    constructor(startState: ShaderEffect);
+    setFeedbackSrc(fx: ShaderEffect): void;
+    setSrcs(fx: {
+        initialState: ShaderEffect;
+    }): void;
+    render(renderer: THREE.WebGLRenderer): void;
+    dispose(): void;
+    setUniforms(_uniforms: ShaderUniforms): void;
+    updateUniforms(): void;
+}
+declare class Pingpong {
+    src: THREE.WebGLRenderTarget;
+    dst: THREE.WebGLRenderTarget;
+    swap(): void;
+    constructor(width: number, height: number);
+}
+declare class CustomShaderEffect extends ShaderEffect {
+    output: THREE.WebGLRenderTarget;
+    width: number;
+    height: number;
+    scene: THREE.Scene;
+    camera: THREE.Camera;
+    inputs: ShaderInputs;
+    material: THREE.ShaderMaterial;
+    constructor(fsString: string, inputs: ShaderInputs, width?: number, height?: number, customOutput?: THREE.WebGLRenderTarget);
+    dispose(): void;
+    setUniforms(uniforms: ShaderUniforms): void;
+    updateSources(): void;
+    updateUniforms(): void;
+    setShader(fragmentString: string): void;
+    setSrcs(inputs: ShaderInputs): void;
+    _setMaterialUniformsFromInputs(): void;
+    render(renderer: THREE.WebGLRenderer): void;
+}
+declare class CustomFeedbackShaderEffect extends CustomShaderEffect {
+    pingpong: Pingpong;
+    _passthrough: Passthru;
+    constructor(fsString: string, inputArgs: ShaderInputs, width?: number, height?: number);
+    render(renderer: THREE.WebGLRenderer): void;
+    dispose(): void;
+}
+declare class Passthru extends CustomShaderEffect {
+    effectName: string;
+    constructor(inputs: {
+        src: ShaderSource;
+    }, width?: number, height?: number, customOutput?: THREE.WebGLRenderTarget);
+    setSrcs(fx: {
+        src: ShaderSource;
+    }): void;
+}
+declare class CanvasPaint extends CustomShaderEffect {
+    effectName: string;
+    constructor(inputs: {
+        src: ShaderSource;
+    }, width?: number, height?: number);
+    setSrcs(fx: {
+        src: ShaderSource;
+    }): void;
+    render(renderer: THREE.WebGLRenderer): void;
+}
+`;
+
+export const customFXDefs = `
 import { CustomShaderEffect, type Dynamic, type ShaderSource, CustomFeedbackShaderEffect } from "./shaderFX";
 export declare class Wobble extends CustomShaderEffect {
     effectName: string;

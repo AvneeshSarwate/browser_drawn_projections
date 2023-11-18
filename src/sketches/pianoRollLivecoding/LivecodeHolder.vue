@@ -16,6 +16,7 @@ import * as monaco from 'monaco-editor';
 import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
 import TsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
 import { channelDefs, channelModDefs, channelSrc } from './chanelSrc';
+import { shaderFXDefs, customFXDefs, shaderFXGlobalDefs } from './shaderFXDefs';
 import { buildFuncTS, buildFuncJS } from '@/livecoding/scratch';
 import { transform } from "sucrase";
 import ts, * as TS from 'typescript'
@@ -71,6 +72,10 @@ onMounted(() => {
     const channelUri = "ts:filename/channels.d.ts"
     monaco.languages.typescript.typescriptDefaults.addExtraLib(infoSrc, channelUri)
     editorModel = monaco.editor.createModel(infoSrc, "typescript", monaco.Uri.parse(channelUri))
+
+    const shaderFxUri = "ts:filename/shaderFX.d.ts"
+    monaco.languages.typescript.typescriptDefaults.addExtraLib(shaderFXGlobalDefs, shaderFxUri)
+    monaco.editor.createModel(shaderFXDefs, "typescript", monaco.Uri.parse(shaderFxUri))
 
     const tsSource = `
   console.log("livecode launch", launch)

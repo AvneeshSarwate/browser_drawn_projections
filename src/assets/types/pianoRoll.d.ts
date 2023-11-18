@@ -1,17 +1,7 @@
-import { Circle, Element, Rect, Svg, Text } from '@svgdotjs/svg.js';
 type NoteInfo = {
     pitch: number;
     position: number;
     duration: number;
-};
-type Note = {
-    elem: Rect;
-    info: NoteInfo;
-    label: Text;
-    handles: {
-        start: Circle;
-        end: Circle;
-    };
 };
 type MouseMoveRoot = {
     mouseX: number;
@@ -35,7 +25,7 @@ type Box = {
     };
 };
 export declare class PianoRoll {
-    svgRoot: Svg;
+    private svgRoot;
     noteModStartReference: {
         [key: string]: {
             x: number;
@@ -44,20 +34,16 @@ export declare class PianoRoll {
             height: number;
         };
     };
-    notes: {
-        [key: string]: Note;
-    };
-    spatialNoteTracker: {
-        [key: string]: Note[];
-    };
-    selectedElements: Set<Rect>;
+    private notes;
+    private spatialNoteTracker;
+    private selectedElements;
     selectedNoteIds: string[];
     selectRect: any;
     cursorElement: any;
     cursorPosition: number;
     cursorWidth: number;
     playCursorElement: any;
-    backgroundElements: Set<Element>;
+    private backgroundElements;
     quarterNoteWidth: number;
     noteHeight: number;
     handleRad: number;
@@ -95,13 +81,11 @@ export declare class PianoRoll {
     count: number;
     draggingActive: boolean;
     quantDragActivated: boolean;
-    dragTarget?: Rect;
+    private dragTarget?;
     resizingActive: boolean;
     quantResizingActivated: boolean;
-    resizeTarget?: Rect;
-    rawSVGElementToWrapper: {
-        [key: string]: Rect;
-    };
+    private resizeTarget?;
+    private rawSVGElementToWrapper;
     copiedNoteBuffer: NoteInfo[];
     containerElement: HTMLElement | null;
     containerElementId: any;
@@ -113,13 +97,13 @@ export declare class PianoRoll {
     playHandler: any;
     noteOnOffHandler: any;
     wIsDown: any;
-    debugCircle0: Circle;
-    debugCircle1: Circle;
+    private debugCircle0;
+    private debugCircle1;
     constructor(containerElementId: string, playHandler: () => void, noteOnOffHandler: () => void);
     drawBackgroundAndCursor(): void;
     addNote(pitch: number, position: number, duration: number, avoidHistoryManipulation?: boolean): string;
-    deleteElement(elem: Rect): void;
-    deleteElements(elements: Set<Rect>): void;
+    private deleteElement;
+    private deleteElements;
     getNoteData(): {
         pitch: number;
         position: number;
@@ -127,10 +111,10 @@ export declare class PianoRoll {
     }[];
     setNoteData(noteData: NoteInfo[]): void;
     setViewportToShowAllNotes(): void;
-    updateNoteInfo(note: Note, calledFromBatchUpdate: boolean): void;
-    updateNoteInfoMultiple(notes: Note[]): void;
-    updateNoteElement(nt: Note, position: number, pitch: number, duration: number): void;
-    updateNoteElemScreenCoords(nt: Note, x?: number, y?: number, width?: number, persistData?: boolean, calledFromBatchUpdate?: boolean): void;
+    private updateNoteInfo;
+    private updateNoteInfoMultiple;
+    private updateNoteElement;
+    private updateNoteElemScreenCoords;
     svgMouseCoord(evt: MouseEvent): DOMPoint;
     svgYtoPitch(yVal: number): number;
     svgXtoPosition(xVal: number): number;
@@ -162,25 +146,25 @@ export declare class PianoRoll {
     midiPitchToPitchString(pitch: number): string;
     svgYToPitchString(yVal: number): string;
     refreshNoteModStartReference(noteIds: string[]): void;
-    getNotesAtPosition(pos: number): Note[];
-    checkIfNoteMovedSignificantly(noteElement: Rect, thresh: number): boolean;
-    checkIfNoteResizedSignificantly(noteElement: Rect, thresh: number): boolean;
-    initializeNoteModificationAction(element?: Rect): void;
+    private getNotesAtPosition;
+    private checkIfNoteMovedSignificantly;
+    private checkIfNoteResizedSignificantly;
+    private initializeNoteModificationAction;
     updateNoteStateOnModificationCompletion(): void;
     endSelect(): void;
     endDrag(): void;
     endResize(): void;
     startDragSelection(dragStart: DOMPoint): void;
-    attachHandlersOnBackground(backgroundElements_: Set<Element>, _: Svg): void;
+    private attachHandlersOnBackground;
     populateSpatialNoteTracker(): void;
     executeOverlapVisibleChanges(): void;
     setDifference<T>(setA: Set<T>, setB: Set<T>): Set<T>;
     isDragOutOfBounds(): void;
     isResizeOutOfBounds(): void;
-    attachHandlersOnNote(note: Note, svgParentObj: Svg): void;
-    selectNote(noteElem: Rect): void;
-    deselectNote(noteElem: Rect): void;
-    selectRectIntersection(noteElem: Rect): boolean;
+    private attachHandlersOnNote;
+    private selectNote;
+    private deselectNote;
+    private selectRectIntersection;
     boxIntersect(noteBox: Box, selectBox: Box): boolean;
     clearNoteSelection(): void;
 }
