@@ -5,7 +5,8 @@ import { inject, onMounted, onUnmounted } from 'vue';
 import { CanvasPaint, FeedbackNode, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords, targetNormalizedCoords } from '@/io/keyboardAndMouse';
 import p5 from 'p5';
-import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, tri, EventChop, cos, sin, chanExports, chanExpandString } from '@/channels/channels';
+import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, tri, EventChop, cos, sin } from '@/channels/channels';
+import {channelExports, channelExportString} from '@/channels/exports'
 import { listToClip, clipToDeltas, note } from '@/music/clipPlayback';
 import { Scale } from '@/music/scale';
 import { sampler } from '@/music/synths';
@@ -108,12 +109,6 @@ onMounted(() => {
     // const func = buildFuncJS(tsSource)
     // func(launch)
 
-    const libAddedSrc = `
-    ${chanExpandString}
-
-    ${tsSource}
-    `
-
     // const acParse = acorn.parse(sucraseFunc, { ecmaVersion: 2020, sourceType: 'module' })
 
     //@ts-ignore
@@ -121,9 +116,6 @@ onMounted(() => {
     // const bodyString = sucraseFunc.substring(livecodeBody.start, livecodeBody.end)
     // const livecodeFunc = Function('launch', bodyString)
     // livecodeFunc(launch)
-
-    const livecodeFunc = Function('chanExports', libAddedSrc)
-    livecodeFunc(chanExports)
 
 
     editor = monaco.editor.create(document.getElementById('monacoHolder')!!, {
@@ -135,6 +127,17 @@ onMounted(() => {
         enabled: true
       }
     });
+
+    const eidtorVal = editor.getValue()
+
+    const libAddedSrc = `
+    ${channelExportString}
+
+    ${eidtorVal}
+    `
+
+    const livecodeFunc = Function('chanExports', libAddedSrc)
+    livecodeFunc(channelExports)
 
 
     const scale = new Scale(undefined, 48)

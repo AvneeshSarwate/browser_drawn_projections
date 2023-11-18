@@ -1,7 +1,7 @@
 import { launch } from "@/channels/channels";
 
 //needed because Tone Instrument type is not public 
-type Instrument = {
+export type Instrument = {
   triggerAttackRelease: (pitch: number, duration: number, time?: number, velocity?: number) => void;
 }
 
@@ -53,5 +53,4 @@ export function playClip(clip: Clip, synth: Instrument) {
       synth.triggerAttackRelease(note.pitch, note.duration, undefined, note.velocity);
     });
   })
- 
 }
