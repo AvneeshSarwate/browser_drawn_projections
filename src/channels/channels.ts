@@ -496,23 +496,3 @@ export const steps = (start: number, end: number, count: number): number[] => {
   }
   return out
 }
-
-//wrap all public exports in a single object so they can be imported as a single object
-export const chanExports = {
-  CancelablePromisePoxy,
-  launch, 
-  TimeContext,
-  Ramp,
-  EventChop,
-  now,
-  sinN,
-  cosN,
-  sin,
-  cos,
-  tri,
-  saw,
-  xyZip,
-  steps,
-}
-
-export const chanExportString = `const { ${Object.keys(chanExports).join(', ')} } = chanExports`

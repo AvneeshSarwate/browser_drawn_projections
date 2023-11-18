@@ -15,7 +15,7 @@ import { PianoRoll } from '@/music/pianoRoll';
 import * as monaco from 'monaco-editor';
 import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
 import TsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
-import { channelDefs, channelSrc } from './chanelSrc';
+import { channelDefs, channelModDefs, channelSrc } from './chanelSrc';
 import { buildFuncTS, buildFuncJS } from '@/livecoding/scratch';
 import { transform } from "sucrase";
 import ts, * as TS from 'typescript'
@@ -128,12 +128,12 @@ onMounted(() => {
       }
     });
 
-    const eidtorVal = editor.getValue()
+    const editorVal = editor.getValue()
 
     const libAddedSrc = `
     ${channelExportString}
 
-    ${eidtorVal}
+    ${editorVal}
     `
 
     const livecodeFunc = Function('chanExports', libAddedSrc)

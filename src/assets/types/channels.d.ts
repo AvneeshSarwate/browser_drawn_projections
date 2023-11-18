@@ -101,13 +101,4 @@ export declare const xyZip: (phase: number, xPat: (phase: number) => number, yPa
     y: number;
 }[];
 export declare const steps: (start: number, end: number, count: number) => number[];
-export declare const chanExports: {
-    CancelablePromisePoxy: typeof CancelablePromisePoxy;
-    launch: typeof launch;
-    testCancel: () => Promise<void>;
-    EventChop: typeof EventChop;
-    Ramp: typeof Ramp;
-    sinN: (phase: number) => number;
-};
-export declare const chanExpandString: string;
 export {};
