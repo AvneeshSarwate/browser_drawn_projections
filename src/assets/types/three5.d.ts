@@ -1,0 +1,33 @@
+import * as THREE from 'three';
+import { MeshLineMaterial } from 'meshline';
+import type { Three5Style } from './three5Style';
+export declare class Three5 {
+    private scene;
+    width: number;
+    height: number;
+    private camera;
+    private circleGeometry;
+    private circleStrokeGeometry;
+    private lineGeoPool;
+    private rectGeometry;
+    private cachedLineGeos;
+    private material;
+    private strokeMaterial;
+    useStroke: boolean;
+    output: THREE.WebGLRenderTarget;
+    constructor(width: number, height: number);
+    style: Three5Style | undefined;
+    styleMode: "style" | "material";
+    setStyle(style: Three5Style): void;
+    setMaterial(material: THREE.Material): void;
+    setStrokeMaterial(material: MeshLineMaterial): void;
+    getMaterial(): THREE.Material;
+    circle(x: number, y: number, radius: number, z?: number, strokeZ?: number): void;
+    rect(x: number, y: number, width: number, height: number): void;
+    line(x1: number, y1: number, x2: number, y2: number): void;
+    private useLinePool;
+    curve(rawPts: THREE.Vector2[], resolution?: number): void;
+    render(renderer: THREE.WebGLRenderer): void;
+    createGradientMaterial(color1: THREE.Color, color2: THREE.Color, angle: number, scale: number, offset: number): THREE.ShaderMaterial;
+    dispose(): void;
+}

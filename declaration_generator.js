@@ -12,7 +12,8 @@ function generateDtsFiles(filePaths, targetFolder) {
     paths: { "@/*": ["src/*"] }, // Path alias "@" for "src"
     esModuleInterop: true,
     target: ts.ScriptTarget.ES2020, // Targeting ES2015 or higher
-    downlevelIteration: true // Enable downlevel iteration
+    downlevelIteration: true, // Enable downlevel iteration
+    moduleResolution: ts.ModuleResolutionKind.Bundler, // Resolve modules using Node.js resolution
   };
 
   const resolvedFilePaths = filePaths.map(fp => path.resolve(fp));
