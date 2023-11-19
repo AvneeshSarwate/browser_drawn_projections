@@ -53,14 +53,12 @@ const clearDrawFuncs = () => {
 let editor: monaco.editor.IStandaloneCodeEditor | undefined = undefined
 let editorModel: monaco.editor.ITextModel | undefined = undefined
 
-let livecodeFunc: Function | undefined = undefined
-
 // eslint-disable-next-line no-inner-declarations
 function nodeSlice(input: string, node: any): string {
   return input.substring(node.start, node.end)
 }
 
-function parseEditorVal() {
+function parseEditorVal(): Function | undefined {
   const editorVal = editor?.getValue()
   if (editorVal) {
     const sucraseFunc = transform(editorVal, { transforms: ['typescript'] }).code
@@ -74,7 +72,7 @@ function parseEditorVal() {
     ${bodyString}
     `
 
-    livecodeFunc = Function('chanExports', 'p5sketch', 'inst', 'scale', 'savedState', 'noteInfo', libAddedSrc)
+    return Function('chanExports', 'p5sketch', 'inst', 'scale', 'savedState', 'noteInfo', libAddedSrc)
   }
 }
 
@@ -114,20 +112,21 @@ onMounted(() => {
     // monaco.editor.createModel(shaderFXDefs, "typescript", monaco.Uri.parse(shaderFxUri))
 
     const tsSource = `
-function noteCallback(p5sketch: p5, inst: Instrument, scale: Scale, savedState: any,
+  function noteCallback(p5sketch: p5, inst: Instrument, scale: Scale, savedState: any,
     noteInfo: { pitch: number, duration: number, velocity: number, index: number }) {
-
-  const origInd = scale.getIndFromPitch(noteInfo.pitch)
+  
+  const {pitch, duration, velocity} = noteInfo
+  const origInd = scale.getIndFromPitch(pitch)
   const ind = Math.random() < 0.3 ? origInd + 1 : origInd
-  const pitch = scale.getByIndex(ind)
+  const newPitch = scale.getByIndex(ind)
   console.log("pitch", pitch)
   p5sketch.circle(100, 100, 100)
 
   function m2f(midi: number) {
     return Math.pow(2, (midi - 69) / 12) * 440;
   }
-  
-  inst.triggerAttackRelease(m2f(pitch), 0.5, undefined, 0.5)
+
+  inst.triggerAttackRelease(m2f(newPitch), duration, undefined, velocity)
 }
     `
     
@@ -145,7 +144,7 @@ function noteCallback(p5sketch: p5, inst: Instrument, scale: Scale, savedState: 
       }
     });
 
-    parseEditorVal()
+    let livecodeFunc = parseEditorVal()
 
     const scale = new Scale(undefined, 48)
 
@@ -193,7 +192,7 @@ function noteCallback(p5sketch: p5, inst: Instrument, scale: Scale, savedState: 
         const p5xy = targetToP5Coords(ev, p5i, ev.target as HTMLCanvasElement)
         const normCoords = targetNormalizedCoords(ev, ev.target as HTMLCanvasElement)
 
-        parseEditorVal()
+        let lcFunc = parseEditorVal()
         const savedState = {}
 
 
@@ -237,7 +236,7 @@ function noteCallback(p5sketch: p5, inst: Instrument, scale: Scale, savedState: 
               evtChop.ramp(evtDur * 4, evtData)
               const { pitch, duration, velocity } = mel[i]
               // note(sampler, pitch, duration, velocity)
-              livecodeFunc?.(channelExports, p5i!!, sampler, scale, savedState, {pitch, duration, velocity, index: i})
+              lcFunc?.(channelExports, p5i!!, sampler, scale, savedState, {pitch, duration, velocity, index: i})
               // console.log("playing note", (Date.now() / 1000).toFixed(2), evtData)
             }
             await ctx.wait(durs[durs.length - 1] * evtDur)

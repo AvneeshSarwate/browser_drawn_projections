@@ -105,7 +105,7 @@ export class PianoRoll {
   private spatialNoteTracker: {[key: string]: Note[]};
   private selectedElements: Set<Rect>;
   selectedNoteIds: string[];
-  selectRect: any;
+  private selectRect?: Rect;
   cursorElement: any;
   cursorPosition: number;
   cursorWidth: number;
@@ -826,9 +826,9 @@ export class PianoRoll {
 
   endSelect(){
     // this.selectRect.draw('stop', event);
-    this.selectRect.remove();
+    this.selectRect?.remove();
     this.svgRoot.off('mousemove');
-    this.selectRect = null;
+    this.selectRect = undefined;
   }
 
   endDrag(){
@@ -875,8 +875,8 @@ export class PianoRoll {
       const newTopLeft = { x: Math.min(dragStart.x, movePos.x), y: Math.min(dragStart.y, movePos.y) };
       const newBottomRight = { x: Math.max(dragStart.x, movePos.x), y: Math.max(dragStart.y, movePos.y) };
 
-      this.selectRect.move(newTopLeft.x, newTopLeft.y);
-      this.selectRect.size(newBottomRight.x - newTopLeft.x, newBottomRight.y - newTopLeft.y);
+      this.selectRect?.move(newTopLeft.x, newTopLeft.y);
+      this.selectRect?.size(newBottomRight.x - newTopLeft.x, newBottomRight.y - newTopLeft.y);
       
       //select this.notes which intersect with the selectRect (mouse selection area)
       Object.keys(this.notes).forEach((noteId)=>{
@@ -903,6 +903,9 @@ export class PianoRoll {
       if (this.selectRect) {
         this.endSelect();
       }
+      this.selectRect?.remove();
+      this.selectRect = undefined;
+
       if (this.draggingActive){
         this.endDrag();
       } 
@@ -1140,7 +1143,7 @@ export class PianoRoll {
       tl: {x: noteElem.x().valueOf() as number, y: noteElem.y().valueOf() as number - this.noteHeight/2},  
       br: {x: (noteElem.x().valueOf() as number) + (noteElem.width().valueOf() as number), y: noteElem.y().valueOf() as number + this.noteHeight/2},
     };
-    const selectRectBox = this.selectRect.node.getBBox();
+    const selectRectBox = this.selectRect!!.node.getBBox();
     const selectBox = {
       tl: {x: selectRectBox.x, y: selectRectBox.y},
       br: {x: selectRectBox.x + selectRectBox.width , y: selectRectBox.y + selectRectBox.height}
