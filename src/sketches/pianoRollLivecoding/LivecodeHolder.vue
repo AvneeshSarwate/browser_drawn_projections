@@ -73,11 +73,12 @@ onMounted(() => {
     monaco.languages.typescript.typescriptDefaults.addExtraLib(infoSrc, channelUri)
     editorModel = monaco.editor.createModel(infoSrc, "typescript", monaco.Uri.parse(channelUri))
 
-    const shaderFxUri = "ts:filename/shaderFX.d.ts"
-    monaco.languages.typescript.typescriptDefaults.addExtraLib(shaderFXGlobalDefs, shaderFxUri)
-    monaco.editor.createModel(shaderFXDefs, "typescript", monaco.Uri.parse(shaderFxUri))
+    // const shaderFxUri = "ts:filename/shaderFX.d.ts"
+    // monaco.languages.typescript.typescriptDefaults.addExtraLib(shaderFXGlobalDefs, shaderFxUri)
+    // monaco.editor.createModel(shaderFXDefs, "typescript", monaco.Uri.parse(shaderFxUri))
 
     const tsSource = `
+  // import { launch } from 'channels.d.ts'
   console.log("livecode launch", launch)
   launch(async (ctx) => {
     const stepVal = 0.2
@@ -142,7 +143,7 @@ onMounted(() => {
     `
 
     const livecodeFunc = Function('chanExports', libAddedSrc)
-    livecodeFunc(channelExports)
+    // livecodeFunc(channelExports)
 
 
     const scale = new Scale(undefined, 48)
