@@ -13,6 +13,9 @@
     <li>
       instructions for manipulating the piano roll are below the piano roll
     </li>
+    <li>
+      When a note is played, the code in the editor is executed as a callback - if you change the code, the next loop you trigger will use the new code
+    </li>
   </ul>
   <div id="monacoHolder"></div>
   <br>
