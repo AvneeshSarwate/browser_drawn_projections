@@ -17,6 +17,7 @@ import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
 import TsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
 import { channelDefs, channelModDefs, channelSrc } from './chanelSrc';
 import { shaderFXDefs, customFXDefs, shaderFXGlobalDefs } from './shaderFXDefs';
+import { p5defs } from './p5Defs';
 import { buildFuncTS, buildFuncJS } from '@/livecoding/scratch';
 import { transform } from "sucrase";
 import ts, * as TS from 'typescript'
@@ -73,13 +74,20 @@ onMounted(() => {
     monaco.languages.typescript.typescriptDefaults.addExtraLib(infoSrc, channelUri)
     editorModel = monaco.editor.createModel(infoSrc, "typescript", monaco.Uri.parse(channelUri))
 
+    const p5uri = "ts:filename/p5.d.ts"
+    monaco.languages.typescript.typescriptDefaults.addExtraLib(p5defs, p5uri)
+    // monaco.editor.createModel(p5defs, "typescript", monaco.Uri.parse(p5uri))
+
     // const shaderFxUri = "ts:filename/shaderFX.d.ts"
     // monaco.languages.typescript.typescriptDefaults.addExtraLib(shaderFXGlobalDefs, shaderFxUri)
     // monaco.editor.createModel(shaderFXDefs, "typescript", monaco.Uri.parse(shaderFxUri))
 
     const tsSource = `
   // import { launch } from 'channels.d.ts'
+function noteCallback(p5sketch: p5) {
+  console.log("p5", p5sketch.width, p5sketch.height)
   console.log("livecode launch", launch)
+  p5sketch.circle(100, 100, 100)
   launch(async (ctx) => {
     const stepVal = 0.2
 
@@ -105,23 +113,10 @@ onMounted(() => {
 
     console.log("parent context time elapsed", ctx.progTime.toFixed(3))
   })
+}
     `
 
-    
-
-    // const sucraseFunc = transform(tsSource, { transforms: ['typescript'] }).code
-    // console.log("sucraseFunc", sucraseFunc)
-
-    // const func = buildFuncJS(tsSource)
-    // func(launch)
-
-    // const acParse = acorn.parse(sucraseFunc, { ecmaVersion: 2020, sourceType: 'module' })
-
-    //@ts-ignore
-    // const livecodeBody = acParse.body[0].expression.arguments[0].body.body[0]
-    // const bodyString = sucraseFunc.substring(livecodeBody.start, livecodeBody.end)
-    // const livecodeFunc = Function('launch', bodyString)
-    // livecodeFunc(launch)
+  
 
 
     editor = monaco.editor.create(document.getElementById('monacoHolder')!!, {
@@ -136,14 +131,23 @@ onMounted(() => {
 
     const editorVal = editor.getValue()
 
+    const sucraseFunc = transform(editorVal, { transforms: ['typescript'] }).code
+    const acParse = acorn.parse(sucraseFunc, { ecmaVersion: 2020, sourceType: 'module' })
+    //@ts-ignore
+    const bodyString = nodeSlice(sucraseFunc, acParse.body[0].body)
+
+    // eslint-disable-next-line no-inner-declarations
+    function nodeSlice(input: string, node: any): string {
+      return input.substring(node.start, node.end)
+    }
+
     const libAddedSrc = `
     ${channelExportString}
 
-    ${editorVal}
+    ${bodyString}
     `
 
-    const livecodeFunc = Function('chanExports', libAddedSrc)
-    // livecodeFunc(channelExports)
+    const livecodeFunc = Function('chanExports', 'p5sketch', libAddedSrc)
 
 
     const scale = new Scale(undefined, 48)
@@ -160,6 +164,12 @@ onMounted(() => {
     const p5i = appState.p5Instance!!
     const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
     const threeCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
+
+
+    setTimeout(() => {
+      console.log("livecodeFunc", livecodeFunc)
+      livecodeFunc(channelExports, p5i!!) //todo bug - why does this need to be delayed to call p5 properly?
+    }, 1000); 
 
 
     const baseDur = 0.125 / 2
