@@ -198,7 +198,7 @@ function noteCallback(p5sketch: p5) {
 
         const evtDur = baseDur * Math.pow(2, (1 - normCoords.x) * 4)
 
-        const mel = pianoRoll.getNoteData().map(n => ({ time: n.position, pitch: n.pitch, duration: n.duration, velocity: 0.5 }))
+        const mel = pianoRoll.getNoteData().map(n => ({ time: n.position, pitch: n.pitch, duration: n.duration, velocity: 1 - normCoords.y }))
         const mel2 = mel.map(i => i)
         mel2.sort((a, b) => (a.time + a.duration) - (b.time + b.duration))
         const melDuration = mel2[mel2.length - 1].time + mel2[mel2.length - 1].duration

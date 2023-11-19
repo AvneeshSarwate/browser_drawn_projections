@@ -8,7 +8,7 @@
       click anywhere to start a loop. Press the "c" key to clear all loops. Press the "u" key to clear the last loop
     </li>
     <li>
-      The notes in the piano roll determine the notes in the launched loop, and the x coordinate of your click controls the loop speed
+      The notes in the piano roll determine the notes in the launched loop, and the x coordinate of your click controls the loop speed, and the y coordinate the loop volume
     </li>
     <li>
       instructions for manipulating the piano roll are below the piano roll
