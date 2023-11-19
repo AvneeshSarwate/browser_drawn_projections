@@ -7,7 +7,7 @@ import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, tar
 import p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, tri, EventChop, cos, sin } from '@/channels/channels';
 import {channelExports, channelExportString} from '@/channels/exports'
-import { listToClip, clipToDeltas, note } from '@/music/clipPlayback';
+import { listToClip, clipToDeltas, note, type Instrument } from '@/music/clipPlayback';
 import { Scale } from '@/music/scale';
 import { sampler } from '@/music/synths';
 import { HorizontalBlur, LayerBlend, VerticalBlur, Transform } from '@/rendering/customFX';
@@ -16,7 +16,8 @@ import * as monaco from 'monaco-editor';
 import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
 import TsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
 import { channelDefs, channelModDefs, channelSrc } from './chanelSrc';
-import { shaderFXDefs, customFXDefs, shaderFXGlobalDefs } from './shaderFXDefs';
+import { playbackDefs } from './playbackDefs';
+import { scaleDef } from './scaleDef';
 import { p5defs } from './p5Defs';
 import { buildFuncTS, buildFuncJS } from '@/livecoding/scratch';
 import { transform } from "sucrase";
@@ -52,6 +53,7 @@ const clearDrawFuncs = () => {
 let editor: monaco.editor.IStandaloneCodeEditor | undefined = undefined
 let editorModel: monaco.editor.ITextModel | undefined = undefined
 
+let livecodeFunc: Function | undefined = undefined
 
 onMounted(() => {
   try {
@@ -72,49 +74,33 @@ onMounted(() => {
 
     const channelUri = "ts:filename/channels.d.ts"
     monaco.languages.typescript.typescriptDefaults.addExtraLib(infoSrc, channelUri)
-    editorModel = monaco.editor.createModel(infoSrc, "typescript", monaco.Uri.parse(channelUri))
+    // editorModel = monaco.editor.createModel(infoSrc, "typescript", monaco.Uri.parse(channelUri))
 
     const p5uri = "ts:filename/p5.d.ts"
     monaco.languages.typescript.typescriptDefaults.addExtraLib(p5defs, p5uri)
     // monaco.editor.createModel(p5defs, "typescript", monaco.Uri.parse(p5uri))
+
+    const playbackUri = "ts:filename/playback.d.ts"
+    monaco.languages.typescript.typescriptDefaults.addExtraLib(playbackDefs, playbackUri)
+
+    const scaleUri = "ts:filename/scale.d.ts"
+    monaco.languages.typescript.typescriptDefaults.addExtraLib(scaleDef, scaleUri)
 
     // const shaderFxUri = "ts:filename/shaderFX.d.ts"
     // monaco.languages.typescript.typescriptDefaults.addExtraLib(shaderFXGlobalDefs, shaderFxUri)
     // monaco.editor.createModel(shaderFXDefs, "typescript", monaco.Uri.parse(shaderFxUri))
 
     const tsSource = `
-  // import { launch } from 'channels.d.ts'
-function noteCallback(p5sketch: p5) {
-  console.log("p5", p5sketch.width, p5sketch.height)
-  console.log("livecode launch", launch)
+function noteCallback(p5sketch: p5, inst: Instrument, scale: Scale, noteInfo: { pitch: number, duration: number, velocity: number, index: number }) {
+  const origInd = scale.getIndFromPitch(noteInfo.pitch)
+  const ind = Math.random() < 0.3 ? origInd + 1 : origInd
+  const pitch = scale.getByIndex(ind)
+  console.log("pitch", pitch)
   p5sketch.circle(100, 100, 100)
-  launch(async (ctx) => {
-    const stepVal = 0.2
-
-    const start = ctx.time
-    const start2 = performance.now()
-    let drift = 0, lastDrift = 0
-    const res0 = ctx.branch(async (ctx) => {
-      for (let i = 0; i < 100; i++) {
-        const [logicalTime, wallTime] = [ctx.time - start, (performance.now() - start2) / 1000] //todo bug - is this correct?
-        drift = wallTime - logicalTime 
-        const driftDelta = drift - lastDrift
-        console.log('step', i, "logicalTime", logicalTime.toFixed(3), "wallTime", wallTime.toFixed(3), "drift", drift.toFixed(3), "driftDelta", driftDelta.toFixed(3))
-        lastDrift = drift
-        await ctx.wait(stepVal)
-      }
-    })
-
-    await ctx.branch(async (ctx) => {
-      await ctx.wait(stepVal * 10)
-      console.log('res0 cancel', performance.now() - start2)
-      res0.cancel()
-    })
-
-    console.log("parent context time elapsed", ctx.progTime.toFixed(3))
-  })
+  inst.triggerAttackRelease(pitch, 0.5, undefined, 0.5)
 }
     `
+    
 
   
 
@@ -147,7 +133,7 @@ function noteCallback(p5sketch: p5) {
     ${bodyString}
     `
 
-    const livecodeFunc = Function('chanExports', 'p5sketch', libAddedSrc)
+    livecodeFunc = Function('chanExports', 'p5sketch', 'inst', 'scale', 'noteInfo', libAddedSrc)
 
 
     const scale = new Scale(undefined, 48)
@@ -167,8 +153,8 @@ function noteCallback(p5sketch: p5) {
 
 
     setTimeout(() => {
-      console.log("livecodeFunc", livecodeFunc)
-      livecodeFunc(channelExports, p5i!!) //todo bug - why does this need to be delayed to call p5 properly?
+      // console.log("livecodeFunc", livecodeFunc)
+      livecodeFunc?.(channelExports, p5i!!, sampler, scale, {pitch: 60}) //todo bug - why does this need to be delayed to call p5 properly?
     }, 1000); 
 
 

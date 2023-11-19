@@ -15,6 +15,7 @@
     </li>
   </ul>
   <div id="monacoHolder"></div>
+  <br>
   <div id="pianoRollHolder"></div>
   <div>
   <ul id="pianoRollInstructions">
@@ -84,9 +85,9 @@
   visibility: visible;
 }
 
-#pianoRollInstructions {
+/* #pianoRollInstructions {
   display: none;
-}
+} */
 
 #monacoHolder {
   width: 640px;
