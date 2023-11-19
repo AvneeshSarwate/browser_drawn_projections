@@ -55,6 +55,29 @@ let editorModel: monaco.editor.ITextModel | undefined = undefined
 
 let livecodeFunc: Function | undefined = undefined
 
+// eslint-disable-next-line no-inner-declarations
+function nodeSlice(input: string, node: any): string {
+  return input.substring(node.start, node.end)
+}
+
+function parseEditorVal() {
+  const editorVal = editor?.getValue()
+  if (editorVal) {
+    const sucraseFunc = transform(editorVal, { transforms: ['typescript'] }).code
+    const acParse = acorn.parse(sucraseFunc, { ecmaVersion: 2020, sourceType: 'module' })
+    //@ts-ignore
+    const bodyString = nodeSlice(sucraseFunc, acParse.body[0].body)
+
+    const libAddedSrc = `
+    ${channelExportString}
+
+    ${bodyString}
+    `
+
+    livecodeFunc = Function('chanExports', 'p5sketch', 'inst', 'scale', 'savedState', 'noteInfo', libAddedSrc)
+  }
+}
+
 onMounted(() => {
   try {
 
@@ -91,13 +114,20 @@ onMounted(() => {
     // monaco.editor.createModel(shaderFXDefs, "typescript", monaco.Uri.parse(shaderFxUri))
 
     const tsSource = `
-function noteCallback(p5sketch: p5, inst: Instrument, scale: Scale, noteInfo: { pitch: number, duration: number, velocity: number, index: number }) {
+function noteCallback(p5sketch: p5, inst: Instrument, scale: Scale, savedState: any,
+    noteInfo: { pitch: number, duration: number, velocity: number, index: number }) {
+
   const origInd = scale.getIndFromPitch(noteInfo.pitch)
   const ind = Math.random() < 0.3 ? origInd + 1 : origInd
   const pitch = scale.getByIndex(ind)
   console.log("pitch", pitch)
   p5sketch.circle(100, 100, 100)
-  inst.triggerAttackRelease(pitch, 0.5, undefined, 0.5)
+
+  function m2f(midi: number) {
+    return Math.pow(2, (midi - 69) / 12) * 440;
+  }
+  
+  inst.triggerAttackRelease(m2f(pitch), 0.5, undefined, 0.5)
 }
     `
     
@@ -115,26 +145,7 @@ function noteCallback(p5sketch: p5, inst: Instrument, scale: Scale, noteInfo: { 
       }
     });
 
-    const editorVal = editor.getValue()
-
-    const sucraseFunc = transform(editorVal, { transforms: ['typescript'] }).code
-    const acParse = acorn.parse(sucraseFunc, { ecmaVersion: 2020, sourceType: 'module' })
-    //@ts-ignore
-    const bodyString = nodeSlice(sucraseFunc, acParse.body[0].body)
-
-    // eslint-disable-next-line no-inner-declarations
-    function nodeSlice(input: string, node: any): string {
-      return input.substring(node.start, node.end)
-    }
-
-    const libAddedSrc = `
-    ${channelExportString}
-
-    ${bodyString}
-    `
-
-    livecodeFunc = Function('chanExports', 'p5sketch', 'inst', 'scale', 'noteInfo', libAddedSrc)
-
+    parseEditorVal()
 
     const scale = new Scale(undefined, 48)
 
@@ -152,9 +163,10 @@ function noteCallback(p5sketch: p5, inst: Instrument, scale: Scale, noteInfo: { 
     const threeCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
 
 
+    const initialSavedState = {}
     setTimeout(() => {
       // console.log("livecodeFunc", livecodeFunc)
-      livecodeFunc?.(channelExports, p5i!!, sampler, scale, {pitch: 60}) //todo bug - why does this need to be delayed to call p5 properly?
+      livecodeFunc?.(channelExports, p5i!!, sampler, scale, {}, {pitch: 60}) //todo bug - why does this need to be delayed to call p5 properly?
     }, 1000); 
 
 
@@ -180,6 +192,9 @@ function noteCallback(p5sketch: p5, inst: Instrument, scale: Scale, noteInfo: { 
 
         const p5xy = targetToP5Coords(ev, p5i, ev.target as HTMLCanvasElement)
         const normCoords = targetNormalizedCoords(ev, ev.target as HTMLCanvasElement)
+
+        parseEditorVal()
+        const savedState = {}
 
 
         const evtDur = baseDur * Math.pow(2, (1 - normCoords.x) * 4)
@@ -221,7 +236,8 @@ function noteCallback(p5sketch: p5, inst: Instrument, scale: Scale, noteInfo: { 
               const evtData = { r: p5xy.x / p5i.width, g: p5xy.y / p5i.height, b: r(), x, y }
               evtChop.ramp(evtDur * 4, evtData)
               const { pitch, duration, velocity } = mel[i]
-              note(sampler, pitch, duration, velocity)
+              // note(sampler, pitch, duration, velocity)
+              livecodeFunc?.(channelExports, p5i!!, sampler, scale, savedState, {pitch, duration, velocity, index: i})
               // console.log("playing note", (Date.now() / 1000).toFixed(2), evtData)
             }
             await ctx.wait(durs[durs.length - 1] * evtDur)
