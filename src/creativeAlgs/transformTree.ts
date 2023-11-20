@@ -44,8 +44,8 @@ class VariationTree<T> {
     return this.currentNode.parent?.children.length ?? 0
   }
 
-  siblingByTransform(transformKey: string): VariationNode<T>[] | undefined {
-    return this.currentNode.parent?.childrenByTransform.get(transformKey)
+  siblingsByTransform(transformKey: string): VariationNode<T>[] | null {
+    return this.currentNode.parent?.childrenByTransform.get(transformKey) ?? []
   }
 
   numSibsByTransform(transformKey: string): number {
@@ -53,11 +53,15 @@ class VariationTree<T> {
     const usedKey = this.currentNode.parent?.childrenByTransform.has(transformKey)
       ? transformKey
       : ''
-    return usedKey === '' ? this.siblings().length : this.siblingByTransform(usedKey)?.length ?? 0
+    return usedKey === '' ? this.siblings().length : this.siblingsByTransform(usedKey)?.length ?? 0
+  }
+
+  actualKey(transformKey: string): string {
+    return this.currentNode.childrenByTransform.has(transformKey) ? transformKey : ''
   }
 
   numChildrenByTransform(transformKey: string): number {
-    const usedKey = this.currentNode.childrenByTransform.has(transformKey) ? transformKey : ''
+    const usedKey = this.actualKey(transformKey)
     return usedKey === ''
       ? this.currentNode.children.length
       : this.currentNode.childrenByTransform.get(usedKey)?.length ?? 0
@@ -69,10 +73,10 @@ class VariationTree<T> {
 
   sibIndexByTransform(transformKey: string): number {
     if (this.currentNode === this.root) return 0
-    const usedKey = this.currentNode.childrenByTransform.has(transformKey) ? transformKey : ''
+    const usedKey = this.actualKey(transformKey)
     return usedKey === ''
       ? this.siblingIndex()
-      : this.siblingByTransform(this.currentNode.transformKey)?.indexOf(this.currentNode) ?? 0
+      : this.siblingsByTransform(this.currentNode.transformKey)?.indexOf(this.currentNode) ?? 0
   }
 
   makeChild(transformKey: string) {
@@ -118,7 +122,7 @@ class VariationTree<T> {
       if (transformKey !== '' && this.numChildrenByTransform(transformKey) === 0) {
         this.makeChild(transformKey)
       } else {
-        const usedKey = this.currentNode.childrenByTransform.has(transformKey) ? transformKey : ''
+        const usedKey = this.actualKey(transformKey)
         this.currentNode =
           usedKey === ''
             ? this.currentNode.children[
@@ -141,7 +145,7 @@ class VariationTree<T> {
       if (transformKey !== '' && this.numChildrenByTransform(transformKey) === 0) {
         this.makeChild(transformKey)
       } else {
-        const usedKey = this.currentNode.childrenByTransform.has(transformKey) ? transformKey : ''
+        const usedKey = this.actualKey(transformKey)
         this.currentNode =
           usedKey === ''
             ? this.currentNode.children[mod2(ind, this.currentNode.children.length)]
@@ -165,8 +169,8 @@ class VariationTree<T> {
         this.currentNode =
           usedKey === ''
             ? this.siblings()[Math.floor(Math.random() * this.siblings().length)]
-            : this.siblingByTransform(usedKey)![
-                Math.floor(Math.random() * this.siblingByTransform(usedKey)!.length)
+            : this.siblingsByTransform(usedKey)![
+                Math.floor(Math.random() * this.siblingsByTransform(usedKey)!.length)
               ]
       }
     }
@@ -188,7 +192,7 @@ class VariationTree<T> {
         this.currentNode =
           usedKey === ''
             ? this.siblings()[mod2(ind, this.numSiblings())]
-            : this.siblingByTransform(usedKey)![mod2(ind, this.numSibsByTransform(usedKey))]
+            : this.siblingsByTransform(usedKey)![mod2(ind, this.numSibsByTransform(usedKey))]
       }
     }
   }
@@ -206,7 +210,7 @@ class VariationTree<T> {
       this.currentNode =
         usedKey === ''
           ? this.currentNode.parent!.children[mod2(this.siblingIndex() + amt, this.numSiblings())]
-          : this.siblingByTransform(usedKey)![
+          : this.siblingsByTransform(usedKey)![
               mod2(this.sibIndexByTransform(usedKey) + amt, this.numSibsByTransform(usedKey))
             ]
     }
