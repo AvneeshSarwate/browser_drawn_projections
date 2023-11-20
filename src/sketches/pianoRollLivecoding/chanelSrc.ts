@@ -394,7 +394,7 @@ export const testCancel = async () => {
     let drift, lastDrift = 0
     const res0 = ctx.branch(async (ctx) => {
       for (let i = 0; i < 100; i++) {
-        const [logicalTime, wallTime] = [ctx.time - start, (performance.now() - start2) / 1000] //todo bug - is this correct?
+        const [logicalTime, wallTime] = [ctx.time - start, (performance.now() - start2) / 1000]
         drift = wallTime - logicalTime 
         const driftDelta = drift - lastDrift
         console.log('step', i, "logicalTime", logicalTime.toFixed(3), "wallTime", wallTime.toFixed(3), "drift", drift.toFixed(3), "driftDelta", driftDelta.toFixed(3))

@@ -165,7 +165,7 @@ onMounted(() => {
     const initialSavedState = {}
     setTimeout(() => {
       // console.log("livecodeFunc", livecodeFunc)
-      livecodeFunc?.(channelExports, p5i!!, sampler, scale, {}, {pitch: 60}) //todo bug - why does this need to be delayed to call p5 properly?
+      // livecodeFunc?.(channelExports, p5i!!, sampler, scale, {}, {pitch: 60}) //todo bug - why does this need to be delayed to call p5 properly?
     }, 1000); 
 
 
@@ -179,7 +179,7 @@ onMounted(() => {
       const mousePos = { x: 0, y: 0 }
 
       mousemoveEvent(ev => {
-        const p5xy = targetToP5Coords(ev, p5i, ev.target as HTMLCanvasElement)
+        const p5xy = targetNormalizedCoords(ev, ev.target as HTMLCanvasElement)
         mousePos.x = p5xy.x
         mousePos.y = p5xy.y
       }, threeCanvas)
@@ -229,7 +229,7 @@ onMounted(() => {
             for (let i = 0; i < mel.length; i++) {
               const dur = durs[i]
               const phase = mel[i].time / melDuration
-              await ctx.wait(dur * evtDur)
+              await ctx.wait(Math.max(dur * evtDur * (1 - mousePos.y), 0))
               const x = cos(phase) * rad + p5xy.x
               const y = sin(phase) * rad + p5xy.y
               const evtData = { r: p5xy.x / p5i.width, g: p5xy.y / p5i.height, b: r(), x, y }

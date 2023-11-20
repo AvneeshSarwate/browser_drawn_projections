@@ -13,6 +13,7 @@ const blockRockingUrl = './count_10_av_60fps.mp4';
   <div id="wavesurferHolder"></div>
   <button id="wavesurferPlay">Play/Pause</button>
   <div id="debugInfo"></div>
+  <div id="teleportTarget"></div>
 </template>
 
 

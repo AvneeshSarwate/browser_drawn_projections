@@ -319,6 +319,11 @@ export class Transport {
   }
 }
 
+export type TreeProp = {
+  [key: string]: string | number | boolean | TreeProp;
+};
+
+
 
 /**
  * more things to test:

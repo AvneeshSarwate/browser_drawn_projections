@@ -19,6 +19,7 @@ import { Scale } from '@/music/scale';
 import { clipToDeltas, listToClip, note } from '@/music/clipPlayback';
 import { sampler } from '@/music/synths';
 import { clearListeners, mousedownEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
+import AutoUI from '@/components/AutoUI.vue';
 
 const fps = new FPS()
 
@@ -184,6 +185,8 @@ onMounted(() => {
 
 
 
+
+
 onUnmounted(() => {
   /*todo hotreload - use similar pattern to shaderGraphEndNode?.disposeAll() for hotreloading time loops?
   can wrap launch() function in something that registers loops to a global store, 
@@ -195,65 +198,23 @@ onUnmounted(() => {
   clearListeners()
   fps.remove()
 })
-
-/*
-more ideas
-- todo wishlist - make "blocks" of code undoable?
- - would involve making property assignments automatically undoable, or
-   having a cleaner api for assigning undoable properties
-   (maybe just setters for props that need undo, with a _ suffix indicating undiability)
-- have undo-tree instead of undo stack and then automatic tree walking sequencers
-- can call some disableAll() function at the start of your script that turns off all regions 
-  so that you can know that your script defines "everything" on the screen
-- can have other types of "drawable objects" that you livecode as well, instead of just 
-  "plane-animations" (eg, like gesture loops)
-- if you can save and recall scripts, they can be like "scenes" - 
-  if you really want, can even snapshot a thumbnail and have a scene selector UI
-
-
-- todo wishlist create a "modal drawing" interface with mouse and keyboard - different keys for different
-  drawing modes, and also a way to record loops of drawing and play them back
-  - also be able to save and load these loops to file, create transformed instances of them
-    - go back to "delta list" format for saving gestures to enable this
-
-- create the equivalent of CHOPs to provide data sources for animations
-  - need to think about rethink the API for animation segments
-    - abstractions shouldn't be too deep for newcomers to author their own 
-    - need to be able to bind more generally to any kind of "drawable object"
-      - or at least, need to provide type-safety so you can't bind to the wrong thing
-  - figure out how to bind chops to fx parameters
-  - figure out how to bind chops to live inputs (mouse, keyboard, midi, etc)
-  - create equivalents for event-chop and timer chop
-
-- think about an API for transport controls
-  - play, pause, stop, loop, etc
-  - also, how to bind to these from chops
-  - also, how to bind to these from live inputs (mouse, keyboard, midi, etc)
-  - Use tone.js transport?
-
-- incorporate theater.js for timelining things?
-
-- port over Kotlin structured-timing-loops API into typescript
-  - use tone.js transport for reference timing
-  - implement branch() and wait() functions 
-
-- look into using advanced typescript types to provide more robust way to access
-  channel names for things like event chop where you can have arbitrary metadata
-
-- practical steps
-  - make animations triggerable
-    - do this by having animations run off of an event chop?
-      - have animations take an array of phase values instead of a single one, and
-        run their animation for each val - makes them auto-instancing  
-  - don't actuall need a pattern CHOP, just need pattern generating functions
-    with good API/defaults, driven by a phase value
-
-*/
+const uiObj = {
+  cat: "cat",
+  someNum: 5,
+  someBool: true,
+  obj: {
+    someNum: 5,
+    someStr: "str"
+  }
+}
 
 </script>
 
 <template>
   <div></div>
+  <Teleport to="#teleportTarget">
+    <AutoUI :object-to-edit="uiObj"/>
+  </Teleport>
 </template>
 
 <style scoped></style>
