@@ -40,6 +40,6 @@ const blockRockingUrl = './count_10_av_60fps.mp4';
 }
 
 #video {
-  /* display: none; */
+  display: none;
 }
 </style>

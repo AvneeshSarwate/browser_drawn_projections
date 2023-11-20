@@ -3,7 +3,7 @@
 import { type DevelopmentAppState } from './developmentAppState';
 import p5 from 'p5';
 import * as THREE from 'three'
-import { inject, onMounted, onUnmounted } from 'vue';
+import { inject, onMounted, onUnmounted, ref } from 'vue';
 import * as a from './planeAnimations'
 import { groupedAnimation0 } from './modularizedTransforms';
 import { xyZip, sinN, cosN, EventChop, steps, now, launch, Ramp, sin, cos } from '@/channels/channels';
@@ -202,9 +202,12 @@ const uiObj0 = {
   cat: "cat",
   someNum: 5,
   someBool: true,
-  obj0: {
+  obj1: {
     someNum: 5,
-    someStr: "str"
+    someStr: "str",
+    moaObj: {
+      str2: "a"
+    }
   }
 }
 
@@ -212,21 +215,32 @@ const uiObj1 = {
   cat: "cat2",
   someNum: 50,
   someBool: true,
+  diffProp: "diff",
   obj1: {
     someNum: 5,
-    someStr: "str"
+    someStr: "str",
+    moaObj: {
+      str2: "aaaaa"
+    }
   }
 }
 
 //todo api - figure out how to dynamically switch stuff out sent to the AutoUI component
-let uiObj = uiObj0
+let uiObj: any = uiObj0
+
+let uiObjRef = ref(uiObj)
+let index = 0
+setInterval(() => {
+  console.log("setting uiObjRef")
+  uiObjRef.value = index++ % 2 === 0 ? uiObj0 : uiObj1
+}, 1000)
 
 </script>
 
 <template>
   <div></div>
   <Teleport to="#teleportTarget">
-    <AutoUI :object-to-edit="uiObj"/>
+    <AutoUI :object-to-edit="uiObjRef"/>
   </Teleport>
 </template>
 

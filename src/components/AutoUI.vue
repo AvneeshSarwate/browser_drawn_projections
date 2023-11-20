@@ -42,7 +42,9 @@ function setPropValue(key: string, value: string | number) {
     <div v-else-if="item?.type === 'nested'">
       <details>
         <summary>{{ item.key }}</summary>
-        <AutoUI :object-to-edit="(props.objectToEdit[item.key] as TreeProp)" />
+        <div class="autoUIInset">
+          <AutoUI :object-to-edit="(props.objectToEdit[item.key] as TreeProp)" />
+        </div>
       </details>
     </div>
   </div>
@@ -50,4 +52,7 @@ function setPropValue(key: string, value: string | number) {
 
 <style scoped>
 /* Add CSS styles if needed */
+.autoUIInset {
+  margin-left: 25px;
+}
 </style>
