@@ -2,7 +2,10 @@
 import { defineProps, computed } from 'vue'
 import { type TreeProp } from '@/stores/undoCommands'
 
-const props = defineProps<{objectToEdit: TreeProp}>()
+const props = defineProps<{ objectToEdit: TreeProp }>()
+
+//todo api - add arrays to the tree prop type
+//todo - add a panel for adjusting the display properties AutoUI view (make it like unity inspector)
 
 const renderInputs = computed(() => {
   return Object.keys(props.objectToEdit).map(key => {
