@@ -198,15 +198,28 @@ onUnmounted(() => {
   clearListeners()
   fps.remove()
 })
-const uiObj = {
+const uiObj0 = {
   cat: "cat",
   someNum: 5,
   someBool: true,
-  obj: {
+  obj0: {
     someNum: 5,
     someStr: "str"
   }
 }
+
+const uiObj1 = {
+  cat: "cat2",
+  someNum: 50,
+  someBool: true,
+  obj1: {
+    someNum: 5,
+    someStr: "str"
+  }
+}
+
+//todo api - figure out how to dynamically switch stuff out sent to the AutoUI component
+let uiObj = uiObj0
 
 </script>
 
