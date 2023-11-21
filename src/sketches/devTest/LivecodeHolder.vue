@@ -20,6 +20,8 @@ import { clipToDeltas, listToClip, note } from '@/music/clipPlayback';
 import { sampler } from '@/music/synths';
 import { clearListeners, mousedownEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import AutoUI from '@/components/AutoUI.vue';
+import studio from '@theatre/studio'
+import { getProject, types } from '@theatre/core';
 
 const fps = new FPS()
 
@@ -72,26 +74,6 @@ const reset = () => {
 // const waveAudioBands = new MediaAudioAnalyzer(wavesurfer.getMediaElement() as HTMLVideoElement)
 
 
-let scale = new Scale()
-//@ts-ignore
-window.scaleInst = new Scale()
-
-let neg1 = scale.getByIndex(-1)
-let negOct = scale.getByIndex(-8)
-
-let x = 5
-
-let vec2 = (x: number, y: number | undefined) => 5
-let vec3 = (x: number, y: number | undefined, z: number | undefined) => 5 
-let gl_fragCoord = vec2(0, 0)
-
-const shaderFunc = () => {
-  gl_fragCoord = vec2(0, 0) + 5 * vec2(1, 1) 
-}
-
-console.log("shaderFunc", shaderFunc.toString())
-
-
 onMounted(() => {
   try {
     const p5i = appState.p5Instance!!
@@ -102,63 +84,53 @@ onMounted(() => {
 
     if (appState.p5Instance && appState.regions.list.length > 0) {
 
-      const scale = new Scale()
-      
-
-      const evtDur = 0.125
-      const mel = listToClip(scale.getMultiple([1, 3, 5, 6, 8, 10, 12]), evtDur)
-      const circle0 = xyZip(0, cos, sin, mel.length)
-      const rad = 50
-
 
       const code = () => {
         reset()
 
 
-        mousedownEvent(ev => {
+        const circleDef = {
+          x: 0.5,
+          y: 0.5,
+        }
 
-          const p5xy = targetToP5Coords(ev, p5i, ev.target as HTMLCanvasElement)
-          const evtChop = new EventChop<{ r: number, g: number, b: number, x: number, y: number }>
-          const durs = clipToDeltas(mel)
-          console.log("durs", durs)
-          const drawFuncId = crypto.randomUUID()
-          appState.drawFuncMap.set(drawFuncId, () => {
-            evtChop.events.forEach(evt => {
-              const { r, g, b, x, y } = evt.metadata
-              p5i.push()
-              p5i.fill(r * 255, g * 255, b * 255)
-              p5i.circle(x, y, 40 * (1 - evt.evt.val()))
-              p5i.pop()
-            })
-          })
+        appState.drawFunctions.push(() => {
+          p5i!!.fill(255, 0, 0)
+          p5i!!.circle(circleDef.x * p5i!!.width, circleDef.y * p5i!!.height, 100)
+        })
 
-          const r = () => Math.random()
-          
-          
-          launch(async ctx => {
-            for (let i = 0; i < mel.length; i++) {
-              const dur = durs[i]
-              await ctx.wait(dur)
-              const x = circle0[i].x * rad + p5xy.x
-              const y = circle0[i].y * rad + p5xy.y
-              const evtData = { r: p5xy.x/p5i.width, g: p5xy.y/p5i.height, b: r(), x, y }
-              evtChop.ramp(evtDur*4, evtData)
-              const { pitch, duration, velocity } = mel[i]
-              note(sampler, pitch, duration, velocity)
-              console.log("playing note", (Date.now()/1000).toFixed(2), evtData)
-            }
-            await ctx.wait(evtDur*4)
-            appState.drawFuncMap.delete(drawFuncId)
-          })
-        }, threeCanvas)
+        studio.initialize()
+
+        const project = getProject('animation test')
+        const sheet = project.sheet('sheet 1')
+        const circleAnimObj = sheet.object('firstCircle', {
+          x: types.number(circleDef.x, { range: [0, 1] }),
+          y: types.number(circleDef.y, { range: [0, 1] }),
+          zoom: types.number(0.01, { range: [0, 0.2] }),
+        })
+
+        const fdbkZoom = new FeedbackZoom({ src: p5Canvas })
+
+        setInterval(() => {
+          sheet.sequence.position = Math.random() * 10
+        }, 1000)
+
+        circleAnimObj.onValuesChange(({ x, y, zoom }) => {
+          console.log("updating circle", x, y, zoom)
+          circleDef.x = x
+          circleDef.y = y
+          fdbkZoom.setUniforms({ zoom })
+        })
 
 
 
-        //todo api - p5 draw functions called AFTER shader draw don't show up in the shader - fix or warn about this
-        // const fdbkZoom = new FeedbackZoom({ src: p5Canvas })
+
+        
+
+
         // const wobble = new Wobble({ src: three5i!!.output.texture })
         // wobble.setUniforms({xStrength: 0.01, yStrength: 0.01})
-        const passthru = new Passthru({ src: p5Canvas})
+        const passthru = new Passthru({ src: fdbkZoom})
         const canvasPaint = new CanvasPaint({ src: passthru }) 
         appState.drawFunctions.push(() => canvasPaint.renderAll(appState.threeRenderer!!))
 
@@ -231,9 +203,9 @@ let uiObj: any = uiObj0
 let uiObjRef = ref(uiObj)
 let index = 0
 setInterval(() => {
-  console.log("setting uiObjRef")
+  // console.log("setting uiObjRef")
   uiObjRef.value = index++ % 2 === 0 ? uiObj0 : uiObj1
-}, 1000)
+}, 5000)
 
 </script>
 

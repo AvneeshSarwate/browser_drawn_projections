@@ -36,7 +36,7 @@ class VariationTree<T> {
     }
   }
 
-  siblings(transformKey: string = ''): VariationNode<T>[] {
+  siblings(): VariationNode<T>[] {
     return this.currentNode.parent?.children ?? []
   }
 
