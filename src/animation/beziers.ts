@@ -124,7 +124,13 @@ export function pos2val(pos: number, positions: number[], values: number[], hand
 }
 
 
-export function getAnimPos(debugName: string, normTime: number, seq: TheatreSequence) {
+function debugNameTranslate(debugName: string): string {
+  const parts = debugName.split('.');
+  return parts[0]+":["+parts.slice(1).map(p => '"'+p+'"').join(',')+"]";
+}
+
+export function getAnimPos(propName: string, normTime: number, seq: TheatreSequence) {
+  const debugName = debugNameTranslate(propName);
   for(const objKey in seq.tracksByObject) {
     const obj = seq.tracksByObject[objKey];
     for(const trackKey in obj.trackData) {

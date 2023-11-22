@@ -23,7 +23,7 @@ import AutoUI from '@/components/AutoUI.vue';
 import studio from '@theatre/studio'
 import { getProject, types } from '@theatre/core';
 import { anim0 } from './animations'
-import { getAnimPos } from '@/animation/beziers'
+import { getAnimPos, type TheatreSequence } from '@/animation/beziers'
 
 
 const p = getAnimPos("aa", 0.5, anim0.sheetsById['sheet 1'].sequence)
@@ -137,15 +137,18 @@ onMounted(() => {
           p5i!!.circle(programaticCircle.x * p5i!!.width, programaticCircle.y * p5i!!.height, 100)
         })
 
+        const seq = studio.createContentOfSaveFile('animation test') as TheatreSequence
+
         launchLoop(async (ctx) => {
           const starTime = now()
           const period = 5
-          //@ts-ignore
+
+          // eslint-disable-next-line no-constant-condition
           while (true) {
             const time = now() - starTime
             const normTime = (time % period) / period
-            programaticCircle.x = getAnimPos('secondCircle:["x"]', normTime, anim0.sheetsById['sheet 1'].sequence)
-            programaticCircle.y = getAnimPos('secondCircle:["y"]', normTime, anim0.sheetsById['sheet 1'].sequence)
+            programaticCircle.x = getAnimPos('secondCircle.x', normTime, anim0.sheetsById['sheet 1'].sequence)
+            programaticCircle.y = getAnimPos('secondCircle.y', normTime, anim0.sheetsById['sheet 1'].sequence)
 
             await ctx.waitFrame()
           }
@@ -197,9 +200,9 @@ onMounted(() => {
         // wobble.setUniforms({xStrength: 0.01, yStrength: 0.01})
         const passthru = new Passthru({ src: fdbkZoom})
         const canvasPaint = new CanvasPaint({ src: passthru }) 
-        appState.drawFunctions.push(() => canvasPaint.renderAll(appState.threeRenderer!!))
 
         shaderGraphEndNode = canvasPaint
+        appState.shaderDrawFunc = () => shaderGraphEndNode!!.renderAll(appState.threeRenderer!!)
       }
 
 

@@ -34,7 +34,10 @@ export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => Develo
         }
 
         appState().drawFuncMap.forEach(d => d(p))
+        appState().oneTimeDrawFuncs.forEach(d => d(p))
+        appState().oneTimeDrawFuncs.length = 0
         appState().drawFunctions.forEach(d => d(p))
+        appState().shaderDrawFunc?.()
       }
 
       const end = stats.end()
