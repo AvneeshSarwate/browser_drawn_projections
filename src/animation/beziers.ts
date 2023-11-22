@@ -137,5 +137,6 @@ export function getAnimPos(debugName: string, normTime: number, seq: TheatreSequ
       }
     }
   }
+  return 0;
 }
 

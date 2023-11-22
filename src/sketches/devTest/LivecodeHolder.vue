@@ -6,7 +6,7 @@ import * as THREE from 'three'
 import { inject, onMounted, onUnmounted, ref } from 'vue';
 import * as a from './planeAnimations'
 import { groupedAnimation0 } from './modularizedTransforms';
-import { xyZip, sinN, cosN, EventChop, steps, now, launch, Ramp, sin, cos } from '@/channels/channels';
+import { xyZip, sinN, cosN, EventChop, steps, now, launch, Ramp, sin, cos, CancelablePromisePoxy, TimeContext } from '@/channels/channels';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { MediaAudioAnalyzer } from '@/rendering/VideoAudioAnalyzer';
 import WaveSurfer from 'wavesurfer.js'
@@ -28,21 +28,18 @@ import { getAnimPos } from '@/animation/beziers'
 
 const p = getAnimPos("aa", 0.5, anim0.sheetsById['sheet 1'].sequence)
 
-const fps = new FPS()
-
 const appState = inject<DevelopmentAppState>('appState')!!
-
-const reg = (i: number) => appState.regions.list[i] 
-
-const norm  = ({x, y}: {x: number, y: number}) => ({x: x * appState.p5Instance!!.width, y: y * appState.p5Instance!!.height})
-
-const aseq = (animations: a.AnimationSegment[]) => {
-  return new a.AnimationSeq(animations)
-}
 
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
 
 let three5i: Three5 | undefined = undefined
+
+let timeLoops: CancelablePromisePoxy<any>[] = []
+const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromisePoxy<any> => {
+  const loop = launch(block)
+  timeLoops.push(loop)
+  return loop
+}
 
 const reset = () => {
   appState.regions.list.forEach(r => {
@@ -130,6 +127,30 @@ onMounted(() => {
 
         const fdbkZoom = new FeedbackZoom({ src: p5Canvas })
 
+        const programaticCircle = {
+          x: 0.5,
+          y: 0.5,
+        }
+
+        appState.drawFunctions.push(() => {
+          p5i!!.fill(0, 0, 255)
+          p5i!!.circle(programaticCircle.x * p5i!!.width, programaticCircle.y * p5i!!.height, 100)
+        })
+
+        launchLoop(async (ctx) => {
+          const starTime = now()
+          const period = 5
+          //@ts-ignore
+          while (true) {
+            const time = now() - starTime
+            const normTime = (time % period) / period
+            programaticCircle.x = getAnimPos('secondCircle:["x"]', normTime, anim0.sheetsById['sheet 1'].sequence)
+            programaticCircle.y = getAnimPos('secondCircle:["y"]', normTime, anim0.sheetsById['sheet 1'].sequence)
+
+            await ctx.waitFrame()
+          }
+        })
+
         //@ts-ignore
         window.writeSaveFile = () => {
           const saveFile = studio.createContentOfSaveFile('animation test')
@@ -167,7 +188,7 @@ onMounted(() => {
         })
 
 
-
+        
 
         
 
@@ -212,7 +233,8 @@ onUnmounted(() => {
   shaderGraphEndNode?.disposeAll()
   three5i?.dispose()
   clearListeners()
-  fps.remove()
+  timeLoops.forEach(loop => loop.cancel())
+  timeLoops = []
 })
 const uiObj0 = {
   cat: "cat",
