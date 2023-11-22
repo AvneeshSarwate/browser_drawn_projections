@@ -22,6 +22,11 @@ import { clearListeners, mousedownEvent, targetToP5Coords } from '@/io/keyboardA
 import AutoUI from '@/components/AutoUI.vue';
 import studio from '@theatre/studio'
 import { getProject, types } from '@theatre/core';
+import { anim0 } from './animations'
+import { getAnimPos } from '@/animation/beziers'
+
+
+const p = getAnimPos("aa", 0.5, anim0.sheetsById['sheet 1'].sequence)
 
 const fps = new FPS()
 
@@ -94,32 +99,71 @@ onMounted(() => {
           y: 0.5,
         }
 
+        const circleDef2 = {
+          x: 0.5,
+          y: 0.5,
+        }
+
         appState.drawFunctions.push(() => {
           p5i!!.fill(255, 0, 0)
           p5i!!.circle(circleDef.x * p5i!!.width, circleDef.y * p5i!!.height, 100)
+
+          p5i!!.fill(0, 255, 0)
+          p5i!!.circle(circleDef2.x * p5i!!.width, circleDef2.y * p5i!!.height, 100)
         })
 
         studio.initialize()
 
         const project = getProject('animation test')
         const sheet = project.sheet('sheet 1')
+
         const circleAnimObj = sheet.object('firstCircle', {
           x: types.number(circleDef.x, { range: [0, 1] }),
           y: types.number(circleDef.y, { range: [0, 1] }),
           zoom: types.number(0.01, { range: [0, 0.2] }),
         })
 
+        const circleAnimObj2 = sheet.object('secondCircle', {
+          x: types.number(circleDef2.x, { range: [0, 1] }),
+          y: types.number(circleDef2.y, { range: [0, 1] }),
+        })
+
         const fdbkZoom = new FeedbackZoom({ src: p5Canvas })
 
-        setInterval(() => {
-          sheet.sequence.position = Math.random() * 10
-        }, 1000)
+        //@ts-ignore
+        window.writeSaveFile = () => {
+          const saveFile = studio.createContentOfSaveFile('animation test')
+          const saveFileStr = JSON.stringify(saveFile)
+          console.log("saveFileStr", saveFileStr)
+          const blob = new Blob([saveFileStr], { type: 'text/plain;charset=utf-8' })
+
+          //download file with filename animations_timestamp
+          const a = document.createElement('a')
+          a.download = `animations_${Date.now()}.json`
+          a.href = URL.createObjectURL(blob)
+          a.click()
+          a.remove()
+        }
+
+        // setInterval(() => {
+        //   sheet.sequence.position = Math.random() * 10
+        // }, 1000)
+
+        // window.saveAnimation = () => {
+        //   studio.createContentOfSaveFile()
+        // }
 
         circleAnimObj.onValuesChange(({ x, y, zoom }) => {
-          console.log("updating circle", x, y, zoom)
+          // console.log("updating circle", x, y, zoom)
           circleDef.x = x
           circleDef.y = y
           fdbkZoom.setUniforms({ zoom })
+        })
+
+        circleAnimObj2.onValuesChange(({ x, y }) => {
+          // console.log("updating circle2", x, y)
+          circleDef2.x = x
+          circleDef2.y = y
         })
 
 
