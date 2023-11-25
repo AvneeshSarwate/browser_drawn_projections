@@ -16,10 +16,10 @@ interface MPEVoiceGraph extends VoiceGraph {
 }
 
 class MPEPolySynth<T extends MPEVoiceGraph> {
-  private vGraphCtor: Constructor<T>
-  private maxVoices: number
-  private voices: Map<number, T> //map of voices by creation time via Date.now()
-  private voiceIndex: number
+  vGraphCtor: Constructor<T>
+  maxVoices: number
+  voices: Map<number, T> //map of voices by creation time via Date.now()
+  voiceIndex: number
 
   constructor(vGraph: Constructor<T>, maxVoices: number = 32) {
     this.vGraphCtor = vGraph
@@ -28,7 +28,7 @@ class MPEPolySynth<T extends MPEVoiceGraph> {
     this.voiceIndex = 0
   }
 
-  public noteOn(note: number, velocity: number, pressure: number, slide: number): T {
+  noteOn(note: number, velocity: number, pressure: number, slide: number): T {
     let voice: T
 
     if (this.voices.size < this.maxVoices) {
@@ -45,7 +45,7 @@ class MPEPolySynth<T extends MPEVoiceGraph> {
     return voice
   }
 
-  public noteOff(voice: T): void {
+  noteOff(voice: T): void {
     this.voices.forEach((v, k) => {
       if (v === voice) {
         v.voiceFinishedCB = () => {
