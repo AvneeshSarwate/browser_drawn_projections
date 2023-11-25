@@ -38,11 +38,13 @@ export class CancelablePromisePoxy<T> implements Promise<T> {
   }
 }
 
+let contextId = 0
+
 type Constructor<T> = new (...args: any[]) => T;
 function createAndLaunchContext<T, C extends TimeContext>(block: (ctx: C) => Promise<T>, rootTime: number, ctor: Constructor<C>, parentContext?: C): CancelablePromisePoxy<T> {
   const abortController = new AbortController()
   const promiseProxy = new CancelablePromisePoxy<T>(abortController)
-  const newContext = new ctor(rootTime, abortController)
+  const newContext = new ctor(rootTime, abortController, contextId++)
   const blockPromise = block(newContext)
   promiseProxy.promise = blockPromise
   const bp = blockPromise.catch((e) => {
@@ -51,7 +53,8 @@ function createAndLaunchContext<T, C extends TimeContext>(block: (ctx: C) => Pro
   })
   if (parentContext) {
     bp.finally(() => {
-      parentContext.time = Math.max(newContext.time, parentContext.time) 
+      //todo bug - a branched child should only update it's parent's time when awaited
+      // parentContext.time = Math.max(newContext.time, parentContext.time) 
     })
   }
   return promiseProxy
@@ -73,11 +76,13 @@ export abstract class TimeContext {
   public get progTime(): number {
     return this.time - this.startTime
   }
+  public id: number
 
-  constructor(time: number, ab: AbortController) {
+  constructor(time: number, ab: AbortController, id: number) {
     this.time = time
     this.startTime = time
     this.abortController = ab
+    this.id = id
     this.abortController.signal.addEventListener('abort', () => {
       this.isCanceled = true
       console.log('abort')
@@ -125,6 +130,7 @@ class ToneTimeContext extends TimeContext {
 
 class DateTimeContext extends TimeContext{
   public async wait(sec: number) {
+    // console.log('wait', sec, this.id, this.time.toFixed(3))
     if (this.isCanceled) {
       throw new Error('context is canceled')
     }

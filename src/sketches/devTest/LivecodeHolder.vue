@@ -198,20 +198,20 @@ onMounted(() => {
 
         //on mouseclick, useLaunchLoop to play some notes using synth
         mousedownEvent(ev => {
-          // const scale = new Scale()
-          // launchLoop(async ctx => {
-          //   const starTime = now()
-          //   for (let i = 0; i < 8; i++) {
-          //     const note = scale.getByIndex(i)
-          //     console.log("note time", i, note, (now() - starTime).toFixed(2))
-          //     // const voice = synth.noteOn(note, 20, 0.02, 0.005)
-          //     ctx.branch(async (c) => {
-          //       await c.wait(1.02)
-          //       // synth.noteOff(voice)
-          //     })
-          //     await ctx.wait(.25)
-          //   }
-          // })
+          const scale = new Scale()
+          launchLoop(async ctx => {
+            const starTime = now()
+            for (let i = 0; i < 8; i++) {
+              const note = scale.getByIndex(i)
+              console.log("note time", i, note, (now() - starTime).toFixed(2))
+              const voice = synth.noteOn(note, 20, 0.02, 0.005)
+              await ctx.branch(async (c) => {
+                await c.wait(.05)
+                synth.noteOff(voice)
+              })
+              await ctx.wait(.25)
+            }
+          })
 
           // if (!notesOn) {
           //   voice0 = synth.noteOn(60, 20, 0.02, 0.005)
