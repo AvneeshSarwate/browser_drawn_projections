@@ -7,6 +7,7 @@ interface VoiceGraph {
   noteOff(): void
   voiceFinishedCB?: (...args: any[]) => void
   forceFinish(): void
+  dispose(): void
 }
 
 interface MPEVoiceGraph extends VoiceGraph {
@@ -58,13 +59,20 @@ class MPEPolySynth<T extends MPEVoiceGraph> {
       }
     })
   }
+
+  public dispose(): void {
+    this.voices.forEach(voice => {
+      voice.dispose()
+    })
+    this.voices.clear()
+  }
 }
 
 class FatOscillatorVoice implements MPEVoiceGraph {
   private oscillator: Tone.FatOscillator
   private filter: Tone.Filter
   private distortion: Tone.Distortion
-  private envelope: Tone.Envelope
+  private envelope: Tone.AmplitudeEnvelope
   private _pitch: number
   private _pressure: number
   private _slide: number
@@ -73,7 +81,7 @@ class FatOscillatorVoice implements MPEVoiceGraph {
     this.oscillator = new Tone.FatOscillator().start()
     this.filter = new Tone.Filter({ type: "lowpass" })
     this.distortion = new Tone.Distortion()
-    this.envelope = new Tone.Envelope({
+    this.envelope = new Tone.AmplitudeEnvelope({
       attack: 0.1,
       decay: 0.2,
       sustain: 0.9,
@@ -173,10 +181,17 @@ class FatOscillatorVoice implements MPEVoiceGraph {
   }
 
   voiceFinishedCB?: () => void
+
+  dispose(): void {
+    this.oscillator.dispose()
+    this.filter.dispose()
+    this.distortion.dispose()
+    this.envelope.dispose()
+  }
 }
 
 
-export const getMpeSynth = () => {
+export const getMPESynth = () => {
   const synth = new MPEPolySynth(FatOscillatorVoice)
   return synth
 }

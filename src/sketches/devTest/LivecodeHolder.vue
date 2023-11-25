@@ -24,6 +24,7 @@ import studio from '@theatre/studio'
 import { getProject, types } from '@theatre/core';
 import { anim0 } from './animations'
 import { getAnimPos, type TheatreSequence } from '@/animation/beziers'
+import { getMPESynth } from '@/music/mpeSynth';
 
 
 const p = getAnimPos("aa", 0.5, anim0.sheetsById['sheet 1'].sequence)
@@ -75,6 +76,8 @@ const reset = () => {
 
 // const waveAudioBands = new MediaAudioAnalyzer(wavesurfer.getMediaElement() as HTMLVideoElement)
 
+
+const synth = getMPESynth()
 
 onMounted(() => {
   try {
@@ -191,7 +194,23 @@ onMounted(() => {
         })
 
 
-        
+        //on mouseclick, useLaunchLoop to play some notes using synth
+        mousedownEvent(ev => {
+          const scale = new Scale()
+          launchLoop(async ctx => { 
+            const starTime = now()
+            for (let i = 0; i < 10; i++) {
+              const note = scale.getByIndex(i)
+              console.log("note time", note, (now() - starTime).toFixed(3))
+              const voice = synth.noteOn(note, 20, 0.02, 0.005)
+              ctx.branch(async c => {
+                await c.wait(0.25)
+                synth.noteOff(voice)
+              })
+              await ctx.wait(.25)
+            }
+          })
+        }, threeCanvas)
 
         
 
@@ -238,7 +257,11 @@ onUnmounted(() => {
   clearListeners()
   timeLoops.forEach(loop => loop.cancel())
   timeLoops = []
+
+  synth.dispose()
 })
+
+
 const uiObj0 = {
   cat: "cat",
   someNum: 5,
