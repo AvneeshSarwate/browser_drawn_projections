@@ -10,7 +10,7 @@ interface VoiceGraph {
   dispose(): void
 }
 
-interface MPEVoiceGraph extends VoiceGraph {
+export interface MPEVoiceGraph extends VoiceGraph {
   //should be implemented as getters/setters on the implementing class
   pitch: number
   pressure: number
@@ -51,7 +51,7 @@ class MPEPolySynth<T extends MPEVoiceGraph> {
     return voice
   }
 
-  noteOff(voice: T): void {
+  noteOff(voice: VoiceGraph): void {
     this.voices.forEach((v, k) => {
       if (v === voice) {
         v.voiceFinishedCB = () => this.voices.delete(k)
