@@ -60,4 +60,123 @@ class MPEPolySynth<T extends MPEVoiceGraph> {
   }
 }
 
+class FatOscillatorVoice implements MPEVoiceGraph {
+  private oscillator: Tone.FatOscillator
+  private filter: Tone.Filter
+  private distortion: Tone.Distortion
+  private envelope: Tone.Envelope
+  private _pitch: number
+  private _pressure: number
+  private _slide: number
 
+  constructor() {
+    this.oscillator = new Tone.FatOscillator().start()
+    this.filter = new Tone.Filter({ type: "lowpass" })
+    this.distortion = new Tone.Distortion()
+    this.envelope = new Tone.Envelope({
+      attack: 0.1,
+      decay: 0.2,
+      sustain: 0.9,
+      release: 0.8
+    })
+
+    this.oscillator.chain(this.filter, this.distortion, this.envelope, Tone.Destination)
+
+    this._pitch = 0
+    this._pressure = 0
+    this._slide = 0
+  }
+
+  get pitch(): number {
+    return this._pitch
+  }
+
+  set pitch(value: number) {
+    this._pitch = value
+    this.oscillator.frequency.value = Tone.Midi(value).toFrequency()
+  }
+
+  get pressure(): number {
+    return this._pressure
+  }
+
+  set pressure(value: number) {
+    this._pressure = value
+    this.filter.frequency.value = 100 + value * 1000 // Example mapping
+  }
+
+  get slide(): number {
+    return this._slide
+  }
+
+  set slide(value: number) {
+    this._slide = value
+    this.distortion.distortion = value // Example mapping
+  }
+
+  get attack(): number {
+    return Number(this.envelope.attack)
+  }
+
+  set attack(value: number) {
+    this.envelope.attack = value
+  }
+
+  get decay(): number {
+    return Number(this.envelope.decay)
+  }
+
+  set decay(value: number) {
+    this.envelope.decay = value
+  }
+
+  get sustain(): number {
+    return this.envelope.sustain
+  }
+
+  set sustain(value: number) {
+    this.envelope.sustain = value
+  }
+
+  get release(): number {
+    return Number(this.envelope.release)
+  }
+
+  set release(value: number) {
+    this.envelope.release = value
+  }
+
+  noteOn(note: number, velocity: number, pressure: number, slide: number): void {
+    this.pitch = note
+    this.pressure = pressure
+    this.slide = slide
+    this.envelope.triggerAttack(Tone.now(), velocity)
+  }
+
+  noteOff(): void {
+    this.envelope.triggerRelease()
+
+    // Call the callback after the release time
+    setTimeout(() => {
+      if (this.voiceFinishedCB) {
+        this.voiceFinishedCB()
+      }
+    }, Number(this.envelope.release) * 1000) // Convert seconds to milliseconds
+  }
+
+  forceFinish(): void {
+    // Same as noteOff, but immediate
+    this.envelope.cancel()
+    if (this.voiceFinishedCB) {
+      this.voiceFinishedCB()
+    }
+  }
+
+  voiceFinishedCB?: () => void
+}
+
+
+export const getMpeSynth = () => {
+  const synth = new MPEPolySynth(FatOscillatorVoice)
+  return synth
+}
