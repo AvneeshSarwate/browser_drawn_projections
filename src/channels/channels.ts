@@ -41,7 +41,7 @@ export class CancelablePromisePoxy<T> implements Promise<T> {
 let contextId = 0
 
 type Constructor<T> = new (...args: any[]) => T;
-function createAndLaunchContext<T, C extends TimeContext>(block: (ctx: C) => Promise<T>, rootTime: number, ctor: Constructor<C>, parentContext?: C): CancelablePromisePoxy<T> {
+function createAndLaunchContext<T, C extends TimeContext>(block: (ctx: C) => Promise<T>, rootTime: number, ctor: Constructor<C>, updateParent: boolean, parentContext?: C): CancelablePromisePoxy<T> {
   const abortController = new AbortController()
   const promiseProxy = new CancelablePromisePoxy<T>(abortController)
   const newContext = new ctor(rootTime, abortController, contextId++)
@@ -54,7 +54,7 @@ function createAndLaunchContext<T, C extends TimeContext>(block: (ctx: C) => Pro
   if (parentContext) {
     bp.finally(() => {
       //todo bug - a branched child should only update it's parent's time when awaited
-      // parentContext.time = Math.max(newContext.time, parentContext.time) 
+      if(updateParent) parentContext.time = Math.max(newContext.time, parentContext.time) 
     })
   }
   return promiseProxy
@@ -63,8 +63,8 @@ function createAndLaunchContext<T, C extends TimeContext>(block: (ctx: C) => Pro
 const USE_TONE = false
 //todo hotreload - need to register all launches to global state so they can be canceled on hot reload
 export function launch<T>(block: (ctx: TimeContext) => Promise<T>): CancelablePromisePoxy<T> {
-  if(USE_TONE) return createAndLaunchContext(block, Tone.Transport.immediate(), ToneTimeContext)
-  else return createAndLaunchContext(block, performance.now()/1000, DateTimeContext)
+  if(USE_TONE) return createAndLaunchContext(block, Tone.Transport.immediate(), ToneTimeContext, false)
+  else return createAndLaunchContext(block, performance.now()/1000, DateTimeContext, false)
 }
 
 //todo draft - need to test generalized TimeContext implementation in loops
@@ -88,9 +88,13 @@ export abstract class TimeContext {
       console.log('abort')
     })
   }
-  public branch<T>(block: (ctx: ToneTimeContext) => Promise<T>): CancelablePromisePoxy<T> {
-    return createAndLaunchContext(block, this.time, Object.getPrototypeOf(this).constructor, this)
+  public branch<T>(block: (ctx: ToneTimeContext) => Promise<T>): void {
+    createAndLaunchContext(block, this.time, Object.getPrototypeOf(this).constructor, false, this)
   }
+
+  public branchWait<T>(block: (ctx: ToneTimeContext) => Promise<T>): CancelablePromisePoxy<T> {
+    return createAndLaunchContext(block, this.time, Object.getPrototypeOf(this).constructor, true, this)
+  } 
 
   public abstract wait(sec: number): Promise<void>
   public waitFrame(): Promise<void> {
@@ -169,7 +173,7 @@ export const testCancel = async () => {
     const start = ctx.time
     const start2 = performance.now()  + (USE_TONE ? Tone.context.lookAhead * 1000 : 0)
     let drift, lastDrift = 0
-    const res0 = ctx.branch(async (ctx) => {
+    const res0 = ctx.branchWait(async (ctx) => {
       for (let i = 0; i < 100; i++) {
         const [logicalTime, wallTime] = [ctx.time - start, (performance.now() - start2) / 1000] //todo bug - is this correct?
         drift = wallTime - logicalTime 
@@ -180,7 +184,7 @@ export const testCancel = async () => {
       }
     })
 
-    await ctx.branch(async (ctx) => {
+    await ctx.branchWait(async (ctx) => {
       await ctx.wait(stepVal * 10)
       console.log('res0 cancel', performance.now() - start2)
       res0.cancel()
