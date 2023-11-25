@@ -30,7 +30,7 @@ function setPropValue(key: string, value: string | number) {
 <template>
   <div v-for="(item, index) in renderInputs" :key="index">
     <div v-if="item?.type === 'input'">
-      <label :for="item.key">{{ item.key }}</label>
+      <label :for="item.key">{{ item.key }}</label> <!-- todo api - key should be full path-chain to prevent duplicates -->
        <!-- eslint-disable-next-line vue/no-mutating-props -->
       <input :id="item.key" v-model="props.objectToEdit[item.key]" />
     </div>

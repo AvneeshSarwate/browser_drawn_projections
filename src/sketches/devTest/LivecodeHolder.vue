@@ -199,12 +199,12 @@ onMounted(() => {
           const scale = new Scale()
           launchLoop(async ctx => { 
             const starTime = now()
-            for (let i = 0; i < 10; i++) {
+            for (let i = 0; i < 8; i++) {
               const note = scale.getByIndex(i)
-              console.log("note time", note, (now() - starTime).toFixed(3))
+              console.log("note time", i, note, (now() - starTime).toFixed(3))
               const voice = synth.noteOn(note, 20, 0.02, 0.005)
-              ctx.branch(async c => {
-                await c.wait(0.25)
+              ctx.branch(async (c) => {
+                await c.wait(.05)
                 synth.noteOff(voice)
               })
               await ctx.wait(.25)

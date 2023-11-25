@@ -82,10 +82,10 @@ class FatOscillatorVoice implements MPEVoiceGraph {
     this.filter = new Tone.Filter({ type: "lowpass" })
     this.distortion = new Tone.Distortion()
     this.envelope = new Tone.AmplitudeEnvelope({
-      attack: 0.1,
+      attack: 0.01,
       decay: 0.2,
       sustain: 0.9,
-      release: 0.8
+      release: 0.05
     })
 
     this.oscillator.chain(this.filter, this.distortion, this.envelope, Tone.Destination)
