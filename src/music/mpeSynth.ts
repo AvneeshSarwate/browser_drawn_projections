@@ -68,11 +68,12 @@ class MPEPolySynth<T extends MPEVoiceGraph> {
   }
 }
 
-class FatOscillatorVoice implements MPEVoiceGraph {
+export class FatOscillatorVoice implements MPEVoiceGraph {
   private oscillator: Tone.FatOscillator
   private filter: Tone.Filter
   private distortion: Tone.Distortion
   private envelope: Tone.AmplitudeEnvelope
+  private outputGain: Tone.Gain
   private _pitch: number
   private _pressure: number
   private _slide: number
@@ -80,6 +81,7 @@ class FatOscillatorVoice implements MPEVoiceGraph {
   constructor() {
     this.oscillator = new Tone.FatOscillator().start()
     this.filter = new Tone.Filter({ type: "lowpass" })
+    this.filter.Q.value = 25
     this.distortion = new Tone.Distortion()
     this.envelope = new Tone.AmplitudeEnvelope({
       attack: 0.01,
@@ -87,8 +89,16 @@ class FatOscillatorVoice implements MPEVoiceGraph {
       sustain: 0.9,
       release: 0.05
     })
+    this.outputGain = new Tone.Gain(0.1)
 
-    this.oscillator.chain(this.filter, this.distortion, this.envelope, Tone.Destination)
+    // todo api - have output of all voices be a raw webAudio gain node (RWGN), which all get merged into a RWGN in the mpeSynth
+    // this allows MPEVoiceGraphs to be implemented with either Tone.js or raw webAudio
+    // MPEPolySynth then needs to manually be connected to it's destination (another node or webaudio AudioDestinationNode)
+    // const rawGain = new GainNode(Tone.context.rawContext)
+    // Tone.connect(this.outputGain, rawGain)
+    // rawGain can also be at the end of the chain() call
+
+    this.oscillator.chain(this.filter, this.distortion, this.envelope, this.outputGain)
 
     this._pitch = 0
     this._pressure = 0
@@ -110,7 +120,7 @@ class FatOscillatorVoice implements MPEVoiceGraph {
 
   set pressure(value: number) {
     this._pressure = value
-    this.filter.frequency.value = 100 + value * 1000 // Example mapping
+    this.filter.frequency.value = 100 + value * 3000 // Example mapping
   }
 
   get slide(): number {
@@ -119,7 +129,7 @@ class FatOscillatorVoice implements MPEVoiceGraph {
 
   set slide(value: number) {
     this._slide = value
-    this.distortion.distortion = value // Example mapping
+    this.distortion.distortion = Math.pow(value, 2.5) // Example mapping
   }
 
   get attack(): number {
