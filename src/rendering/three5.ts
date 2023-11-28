@@ -194,6 +194,13 @@ export class Three5 {
   }
 
   dispose() {
+    const meshes = this.scene.children.filter(child => child instanceof THREE.Mesh).map(child => child as THREE.Mesh);
+    const geos = meshes.map(mesh => mesh.geometry).filter(geo => this.cachedLineGeos.has(geo.uuid) === false);
+    
+    geos.forEach(geo => geo.dispose());
+    //@ts-expect-error
+    meshes.forEach(child => (child as THREE.Mesh).material.dispose());
+
     this.scene.clear();
     this.output.dispose();
   }

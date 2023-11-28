@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { createP5Sketch } from './p5Sketch';
-import { type DevelopmentAppState } from './developmentAppState';
+import { appStateName, type DevelopmentAppState } from './appState';
 import type p5 from 'p5';
 import * as THREE from 'three';
 import * as Tone from 'tone'
 import { inject, onMounted, onUnmounted } from 'vue';
 
+//@ts-ignore
+import Stats from '@/rendering/Stats';
 
-const appState = inject<DevelopmentAppState>('appState')!!
+const appState = inject<DevelopmentAppState>(appStateName)!!
 
 const neutralizeSketch = (instance: p5) => {
   instance.noLoop()
@@ -37,6 +39,11 @@ Tone.Transport.context.lookAhead = 0.01
 //todo api - need a way to set resolution of sketch that automatically propogates to CustomEffects
 
 onMounted(() => {
+  const stats = new Stats();
+  stats.showPanel(1); // 0: fps, 1: ms, 2: mb, 3+: custom
+  appState.stats = stats
+  document.body.appendChild(stats.dom);
+
   //explanation - the closest you can get to removing a p5 instance without removing the underlying canvas
   if(appState.p5Instance) neutralizeSketch(appState.p5Instance)
 
@@ -49,7 +56,10 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-
+  if (appState.p5Instance) {
+    neutralizeSketch(appState.p5Instance)
+    document.getElementsByClassName('frameRateStats')[0]?.remove()
+  }
 })
 
 

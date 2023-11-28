@@ -4,6 +4,11 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
+import studio from '@theatre/studio'
+import { getProject, types } from '@theatre/core';
+
+studio.initialize()
+studio.ui.hide()
 
 const app = createApp(App)
 

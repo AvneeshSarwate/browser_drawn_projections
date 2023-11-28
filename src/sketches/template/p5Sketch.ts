@@ -12,7 +12,7 @@ export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => Templa
     }
 
     p.draw = () => {
-      appState().stats.begin()
+      appState().stats?.begin()
       if (!appState().paused) {
         p.clear(0, 0, 0, 0)
 
@@ -23,7 +23,7 @@ export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => Templa
         appState().shaderDrawFunc?.()
       }
 
-      appState().stats.end()
+      appState().stats?.end()
     }
   }
 

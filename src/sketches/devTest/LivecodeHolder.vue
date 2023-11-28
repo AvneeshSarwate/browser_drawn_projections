@@ -1,6 +1,6 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
-import { type DevelopmentAppState } from './developmentAppState';
+import { appStateName, type DevelopmentAppState } from './appState';
 import p5 from 'p5';
 import * as THREE from 'three'
 import { inject, onMounted, onUnmounted, ref } from 'vue';
@@ -29,7 +29,7 @@ import { getMPESynth, type MPEVoiceGraph } from '@/music/mpeSynth';
 
 const p = getAnimPos("aa", 0.5, anim0.sheetsById['sheet 1'].sequence)
 
-const appState = inject<DevelopmentAppState>('appState')!!
+const appState = inject<DevelopmentAppState>(appStateName)!!
 
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
 
@@ -115,8 +115,6 @@ onMounted(() => {
           p5i!!.circle(circleDef2.x * p5i!!.width, circleDef2.y * p5i!!.height, 100)
         })
 
-        studio.initialize()
-
         const project = getProject('animation test')
         const sheet = project.sheet('sheet 1')
 
@@ -124,12 +122,12 @@ onMounted(() => {
           x: types.number(circleDef.x, { range: [0, 1] }),
           y: types.number(circleDef.y, { range: [0, 1] }),
           zoom: types.number(0.01, { range: [0, 0.2] }),
-        })
+        }, {reconfigure: true})
 
         const circleAnimObj2 = sheet.object('secondCircle', {
           x: types.number(circleDef2.x, { range: [0, 1] }),
           y: types.number(circleDef2.y, { range: [0, 1] }),
-        })
+        }, {reconfigure: true})
 
         const fdbkZoom = new FeedbackZoom({ src: p5Canvas })
 

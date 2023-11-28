@@ -55,8 +55,11 @@ onMounted(() => {
 onUnmounted(() => {
   if (appState.p5Instance) {
     neutralizeSketch(appState.p5Instance)
-    document.getElementsByClassName('frameRateStats')[0]?.remove()
   }
+  document.getElementsByClassName('frameRateStats')[0]?.remove()
+
+  //todo hotreload - for cleaning up threeRenderer, anything more than calling dispose()?
+  appState.threeRenderer?.dispose()
   
 })
 

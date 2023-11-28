@@ -173,9 +173,6 @@ export function findClosestPointAndRegion(p5Instance: p5, regions: EntityList<Re
   }
 }
 
-export const stats = new Stats();
-stats.showPanel( 1 ); // 0: fps, 1: ms, 2: mb, 3+: custom
-
 export type DevelopmentAppState = {
   regions: EntityList<Region>
   p5Instance: p5 | undefined
@@ -186,7 +183,7 @@ export type DevelopmentAppState = {
   oneTimeDrawFuncs: ((p5: p5) => void)[]
   drawFuncMap: Map<string, (p5: p5) => void>
   shaderDrawFunc: (() => void) | undefined
-  // stats: { begin: () => void, end: () => void, update: () => void }
+  stats?: { begin: () => void, end: () => void, update: () => void }
   paused: boolean
 }
 
@@ -200,11 +197,13 @@ export const appState: DevelopmentAppState = {
   oneTimeDrawFuncs: [],
   drawFuncMap: new Map<string, (p5: p5) => void>(),
   shaderDrawFunc: undefined,
-  // stats: stats,
+  stats: undefined,
   paused: false
 } 
 
-export const globalStore = defineStore('appState', () => {
+export const appStateName = 'devTestAppState'
+
+export const globalStore = defineStore(appStateName, () => {
   const appStateRef = ref(appState)
 
   //@ts-ignore
