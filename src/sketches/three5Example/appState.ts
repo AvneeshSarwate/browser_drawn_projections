@@ -5,6 +5,8 @@ import { Entity, EntityList } from '@/stores/undoCommands'
 //@ts-ignore
 import Stats from 'stats.js/src/Stats'
 import { Ramp } from '@/channels/channels'
+import { defineStore, acceptHMRUpdate } from 'pinia';
+import { ref } from 'vue';
 
 
 
@@ -39,4 +41,17 @@ export const appState: Three5ExAppState = {
   stats: stats,
   paused: false,
   drawing: false,
+} 
+
+export const globalStore = defineStore('appState', () => {
+  const appStateRef = ref(appState)
+
+  //@ts-ignore
+  window.appState = appStateRef
+
+  return { appStateRef }
+});
+
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(globalStore, import.meta.hot))
 } 
