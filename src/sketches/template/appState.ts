@@ -2,8 +2,6 @@ import p5 from 'p5'
 import { Entity, EntityList } from '@/stores/undoCommands'
 
 
-//@ts-ignore
-import Stats from '@/rendering/Stats'
 import { Ramp } from '@/channels/channels'
 import { defineStore, acceptHMRUpdate } from 'pinia'
 import { ref } from 'vue'
@@ -104,9 +102,6 @@ export class PulseCircle extends Entity {
   }
 }
 
-const stats = new Stats();
-stats.showPanel( 1 ); // 0: fps, 1: ms, 2: mb, 3+: custom
-
 export type TemplateAppState = {
   circles: EntityList<PulseCircle>
   p5Instance: p5 | undefined
@@ -117,7 +112,7 @@ export type TemplateAppState = {
   oneTimeDrawFuncs: ((p5: p5) => void)[]
   drawFuncMap: Map<string, (p5: p5) => void>
   shaderDrawFunc: (() => void) | undefined
-  stats: { begin: () => void, end: () => void }
+  stats?: { begin: () => void, end: () => void }
   paused: boolean
   drawing: boolean
 }
@@ -132,7 +127,7 @@ export const appState: TemplateAppState = {
   oneTimeDrawFuncs: [],
   drawFuncMap: new Map<string, (p5: p5) => void>(),
   shaderDrawFunc: undefined,
-  stats: stats,
+  stats: undefined,
   paused: false,
   drawing: false,
 } 

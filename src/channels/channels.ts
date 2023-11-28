@@ -49,7 +49,7 @@ function createAndLaunchContext<T, C extends TimeContext>(block: (ctx: C) => Pro
   promiseProxy.promise = blockPromise
   const bp = blockPromise.catch((e) => {
     const err = e as Error
-    console.log('promise catch error', err, err.message, err.stack)
+    console.log('promise catch error', err, err?.message, err?.stack)
   })
   if (parentContext) {
     bp.finally(() => {

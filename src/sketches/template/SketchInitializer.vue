@@ -5,6 +5,9 @@ import type p5 from 'p5';
 import * as THREE from 'three';
 import { inject, onMounted, onUnmounted } from 'vue';
 
+//@ts-ignore
+import Stats from '@/rendering/Stats';
+
 
 const appState = inject<TemplateAppState>(appStateName)!!
 
@@ -33,6 +36,11 @@ const neutralizeSketch = (instance: p5) => {
 
 
 onMounted(() => {
+  const stats = new Stats();
+  stats.showPanel(1); // 0: fps, 1: ms, 2: mb, 3+: custom
+  appState.stats = stats
+  document.body.appendChild(stats.dom);
+
   //explanation - the closest you can get to removing a p5 instance without removing the underlying canvas
   if(appState.p5Instance) neutralizeSketch(appState.p5Instance)
 
@@ -47,7 +55,7 @@ onMounted(() => {
 onUnmounted(() => {
   if (appState.p5Instance) {
     neutralizeSketch(appState.p5Instance)
-    document.getElementsByClassName('frameRateStats')[0].remove() 
+    document.getElementsByClassName('frameRateStats')[0]?.remove()
   }
   
 })
