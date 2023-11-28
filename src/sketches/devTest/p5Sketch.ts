@@ -1,4 +1,4 @@
-import { findClosestPointAndRegion, type DevelopmentAppState, Region, stats } from './developmentAppState'
+import { findClosestPointAndRegion, type DevelopmentAppState, Region, stats } from './appState'
 import p5 from 'p5'
 
 export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => DevelopmentAppState): p5 {

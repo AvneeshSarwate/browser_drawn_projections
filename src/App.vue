@@ -3,8 +3,6 @@ import { commandHistory } from './stores/undoCommands';
 import { provide } from 'vue';
 import OneshotCode from './components/OneshotCode.vue';
 import { globalStore, getUrlSketch, type sketchNames } from './stores/stateInitializer';
-import DevSketch from './sketches/devTest/SketchWrapper.vue';
-import TemplateSketch from './sketches/template/SketchWrapper.vue';
 import TonePianoSequencer from './sketches/tonePianoSequencer/SketchWrapper.vue';
 import Three5Example from './sketches/three5Example/SketchWrapper.vue';
 import ClickAVMelodyLauncher from './sketches/clickAVMelodyLauncher/SketchWrapper.vue';
@@ -14,9 +12,6 @@ import { RouterView } from 'vue-router'
 
 
 const sketchStates: Record<sketchNames, any> = {
-  devTest: DevSketch,
-  template: TemplateSketch,
-  tonePianoSequencer: TonePianoSequencer,
   three5Example: Three5Example,
   clickAVMelodyLauncher: ClickAVMelodyLauncher,
   pianoRollMelodyLauncher: PianoRollMelodyLauncher,

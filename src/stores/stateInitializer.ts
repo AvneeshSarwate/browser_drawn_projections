@@ -1,8 +1,5 @@
 import { ref } from 'vue'
 import { defineStore, acceptHMRUpdate } from 'pinia'
-import { appState as templateState} from '@/sketches/template/appState';
-import { appState as devTestState } from '@/sketches/devTest/developmentAppState';
-import { appState as tonePianoSequencerState } from '@/sketches/tonePianoSequencer/appState';
 import { appState as three5ExampleState } from '@/sketches/three5Example/appState';
 import { appState as clickAVMelodyLauncherState } from '@/sketches/clickAVMelodyLauncher/appState';
 import { appState as pianoRollMelodyLauncherState } from '@/sketches/pianoRollMelodyLauncher/appState';
@@ -12,9 +9,6 @@ import { appState as pianoRollLivecodingState } from '@/sketches/pianoRollLiveco
 
 export type sketchNames =
   'notInSet' |
-  'template' |
-  'devTest' |
-  'tonePianoSequencer' |
   'three5Example' |
   'clickAVMelodyLauncher' |
   'pianoRollMelodyLauncher' |
@@ -23,9 +17,6 @@ export type sketchNames =
 //todo sketch gallery - pull sketchStates map in App.vue based on menu selection
 //   coordinating hot reload doesn't matter for external gallery
 export const sketchStates: Record<sketchNames, any> = {
-  template: ref(templateState),
-  devTest: ref(devTestState),
-  tonePianoSequencer: ref(tonePianoSequencerState),
   three5Example: ref(three5ExampleState),
   clickAVMelodyLauncher: ref(clickAVMelodyLauncherState),
   pianoRollMelodyLauncher: ref(pianoRollMelodyLauncherState),

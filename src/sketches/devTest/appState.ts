@@ -6,6 +6,8 @@ import { storedData1 } from './exportedShapes'
 
 //@ts-ignore
 import Stats from '@/rendering/Stats'
+import { defineStore, acceptHMRUpdate } from 'pinia'
+import { ref } from 'vue'
 
 
 export type DrawMode = 'display' | 'addingPoint' | 'movingPoint'
@@ -201,4 +203,17 @@ export const appState: DevelopmentAppState = {
   shaderDrawFunc: undefined,
   // stats: stats,
   paused: false
+} 
+
+export const globalStore = defineStore('appState', () => {
+  const appStateRef = ref(appState)
+
+  //@ts-ignore
+  window.appState = appStateRef
+
+  return { appStateRef }
+});
+
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(globalStore, import.meta.hot))
 } 

@@ -1,5 +1,5 @@
 
-import type { Region } from './developmentAppState'
+import type { Region } from './appState'
 import p5 from 'p5'
 
 

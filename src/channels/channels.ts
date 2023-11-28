@@ -1,4 +1,4 @@
-import { Region } from '@/sketches/devTest/developmentAppState'
+import { Region } from '@/sketches/devTest/appState'
 import { lerp } from 'three/src/math/MathUtils.js'
 import * as Tone from 'tone'
 import * as a from '@/sketches/devTest/planeAnimations'

@@ -62,4 +62,4 @@ onUnmounted(() => {
   causing a flicker. -->
 </template>
 
-<style scoped></style>@/stores/undoCommands
+<style scoped></style>@/stores/undoCommands./appState

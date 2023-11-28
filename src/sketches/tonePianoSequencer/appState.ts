@@ -6,6 +6,8 @@ import { Entity, EntityList } from '@/stores/undoCommands'
 //@ts-ignore
 import Stats from 'stats.js/src/Stats'
 import { Ramp } from '@/channels/channels'
+import { acceptHMRUpdate, defineStore } from 'pinia'
+import { ref } from 'vue'
 
 
 type PulseCircleSerialized = {
@@ -177,4 +179,17 @@ export const appState: ToneSeqAppState = {
   stats: stats,
   paused: false,
   drawing: false,
+} 
+
+export const globalStore = defineStore('appState', () => {
+  const appStateRef = ref(appState)
+
+  //@ts-ignore
+  window.appState = appStateRef
+
+  return { appStateRef }
+});
+
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(globalStore, import.meta.hot))
 } 

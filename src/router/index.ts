@@ -15,6 +15,16 @@ const router = createRouter({
       component: () => import('../sketches/template/SketchWrapper.vue')
     },
     {
+      path: '/devTest',
+      name: 'devTest',
+      component: () => import('../sketches/devTest/SketchWrapper.vue')
+    },
+    {
+      path: '/tonePianoSequencer',
+      name: 'tonePianoSequencer',
+      component: () => import('../sketches/tonePianoSequencer/SketchWrapper.vue')
+    },
+    {
       path: '/multiPianoRollComposing',
       name: 'multiPianoRollComposing',
       // route level code-splitting
