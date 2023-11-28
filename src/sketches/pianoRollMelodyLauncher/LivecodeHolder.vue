@@ -34,9 +34,9 @@ onMounted(() => {
     const scale = new Scale(undefined, 48)
 
     const pitches = scale.getMultiple([1, 3, 5, 6, 8, 10, 12])
-    const notes = pitches.map((p, i) => ({ pitch: p, duration: 1, position: i }))
+    const notes = pitches.map((p, i) => ({ pitch: p, duration: 1, position: i, velocity: 0.5 }))
 
-    const pianoRoll = new PianoRoll("pianoRollHolder", () => null, () => null)
+    const pianoRoll = new PianoRoll<any>("pianoRollHolder", () => null, () => null)
     pianoRoll.setNoteData(notes)
     pianoRoll.setViewportToShowAllNotes()
 

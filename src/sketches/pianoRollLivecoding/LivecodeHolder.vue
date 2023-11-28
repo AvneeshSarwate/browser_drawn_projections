@@ -15,7 +15,7 @@ import { PianoRoll } from '@/music/pianoRoll';
 import * as monaco from 'monaco-editor';
 import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
 import TsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
-import { channelDefs, channelModDefs, channelSrc } from './chanelSrc';
+import { channelDefs, channelModDefs } from './chanelSrc';
 import { playbackDefs } from './playbackDefs';
 import { scaleDef } from './scaleDef';
 import { p5defs } from './p5Defs';
@@ -149,9 +149,9 @@ onMounted(() => {
     const scale = new Scale(undefined, 48)
 
     const pitches = scale.getMultiple([1, 3, 5, 6, 8, 10, 12])
-    const notes = pitches.map((p, i) => ({ pitch: p, duration: 1, position: i }))
+    const notes = pitches.map((p, i) => ({ pitch: p, duration: 1, position: i, velocity: 0.5 }))
 
-    const pianoRoll = new PianoRoll("pianoRollHolder", () => null, () => null)
+    const pianoRoll = new PianoRoll<any>("pianoRollHolder", () => null, () => null)
     pianoRoll.setNoteData(notes)
     pianoRoll.setViewportToShowAllNotes()
 

@@ -69,11 +69,11 @@ Basic strategy for implementing multi-note modifications -
 - Use this mouse deviation info to control movement/resizing of all selected elements
 */
 
-type NoteInfo = {pitch: number, position: number, duration: number}
+type NoteInfo<T> = {pitch: number, position: number, duration: number, velocity: number, metadata?: T}
 
-type Note = {
+type Note<T> = {
   elem: Rect,
-  info: NoteInfo,
+  info: NoteInfo<T>,
   label: Text,
   handles: {
     start: Circle,
@@ -98,11 +98,11 @@ type Box = {
   br: { x: number, y: number }
 }
 
-export class PianoRoll {
+export class PianoRoll<T> {
   private svgRoot!: Svg;
   noteModStartReference: { [key: string]: { x: number, y: number, width: number, height: number } };
-  private notes: {[key: string]: Note};
-  private spatialNoteTracker: {[key: string]: Note[]};
+  private notes: {[key: string]: Note<T>};
+  private spatialNoteTracker: {[key: string]: Note<T>[]};
   private selectedElements: Set<Rect>;
   selectedNoteIds: string[];
   private selectRect?: Rect;
@@ -134,7 +134,7 @@ export class PianoRoll {
   noteCount: number;
   refPt!: DOMPoint;
   shiftKeyDown: boolean;
-  historyList: NoteInfo[][];
+  historyList: NoteInfo<T>[][];
   historyListIndex: number;
   pianoRollHeight: number = 0;
   pianoRollWidth: number = 0;
@@ -153,7 +153,7 @@ export class PianoRoll {
   quantResizingActivated: boolean;
   private resizeTarget?: Rect;
   private rawSVGElementToWrapper: {[key: string]: Rect}
-  copiedNoteBuffer: NoteInfo[];
+  copiedNoteBuffer: NoteInfo<T>[];
   containerElement: HTMLElement | null;
   containerElementId: any;
   temporaryMouseMoveHandler?: (event: MouseEvent) => void;
@@ -345,9 +345,9 @@ export class PianoRoll {
       // .style('pointer-events', 'none');
     const startHandle = this.svgRoot.circle(this.handleRad).move(xPos - this.handleRad/2, yPos + (this.noteHeight-this.handleRad)/2).fill('#000');
     const endHandle = this.svgRoot.circle(this.handleRad).move(xPos + width - this.handleRad / 2, yPos + (this.noteHeight - this.handleRad) / 2).fill('#000');
-    const newNote: Note = {
+    const newNote: Note<T> = {
       elem: rect, 
-      info: {pitch, position, duration},
+      info: {pitch, position, duration, velocity: 0.5},
       label: text,
       handles: {start: startHandle, end: endHandle}
     }
@@ -385,7 +385,7 @@ export class PianoRoll {
     return Object.values(this.notes).map(note => ({ ...note.info }));
   }
 
-  setNoteData(noteData: NoteInfo[]) {
+  setNoteData(noteData: NoteInfo<T>[]) {
     this.deleteElements(new Set(Object.values(this.notes).map(note => note.elem)))
     this.notes = {};
     noteData.forEach((noteInfo) => {
@@ -418,12 +418,12 @@ export class PianoRoll {
   }
 
   //update underlying note info from SVG element change
-  private updateNoteInfo(note: Note, calledFromBatchUpdate: boolean){
+  private updateNoteInfo(note: Note<T>, calledFromBatchUpdate: boolean){
     if (note.elem.visible()) {
       const pitch = this.svgYtoPitch(note.elem.y().valueOf() as number);
       const position = this.svgXtoPosition(note.elem.x().valueOf() as number);
       const duration = note.elem.width().valueOf() as number / this.quarterNoteWidth; //todo refactor check all these valueOf() calls
-      note.info = {pitch, position, duration};
+      note.info = {pitch, position, duration, velocity: 0.5};
     } else {
       this.deleteElement(note.elem);
       delete this.notes[note.elem.id()];
@@ -432,13 +432,13 @@ export class PianoRoll {
   }
 
   //a separate function so that batch note changes are saved in the undo history as a single event
-  private updateNoteInfoMultiple(notes: Note[]){
+  private updateNoteInfoMultiple(notes: Note<T>[]){
     notes.forEach(note => this.updateNoteInfo(note, true));
     this.snapshotNoteState();
   }
 
   //update note SVG element from underlying info change
-  private updateNoteElement(nt: Note, position: number, pitch: number, duration: number){
+  private updateNoteElement(nt: Note<T>, position: number, pitch: number, duration: number){
     nt.elem.show();
     nt.label.show();
     nt.handles.start.show();
@@ -449,7 +449,7 @@ export class PianoRoll {
     this.updateNoteElemScreenCoords(nt, xPos, yPos, width);
   }
 
-  private updateNoteElemScreenCoords(nt: Note, x?: number, y?: number, width?: number, persistData: boolean = true, calledFromBatchUpdate: boolean = true) {
+  private updateNoteElemScreenCoords(nt: Note<T>, x?: number, y?: number, width?: number, persistData: boolean = true, calledFromBatchUpdate: boolean = true) {
     x = x ?? nt.elem.x().valueOf() as number;
     y = y ?? nt.elem.y().valueOf() as number;
     width = width ?? nt.elem.width().valueOf() as number;
@@ -669,11 +669,11 @@ export class PianoRoll {
       this.containerElement!!.removeEventListener('mousemove', this.temporaryMouseMoveHandler!!);
       this.temporaryMouseMoveHandler = undefined;
     }
-    if (event.key == 'w'){ 
-      this.wIsDown = false;
-      //replace with generic interactionPlay() handler 
-      this.getNotesAtPosition(this.cursorPosition+0.01).map(n => this.noteOnOffHandler(n.info.pitch, 'off'));
-    }
+    // if (event.key == 'w'){ 
+    //   this.wIsDown = false;
+    //   //replace with generic interactionPlay() handler 
+    //   this.getNotesAtPosition(this.cursorPosition+0.01).map(n => this.noteOnOffHandler(n.info.pitch, 'off'));
+    // }
   }
 
   copyNotes(){
@@ -785,7 +785,7 @@ export class PianoRoll {
 
 
   private getNotesAtPosition(pos: number){
-    const notesAtPos = Object.values(this.notes).filter(n => n.info.position <= pos && pos <= n.info.position+n.info.duration);
+    const notesAtPos = Object.values(this.notes).filter(n => n.info.position <= pos && pos <= n.info.position+n.info.duration).map(n => n.info);
     return notesAtPos;
   }
 
@@ -1014,7 +1014,7 @@ export class PianoRoll {
   }
 
   // sets event handlers on each note element for position/resize multi-select changes
-  private attachHandlersOnNote(note: Note, svgParentObj: Svg){
+  private attachHandlersOnNote(note: Note<T>, svgParentObj: Svg){
     
     /* Performs the same drag deviation done on the clicked element to 
      * the other selected elements
