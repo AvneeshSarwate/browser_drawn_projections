@@ -137,7 +137,9 @@ export const appState: TemplateAppState = {
   drawing: false,
 } 
 
-export const globalStore = defineStore('appState', () => {
+export const appStateName = 'templateAppState'
+
+export const globalStore = defineStore(appStateName, () => {
   const appStateRef = ref(appState)
 
   //@ts-ignore

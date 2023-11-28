@@ -3,7 +3,7 @@ import { Entity, EntityList } from '@/stores/undoCommands'
 
 
 //@ts-ignore
-import Stats from 'stats.js/src/Stats'
+import Stats from '@/rendering/Stats'
 import { Ramp } from '@/channels/channels'
 import { defineStore, acceptHMRUpdate } from 'pinia';
 import { ref } from 'vue';
@@ -13,7 +13,6 @@ import { ref } from 'vue';
 
 const stats = new Stats();
 stats.showPanel( 1 ); // 0: fps, 1: ms, 2: mb, 3+: custom
-document.body.appendChild( stats.dom );
 
 export type Three5ExAppState = {
   p5Instance: p5 | undefined

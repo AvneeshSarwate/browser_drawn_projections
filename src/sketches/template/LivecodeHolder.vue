@@ -1,13 +1,13 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
-import { type TemplateAppState, PulseCircle } from './appState';
+import { type TemplateAppState, PulseCircle, appStateName } from './appState';
 import { inject, onMounted, onUnmounted } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
 
-const appState = inject<TemplateAppState>('appState')!!
+const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
 let timeLoops: CancelablePromisePoxy<any>[] = []
 

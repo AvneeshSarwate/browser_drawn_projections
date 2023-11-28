@@ -4,7 +4,7 @@ import { Entity, EntityList } from '@/stores/undoCommands'
 
 
 //@ts-ignore
-import Stats from 'stats.js/src/Stats'
+import Stats from '@/rendering/Stats'
 import { Ramp } from '@/channels/channels'
 import { acceptHMRUpdate, defineStore } from 'pinia'
 import { ref } from 'vue'
@@ -112,7 +112,6 @@ export class PulseCircle extends Entity {
 
 const stats = new Stats();
 stats.showPanel( 1 ); // 0: fps, 1: ms, 2: mb, 3+: custom
-document.body.appendChild( stats.dom );
 
 export const sampler = new Tone.Sampler({
   "A0": "A0.[mp3|ogg]",
