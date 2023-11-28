@@ -11,6 +11,7 @@ import { appState as pianoRollLivecodingState } from '@/sketches/pianoRollLiveco
 //todo hotreload - save to localStorage to enable refresh when needed
 
 export type sketchNames =
+  'notInSet' |
   'template' |
   'devTest' |
   'tonePianoSequencer' |
@@ -29,13 +30,14 @@ export const sketchStates: Record<sketchNames, any> = {
   clickAVMelodyLauncher: ref(clickAVMelodyLauncherState),
   pianoRollMelodyLauncher: ref(pianoRollMelodyLauncherState),
   pianoRollLivecoding: ref(pianoRollLivecodingState),
+  notInSet: "notInSet"
 }
 
 //todo sketch gallery - have this be a route instead of a query param? vue router?
 export function getUrlSketch(): sketchNames {
   const urlParams = new URLSearchParams(window.location.search);
-  const urlSketch = urlParams.get('sketchName') ?? 'template';
-  return (urlSketch in sketchStates ? urlSketch : 'template') as sketchNames;
+  const urlSketch = urlParams.get('sketchName') ?? 'notInSet';
+  return (urlSketch in sketchStates ? urlSketch : 'notInSet') as sketchNames;
 }
 
 export const globalStore = defineStore('appState', () => {

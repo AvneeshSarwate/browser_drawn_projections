@@ -10,6 +10,7 @@ import Three5Example from './sketches/three5Example/SketchWrapper.vue';
 import ClickAVMelodyLauncher from './sketches/clickAVMelodyLauncher/SketchWrapper.vue';
 import PianoRollMelodyLauncher from './sketches/pianoRollMelodyLauncher/SketchWrapper.vue';
 import PianoRollLivecoding from './sketches/pianoRollLivecoding/SketchWrapper.vue';
+import { RouterView } from 'vue-router'
 
 
 const sketchStates: Record<sketchNames, any> = {
@@ -20,6 +21,7 @@ const sketchStates: Record<sketchNames, any> = {
   clickAVMelodyLauncher: ClickAVMelodyLauncher,
   pianoRollMelodyLauncher: PianoRollMelodyLauncher,
   pianoRollLivecoding: PianoRollLivecoding,
+  notInSet: "notInSet"
 }
 
 const comp = sketchStates[getUrlSketch()]
@@ -28,7 +30,12 @@ const store = globalStore()
 
 const appState = store.appStateRef
 
-provide('appState', appState)
+const isRouterComp = comp === "notInSet"
+console.log("isRouterComp", isRouterComp, comp)
+
+if(!isRouterComp) {
+  provide('appState', appState)
+}
 
 </script>
 
@@ -39,7 +46,9 @@ provide('appState', appState)
   </div>
   
   <!-- <DevSketch></DevSketch> -->
-  <component :is="comp"></component>
+
+  <component v-if="!isRouterComp" :is="comp"></component>
+  <RouterView v-else></RouterView>
 
   <!-- used for used for inspection and fixes -->
   <OneshotCode></OneshotCode>
@@ -56,4 +65,3 @@ provide('appState', appState)
 
 
 </style>
-./sketches/three5Example/SketchWrapper.vue

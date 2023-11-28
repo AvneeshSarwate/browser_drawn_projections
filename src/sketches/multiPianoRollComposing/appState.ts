@@ -5,8 +5,8 @@ import { Entity, EntityList } from '@/stores/undoCommands'
 //@ts-ignore
 import Stats from 'stats.js/src/Stats'
 import { Ramp } from '@/channels/channels'
-import { defineStore, acceptHMRUpdate } from 'pinia'
 import { ref } from 'vue'
+import { acceptHMRUpdate, defineStore } from 'pinia'
 
 
 type PulseCircleSerialized = {
@@ -108,7 +108,7 @@ const stats = new Stats();
 stats.showPanel( 1 ); // 0: fps, 1: ms, 2: mb, 3+: custom
 document.body.appendChild( stats.dom );
 
-export type TemplateAppState = {
+export type ClickAVAppState = {
   circles: EntityList<PulseCircle>
   p5Instance: p5 | undefined
   threeRenderer: THREE.WebGLRenderer | undefined
@@ -123,7 +123,7 @@ export type TemplateAppState = {
   drawing: boolean
 }
 
-export const appState: TemplateAppState = {
+export const appState: ClickAVAppState = {
   circles: new EntityList(PulseCircle),
   p5Instance: undefined,
   threeRenderer: undefined,
@@ -149,4 +149,4 @@ export const globalStore = defineStore('appState', () => {
 
 if (import.meta.hot) {
   import.meta.hot.accept(acceptHMRUpdate(globalStore, import.meta.hot))
-} 
+}

@@ -28,6 +28,7 @@
     "three": "^0.156.1",
     "tone": "^14.7.77",
     "vue": "^3.3.4",
+    "vue-router": "^4.2.5",
     "vuedraggable": "^4.1.0",
     "wavesurfer.js": "^7.3.4"
   },
