@@ -69,7 +69,7 @@ Basic strategy for implementing multi-note modifications -
 - Use this mouse deviation info to control movement/resizing of all selected elements
 */
 
-type NoteInfo<T> = {pitch: number, position: number, duration: number, velocity: number, metadata?: T}
+export type NoteInfo<T> = {pitch: number, position: number, duration: number, velocity: number, metadata?: T}
 
 type Note<T> = {
   elem: Rect,
@@ -108,6 +108,7 @@ export class PianoRoll<T> {
   private selectRect?: Rect;
   cursorElement: any;
   cursorPosition: number;
+  lastCursorPosition = 0
   cursorWidth: number;
   playCursorElement: any;
   private backgroundElements: Set<Element> = new Set();

@@ -3,24 +3,24 @@
     <canvas id="p5Canvas" width="1280" height="720" abitrary-prop="somethi"></canvas>
     <canvas id="threeCanvas" width="1280" height="720" abitrary-prop="somethi"></canvas>
   </div>
-  <ul>
-    <li>
-      click anywhere to start a loop. Press the "c" key to clear all loops. Press the "u" key to clear the last loop
-    </li>
-    <li>
-      The notes in the piano roll determine the notes in the launched loop, and the x coordinate of your click controls the loop speed, and the y coordinate the loop volume
-    </li>
-    <li>
-      instructions for manipulating the piano roll are below the piano roll
-    </li>
-    <li>
-      When a note is played, the code in the editor is executed as a callback - if you change the code, the next loop you trigger will use the new code
-    </li>
-  </ul>
   <div id="monacoHolder"></div>
   <br>
-  <div id="pianoRollHolder"></div>
-  <div>
+  <details class="pianoFolder">
+    <summary>piano roll 0</summary>
+    <div id="phold0" class="pianoRollHolder"></div> <br>
+  </details>
+  <details class="pianoFolder">
+    <summary>piano roll 1</summary>
+    <div id="phold1" class="pianoRollHolder"></div> <br>
+  </details>
+  <details class="pianoFolder">
+    <summary>piano roll 2</summary>
+    <div id="phold2" class="pianoRollHolder"></div> <br>
+  </details>
+  <details class="pianoFolder">
+    <summary>piano roll 3</summary>
+    <div id="phold3" class="pianoRollHolder"></div> <br>
+  </details>
   <ul id="pianoRollInstructions">
     <li>
         Note: this is currently only working with laptop trackpads - normal mouse behavior will be weird (to be fixed
@@ -61,7 +61,6 @@
         Use Cmd-c/Cmd-v to copy/paste note selections. Selections will be pasted at the vertical cursor position.
     </li>
   </ul>
-  </div>
   <div id="debugInfo"></div>
 </template>
 
@@ -69,6 +68,7 @@
 <style scoped>
 #canvasContainer {
   background-color: black;
+  display: none;
 }
 
 #p5Canvas {
@@ -88,12 +88,18 @@
   visibility: visible;
 }
 
-/* #pianoRollInstructions {
+#pianoRollInstructions {
   display: none;
-} */
+}
+
+.pianoFolder,
+.pianoRollHolder {
+  margin-left: 20px;
+}
 
 #monacoHolder {
   width: 640px;
   height: 360px;
+  display: none;
 }
 </style>
