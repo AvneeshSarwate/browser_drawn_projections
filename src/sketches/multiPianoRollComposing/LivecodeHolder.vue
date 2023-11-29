@@ -9,7 +9,7 @@ import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, tri, Event
 import {channelExports, channelExportString} from '@/channels/exports'
 import { listToClip, clipToDeltas, note, type Instrument } from '@/music/clipPlayback';
 import { Scale } from '@/music/scale';
-import { sampler } from '@/music/synths';
+import { getPiano, sampler } from '@/music/synths';
 import { HorizontalBlur, LayerBlend, VerticalBlur, Transform } from '@/rendering/customFX';
 import { PianoRoll, type NoteInfo } from '@/music/pianoRoll';
 import * as monaco from 'monaco-editor';
@@ -156,8 +156,31 @@ function makePianoRoll<T>(container: string, inst: Instrument, notes?: NoteInfo<
   return pianoRoll
 }
 
+function getLocalStorageNotes(key: string, defaultNotes: NoteInfo<void>[]) {
+  const storedNotes = localStorage.getItem(key)
+  if (storedNotes) {
+    const parsed = JSON.parse(storedNotes)
+    return parsed as NoteInfo<void>[]
+  }
+  const cloneNotes  = defaultNotes.map(n => ({...n}))
+  return defaultNotes
+}
+
+const pianoRolls = new Map<string, PianoRoll<any>>()
+const pianoRollNames = ['phold0', 'phold1', 'phold2', 'phold3']
+
 onMounted(() => {
   try {
+
+    document.getElementById('debugInfo')!!.onclick = () => {
+      navigator.clipboard.readText().then(t => {
+        console.log("clipboardText", t)
+      })
+      navigator.clipboard.read().then(t => {
+        console.log("clipboard", t)
+      })
+    }
+
 
     editor = createEditor(tsSource)
 
@@ -167,12 +190,11 @@ onMounted(() => {
 
     const pitches = scale.getMultiple([1, 3, 5, 6, 8, 10, 12])
     const notes = pitches.map((p, i) => ({ pitch: p, duration: 1, position: i, velocity: 0.5 }))
+    
 
-    const pianoRoll0 = makePianoRoll<void>('phold0', sampler, notes)
-    const pianoRoll1 = makePianoRoll<void>('phold1', sampler, notes)
-    const pianoRoll2 = makePianoRoll<void>('phold2', sampler, notes)
-    const pianoRoll3 = makePianoRoll<void>('phold3', sampler, notes)
-
+    pianoRollNames.forEach((name, i) => {
+      pianoRolls.set(name, makePianoRoll<void>(name, getPiano(), getLocalStorageNotes(name, notes)))
+    })
 
 
 
@@ -259,6 +281,14 @@ onUnmounted(() => {
   for (let i = 0; i < 4; i++) document.getElementById(`phold${i}`)!!.innerHTML = ''
   editorModel?.dispose()
   editor?.dispose()
+
+  pianoRollNames.forEach((name, i) => {
+    const pianoRoll = pianoRolls.get(name)
+    if (pianoRoll) {
+      const notes = pianoRoll.getNoteData()
+      localStorage.setItem(name, JSON.stringify(notes))
+    }
+  })
 })
 
 </script>

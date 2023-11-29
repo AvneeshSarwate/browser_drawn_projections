@@ -7,19 +7,23 @@
   <br>
   <details class="pianoFolder">
     <summary>piano roll 0</summary>
-    <div id="phold0" class="pianoRollHolder"></div> <br>
+    <span><div id="phold0" class="pianoRollHolder"></div> <button id="pplay">play</button> </span>
+    <br>
   </details>
   <details class="pianoFolder">
     <summary>piano roll 1</summary>
-    <div id="phold1" class="pianoRollHolder"></div> <br>
+    <span><div id="phold1" class="pianoRollHolder"></div> <button id="pplay">play</button> </span>
+    <br>
   </details>
   <details class="pianoFolder">
     <summary>piano roll 2</summary>
-    <div id="phold2" class="pianoRollHolder"></div> <br>
+    <span><div id="phold2" class="pianoRollHolder"></div> <button id="pplay">play</button> </span>
+    <br>
   </details>
   <details class="pianoFolder">
     <summary>piano roll 3</summary>
-    <div id="phold3" class="pianoRollHolder"></div> <br>
+    <span><div id="phold3" class="pianoRollHolder"></div> <button id="pplay">play</button> </span>
+    <br>
   </details>
   <ul id="pianoRollInstructions">
     <li>
@@ -61,7 +65,9 @@
         Use Cmd-c/Cmd-v to copy/paste note selections. Selections will be pasted at the vertical cursor position.
     </li>
   </ul>
-  <div id="debugInfo"></div>
+  <div id="debugInfo">
+    debug info
+  </div>
 </template>
 
 
