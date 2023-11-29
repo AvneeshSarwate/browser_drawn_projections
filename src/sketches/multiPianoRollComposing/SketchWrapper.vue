@@ -3,10 +3,10 @@ import SketchHtml from './SketchHtml.vue';
 import SketchInitializer from './SketchInitializer.vue';
 import LivecodeHolder from './LivecodeHolder.vue';
 import { provide } from 'vue';
-import { appState } from './appState';
+import { appState, appStateName } from './appState';
 
 
-provide('appState', appState)
+provide(appStateName, appState)
 
 
 </script>

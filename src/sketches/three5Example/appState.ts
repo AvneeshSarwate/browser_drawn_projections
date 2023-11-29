@@ -42,7 +42,9 @@ export const appState: Three5ExAppState = {
   drawing: false,
 } 
 
-export const globalStore = defineStore('appState', () => {
+export const appStateName = 'three5ExampleAppState'
+
+export const globalStore = defineStore(appStateName, () => {
   const appStateRef = ref(appState)
 
   //@ts-ignore

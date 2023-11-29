@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { createP5Sketch } from './p5Sketch';
-import { type ToneSeqAppState } from './appState';
+import { appStateName, type ToneSeqAppState } from './appState';
 import type p5 from 'p5';
 import * as THREE from 'three';
 import * as Tone from 'tone'
 import { inject, onMounted, onUnmounted } from 'vue';
 
 
-const appState = inject<ToneSeqAppState>('appState')!!
+const appState = inject<ToneSeqAppState>(appStateName)!!
 
 const neutralizeSketch = (instance: p5) => {
   instance.noLoop()

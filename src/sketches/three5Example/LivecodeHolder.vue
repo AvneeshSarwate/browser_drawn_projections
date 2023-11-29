@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { type Three5ExAppState } from './appState';
+import { appStateName, type Three5ExAppState } from './appState';
 import { inject, onMounted, onUnmounted } from 'vue';
 import { clearListeners, singleKeydownEvent } from '@/io/keyboardAndMouse';
 import { sinN, now, steps } from '@/channels/channels';
@@ -11,7 +11,7 @@ import { FPS } from '@/rendering/fps';
 
 const fps = new FPS()
 
-const appState = inject<Three5ExAppState>('appState')!!
+const appState = inject<Three5ExAppState>(appStateName)!!
 
 const clearDrawFuncs = () => {
   appState.drawFunctions = []

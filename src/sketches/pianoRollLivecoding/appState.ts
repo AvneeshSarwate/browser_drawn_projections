@@ -137,7 +137,9 @@ export const appState: ClickAVAppState = {
   drawing: false,
 } 
 
-export const globalStore = defineStore('appState', () => {
+export const appStateName = 'pianoRollLivecodingAppState'
+
+export const globalStore = defineStore(appStateName, () => {
   const appStateRef = ref(appState)
 
   //@ts-ignore

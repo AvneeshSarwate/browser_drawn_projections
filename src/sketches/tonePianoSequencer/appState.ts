@@ -180,7 +180,9 @@ export const appState: ToneSeqAppState = {
   drawing: false,
 } 
 
-export const globalStore = defineStore('appState', () => {
+export const appStateName = 'tonePianoSequencerAppState'
+
+export const globalStore = defineStore(appStateName, () => {
   const appStateRef = ref(appState)
 
   //@ts-ignore
