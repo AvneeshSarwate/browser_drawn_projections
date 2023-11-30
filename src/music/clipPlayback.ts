@@ -14,7 +14,7 @@ export function note( synth: Instrument, pitch: number, duration: number, veloci
 }
 
 export type Clip = {
-  time: number;
+  position: number;
   pitch: number;
   duration: number;
   velocity: number;
@@ -23,12 +23,12 @@ export type Clip = {
 export function clipToDeltas(clip: Clip, totalTime?: number) {
   const interNoteTimeDeltas: number[] = [];
   clip.forEach((note, i) => {
-    const delta = i === 0 ? note.time : note.time - clip[i - 1].time
+    const delta = i === 0 ? note.position : note.position - clip[i - 1].position
     interNoteTimeDeltas.push(delta);
   });
   if (totalTime) { 
     const lastNote = clip[clip.length - 1];
-    const lastNoteDelta = totalTime - lastNote.time;
+    const lastNoteDelta = totalTime - lastNote.position;
     interNoteTimeDeltas.push(lastNoteDelta);
   }
   return interNoteTimeDeltas;
@@ -40,7 +40,7 @@ export const listToClip = (pitches: number[], stepTime: number = 0.5, dur: numbe
       pitch: v,
       velocity: vel,
       duration: dur,
-      time: i * stepTime,
+      position: i * stepTime,
     }
   })
 }

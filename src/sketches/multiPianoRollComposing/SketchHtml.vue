@@ -7,22 +7,22 @@
   <br>
   <details class="pianoFolder">
     <summary>piano roll 0</summary>
-    <span><div id="phold0" class="pianoRollHolder"></div> <button id="pplay">play</button> </span>
+    <span><div id="phold0" class="pianoRollHolder"></div> <button id="pplay0">play</button> </span>
     <br>
   </details>
   <details class="pianoFolder">
     <summary>piano roll 1</summary>
-    <span><div id="phold1" class="pianoRollHolder"></div> <button id="pplay">play</button> </span>
+    <span><div id="phold1" class="pianoRollHolder"></div> <button id="pplay1">play</button> </span>
     <br>
   </details>
   <details class="pianoFolder">
     <summary>piano roll 2</summary>
-    <span><div id="phold2" class="pianoRollHolder"></div> <button id="pplay">play</button> </span>
+    <span><div id="phold2" class="pianoRollHolder"></div> <button id="pplay2">play</button> </span>
     <br>
   </details>
   <details class="pianoFolder">
     <summary>piano roll 3</summary>
-    <span><div id="phold3" class="pianoRollHolder"></div> <button id="pplay">play</button> </span>
+    <span><div id="phold3" class="pianoRollHolder"></div> <button id="pplay3">play</button> </span>
     <br>
   </details>
   <ul id="pianoRollInstructions">

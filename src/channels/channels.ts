@@ -88,11 +88,11 @@ export abstract class TimeContext {
       console.log('abort')
     })
   }
-  public branch<T>(block: (ctx: ToneTimeContext) => Promise<T>): void {
+  public branch<T>(block: (ctx: TimeContext) => Promise<T>): void {
     createAndLaunchContext(block, this.time, Object.getPrototypeOf(this).constructor, false, this)
   }
 
-  public branchWait<T>(block: (ctx: ToneTimeContext) => Promise<T>): CancelablePromisePoxy<T> {
+  public branchWait<T>(block: (ctx: TimeContext) => Promise<T>): CancelablePromisePoxy<T> {
     return createAndLaunchContext(block, this.time, Object.getPrototypeOf(this).constructor, true, this)
   } 
 

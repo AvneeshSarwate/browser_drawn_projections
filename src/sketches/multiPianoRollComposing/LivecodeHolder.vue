@@ -23,6 +23,7 @@ import { buildFuncTS, buildFuncJS } from '@/livecoding/scratch';
 import { transform } from "sucrase";
 import ts, * as TS from 'typescript'
 import * as acorn from 'acorn'
+import { midiOutputs } from '@/io/midi'
 
 declare function defineCallback<T>(cb: (block: (ctx: TimeContext) => Promise<T>) => CancelablePromisePoxy<T>): void;
 
@@ -169,6 +170,46 @@ function getLocalStorageNotes(key: string, defaultNotes: NoteInfo<void>[]) {
 const pianoRolls = new Map<string, PianoRoll<any>>()
 const pianoRollNames = ['phold0', 'phold1', 'phold2', 'phold3']
 
+
+
+function pianoRollDeltas<T>(pr: PianoRoll<T>) {
+  const mel = pr.getNoteData()
+  const mel2 = mel.map(i => i)
+  mel2.sort((a, b) => (a.position + a.duration) - (b.position + b.duration))
+  const totalLength = mel2[mel2.length - 1].position + mel2[mel2.length - 1].duration
+
+  const evtChop = new EventChop<{ r: number, g: number, b: number, x: number, y: number }>
+  const deltas = clipToDeltas(mel, totalLength)
+  return {totalLength, deltas}
+}
+
+type NotePlayFunc = (pitch: number, duration: number, velocity: number, ctx: TimeContext) => void
+
+
+function playPianoRoll<T>(pr: PianoRoll<T>, playFunc: NotePlayFunc) {
+  const {totalLength, deltas} = pianoRollDeltas(pr)
+  const notes = pr.getNoteData()
+  launchLoop(async ctx => {
+    ctx.branch(async ctx => { 
+      for (let i = 0; i < notes.length; i++) {
+        await ctx.wait(deltas[i])
+        ctx.branch(async ctx => {
+          const { pitch, duration, velocity } = notes[i]
+          // inst.triggerAttackRelease(pitch, duration, undefined, velocity)
+          playFunc(pitch, duration, velocity, ctx)
+        })
+      }
+    })
+    ctx.branch(async ctx => {
+      while (ctx.time - ctx.startTime < totalLength) {
+        await ctx.wait(0.016)
+        pr.setCursorPos(ctx.time - ctx.startTime)
+      }
+    })
+  })
+}
+
+
 onMounted(() => {
   try {
 
@@ -190,10 +231,32 @@ onMounted(() => {
 
     const pitches = scale.getMultiple([1, 3, 5, 6, 8, 10, 12])
     const notes = pitches.map((p, i) => ({ pitch: p, duration: 1, position: i, velocity: 0.5 }))
-    
 
+    //todo api - need a better way to attach piano rolls and associated controllers to their handlers
     pianoRollNames.forEach((name, i) => {
-      pianoRolls.set(name, makePianoRoll<void>(name, getPiano(), getLocalStorageNotes(name, notes)))
+      launchLoop(async ctx => { //todo api - need a better way to wait for midi to be ready
+        await ctx.wait(1)
+        const pianoRoll = makePianoRoll<void>(name, getPiano(), getLocalStorageNotes(name, notes))
+        pianoRolls.set(name, pianoRoll)
+        pianoRoll.setCursorPos(3)
+        const buttonName = name.replace('phold', 'pplay')
+        // const sampler = getPiano()
+        const midiIndex = Number(name.slice(-1))
+        const midiName = `IAC Driver Bus ${midiIndex + 1}`
+        const midiDevice = midiOutputs.get(midiName)!!
+        console.log(midiName, midiDevice, midiOutputs)
+        function midiPlay(pitch: number, duration: number, velocity: number, ctx: TimeContext) {
+          ctx.branch(async ctx => {
+            console.log('plaid note', pitch)
+            midiDevice.sendNoteOn(pitch, velocity * 127)
+            await ctx.wait(duration)
+            midiDevice.sendNoteOff(pitch)
+          })
+        }
+        document.getElementById(buttonName)!!.onclick = () => {
+            playPianoRoll(pianoRoll, midiPlay)
+          }
+      })
     })
 
 

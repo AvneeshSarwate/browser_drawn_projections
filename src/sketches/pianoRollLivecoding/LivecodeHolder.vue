@@ -198,10 +198,10 @@ onMounted(() => {
 
         const evtDur = baseDur * Math.pow(2, (1 - normCoords.x) * 4)
 
-        const mel = pianoRoll.getNoteData().map(n => ({ time: n.position, pitch: n.pitch, duration: n.duration, velocity: 1 - normCoords.y }))
+        const mel = pianoRoll.getNoteData().map(n => ({ position: n.position, pitch: n.pitch, duration: n.duration, velocity: 1 - normCoords.y }))
         const mel2 = mel.map(i => i)
-        mel2.sort((a, b) => (a.time + a.duration) - (b.time + b.duration))
-        const melDuration = mel2[mel2.length - 1].time + mel2[mel2.length - 1].duration
+        mel2.sort((a, b) => (a.position + a.duration) - (b.position + b.duration))
+        const melDuration = mel2[mel2.length - 1].position + mel2[mel2.length - 1].duration
 
         const evtChop = new EventChop<{ r: number, g: number, b: number, x: number, y: number }>
         const durs = clipToDeltas(mel, melDuration)
@@ -228,7 +228,7 @@ onMounted(() => {
           while (true) {
             for (let i = 0; i < mel.length; i++) {
               const dur = durs[i]
-              const phase = mel[i].time / melDuration
+              const phase = mel[i].position / melDuration
               await ctx.wait(Math.max(dur * evtDur * (1 - mousePos.y*0), 0))
               const x = cos(phase) * rad + p5xy.x
               const y = sin(phase) * rad + p5xy.y

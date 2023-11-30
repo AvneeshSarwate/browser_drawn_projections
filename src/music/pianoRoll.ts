@@ -106,7 +106,7 @@ export class PianoRoll<T> {
   private selectedElements: Set<Rect>;
   selectedNoteIds: string[];
   private selectRect?: Rect;
-  cursorElement: any;
+  private cursorElement!: Rect
   cursorPosition: number;
   lastCursorPosition = 0
   cursorWidth: number;
@@ -327,7 +327,7 @@ export class PianoRoll<T> {
 
     this.cursorElement = this.svgRoot.rect(this.cursorWidth, this.pianoRollHeight).move(this.cursorPosition * this.quarterNoteWidth, 0).fill(this.noteColor);
     this.playCursorElement = this.svgRoot.rect(this.cursorWidth, this.pianoRollHeight).move(this.cursorPosition * this.quarterNoteWidth, 0).fill('#2d2').opacity(0);
-    this.cursorElement.animate(1500, '<>').attr({fill: '#fff'}).loop(Infinity, true);
+    this.cursorElement.animate(1500).attr({fill: '#fff'}).loop(Infinity, true);
   }
 
 
@@ -934,6 +934,10 @@ export class PianoRoll<T> {
     });
   }
 
+  setCursorPos(beats: number) {
+    this.cursorPosition = beats
+    this.cursorElement.x(beats * this.quarterNoteWidth)
+  }
 
 
   populateSpatialNoteTracker(){ //todo - probably don't need this - just query directly for notes of a pitch
