@@ -78,10 +78,10 @@
   },
   "TimeSelection": {
     "AnchorTime": {
-      "@_Value": "0.5"
+      "@_Value": "0.75"
     },
     "OtherTime": {
-      "@_Value": "0.75"
+      "@_Value": "1"
     }
   },
   "Legato": {
@@ -170,16 +170,28 @@
       "KeyTrack": [
         {
           "Notes": {
-            "MidiNoteEvent": {
-              "@_Time": "0.5",
-              "@_Duration": "0.25",
-              "@_Velocity": "100",
-              "@_VelocityDeviation": "0",
-              "@_OffVelocity": "64",
-              "@_Probability": "1",
-              "@_IsEnabled": "true",
-              "@_NoteId": "3"
-            }
+            "MidiNoteEvent": [
+              {
+                "@_Time": "0.5",
+                "@_Duration": "0.25",
+                "@_Velocity": "100",
+                "@_VelocityDeviation": "0",
+                "@_OffVelocity": "64",
+                "@_Probability": "1",
+                "@_IsEnabled": "true",
+                "@_NoteId": "3"
+              },
+              {
+                "@_Time": "0.75",
+                "@_Duration": "0.25",
+                "@_Velocity": "100",
+                "@_VelocityDeviation": "0",
+                "@_OffVelocity": "64",
+                "@_Probability": "1",
+                "@_IsEnabled": "true",
+                "@_NoteId": "4"
+              }
+            ]
           },
           "MidiKey": {
             "@_Value": "66"
@@ -229,7 +241,7 @@
     },
     "NoteIdGenerator": {
       "NextId": {
-        "@_Value": "4"
+        "@_Value": "5"
       }
     }
   },
