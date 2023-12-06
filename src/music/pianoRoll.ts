@@ -164,7 +164,7 @@ export class PianoRoll<T> {
   wIsDown: any;
   private debugCircle0: Circle
   private debugCircle1: Circle
-  constructor(containerElementId: string, playHandler: () => void, noteOnOffHandler: () => void){
+  constructor(containerElementId: string, playHandler: (pitch: number) => void, noteOnOffHandler: (pitch: number, onOff: ('on' | 'off')) => void){
     this.svgRoot; //the svg root element
 
     /* a dictionary that, upon the start of a group drag/resize event, stores the 
@@ -280,8 +280,8 @@ export class PianoRoll<T> {
     // attach the interaction handlers not related to individual notes
     this.attachHandlersOnBackground(this.backgroundElements, this.svgRoot);
 
-    this.addNote(55, 0, 1, false);
-    this.addNote(60, 0, 1, false);
+    // this.addNote(55, 0, 1, false);
+    // this.addNote(60, 0, 1, false);
 
 
     //set the view-area so we aren't looking at the whole 127 note 100 measure piano roll
@@ -646,15 +646,15 @@ export class PianoRoll<T> {
       });
       this.snapshotNoteState();
     }
-    // if (event.key == 'q'){ 
-    //   this.getNotesAtPosition(this.cursorPosition+0.01).map(n => this.playHandler(n.info.pitch));
-    // }
-    // if (event.key == 'w'){
-    //   if (!this.wIsDown){
-    //     this.wIsDown = true;
-    //     this.getNotesAtPosition(this.cursorPosition+0.01).map(n => this.noteOnOffHandler(n.info.pitch, 'on'));
-    //   }
-    // }
+    if (event.key == 'q'){ 
+      this.getNotesAtPosition(this.cursorPosition+0.01).map(n => this.playHandler(n.pitch));
+    }
+    if (event.key == 'w'){
+      if (!this.wIsDown){
+        this.wIsDown = true;
+        this.getNotesAtPosition(this.cursorPosition+0.01).map(n => this.noteOnOffHandler(n.pitch, 'on'));
+      }
+    }
     event.stopPropagation();
   }
 
@@ -670,11 +670,11 @@ export class PianoRoll<T> {
       this.containerElement!!.removeEventListener('mousemove', this.temporaryMouseMoveHandler!!);
       this.temporaryMouseMoveHandler = undefined;
     }
-    // if (event.key == 'w'){ 
-    //   this.wIsDown = false;
-    //   //replace with generic interactionPlay() handler 
-    //   this.getNotesAtPosition(this.cursorPosition+0.01).map(n => this.noteOnOffHandler(n.info.pitch, 'off'));
-    // }
+    if (event.key == 'w'){ 
+      this.wIsDown = false;
+      //replace with generic interactionPlay() handler 
+      this.getNotesAtPosition(this.cursorPosition+0.01).map(n => this.noteOnOffHandler(n.pitch, 'off'));
+    }
   }
 
   copyNotes(){

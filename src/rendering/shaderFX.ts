@@ -165,7 +165,7 @@ export class CustomShaderEffect extends ShaderEffect {
   camera: THREE.Camera
   inputs: ShaderInputs
   material: THREE.ShaderMaterial
-  constructor(fsString: string, inputs: ShaderInputs, width = 1280, height = 720, customOutput?: THREE.WebGLRenderTarget) {
+  constructor(fsString: string, inputs: ShaderInputs, width = 1280, height = 720, customOutput?: THREE.WebGLRenderTarget, filterType: ('neareast' | 'linear') = 'linear') {
     super()
     //todo hotreload - register ShaderEffects so textures can be cleaned up on reload
     /* todo hotreload/deep design - should hotreload safetfy of ShaderEffects be internal, or an external wrapper?
@@ -174,7 +174,7 @@ export class CustomShaderEffect extends ShaderEffect {
             and if not, see if you can expose a minimal API that is then mostly managed by an outside service
     */
 
-    this.output = customOutput ?? halfTarget(width, height, 'linear')
+    this.output = customOutput ?? halfTarget(width, height, filterType)
     this.width = width
     this.height = height
     //a scene with an orthographic camera, a single plane, and a shader material

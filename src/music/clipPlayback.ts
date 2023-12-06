@@ -3,14 +3,16 @@ import { launch } from "@/channels/channels";
 //needed because Tone Instrument type is not public 
 export type Instrument = {
   triggerAttackRelease: (pitch: number, duration: number, time?: number, velocity?: number) => void;
+  triggerAttack: (pitch: number, time?: number, velocity?: number) => void;
+  triggerRelease: (pitch: number, time?: number) => void;
 }
 
-function midiToFrequency(midi: number) {
+export function m2f(midi: number) {
   return Math.pow(2, (midi - 69) / 12) * 440;
 }
 
 export function note( synth: Instrument, pitch: number, duration: number, velocity: number = 60) {
-  synth.triggerAttackRelease(midiToFrequency(pitch), duration, undefined, velocity);
+  synth.triggerAttackRelease(m2f(pitch), duration, undefined, velocity);
 }
 
 export type Clip = {

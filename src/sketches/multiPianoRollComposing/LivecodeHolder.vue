@@ -7,7 +7,7 @@ import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, tar
 import p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, tri, EventChop, cos, sin } from '@/channels/channels';
 import {channelExports, channelExportString} from '@/channels/exports'
-import { listToClip, clipToDeltas, note, type Instrument } from '@/music/clipPlayback';
+import { listToClip, clipToDeltas, note, type Instrument, m2f } from '@/music/clipPlayback';
 import { Scale } from '@/music/scale';
 import { getPiano, sampler } from '@/music/synths';
 import { HorizontalBlur, LayerBlend, VerticalBlur, Transform } from '@/rendering/customFX';
@@ -51,91 +51,6 @@ const clearDrawFuncs = () => {
   appState.drawFuncMap.clear()
 }
 
-let editor: monaco.editor.IStandaloneCodeEditor | undefined = undefined
-let editorModel: monaco.editor.ITextModel | undefined = undefined
-
-// eslint-disable-next-line no-inner-declarations
-function nodeSlice(input: string, node: any): string {
-  return input.substring(node.start, node.end)
-}
-
-function parseEditorVal(editor: monaco.editor.IStandaloneCodeEditor): Function | undefined {
-  const editorVal = editor.getValue()
-  if (editorVal) {
-    const sucraseFunc = transform(editorVal, { transforms: ['typescript'] }).code
-    const acParse = acorn.parse(sucraseFunc, { ecmaVersion: 2020, sourceType: 'module' })
-    //@ts-ignore
-    const bodyString = nodeSlice(sucraseFunc, acParse.body[0].body)
-
-    const libAddedSrc = `
-    ${channelExportString}
-
-    ${bodyString}
-    `
-
-    return Function('chanExports', 'p5sketch', 'inst', 'scale', 'savedState', 'noteInfo', libAddedSrc)
-  }
-}
-
-function createEditor(tsSource: string) {
-  // validation settings
-  monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
-    noSemanticValidation: true,
-    noSyntaxValidation: false,
-  });
-
-  // compiler options
-  monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
-    target: monaco.languages.typescript.ScriptTarget.ES2015,
-    allowNonTsExtensions: true,
-  });
-
-  const infoSrc = channelDefs
-
-  const channelUri = "ts:filename/channels.d.ts"
-  monaco.languages.typescript.typescriptDefaults.addExtraLib(infoSrc, channelUri)
-  // editorModel = monaco.editor.createModel(infoSrc, "typescript", monaco.Uri.parse(channelUri))
-
-  const p5uri = "ts:filename/p5.d.ts"
-  monaco.languages.typescript.typescriptDefaults.addExtraLib(p5defs, p5uri)
-  // monaco.editor.createModel(p5defs, "typescript", monaco.Uri.parse(p5uri))
-
-  const playbackUri = "ts:filename/playback.d.ts"
-  monaco.languages.typescript.typescriptDefaults.addExtraLib(playbackDefs, playbackUri)
-
-  const scaleUri = "ts:filename/scale.d.ts"
-  monaco.languages.typescript.typescriptDefaults.addExtraLib(scaleDef, scaleUri)
-
-  return monaco.editor.create(document.getElementById('monacoHolder')!!, {
-      value: tsSource,
-      language: 'typescript',
-      theme: 'vs-dark',
-      automaticLayout: true,
-      minimap: {
-        enabled: true
-      }
-    });
-}
-
-const tsSource = `
-  function noteCallback(p5sketch: p5, inst: Instrument, scale: Scale, savedState: any,
-    noteInfo: { pitch: number, duration: number, velocity: number, index: number }) {
-  
-  const {pitch, duration, velocity} = noteInfo
-  const origInd = scale.getIndFromPitch(pitch)
-  const ind = Math.random() < 0.3 ? origInd + 1 : origInd
-  const newPitch = scale.getByIndex(ind)
-  console.log("pitch", pitch)
-  p5sketch.circle(100, 100, 100)
-
-  function m2f(midi: number) {
-    return Math.pow(2, (midi - 69) / 12) * 440;
-  }
-
-  inst.triggerAttackRelease(m2f(newPitch), duration, undefined, velocity)
-}
-    `
-
 function playOnce(pianoRoll: PianoRoll<any>, inst: Instrument) {
   const notes = pianoRoll.getNoteData()
   const noteClone = notes.map(n => ({ ...n }))
@@ -149,10 +64,12 @@ function playOnce(pianoRoll: PianoRoll<any>, inst: Instrument) {
 
 function makePianoRoll<T>(container: string, inst: Instrument, notes?: NoteInfo<T>[]) {
   //todo api - use intrument for note playing callbacks
-  const pianoRoll = new PianoRoll<any>(container, () => null, () => null)
-  if (notes) {
-    pianoRoll.setNoteData(notes)
-    pianoRoll.setViewportToShowAllNotes()
+  const trigger = (pitch: number) => inst.triggerAttackRelease(m2f(pitch), 0.1)
+  const onOff = (pitch: number, onOff: ('on' | 'off')) => onOff === 'on' ? inst.triggerAttack(m2f(pitch), undefined, 0.1) : inst.triggerRelease(m2f(pitch))
+  const pianoRoll = new PianoRoll<any>(container, trigger, onOff)
+  if (notes) { //todo bug - need to wait for piano roll synth to be ready before setting notes, or not play notes on initial add
+    // pianoRoll.setNoteData(notes)
+    // pianoRoll.setViewportToShowAllNotes()
   }
   return pianoRoll
 }
@@ -222,11 +139,6 @@ onMounted(() => {
       })
     }
 
-
-    editor = createEditor(tsSource)
-
-    let livecodeFunc = parseEditorVal(editor)
-
     const scale = new Scale(undefined, 48)
 
     const pitches = scale.getMultiple([1, 3, 5, 6, 8, 10, 12])
@@ -234,13 +146,13 @@ onMounted(() => {
 
     //todo api - need a better way to attach piano rolls and associated controllers to their handlers
     pianoRollNames.forEach((name, i) => {
-      launchLoop(async ctx => { //todo api - need a better way to wait for midi to be ready
+      launchLoop(async ctx => { //todo api - to wait for midi - use MIDI_READY promise from midi.ts instead of a loop/wait 
         await ctx.wait(1)
-        const pianoRoll = makePianoRoll<void>(name, getPiano(), getLocalStorageNotes(name, notes))
+        const sampler = getPiano()
+        const pianoRoll = makePianoRoll<void>(name, sampler, getLocalStorageNotes(name, notes))
         pianoRolls.set(name, pianoRoll)
         pianoRoll.setCursorPos(3)
         const buttonName = name.replace('phold', 'pplay')
-        // const sampler = getPiano()
         const midiIndex = Number(name.slice(-1))
         const midiName = `IAC Driver Bus ${midiIndex + 1}`
         const midiDevice = midiOutputs.get(midiName)!!
@@ -261,68 +173,8 @@ onMounted(() => {
 
 
 
-
-
-    const p5i = appState.p5Instance!!
-    const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
-    const threeCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
-
-
-    const initialSavedState = {}
-    setTimeout(() => {
-      // console.log("livecodeFunc", livecodeFunc)
-      // livecodeFunc?.(channelExports, p5i!!, sampler, scale, {}, {pitch: 60}) //todo bug - why does this need to be delayed to call p5 properly?
-    }, 1000); 
-
-
-    const baseDur = 0.125 / 2
-    const baseSeq = [1, 3, 5, 6, 8, 10, 12]
-    const rad = 50
-
-
     const code = () => {
 
-      const mousePos = { x: 0, y: 0 }
-
-      mousemoveEvent(ev => {
-        const p5xy = targetNormalizedCoords(ev, ev.target as HTMLCanvasElement)
-        mousePos.x = p5xy.x
-        mousePos.y = p5xy.y
-      }, threeCanvas)
-
-      const loopMap = new Map<string, CancelablePromisePoxy<any>>()
-      const loopIdStack = [] as string[]
-
-      
-
-      const p5Passthru = new Passthru({ src: p5Canvas })
-
-      const canvasPaint = new CanvasPaint({ src: p5Passthru })
-      shaderGraphEndNode = canvasPaint
-
-
-
-      appState.shaderDrawFunc = () => shaderGraphEndNode!!.renderAll(appState.threeRenderer!!)
-
-      singleKeydownEvent('u', (ev) => {
-        const lastId = loopIdStack.pop()
-        if (lastId) {
-          const lastLoop = loopMap.get(lastId)
-          if (lastLoop) {
-            lastLoop.cancel()
-            appState.drawFuncMap.delete(lastId)
-          }
-        }
-      })
-
-      singleKeydownEvent('c', (ev) => {
-        //iterate over keys in loopMap and cancel each
-        for (const [key, loop] of loopMap.entries()) {
-          loop.cancel()
-          appState.drawFuncMap.delete(key)
-        }
-      })
-      singleKeydownEvent('p', (ev) => { appState.paused = !appState.paused })
     }
 
     appState.codeStack.push(code)
@@ -342,8 +194,6 @@ onUnmounted(() => {
   clearListeners()
   timeLoops.forEach(tl => tl.cancel())
   for (let i = 0; i < 4; i++) document.getElementById(`phold${i}`)!!.innerHTML = ''
-  editorModel?.dispose()
-  editor?.dispose()
 
   pianoRollNames.forEach((name, i) => {
     const pianoRoll = pianoRolls.get(name)

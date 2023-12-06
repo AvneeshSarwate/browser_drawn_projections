@@ -1,6 +1,14 @@
 import * as TS from 'typescript'
 import * as acorn from 'acorn'
 
+import * as monaco from 'monaco-editor';
+import { channelDefs } from './chanelSrc';
+import { p5defs } from './p5Defs';
+import { scaleDef } from './scaleDef';
+import { playbackDefs } from './playbackDefs';
+import { channelExportString } from '@/channels/exports';
+import { transform } from 'sucrase';
+
 
 
 // adding types to monaco editor - https://stackoverflow.com/a/52294684
@@ -54,4 +62,67 @@ export function buildFuncJS(jsString: string) {
   console.log('funcBody', funcBody)
   const func = Function('launch', funcBody)
   return func
+}
+
+
+function nodeSlice(input: string, node: any): string {
+  return input.substring(node.start, node.end)
+}
+
+function parseEditorVal(editor: monaco.editor.IStandaloneCodeEditor): Function | undefined {
+  const editorVal = editor.getValue()
+  if (editorVal) {
+    const sucraseFunc = transform(editorVal, { transforms: ['typescript'] }).code
+    const acParse = acorn.parse(sucraseFunc, { ecmaVersion: 2020, sourceType: 'module' })
+    //@ts-ignore
+    const bodyString = nodeSlice(sucraseFunc, acParse.body[0].body)
+
+    const libAddedSrc = `
+    ${channelExportString}
+
+    ${bodyString}
+    `
+
+    return Function('chanExports', 'p5sketch', 'inst', 'scale', 'savedState', 'noteInfo', libAddedSrc)
+  }
+}
+
+function createEditor(tsSource: string) {
+  // validation settings
+  monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
+    noSemanticValidation: true,
+    noSyntaxValidation: false,
+  });
+
+  // compiler options
+  monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
+    target: monaco.languages.typescript.ScriptTarget.ES2015,
+    allowNonTsExtensions: true,
+  });
+
+  const infoSrc = channelDefs
+
+  const channelUri = "ts:filename/channels.d.ts"
+  monaco.languages.typescript.typescriptDefaults.addExtraLib(infoSrc, channelUri)
+  // editorModel = monaco.editor.createModel(infoSrc, "typescript", monaco.Uri.parse(channelUri))
+
+  const p5uri = "ts:filename/p5.d.ts"
+  monaco.languages.typescript.typescriptDefaults.addExtraLib(p5defs, p5uri)
+  // monaco.editor.createModel(p5defs, "typescript", monaco.Uri.parse(p5uri))
+
+  const playbackUri = "ts:filename/playback.d.ts"
+  monaco.languages.typescript.typescriptDefaults.addExtraLib(playbackDefs, playbackUri)
+
+  const scaleUri = "ts:filename/scale.d.ts"
+  monaco.languages.typescript.typescriptDefaults.addExtraLib(scaleDef, scaleUri)
+
+  return monaco.editor.create(document.getElementById('monacoHolder')!!, {
+      value: tsSource,
+      language: 'typescript',
+      theme: 'vs-dark',
+      automaticLayout: true,
+      minimap: {
+        enabled: true
+      }
+    });
 }

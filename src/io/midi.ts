@@ -3,7 +3,7 @@ import { MIDIVal, MIDIValInput, MIDIValOutput } from "@midival/core";
 export const midiInputs: Map<string, MIDIValInput> = new Map();
 export const midiOutputs: Map<string, MIDIValOutput> = new Map()
 
-MIDIVal.connect().then((accessObject) => {
+export const MIDI_READY = MIDIVal.connect().then((accessObject) => {
   accessObject.inputs.forEach((input) => {
     console.log("midi input", input.name);
     midiInputs.set(input.name, new MIDIValInput(input));
