@@ -104,7 +104,7 @@ onMounted(() => {
             for (let i = 0; i < mel.length; i++) {
               const dur = durs[i]
               const phase = mel[i].time / melDuration
-              await ctx.wait(dur * evtDur)
+              await ctx.waitSec(dur * evtDur)
               const x = cos(phase) * rad + p5xy.x
               const y = sin(phase) * rad + p5xy.y
               const evtData = { r: p5xy.x / p5i.width, g: p5xy.y / p5i.height, b: r(), x, y }
@@ -113,7 +113,7 @@ onMounted(() => {
               note(sampler, pitch, duration, velocity)
               // console.log("playing note", (Date.now() / 1000).toFixed(2), evtData)
             }
-            await ctx.wait(durs[durs.length - 1] * evtDur)
+            await ctx.waitSec(durs[durs.length - 1] * evtDur)
           }
         })
 

@@ -65,7 +65,7 @@ onMounted(() => {
             seqInd = (seqInd + 1) % appState.circles.list.length
             appState.circles.list[seqInd].trigger()
           }
-          await ctx.wait(0.05)
+          await ctx.waitSec(0.05)
         }
       })
 

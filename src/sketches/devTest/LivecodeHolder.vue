@@ -204,10 +204,10 @@ onMounted(() => {
               console.log("note time", i, note, (now() - starTime).toFixed(2))
               const voice = synth.noteOn(note, 20, 0.02, 0.005)
               await ctx.branchWait(async (c) => {
-                await c.wait(.05)
+                await c.waitSec(.05)
                 synth.noteOff(voice)
               })
-              await ctx.wait(.25)
+              await ctx.waitSec(.25)
             }
           })
 

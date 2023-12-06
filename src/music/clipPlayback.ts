@@ -65,7 +65,7 @@ export function playClip(clip: Clip, synth: Instrument) {
   const deltas = clipToDeltas(clip);
   launch(async ctx => {
     clip.forEach((note, i) => {
-      ctx.wait(deltas[i]);
+      ctx.waitSec(deltas[i]);
       synth.triggerAttackRelease(note.pitch, note.duration, undefined, note.velocity);
     });
   })

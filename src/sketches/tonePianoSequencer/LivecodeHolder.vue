@@ -145,7 +145,7 @@ onMounted(() => {
 
             lastX = thisX
             thisX += 1 * (1 + 1 - relativeHeight)
-            await ctx.wait(0.016)
+            await ctx.waitSec(0.016)
           }
 
           appState.drawFuncMap.delete("playhead" + playheadId)

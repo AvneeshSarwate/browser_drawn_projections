@@ -109,7 +109,7 @@ function playPianoRoll<T>(pr: PianoRoll<T>, playFunc: NotePlayFunc) {
   launchLoop(async ctx => {
     ctx.branch(async ctx => { 
       for (let i = 0; i < notes.length; i++) {
-        await ctx.wait(deltas[i])
+        await ctx.waitSec(deltas[i])
         ctx.branch(async ctx => {
           const { pitch, duration, velocity } = notes[i]
           // inst.triggerAttackRelease(pitch, duration, undefined, velocity)
@@ -119,7 +119,7 @@ function playPianoRoll<T>(pr: PianoRoll<T>, playFunc: NotePlayFunc) {
     })
     ctx.branch(async ctx => {
       while (ctx.time - ctx.startTime < totalLength) {
-        await ctx.wait(0.016)
+        await ctx.waitSec(0.016)
         pr.setCursorPos(ctx.time - ctx.startTime)
       }
     })
@@ -147,9 +147,9 @@ onMounted(() => {
     //todo api - need a better way to attach piano rolls and associated controllers to their handlers
     pianoRollNames.forEach((name, i) => {
       launchLoop(async ctx => { //todo api - to wait for midi - use MIDI_READY promise from midi.ts instead of a loop/wait 
-        await ctx.wait(1)
+        await ctx.waitSec(1)
         const sampler = getPiano()
-        await ctx.wait(1)
+        await ctx.waitSec(1)
         const pianoRoll = makePianoRoll<void>(name, sampler, notes.map(n => ({ ...n })))
         pianoRolls.set(name, pianoRoll)
         pianoRoll.setCursorPos(3)
@@ -162,7 +162,7 @@ onMounted(() => {
           ctx.branch(async ctx => {
             console.log('plaid note', pitch)
             midiDevice.sendNoteOn(pitch, velocity * 127)
-            await ctx.wait(duration)
+            await ctx.waitSec(duration)
             midiDevice.sendNoteOff(pitch)
           })
         }

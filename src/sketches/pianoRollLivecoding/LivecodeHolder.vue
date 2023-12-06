@@ -229,7 +229,7 @@ onMounted(() => {
             for (let i = 0; i < mel.length; i++) {
               const dur = durs[i]
               const phase = mel[i].position / melDuration
-              await ctx.wait(Math.max(dur * evtDur * (1 - mousePos.y*0), 0))
+              await ctx.waitSec(Math.max(dur * evtDur * (1 - mousePos.y*0), 0))
               const x = cos(phase) * rad + p5xy.x
               const y = sin(phase) * rad + p5xy.y
               const evtData = { r: p5xy.x / p5i.width, g: p5xy.y / p5i.height, b: r(), x, y }
@@ -239,7 +239,7 @@ onMounted(() => {
               lcFunc?.(channelExports, p5i!!, sampler, scale, savedState, {pitch, duration, velocity, index: i})
               // console.log("playing note", (Date.now() / 1000).toFixed(2), evtData)
             }
-            await ctx.wait(durs[durs.length - 1] * evtDur)
+            await ctx.waitSec(durs[durs.length - 1] * evtDur)
           }
         })
 

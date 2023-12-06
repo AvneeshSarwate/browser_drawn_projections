@@ -77,6 +77,7 @@ export abstract class TimeContext {
     return this.time - this.startTime
   }
   public id: number
+  public bpm: number = 120
 
   constructor(time: number, ab: AbortController, id: number) {
     this.time = time
@@ -96,7 +97,10 @@ export abstract class TimeContext {
     return createAndLaunchContext(block, this.time, Object.getPrototypeOf(this).constructor, true, this)
   } 
 
-  public abstract wait(sec: number): Promise<void>
+  public abstract waitSec(sec: number): Promise<void>
+  public wait(beats: number) {
+    return this.waitSec(beats * 60 / this.bpm)
+  }
   public waitFrame(): Promise<void> {
     if (this.isCanceled) {
       throw new Error('context is canceled')
@@ -115,7 +119,7 @@ export abstract class TimeContext {
 }
 
 class ToneTimeContext extends TimeContext {
-  public async wait(sec: number) {
+  public async waitSec(sec: number) {
     if (this.isCanceled) {
       throw new Error('context is canceled')
     }
@@ -133,7 +137,7 @@ class ToneTimeContext extends TimeContext {
 }
 
 class DateTimeContext extends TimeContext{
-  public async wait(sec: number) {
+  public async waitSec(sec: number) {
     // console.log('wait', sec, this.id, this.time.toFixed(3))
     if (this.isCanceled) {
       throw new Error('context is canceled')
@@ -180,12 +184,12 @@ export const testCancel = async () => {
         const driftDelta = drift - lastDrift
         console.log('step', i, "logicalTime", logicalTime.toFixed(3), "wallTime", wallTime.toFixed(3), "drift", drift.toFixed(3), "driftDelta", driftDelta.toFixed(3))
         lastDrift = drift
-        await ctx.wait(stepVal)
+        await ctx.waitSec(stepVal)
       }
     })
 
     await ctx.branchWait(async (ctx) => {
-      await ctx.wait(stepVal * 10)
+      await ctx.waitSec(stepVal * 10)
       console.log('res0 cancel', performance.now() - start2)
       res0.cancel()
     })
@@ -440,7 +444,7 @@ function testCalls() {
     for (let i = 0; i < 10; i++) {
       ec.ramp(1, { reg: regs[i % 4], aseg: a.lrLine(1) })
       ec.ramp(1, { reg: regs[(i+2) % 4], aseg: a.rlLine(1) })
-      await ctx.wait(1) //todo api - should await be inside the wait() call?
+      await ctx.waitSec(1) //todo api - should await be inside the wait() call?
     }
   })
 }
