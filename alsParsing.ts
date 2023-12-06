@@ -1,14 +1,15 @@
 import { XMLParser } from "fast-xml-parser"
 import * as fs from "fs";
 import * as zlib from "zlib";
+import WebSocket from 'ws';
 
 const gzipedFile = fs.readFileSync("td_ableton/pianos Project/pianos.als");
 const xml = zlib.gunzipSync(gzipedFile).toString();
 
 
-type Note = { pitch: number, duration: number, velocity: number, position: number }
+export type AbletonNote = { pitch: number, duration: number, velocity: number, position: number }
 
-function parseXmlNote(xmlNote: any, pitchStr: string): Note {
+function parseXmlNote(xmlNote: any, pitchStr: string): AbletonNote {
   const pitch = Number(pitchStr);
   const duration = Number(xmlNote["@_Duration"]);
   const velocity = Number(xmlNote["@_Velocity"]);
@@ -23,12 +24,12 @@ function arrayWrap<T>(maybeArray: T | T[]): T[] {
 }
 
 
-function parseXML(xml: string): Map<string, Note[]> {
+function parseXML(xml: string): Map<string, AbletonNote[]> {
   const parser = new XMLParser({ignoreAttributes: false});
   const parsed = parser.parse(xml);
   const tracks = parsed.Ableton.LiveSet.Tracks.MidiTrack
 
-  const clipMap = new Map<string, Note[]>();
+  const clipMap = new Map<string, AbletonNote[]>();
 
   tracks.forEach((track: any, track_ind) => {
     const clipSlotList = track.DeviceChain.MainSequencer.ClipSlotList.ClipSlot;
@@ -36,7 +37,7 @@ function parseXML(xml: string): Map<string, Note[]> {
       const clip = slot?.ClipSlot?.Value?.MidiClip;
       if (clip) {
         const keytracks = arrayWrap(clip.Notes.KeyTracks.KeyTrack)
-        const notes: Note[] = []
+        const notes: AbletonNote[] = []
         
         keytracks.forEach((keytrack: any) => {
           const pitchStr = keytrack.MidiKey["@_Value"]
@@ -62,3 +63,18 @@ function parseXML(xml: string): Map<string, Note[]> {
 }
 
 console.log(parseXML(xml));
+
+const wss = new WebSocket.Server({ port: 8080 });
+
+wss.on('connection', (ws: WebSocket) => {
+  console.log('New client connected');
+
+  ws.on('message', (message: string) => {
+    console.log(`Received message: ${message}`);
+    ws.send(`Server received your message: ${message}`);
+  });
+
+  ws.on('close', () => {
+    console.log('Client disconnected');
+  });
+});
