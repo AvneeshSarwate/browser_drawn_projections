@@ -10,7 +10,8 @@ export const sketchNames = [
   'clickAVMelodyLauncher',
   'pianoRollMelodyLauncher',
   'pianoRollLivecoding',
-  'multiPianoRollComposing'
+  'multiPianoRollComposing',
+  'abletonClipComposing'
 ]
 
 const sketchRoutes = sketchNames.map(name => {

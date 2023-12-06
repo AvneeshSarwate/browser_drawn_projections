@@ -36,6 +36,20 @@ export function clipToDeltas(clip: Clip, totalTime?: number) {
   return interNoteTimeDeltas;
 }
 
+export function positionsToDeltas(positions: number[], totalTime?: number) {
+  const deltas: number[] = [];
+  positions.forEach((pos, i) => {
+    const delta = i === 0 ? pos : pos - positions[i - 1]
+    deltas.push(delta);
+  });
+  if (totalTime) { 
+    const lastPos = positions[positions.length - 1];
+    const lastDelta = totalTime - lastPos;
+    deltas.push(lastDelta);
+  }
+  return deltas;
+}
+
 export const listToClip = (pitches: number[], stepTime: number = 0.5, dur: number = 0.5, vel: number = 0.5): Clip => {
   return pitches.map((v, i) => {
     return {

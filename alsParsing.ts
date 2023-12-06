@@ -1,13 +1,15 @@
 import { XMLParser } from "fast-xml-parser"
 import * as fs from "fs";
 import * as zlib from "zlib";
-import WebSocket from 'ws';
+import { WebSocket } from 'ws';
 
-const gzipedFile = fs.readFileSync("td_ableton/pianos Project/pianos.als");
+const fileName = "td_ableton/pianos Project/pianos.als";
+
+const gzipedFile = fs.readFileSync(fileName);
 const xml = zlib.gunzipSync(gzipedFile).toString();
 
 
-export type AbletonNote = { pitch: number, duration: number, velocity: number, position: number }
+type AbletonNote = { pitch: number, duration: number, velocity: number, position: number }
 
 function parseXmlNote(xmlNote: any, pitchStr: string): AbletonNote {
   const pitch = Number(pitchStr);
@@ -62,7 +64,7 @@ function parseXML(xml: string): Map<string, AbletonNote[]> {
   return clipMap;
 }
 
-console.log(parseXML(xml));
+let clipMap = parseXML(xml);
 
 const wss = new WebSocket.Server({ port: 8080 });
 
@@ -78,3 +80,15 @@ wss.on('connection', (ws: WebSocket) => {
     console.log('Client disconnected');
   });
 });
+
+fs.watchFile(fileName, () => {
+  console.log("file changed");
+  const gzipedFile = fs.readFileSync(fileName);
+  const xml = zlib.gunzipSync(gzipedFile).toString();
+  clipMap = parseXML(xml);
+
+  const clipMapJson = JSON.stringify({type: 'clipMap', data: Object.fromEntries(clipMap)});
+  wss.clients.forEach((client) => {
+    client.send(clipMapJson);
+  });
+})

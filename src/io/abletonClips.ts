@@ -15,6 +15,14 @@ ws.on('open', () => {
 
 ws.on('message', (message: string) => {
   console.log(`Received message from server: ${message}`);
+  const mes = JSON.parse(message);
+  if (mes.type === 'clipMap') {
+    clipMap.clear();
+    Object.entries(mes.data).forEach(([key, value]: [string, AbletonNote[]]) => {
+      clipMap.set(key, value);
+    });
+    console.log('clipMap updated');
+  }
 });
 
 ws.on('close', () => {

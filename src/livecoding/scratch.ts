@@ -2,12 +2,25 @@ import * as TS from 'typescript'
 import * as acorn from 'acorn'
 
 import * as monaco from 'monaco-editor';
+import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
+import TsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
+
 import { channelDefs } from './chanelSrc';
 import { p5defs } from './p5Defs';
 import { scaleDef } from './scaleDef';
 import { playbackDefs } from './playbackDefs';
 import { channelExportString } from '@/channels/exports';
 import { transform } from 'sucrase';
+
+
+self.MonacoEnvironment = {
+  getWorker(_, label) {
+    if (label === 'typescript' || label === 'javascript') {
+      return new TsWorker();
+    }
+    return new EditorWorker();
+  }
+};
 
 
 
