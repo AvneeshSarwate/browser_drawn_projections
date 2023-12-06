@@ -1,30 +1,27 @@
-import WebSocket from 'ws';
-
 const ws = new WebSocket('ws://localhost:8080');
 
-//todo api - consolidate AbletonNote type def with the one in alsParsing.ts
-type AbletonNote = { pitch: number, duration: number, velocity: number, position: number } 
+//todo api - consolidate AbletonNote/Clip type def with the one in alsParsing.ts
+export type AbletonNote = { pitch: number, duration: number, velocity: number, position: number } 
+export type AbletonClip = { name: string, duration: number, notes: AbletonNote[] }
 
-export const clipMap = new Map<string, AbletonNote[]>();
+export const clipMap = new Map<string, AbletonClip>();
 
-ws.on('open', () => {
+ws.onopen = () => {
   console.log('Connected to server');
+};
 
-  ws.send('Hello, server!');
-});
-
-ws.on('message', (message: string) => {
-  console.log(`Received message from server: ${message}`);
-  const mes = JSON.parse(message);
+ws.onmessage = (message) => {
+  console.log(`Received message from server: ${message.data.slice(0, 100)}`);
+  const mes = JSON.parse(message.data);
   if (mes.type === 'clipMap') {
     clipMap.clear();
-    Object.entries(mes.data).forEach(([key, value]: [string, AbletonNote[]]) => {
+    Object.entries(mes.data).forEach(([key, value]: [string, AbletonClip]) => {
       clipMap.set(key, value);
     });
-    console.log('clipMap updated');
+    console.log('clipMap updated', clipMap);
   }
-});
+};
 
-ws.on('close', () => {
+ws.onclose = () => {
   console.log('Disconnected from server');
-});
+};

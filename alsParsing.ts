@@ -10,6 +10,7 @@ const xml = zlib.gunzipSync(gzipedFile).toString();
 
 
 type AbletonNote = { pitch: number, duration: number, velocity: number, position: number }
+type AbletonClip = { name: string, duration: number, notes: AbletonNote[] }
 
 function parseXmlNote(xmlNote: any, pitchStr: string): AbletonNote {
   const pitch = Number(pitchStr);
@@ -26,20 +27,22 @@ function arrayWrap<T>(maybeArray: T | T[]): T[] {
 }
 
 
-function parseXML(xml: string): Map<string, AbletonNote[]> {
+function parseXML(xml: string): Map<string, AbletonClip> {
   const parser = new XMLParser({ignoreAttributes: false});
   const parsed = parser.parse(xml);
   const tracks = parsed.Ableton.LiveSet.Tracks.MidiTrack
 
-  const clipMap = new Map<string, AbletonNote[]>();
+  const clipMap = new Map<string, AbletonClip>();
 
   tracks.forEach((track: any, track_ind) => {
     const clipSlotList = track.DeviceChain.MainSequencer.ClipSlotList.ClipSlot;
     clipSlotList.forEach((slot: any, slot_ind: number) => {
       const clip = slot?.ClipSlot?.Value?.MidiClip;
       if (clip) {
+        // console.log("clip", clip);
         const keytracks = arrayWrap(clip.Notes.KeyTracks.KeyTrack)
         const notes: AbletonNote[] = []
+        const duration = Number(clip.CurrentEnd["@_Value"])
         
         keytracks.forEach((keytrack: any) => {
           const pitchStr = keytrack.MidiKey["@_Value"]
@@ -54,8 +57,9 @@ function parseXML(xml: string): Map<string, AbletonNote[]> {
         notes.sort((a, b) => a.position - b.position);
 
         let clipName = clip.Name["@_Value"]
-        clipName =  clipName != '' ? clipName : `clip_${track_ind}_${slot_ind}`;
-        clipMap.set(clipName, notes);
+        clipName = clipName != '' ? clipName : `clip_${track_ind}_${slot_ind}`;
+        const abletonClip: AbletonClip = { name: clipName, duration, notes };
+        clipMap.set(clipName, abletonClip);
         console.log("name", clipName);
         // fs.writeFileSync("td_ableton/pianos Project/parsed.json", JSON.stringify(clip, null, 2));
       }
@@ -65,11 +69,14 @@ function parseXML(xml: string): Map<string, AbletonNote[]> {
 }
 
 let clipMap = parseXML(xml);
+const clipMapToJSON = (clipMap: Map<string, AbletonClip>) => JSON.stringify({type: 'clipMap', data: Object.fromEntries(clipMap)});
 
 const wss = new WebSocket.Server({ port: 8080 });
 
 wss.on('connection', (ws: WebSocket) => {
   console.log('New client connected');
+
+  ws.send(clipMapToJSON(clipMap));
 
   ws.on('message', (message: string) => {
     console.log(`Received message: ${message}`);
@@ -87,7 +94,7 @@ fs.watchFile(fileName, () => {
   const xml = zlib.gunzipSync(gzipedFile).toString();
   clipMap = parseXML(xml);
 
-  const clipMapJson = JSON.stringify({type: 'clipMap', data: Object.fromEntries(clipMap)});
+  const clipMapJson = clipMapToJSON(clipMap);
   wss.clients.forEach((client) => {
     client.send(clipMapJson);
   });
