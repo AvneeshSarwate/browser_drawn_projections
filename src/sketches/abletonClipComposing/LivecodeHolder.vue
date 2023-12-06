@@ -52,12 +52,29 @@ function playButtonClicked() {
     }
   })
 
+  // for (let i = 1; i < 9; i++) {
+  //   const midiPlay = makeMidiPlayFunc(`IAC Driver Bus ${i}`)
+  //   launchLoop(async ctx => {
+  //     ctx.bpm = 120 +i
+  //     for (let i = 0; i < 400; i++) {
+  //       await playAbletonClip(refClip, ctx, midiPlay)
+  //     }
+  //   })
+  // }
+
+  
   for (let i = 1; i < 9; i++) {
     const midiPlay = makeMidiPlayFunc(`IAC Driver Bus ${i}`)
     launchLoop(async ctx => {
-      ctx.bpm = 120 +i 
-      for (let i = 0; i < 400; i++) {
-        await playAbletonClip(refClip, ctx, midiPlay)
+      ctx.bpm = 120 + i
+      let k = 0 
+      while(k++ < 800) {
+        const noteRes = refClip.next()
+        const newNote: AbletonNote = { ...noteRes.note }
+        newNote.velocity =  40 + sin(ctx.time) * 60
+        await ctx.wait(noteRes.preDelta)
+        midiPlay(newNote, ctx)
+        if(noteRes.postDelta) await ctx.wait(noteRes.postDelta)
       }
     })
   }
