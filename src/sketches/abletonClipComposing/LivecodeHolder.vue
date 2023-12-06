@@ -37,11 +37,31 @@ const clearDrawFuncs = () => {
 
 
 function playButtonClicked() {
-  const playFunc = makeMidiPlayFunc("IAC Driver Bus 1")
+  const clip1 = clipMap.get("clip1")!!
+  const clip2 = clipMap.get("clip2")!!
+  const clip3 = clipMap.get("clip3")!!
+  const clips = [clip1, clip2, clip3]
+
+  let refClip = clip1
+
   launchLoop(async ctx => {
-    await playAbletonClip(clipMap.get("base_clip")!!, ctx, playFunc)
-    await playAbletonClip(clipMap.get("base_clip")!!, ctx, playFunc)
+
+    for (let i = 0; i < 400; i++) {
+      await ctx.wait(8)
+      refClip = clips[i % clips.length]
+    }
   })
+
+  for (let i = 1; i < 9; i++) {
+    const midiPlay = makeMidiPlayFunc(`IAC Driver Bus ${i}`)
+    launchLoop(async ctx => {
+      ctx.bpm = 120 +i 
+      for (let i = 0; i < 400; i++) {
+        await playAbletonClip(refClip, ctx, midiPlay)
+      }
+    })
+  }
+
 }
 
 

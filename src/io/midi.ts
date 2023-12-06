@@ -31,7 +31,7 @@ MIDIVal.onOutputDeviceDisconnected((accessObject) => {
 })
 
 
-
+//todo hotreload - add an allNotesOff method for cleaning up midi
 
 
 
