@@ -1,0 +1,302 @@
+{
+  "LomId": {
+    "@_Value": "0"
+  },
+  "LomIdView": {
+    "@_Value": "0"
+  },
+  "CurrentStart": {
+    "@_Value": "0"
+  },
+  "CurrentEnd": {
+    "@_Value": "4"
+  },
+  "Loop": {
+    "LoopStart": {
+      "@_Value": "0"
+    },
+    "LoopEnd": {
+      "@_Value": "4"
+    },
+    "StartRelative": {
+      "@_Value": "0"
+    },
+    "LoopOn": {
+      "@_Value": "true"
+    },
+    "OutMarker": {
+      "@_Value": "4"
+    },
+    "HiddenLoopStart": {
+      "@_Value": "0"
+    },
+    "HiddenLoopEnd": {
+      "@_Value": "4"
+    }
+  },
+  "Name": {
+    "@_Value": "base_clip"
+  },
+  "Annotation": {
+    "@_Value": ""
+  },
+  "Color": {
+    "@_Value": "23"
+  },
+  "LaunchMode": {
+    "@_Value": "2"
+  },
+  "LaunchQuantisation": {
+    "@_Value": "0"
+  },
+  "TimeSignature": {
+    "TimeSignatures": {
+      "RemoteableTimeSignature": {
+        "Numerator": {
+          "@_Value": "4"
+        },
+        "Denominator": {
+          "@_Value": "4"
+        },
+        "Time": {
+          "@_Value": "0"
+        },
+        "@_Id": "0"
+      }
+    }
+  },
+  "Envelopes": {
+    "Envelopes": ""
+  },
+  "ScrollerTimePreserver": {
+    "LeftTime": {
+      "@_Value": "0"
+    },
+    "RightTime": {
+      "@_Value": "0"
+    }
+  },
+  "TimeSelection": {
+    "AnchorTime": {
+      "@_Value": "0.5"
+    },
+    "OtherTime": {
+      "@_Value": "0.75"
+    }
+  },
+  "Legato": {
+    "@_Value": "false"
+  },
+  "Ram": {
+    "@_Value": "false"
+  },
+  "GrooveSettings": {
+    "GrooveId": {
+      "@_Value": "-1"
+    }
+  },
+  "Disabled": {
+    "@_Value": "false"
+  },
+  "VelocityAmount": {
+    "@_Value": "0"
+  },
+  "FollowAction": {
+    "FollowTime": {
+      "@_Value": "4"
+    },
+    "IsLinked": {
+      "@_Value": "true"
+    },
+    "LoopIterations": {
+      "@_Value": "1"
+    },
+    "FollowActionA": {
+      "@_Value": "4"
+    },
+    "FollowActionB": {
+      "@_Value": "0"
+    },
+    "FollowChanceA": {
+      "@_Value": "100"
+    },
+    "FollowChanceB": {
+      "@_Value": "0"
+    },
+    "JumpIndexA": {
+      "@_Value": "1"
+    },
+    "JumpIndexB": {
+      "@_Value": "1"
+    },
+    "FollowActionEnabled": {
+      "@_Value": "false"
+    }
+  },
+  "Grid": {
+    "FixedNumerator": {
+      "@_Value": "1"
+    },
+    "FixedDenominator": {
+      "@_Value": "16"
+    },
+    "GridIntervalPixel": {
+      "@_Value": "20"
+    },
+    "Ntoles": {
+      "@_Value": "2"
+    },
+    "SnapToGrid": {
+      "@_Value": "true"
+    },
+    "Fixed": {
+      "@_Value": "true"
+    }
+  },
+  "FreezeStart": {
+    "@_Value": "0"
+  },
+  "FreezeEnd": {
+    "@_Value": "0"
+  },
+  "IsWarped": {
+    "@_Value": "true"
+  },
+  "TakeId": {
+    "@_Value": "0"
+  },
+  "Notes": {
+    "KeyTracks": {
+      "KeyTrack": [
+        {
+          "Notes": {
+            "MidiNoteEvent": {
+              "@_Time": "0.5",
+              "@_Duration": "0.25",
+              "@_Velocity": "100",
+              "@_VelocityDeviation": "0",
+              "@_OffVelocity": "64",
+              "@_Probability": "1",
+              "@_IsEnabled": "true",
+              "@_NoteId": "3"
+            }
+          },
+          "MidiKey": {
+            "@_Value": "66"
+          },
+          "@_Id": "2"
+        },
+        {
+          "Notes": {
+            "MidiNoteEvent": {
+              "@_Time": "0.25",
+              "@_Duration": "0.25",
+              "@_Velocity": "100",
+              "@_VelocityDeviation": "0",
+              "@_OffVelocity": "64",
+              "@_Probability": "1",
+              "@_IsEnabled": "true",
+              "@_NoteId": "2"
+            }
+          },
+          "MidiKey": {
+            "@_Value": "69"
+          },
+          "@_Id": "1"
+        },
+        {
+          "Notes": {
+            "MidiNoteEvent": {
+              "@_Time": "0",
+              "@_Duration": "0.25",
+              "@_Velocity": "100",
+              "@_VelocityDeviation": "0",
+              "@_OffVelocity": "64",
+              "@_Probability": "1",
+              "@_IsEnabled": "true",
+              "@_NoteId": "1"
+            }
+          },
+          "MidiKey": {
+            "@_Value": "70"
+          },
+          "@_Id": "0"
+        }
+      ]
+    },
+    "PerNoteEventStore": {
+      "EventLists": ""
+    },
+    "NoteIdGenerator": {
+      "NextId": {
+        "@_Value": "4"
+      }
+    }
+  },
+  "BankSelectCoarse": {
+    "@_Value": "-1"
+  },
+  "BankSelectFine": {
+    "@_Value": "-1"
+  },
+  "ProgramChange": {
+    "@_Value": "-1"
+  },
+  "NoteEditorFoldInZoom": {
+    "@_Value": "-1"
+  },
+  "NoteEditorFoldInScroll": {
+    "@_Value": "0"
+  },
+  "NoteEditorFoldOutZoom": {
+    "@_Value": "1556"
+  },
+  "NoteEditorFoldOutScroll": {
+    "@_Value": "-669"
+  },
+  "NoteEditorFoldScaleZoom": {
+    "@_Value": "-1"
+  },
+  "NoteEditorFoldScaleScroll": {
+    "@_Value": "0"
+  },
+  "ScaleInformation": {
+    "RootNote": {
+      "@_Value": "0"
+    },
+    "Name": {
+      "@_Value": "Major"
+    }
+  },
+  "IsInKey": {
+    "@_Value": "false"
+  },
+  "NoteSpellingPreference": {
+    "@_Value": "3"
+  },
+  "PreferFlatRootNote": {
+    "@_Value": "false"
+  },
+  "ExpressionGrid": {
+    "FixedNumerator": {
+      "@_Value": "1"
+    },
+    "FixedDenominator": {
+      "@_Value": "16"
+    },
+    "GridIntervalPixel": {
+      "@_Value": "20"
+    },
+    "Ntoles": {
+      "@_Value": "2"
+    },
+    "SnapToGrid": {
+      "@_Value": "false"
+    },
+    "Fixed": {
+      "@_Value": "false"
+    }
+  },
+  "@_Id": "1",
+  "@_Time": "0"
+}

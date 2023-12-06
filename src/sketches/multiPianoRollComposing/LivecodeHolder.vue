@@ -68,8 +68,8 @@ function makePianoRoll<T>(container: string, inst: Instrument, notes?: NoteInfo<
   const onOff = (pitch: number, onOff: ('on' | 'off')) => onOff === 'on' ? inst.triggerAttack(m2f(pitch), undefined, 0.1) : inst.triggerRelease(m2f(pitch))
   const pianoRoll = new PianoRoll<any>(container, trigger, onOff)
   if (notes) { //todo bug - need to wait for piano roll synth to be ready before setting notes, or not play notes on initial add
-    // pianoRoll.setNoteData(notes)
-    // pianoRoll.setViewportToShowAllNotes()
+    pianoRoll.setNoteData(notes)
+    pianoRoll.setViewportToShowAllNotes()
   }
   return pianoRoll
 }
@@ -149,7 +149,8 @@ onMounted(() => {
       launchLoop(async ctx => { //todo api - to wait for midi - use MIDI_READY promise from midi.ts instead of a loop/wait 
         await ctx.wait(1)
         const sampler = getPiano()
-        const pianoRoll = makePianoRoll<void>(name, sampler, getLocalStorageNotes(name, notes))
+        await ctx.wait(1)
+        const pianoRoll = makePianoRoll<void>(name, sampler, notes.map(n => ({ ...n })))
         pianoRolls.set(name, pianoRoll)
         pianoRoll.setCursorPos(3)
         const buttonName = name.replace('phold', 'pplay')
