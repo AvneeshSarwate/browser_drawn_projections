@@ -3,6 +3,12 @@
     <canvas id="p5Canvas" width="1280" height="720" abitrary-prop="somethi"></canvas>
     <canvas id="threeCanvas" width="1280" height="720" abitrary-prop="somethi"></canvas>
   </div>
+  <div>
+    Press D to enter draw mode <br>
+    When in draw mode, press S to place a note where your cursor is <br>
+    Click the mouse to launch a playhead - the height of your mouse determnines the speed of the playhead <br>
+    Press F to trigger an animation on the notes
+  </div>
   <div id="debugInfo"></div>
 </template>
 
