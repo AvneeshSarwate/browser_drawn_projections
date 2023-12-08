@@ -138,7 +138,7 @@ onMounted(() => {
 
 
       // const passthru = new Passthru({ src: p5Canvas })
-      const canvasPaint = new CanvasPaint({ src: circle })
+      const canvasPaint = new CanvasPaint({ src: instCircle })
 
       shaderGraphEndNode = canvasPaint
       appState.shaderDrawFunc = () => shaderGraphEndNode!!.renderAll(appState.threeRenderer!!)

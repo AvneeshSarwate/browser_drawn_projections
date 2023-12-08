@@ -1,7 +1,7 @@
 
 import * as THREE from 'three'
 import { instanceVS } from './vertexShaders'
-import { CustomShaderEffect, halfTarget, ShaderEffect, type ShaderInputs } from './shaderFX'
+import { CustomShaderEffect, halfTarget, ShaderEffect, type Dynamic, type ShaderInputs } from './shaderFX'
 
 //used with the "glsl-literal" vscode plugin to get syntax highlighting for embedded glsl
 const glsl = (x: any): string => x[0]
@@ -117,6 +117,8 @@ function shaderCompileTest(renderer: THREE.Renderer) {
 const circleFS = glsl`
 precision highp float;
 
+uniform float time;
+
 float w = 1280.;
 float h = 720.;
 
@@ -132,12 +134,24 @@ void main() {
   vec2 circle = vec2(cosN(indN*3.), sinN(indN*2.))*scale;
   gl_FragColor = vec4(circle, 0, 1);
   float d = 120.;
-  gl_FragColor = vec4(vUV*scale, 0, 1);
+  float x = vUV.x;
+  float y = vUV.y;
+  vec2 xy = vec2(x, y);
+  gl_FragColor = vec4(scale * sinN(time), 0, 1);
 }
 `
+//todo bug - shader that drives instancing not working (details below)
+// when using vUV in any expression for output, positions fall to 0
+// also, 1280,720 only is halfway up/right instead of all the way
+
 
 export class CircleDef extends CustomShaderEffect {
   constructor(width = 1280, height = 720) {
+    const startTime = performance.now()
     super(circleFS, {}, width, height)
+    this.setUniforms({time: () => (performance.now() - startTime)/1000})
+  }
+  setUniforms(uniforms: {time: Dynamic<number>}): void {
+    super.setUniforms(uniforms)
   }
 }
