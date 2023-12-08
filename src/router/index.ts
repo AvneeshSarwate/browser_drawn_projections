@@ -11,7 +11,8 @@ export const sketchNames = [
   'pianoRollMelodyLauncher',
   'pianoRollLivecoding',
   'multiPianoRollComposing',
-  'abletonClipComposing'
+  'abletonClipComposing',
+  'shaderInstanceTest'
 ]
 
 const sketchRoutes = sketchNames.map(name => {

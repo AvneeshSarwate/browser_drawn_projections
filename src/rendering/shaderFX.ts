@@ -5,7 +5,7 @@ export const errorImageTexture = new THREE.TextureLoader().load('src/assets/erro
 
 
 export type ShaderSource = THREE.Texture | THREE.WebGLRenderTarget | HTMLCanvasElement | ShaderEffect;
-type ShaderInputs = {
+export type ShaderInputs = {
   [key: string]: ShaderSource
 };
 
@@ -109,7 +109,7 @@ export class FeedbackNode extends ShaderEffect {
   updateUniforms(): void { }
 }
 
-function halfTarget(width: number, height: number, filterType: ('neareast' | 'linear') = 'neareast'): THREE.WebGLRenderTarget {
+export function halfTarget(width: number, height: number, filterType: ('neareast' | 'linear') = 'neareast'): THREE.WebGLRenderTarget {
   return new THREE.WebGLRenderTarget(width, height, {
     type: THREE.HalfFloatType,
     minFilter: filterType == 'neareast' ? THREE.NearestFilter : THREE.LinearFilter,
@@ -186,7 +186,7 @@ export class CustomShaderEffect extends ShaderEffect {
     this.material = new THREE.ShaderMaterial({
       vertexShader: planeVS,
       fragmentShader: fsString,
-      uniforms: {}
+      uniforms: {} //todo api - set width and height as uniform
     })
     this._setMaterialUniformsFromInputs()
     const mesh = new THREE.Mesh(geometry, this.material)

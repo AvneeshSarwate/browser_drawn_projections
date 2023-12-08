@@ -16,11 +16,13 @@ void main() {
 
 
 
-//all instance textures will be 1024x1024
+//all instance property will be 1024x1024
+//assumes rooted at 0,0
 
 export const instanceVS = glsl`
 
 attribute float instInd;
+// attribute vec3 position;
 
 uniform sampler2D posTexture;
 uniform sampler2D color1Texture; 
@@ -36,7 +38,8 @@ void main() {
   vec4 p = vec4(texPos.rgb, 1.);
   
   p = texPos.a == 0. ? vec4(0) : p;
-  gl_Position = projectionMatrix * modelViewMatrix * p;
+  vec4 pos4 = vec4(position, 1);
+  gl_Position = projectionMatrix * modelViewMatrix * (pos4+p);
 
   color1 = texelFetch(color1Texture, texCoord, 0);
   color2 = texelFetch(color2Texture, texCoord, 0);
