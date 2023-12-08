@@ -29,6 +29,7 @@ export function instanceMesh(fragShader: string, geometry: THREE.BufferGeometry)
   const geometryInstanced = new THREE.InstancedBufferGeometry();
   geometryInstanced.index = geometry.index
   geometryInstanced.attributes = geometry.attributes
+  // geometryInstanced.instanceCount = 2
 
   geometry.setAttribute('instInd', new THREE.InstancedBufferAttribute(indexArray, 1))
 
@@ -64,7 +65,17 @@ export class ShaderInstancedGeo extends CustomShaderEffect {
       uniforms: {}
     })
     this._setMaterialUniformsFromInputs()
-    const mesh = new THREE.Mesh(geometry, this.material)
+
+
+    const geometryInstanced = new THREE.InstancedBufferGeometry();
+    geometryInstanced.index = geometry.index
+    geometryInstanced.attributes = geometry.attributes
+    // geometryInstanced.instanceCount = 2
+
+    geometryInstanced.setAttribute('instInd', new THREE.InstancedBufferAttribute(indexArray, 1))
+
+
+    const mesh = new THREE.Mesh(geometryInstanced, this.material)
     this.scene.add(mesh)
   }
 
@@ -93,7 +104,7 @@ export class ShaderInstancedGeo extends CustomShaderEffect {
 }
 
 
-export const redFrag = `
+export const redFrag = glsl`
 
 void main() {
   gl_FragColor = vec4(1, 0, 0, 1);
@@ -123,6 +134,7 @@ float w = 1280.;
 float h = 720.;
 
 varying vec2 vUV;  
+varying float insti;
 
 float sinN(float n) { return sin(n)*0.5 + 0.5; }
 float cosN(float n) { return cos(n)*0.5 + 0.5; }
@@ -131,13 +143,13 @@ void main() {
   float ind = vUV.x * w * h + vUV.y * h;
   float indN = ind / (w * h);
   vec2 scale = vec2(w, h);
-  vec2 circle = vec2(cosN(indN*3.), sinN(indN*2.))*scale;
+  vec2 circle = vec2(cosN(indN*2.*3.1415), sinN(indN*2.*3.1415))*scale;
   gl_FragColor = vec4(circle, 0, 1);
-  float d = 120.;
-  float x = vUV.x;
-  float y = vUV.y;
-  vec2 xy = vec2(x, y);
-  gl_FragColor = vec4(scale * sinN(time)  * (vUV.xy *3000.), 0, 1);
+  // float d = 120.;
+  // float x = vUV.x;
+  // float y = vUV.y;
+  // vec2 xy = vec2(x, y);
+  // gl_FragColor = vec4(scale * sinN(time)  * (vUV.xy *3000.), 0, 1);
 }
 `
 //todo bug - shader that drives instancing not working (details below)
@@ -156,3 +168,17 @@ export class CircleDef extends CustomShaderEffect {
     super.setUniforms(uniforms)
   }
 }
+
+
+
+export const debugFrag = glsl`
+precision highp float;
+
+varying float insti;
+
+varying vec2 vUV;
+
+void main() {
+  gl_FragColor = vec4(1, vUV.x * insti, 0, 1);
+}
+`

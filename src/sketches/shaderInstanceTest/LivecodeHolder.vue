@@ -6,7 +6,7 @@ import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
-import { CircleDef, ShaderInstancedGeo, redFrag } from '@/rendering/shaderInstancing';
+import { CircleDef, ShaderInstancedGeo, debugFrag, redFrag } from '@/rendering/shaderInstancing';
 import * as THREE from 'three';
 
 const appState = inject<TemplateAppState>(appStateName)!!
@@ -132,10 +132,10 @@ onMounted(() => {
       })
 
 
-      const circle = new CircleDef()
-      const circleGeo = new THREE.CircleGeometry(200, 32)
+      const circle = new CircleDef(1024, 1024)
+      const circleGeo = new THREE.CircleGeometry(5, 32)
       // const passthru = new Passthru({ src: circle })
-      const instCircle = new ShaderInstancedGeo(redFrag, {posTexture: circle}, circleGeo)
+      const instCircle = new ShaderInstancedGeo(debugFrag, {posTexture: circle}, circleGeo)
 
 
       const canvasPaint = new CanvasPaint({ src: instCircle })
