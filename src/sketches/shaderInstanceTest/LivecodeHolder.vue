@@ -134,10 +134,10 @@ onMounted(() => {
 
       const circle = new CircleDef()
       const circleGeo = new THREE.CircleGeometry(200, 32)
+      // const passthru = new Passthru({ src: circle })
       const instCircle = new ShaderInstancedGeo(redFrag, {posTexture: circle}, circleGeo)
 
 
-      // const passthru = new Passthru({ src: p5Canvas })
       const canvasPaint = new CanvasPaint({ src: instCircle })
 
       shaderGraphEndNode = canvasPaint

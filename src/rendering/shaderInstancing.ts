@@ -137,12 +137,13 @@ void main() {
   float x = vUV.x;
   float y = vUV.y;
   vec2 xy = vec2(x, y);
-  gl_FragColor = vec4(scale * sinN(time), 0, 1);
+  gl_FragColor = vec4(scale * sinN(time)  * (vUV.xy *3000.), 0, 1);
 }
 `
 //todo bug - shader that drives instancing not working (details below)
 // when using vUV in any expression for output, positions fall to 0
 // also, 1280,720 only is halfway up/right instead of all the way
+//maybe instanced draw call isn't running right so you're only seeing the first instance drawn (with vUV/pos 0?)
 
 
 export class CircleDef extends CustomShaderEffect {
