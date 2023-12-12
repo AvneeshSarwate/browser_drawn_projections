@@ -136,11 +136,12 @@ export class CircleDef extends CustomShaderEffect {
 export const debugFrag = glsl`
 precision highp float;
 
-varying float insti;
+varying float instN;
 
 varying vec2 vUV;
 
 void main() {
-  gl_FragColor = vec4(1, vUV.x * insti, 0, 1);
+  gl_FragColor = vec4(1, vUV.x, instN, 1);
+  // gl_FragColor = vec4(instN, 0, 0, 1);
 }
 `

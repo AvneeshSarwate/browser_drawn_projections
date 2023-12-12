@@ -32,7 +32,7 @@ uniform sampler2D color2Texture;
 varying vec2 vUV;
 varying vec4 color1;
 varying vec4 color2;
-varying float insti;
+varying float instN;
 
 void main() {
   ivec2 texCoord = ivec2(int(floor(mod(instInd, countDim.x))), int(floor(instInd / countDim.x)));
@@ -46,6 +46,6 @@ void main() {
   color1 = texelFetch(color1Texture, texCoord, 0);
   color2 = texelFetch(color2Texture, texCoord, 0);
 
-  insti = 1.;
+  instN = instInd / (countDim.x * countDim.y);
   vUV = uv;
 }`
