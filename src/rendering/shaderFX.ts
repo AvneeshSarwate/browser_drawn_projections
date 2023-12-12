@@ -117,6 +117,14 @@ export function halfTarget(width: number, height: number, filterType: ('neareast
   })
 }
 
+export function fullTarget(width: number, height: number, filterType: ('neareast' | 'linear') = 'neareast'): THREE.WebGLRenderTarget {
+  return new THREE.WebGLRenderTarget(width, height, {
+    type: THREE.FloatType,
+    minFilter: filterType == 'neareast' ? THREE.NearestFilter : THREE.LinearFilter,
+    magFilter: filterType == 'neareast' ? THREE.NearestFilter : THREE.LinearFilter,
+  })
+}
+
 class Pingpong {
   src: THREE.WebGLRenderTarget
   dst: THREE.WebGLRenderTarget

@@ -132,10 +132,11 @@ onMounted(() => {
       })
 
 
-      const circle = new CircleDef(1024, 1024)
+      const c = 128
+      const circle = new CircleDef(c, c)
       const circleGeo = new THREE.CircleGeometry(5, 32)
       // const passthru = new Passthru({ src: circle })
-      const instCircle = new ShaderInstancedGeo(debugFrag, {posTexture: circle}, circleGeo)
+      const instCircle = new ShaderInstancedGeo(debugFrag, 128, 128, {posTexture: circle}, circleGeo)
 
 
       const canvasPaint = new CanvasPaint({ src: instCircle })
