@@ -24,6 +24,7 @@ export const instanceVS = glsl`
 attribute float instInd;
 // attribute vec3 position;
 
+uniform vec2 countDim;
 uniform sampler2D posTexture;
 uniform sampler2D color1Texture; 
 uniform sampler2D color2Texture; 
@@ -34,7 +35,7 @@ varying vec4 color2;
 varying float insti;
 
 void main() {
-  ivec2 texCoord = ivec2(int(floor(instInd / 128.)), int(mod(instInd, 128.)));
+  ivec2 texCoord = ivec2(int(mod(instInd, countDim.x)), int(floor(instInd / countDim.x)));
   vec4 texPos = texelFetch(posTexture, texCoord, 0);
   vec4 p = vec4(texPos.rgb, 1.);
   

@@ -109,19 +109,11 @@ export class FeedbackNode extends ShaderEffect {
   updateUniforms(): void { }
 }
 
-export function halfTarget(width: number, height: number, filterType: ('neareast' | 'linear') = 'neareast'): THREE.WebGLRenderTarget {
+export function halfTarget(width: number, height: number, filterType: ('nearest' | 'linear') = 'nearest'): THREE.WebGLRenderTarget {
   return new THREE.WebGLRenderTarget(width, height, {
     type: THREE.HalfFloatType,
-    minFilter: filterType == 'neareast' ? THREE.NearestFilter : THREE.LinearFilter,
-    magFilter: filterType == 'neareast' ? THREE.NearestFilter : THREE.LinearFilter,
-  })
-}
-
-export function fullTarget(width: number, height: number, filterType: ('neareast' | 'linear') = 'neareast'): THREE.WebGLRenderTarget {
-  return new THREE.WebGLRenderTarget(width, height, {
-    type: THREE.FloatType,
-    minFilter: filterType == 'neareast' ? THREE.NearestFilter : THREE.LinearFilter,
-    magFilter: filterType == 'neareast' ? THREE.NearestFilter : THREE.LinearFilter,
+    minFilter: filterType == 'nearest' ? THREE.NearestFilter : THREE.LinearFilter,
+    magFilter: filterType == 'nearest' ? THREE.NearestFilter : THREE.LinearFilter,
   })
 }
 
@@ -173,7 +165,7 @@ export class CustomShaderEffect extends ShaderEffect {
   camera: THREE.Camera
   inputs: ShaderInputs
   material: THREE.ShaderMaterial
-  constructor(fsString: string, inputs: ShaderInputs, width = 1280, height = 720, customOutput?: THREE.WebGLRenderTarget, filterType: ('neareast' | 'linear') = 'linear') {
+  constructor(fsString: string, inputs: ShaderInputs, width = 1280, height = 720, customOutput?: THREE.WebGLRenderTarget, filterType: ('nearest' | 'linear') = 'linear') {
     super()
     //todo hotreload - register ShaderEffects so textures can be cleaned up on reload
     /* todo hotreload/deep design - should hotreload safetfy of ShaderEffects be internal, or an external wrapper?

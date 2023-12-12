@@ -32,7 +32,9 @@ export class ShaderInstancedGeo extends CustomShaderEffect {
     this.material = new THREE.ShaderMaterial({
       vertexShader: instanceVS,
       fragmentShader: fsString, 
-      uniforms: {}
+      uniforms: {
+        countDim: {value: new THREE.Vector2(xCount, yCount)},
+      }
     })
     //todo bug - need to set texture size (xCount, yCount) for instancing shader
     this._setMaterialUniformsFromInputs()
