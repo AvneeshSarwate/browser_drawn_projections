@@ -35,7 +35,7 @@ varying vec4 color2;
 varying float insti;
 
 void main() {
-  ivec2 texCoord = ivec2(int(mod(instInd, countDim.x)), int(floor(instInd / countDim.x)));
+  ivec2 texCoord = ivec2(int(floor(mod(instInd, countDim.x))), int(floor(instInd / countDim.x)));
   vec4 texPos = texelFetch(posTexture, texCoord, 0);
   vec4 p = vec4(texPos.rgb, 1.);
   

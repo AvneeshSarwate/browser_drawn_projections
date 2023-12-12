@@ -12,7 +12,7 @@ const indexArray = new Float32Array(1024*1024).map((_, i) => i)
 
 export class ShaderInstancedGeo extends CustomShaderEffect {
 
-  constructor(fsString: string, xCount: number, yCount: number, inputs: ShaderInputs, geometry: THREE.BufferGeometry, width = 1280, height = 720, customOutput?: THREE.WebGLRenderTarget, filterType: ('neareast' | 'linear') = 'linear') {
+  constructor(fsString: string, xCount: number, yCount: number, inputs: ShaderInputs, geometry: THREE.BufferGeometry, width = 1280, height = 720, customOutput?: THREE.WebGLRenderTarget, filterType: ('nearest' | 'linear') = 'nearest') {
     super(fsString, inputs, width, height, customOutput, filterType)
     //todo hotreload - register ShaderEffects so textures can be cleaned up on reload
     /* todo hotreload/deep design - should hotreload safetfy of ShaderEffects be internal, or an external wrapper?
@@ -44,7 +44,7 @@ export class ShaderInstancedGeo extends CustomShaderEffect {
     geometryInstanced.index = geometry.index
     geometryInstanced.attributes = geometry.attributes
     const numInst = xCount * yCount
-    geometryInstanced.instanceCount = numInst
+    // geometryInstanced.instanceCount = numInst
 
     geometryInstanced.setAttribute('instInd', new THREE.InstancedBufferAttribute(indexArray.slice(0, numInst), 1))
 
@@ -123,7 +123,7 @@ void main() {
 export class CircleDef extends CustomShaderEffect {
   constructor(width: number, height: number) {
     const startTime = performance.now()
-    super(circleFS, {}, width, height)
+    super(circleFS, {}, width, height, undefined, 'nearest')
     this.setUniforms({time: () => (performance.now() - startTime)/1000, cW: width, cH: height})
   }
   setUniforms(uniforms: {time: Dynamic<number>, cW: number, cH: number}): void {
