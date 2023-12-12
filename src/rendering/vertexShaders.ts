@@ -26,6 +26,7 @@ attribute float instInd;
 
 uniform vec2 countDim;
 uniform sampler2D posTexture;
+uniform sampler2D scaleTexture; //todo api - need to toggle instance texture use based on if inputs are defined in ShaderInstancedGeo input params
 uniform sampler2D color1Texture; 
 uniform sampler2D color2Texture; 
 
@@ -38,9 +39,12 @@ void main() {
   ivec2 texCoord = ivec2(int(floor(mod(instInd, countDim.x))), int(floor(instInd / countDim.x)));
   vec4 texPos = texelFetch(posTexture, texCoord, 0);
   vec4 p = vec4(texPos.rgb, 1.);
+
+  vec4 texScale = texelFetch(scaleTexture, texCoord, 0);
+  vec3 scale = texScale.rgb;
   
   p = texPos.a == 0. ? vec4(0) : p;
-  vec4 pos4 = vec4(position, 1);
+  vec4 pos4 = vec4(position*scale, 1);
   gl_Position = projectionMatrix * modelViewMatrix * (pos4+p);
 
   color1 = texelFetch(color1Texture, texCoord, 0);

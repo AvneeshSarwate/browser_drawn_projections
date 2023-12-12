@@ -107,7 +107,7 @@ void main() {
   float ind = vUV.x * cW * cH + vUV.y * cH;
   float indN = ind / (cW * cH);
   vec2 scale = vec2(w, h);
-  vec2 circle = vec2(cosN(indN*2.*3.1415), sinN(indN*2.*3.1415))*scale;
+  vec2 circle = vec2(cosN(indN*2.*3.1415+time), sinN(indN*2.*3.1415))*scale;
   gl_FragColor = vec4(circle, 0, 1);
   // float d = 128.;
   // vec2 xy = vUV.xy * vec2(cW, cH) / d;
@@ -124,6 +124,47 @@ export class CircleDef extends CustomShaderEffect {
   constructor(width: number, height: number) {
     const startTime = performance.now()
     super(circleFS, {}, width, height, undefined, 'nearest')
+    this.setUniforms({time: () => (performance.now() - startTime)/1000, cW: width, cH: height})
+  }
+  setUniforms(uniforms: {time: Dynamic<number>, cW: number, cH: number}): void {
+    super.setUniforms(uniforms)
+  }
+}
+
+
+const scaleRampFS = glsl`
+precision highp float;
+
+uniform float time;
+
+float w = 1280.;
+float h = 720.;
+
+uniform float cW;
+uniform float cH;
+
+varying vec2 vUV;  
+
+float sinN(float n) { return sin(n)*0.5 + 0.5; }
+float cosN(float n) { return cos(n)*0.5 + 0.5; }
+
+void main() {
+  float ind = vUV.x * cW * cH + vUV.y * cH;
+  float indN = ind / (cW * cH);
+  float t2 = time*4.;
+  vec2 scale = 0.25 + 0.75 * vec2(cosN(indN*2.*3.1415+t2), sinN(indN*2.*3.1415+t2));
+  
+  gl_FragColor = vec4(scale, 1, 1);
+  // float d = 128.;
+  // vec2 xy = vUV.xy * vec2(cW, cH) / d;
+  // gl_FragColor = vec4(xy, 0, 1);
+}
+`
+
+export class ScaleRamp extends CustomShaderEffect {
+  constructor(width: number, height: number) {
+    const startTime = performance.now()
+    super(scaleRampFS, {}, width, height, undefined, 'nearest')
     this.setUniforms({time: () => (performance.now() - startTime)/1000, cW: width, cH: height})
   }
   setUniforms(uniforms: {time: Dynamic<number>, cW: number, cH: number}): void {
