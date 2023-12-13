@@ -38,15 +38,15 @@ varying float instN;
 void main() {
   ivec2 texCoord = ivec2(int(floor(mod(instInd, countDim.x))), int(floor(instInd / countDim.x)));
   vec4 texPos = texelFetch(posTexture, texCoord, 0);
-  vec4 p = vec4(texPos.rgb, 1.);
 
   vec4 texScale = texelFetch(scaleTexture, texCoord, 0);
   vec3 scale = texScale.rgb;
   
   // p = texPos.a == 0. ? vec4(0) : p;
-  vec4 pos4 = vec4(position*scale, 1);
-  vec4 finalPos = texPos.a == 0. ? vec4(-5000) : pos4+p;
-  gl_Position = projectionMatrix * modelViewMatrix * (finalPos);
+  vec3 scalePos = position*scale;
+  vec4 finalPos = vec4(scalePos + texPos.rgb, 1);
+  vec4 filterPos = texPos.a == 0. ? vec4(-5000) : finalPos;
+  gl_Position = projectionMatrix * modelViewMatrix * (filterPos);
 
   color1 = texelFetch(color1Texture, texCoord, 0);
   color2 = texelFetch(color2Texture, texCoord, 0);

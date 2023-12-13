@@ -132,7 +132,7 @@ onMounted(() => {
       })
 
 
-      const c = 4
+      const c = 20
       const circle = new CircleDef(c, c)
       const scaleRamp = new ScaleRamp(c, c)
       const circleGeo = new THREE.CircleGeometry(50, 32)

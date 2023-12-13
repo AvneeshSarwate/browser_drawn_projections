@@ -109,7 +109,7 @@ void main() {
   vec2 scale = vec2(w, h);
   vec2 circle = vec2(cosN(indN*2.*3.1415+time), sinN(indN*2.*3.1415))*scale;
   vec2 grid = vUV.xy * scale;
-  gl_FragColor = ind < 12. ? vec4(0) : vec4(grid, 0, 1);
+  gl_FragColor = indN < 0.25 ? vec4(0) : vec4(grid, 0, 1);
   // float d = 128.;
   // vec2 xy = vUV.xy * vec2(cW, cH) / d;
   // gl_FragColor = vec4(xy, 0, 1);
