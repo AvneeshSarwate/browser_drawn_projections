@@ -12,7 +12,8 @@ export const sketchNames = [
   'pianoRollLivecoding',
   'multiPianoRollComposing',
   'abletonClipComposing',
-  'shaderInstanceTest'
+  'shaderInstanceTest',
+  'colorHelperTest',
 ]
 
 const sketchRoutes = sketchNames.map(name => {
