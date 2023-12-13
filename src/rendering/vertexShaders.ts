@@ -43,9 +43,10 @@ void main() {
   vec4 texScale = texelFetch(scaleTexture, texCoord, 0);
   vec3 scale = texScale.rgb;
   
-  p = texPos.a == 0. ? vec4(0) : p;
+  // p = texPos.a == 0. ? vec4(0) : p;
   vec4 pos4 = vec4(position*scale, 1);
-  gl_Position = projectionMatrix * modelViewMatrix * (pos4+p);
+  vec4 finalPos = texPos.a == 0. ? vec4(-5000) : pos4+p;
+  gl_Position = projectionMatrix * modelViewMatrix * (finalPos);
 
   color1 = texelFetch(color1Texture, texCoord, 0);
   color2 = texelFetch(color2Texture, texCoord, 0);

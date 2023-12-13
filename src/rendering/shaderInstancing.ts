@@ -104,11 +104,12 @@ float sinN(float n) { return sin(n)*0.5 + 0.5; }
 float cosN(float n) { return cos(n)*0.5 + 0.5; }
 
 void main() {
-  float ind = vUV.x * cW * cH + vUV.y * cH;
+  float ind = (vUV.x - 0.5/cW) * cW * cH + (vUV.y - 0.5/cH) * cH;
   float indN = ind / (cW * cH);
   vec2 scale = vec2(w, h);
   vec2 circle = vec2(cosN(indN*2.*3.1415+time), sinN(indN*2.*3.1415))*scale;
-  gl_FragColor = vec4(circle, 0, 1);
+  vec2 grid = vUV.xy * scale;
+  gl_FragColor = ind < 12. ? vec4(0) : vec4(grid, 0, 1);
   // float d = 128.;
   // vec2 xy = vUV.xy * vec2(cW, cH) / d;
   // gl_FragColor = vec4(xy, 0, 1);
