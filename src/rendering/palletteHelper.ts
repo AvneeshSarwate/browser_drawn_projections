@@ -51,7 +51,8 @@ function setUpComplementsUI(datGui: dat.GUI, colors: colorMap, ind: number) {
   //add reset all vars?
 }
 
-export function setUpColorDatGui(colorObj?: colorMap) : { datGui: dat.GUI, colors: colorChoices } {
+export function setUpColorDatGui(savedColors?: colorChoices): { datGui: dat.GUI, colors: colorChoices } {
+
   const datGui = new dat.GUI()
   const defaultColors = {
     color0: tinycolor.random().toHsv(),
@@ -60,14 +61,14 @@ export function setUpColorDatGui(colorObj?: colorMap) : { datGui: dat.GUI, color
     color3: tinycolor.random().toHsv(),
     color4: tinycolor.random().toHsv()
   }
-  const colors = colorObj ? colorObj : defaultColors
+  const colors = savedColors ?? defaultColors
   datGui.remember(colors)
 
   ;[0, 1, 2, 3, 4].forEach((i) => {
     const col = 'color' + i
     datGui.addColor(colors, col)
 
-    setUpComplementsData(colors, i)
+    if(!savedColors) setUpComplementsData(colors, i)
     setUpComplementsUI(datGui, colors, i)
   })
   console.log("COLORS", colors)
@@ -96,7 +97,7 @@ export function palette(col1: tinycolor.ColorFormats.HSVA, col2: tinycolor.Color
 
 
 
-type colorChoices = {
+export type colorChoices = {
   color0: tinycolor.ColorFormats.HSVA,
   color1: tinycolor.ColorFormats.HSVA,
   color2: tinycolor.ColorFormats.HSVA,

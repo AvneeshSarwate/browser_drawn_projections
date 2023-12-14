@@ -1,12 +1,14 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
 import { type TemplateAppState, PulseCircle, appStateName } from './appState';
-import { inject, onMounted, onUnmounted } from 'vue';
+import { computed, inject, onMounted, onUnmounted, ref } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
-import { mixColor, palette, setUpColorDatGui } from '@/rendering/palletteHelper';
+import { mixColor, palette, setUpColorDatGui, type colorChoices } from '@/rendering/palletteHelper';
+import { compute } from 'three/examples/jsm/nodes/Nodes.js';
+import type { GUI } from 'dat.gui';
 
 const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
@@ -30,10 +32,17 @@ function circleArr(n: number, rad: number, p: p5) {
   return xyZip(0, cos1, sin1, n).map(({ x, y }) => ({x: x*rad + center.x, y: y*rad + center.y}))
 }
 
-const colorGui = setUpColorDatGui()
+let colorGui: {
+  datGui: GUI;
+  colors: colorChoices;
+} | undefined = undefined;
 
 onMounted(() => {
   try {
+
+    const savedColorStr = localStorage.getItem('colorHelperTest')
+    const savedColors = savedColorStr ? JSON.parse(savedColorStr) : undefined
+    colorGui = setUpColorDatGui(savedColors)
 
     const p5i = appState.p5Instance!!
     const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
@@ -126,10 +135,10 @@ onMounted(() => {
 
           const circleInd = appState.circles.list.length - 1
           const paletteLen = 10
-          const col1 = colorGui.colors.color1
-          const col2 = colorGui.colors.color2
-          const pal = palette(col1, col2, paletteLen)
-          const rgb = pal[circleInd % paletteLen].toRgb()
+          const phase = (circleInd % paletteLen) / (paletteLen - 1)
+          const col0 = colorGui!!.colors.col0tri0
+          const col1 = colorGui!!.colors.col0tri1
+          const rgb = mixColor(col0, col1, phase).toRgb()
           newCircle.color = { r: rgb.r/255, g: rgb.g/255, b: rgb.b/255 }
         }
       })
@@ -142,10 +151,9 @@ onMounted(() => {
           const circleInd = i
           const paletteLen = 10
           const phase = (circleInd % paletteLen) / (paletteLen - 1)
-          const col1 = colorGui.colors.color1
-          const col2 = colorGui.colors.color2
-          const pal = palette(col1, col2, paletteLen)
-          const rgb = mixColor(col1, col2, phase).toRgb()
+          const col0 = colorGui!!.colors.col0tri0
+          const col1 = colorGui!!.colors.col0tri1
+          const rgb = mixColor(col0, col1, phase).toRgb()
           c.color = { r: rgb.r/255, g: rgb.g/255, b: rgb.b/255 }
           c.draw(p)
         })
@@ -168,14 +176,14 @@ onMounted(() => {
 
 })
 
-
-
 onUnmounted(() => {
   console.log("disposing livecoded resources")
   shaderGraphEndNode?.disposeAll()
   clearListeners()
   timeLoops.forEach(tl => tl.cancel())
-  colorGui.datGui.destroy() //todo api - save/load to/from localStorage by sketch name
+  localStorage.setItem('colorHelperTest', JSON.stringify(colorGui!!.colors))
+  console.log("should be 360", colorGui!!.colors.color0.h)
+  colorGui!!.datGui.destroy() //todo api - save/load to/from localStorage by sketch name
 })
 
 </script>
