@@ -6,7 +6,7 @@ import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
-import { setUpColorDatGui } from '@/rendering/palletteHelper';
+import { mixColor, palette, setUpColorDatGui } from '@/rendering/palletteHelper';
 
 const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
@@ -30,7 +30,7 @@ function circleArr(n: number, rad: number, p: p5) {
   return xyZip(0, cos1, sin1, n).map(({ x, y }) => ({x: x*rad + center.x, y: y*rad + center.y}))
 }
 
-setUpColorDatGui()
+const colorGui = setUpColorDatGui()
 
 onMounted(() => {
   try {
@@ -123,13 +123,32 @@ onMounted(() => {
           appState.circles.pushItem(newCircle)
           initialCiclePos.push({ x: newCircle.x, y: newCircle.y })
           console.log("adding circle", newCircle)
+
+          const circleInd = appState.circles.list.length - 1
+          const paletteLen = 10
+          const col1 = colorGui.colors.color1
+          const col2 = colorGui.colors.color2
+          const pal = palette(col1, col2, paletteLen)
+          const rgb = pal[circleInd % paletteLen].toRgb()
+          newCircle.color = { r: rgb.r/255, g: rgb.g/255, b: rgb.b/255 }
         }
       })
 
       
       appState.drawFunctions.push((p: p5) => {
         // console.log("drawing circles", appState.circles.list.length)
-        appState.circles.list.forEach(c => c.draw(p))
+        appState.circles.list.forEach((c, i) => {
+          //todo api - wrap datGui colors in a ref in the sketch so you can listen for when they change and updated cached palettes
+          const circleInd = i
+          const paletteLen = 10
+          const phase = (circleInd % paletteLen) / (paletteLen - 1)
+          const col1 = colorGui.colors.color1
+          const col2 = colorGui.colors.color2
+          const pal = palette(col1, col2, paletteLen)
+          const rgb = mixColor(col1, col2, phase).toRgb()
+          c.color = { r: rgb.r/255, g: rgb.g/255, b: rgb.b/255 }
+          c.draw(p)
+        })
       })
 
       const passthru = new Passthru({ src: p5Canvas })
@@ -156,6 +175,7 @@ onUnmounted(() => {
   shaderGraphEndNode?.disposeAll()
   clearListeners()
   timeLoops.forEach(tl => tl.cancel())
+  colorGui.datGui.destroy() //todo api - save/load to/from localStorage by sketch name
 })
 
 </script>
