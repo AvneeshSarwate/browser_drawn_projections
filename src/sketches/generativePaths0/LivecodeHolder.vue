@@ -6,7 +6,7 @@ import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
-import { pathPos } from './utils';
+import { pathPos } from '@/utils/utils';
 
 const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
@@ -84,8 +84,10 @@ onMounted(() => {
         }
       })
 
+      let debugDraw = true
       singleKeydownEvent('c', (ev) => {
-        appState.circles.list.forEach(c => c.debugDraw = !c.debugDraw)
+        appState.circles.list.forEach(c => c.debugDraw = debugDraw)
+        debugDraw = !debugDraw
       })
 
       let launchCounter = 0
