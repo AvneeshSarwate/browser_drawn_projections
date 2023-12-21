@@ -95,7 +95,9 @@ export function palette(col1: tinycolor.ColorFormats.HSVA, col2: tinycolor.Color
   return palette.map((col) => tinycolor(col))
 }
 
-
+export function toRgb(col: tinycolor.ColorFormats.HSVA) {
+  return tinycolor(col).toRgb()
+}
 
 export type colorChoices = {
   color0: tinycolor.ColorFormats.HSVA,

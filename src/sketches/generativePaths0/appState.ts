@@ -132,7 +132,7 @@ export const appState: TemplateAppState = {
   drawing: false,
 } 
 
-export const appStateName = 'templateAppState'
+export const appStateName = 'generativePaths0AppState'
 
 export const globalStore = defineStore(appStateName, () => {
   const appStateRef = ref(appState)

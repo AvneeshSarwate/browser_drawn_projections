@@ -7,6 +7,9 @@ import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, tar
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
 import { pathPos } from '@/utils/utils';
+import { setUpColorDatGui, type colorChoices, toRgb } from '@/rendering/palletteHelper';
+import type { GUI } from 'dat.gui';
+import tinycolor from 'tinycolor2';
 
 const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
@@ -23,12 +26,21 @@ const clearDrawFuncs = () => {
   appState.drawFuncMap = new Map()
 }
 
+let colorGui: {
+  datGui: GUI;
+  colors: colorChoices;
+};
+
 onMounted(() => {
   try {
 
     const p5i = appState.p5Instance!!
     const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
     const threeCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
+
+    const savedColorStr = localStorage.getItem('generativePaths0')
+    const savedColors = savedColorStr ? JSON.parse(savedColorStr) : undefined
+    colorGui = setUpColorDatGui(savedColors)
 
     const initialCiclePos = appState.circles.list.map(c => ({ x: c.x, y: c.y }))
 
@@ -97,8 +109,13 @@ onMounted(() => {
       appState.drawFuncMap.set("launchLines", (p: p5) => {
         p.push()
         p.strokeWeight(10)
-        p.stroke(255, 0, 0)
         launchLines.forEach(({ firstId, secondId }) => {
+
+          const colorInd = (firstId / 2) % 4
+          const color = colors[colorInd]
+
+          p.stroke(color.r, color.g, color.b)
+
           const firstRamp = activeLaunches.get(firstId) || { val: () => 0}
           const secondRamp = activeLaunches.get(secondId) || { val: () => 0}
           // if (firstRamp && secondRamp) {
@@ -110,20 +127,16 @@ onMounted(() => {
         p.pop()
       })
 
+      let lastSpeed = 3 + Math.random() * 3
+      let colors = [colorGui.colors.col0tet0, colorGui.colors.col0tet1, colorGui.colors.col0tet2, colorGui.colors.col0tet3].map(c => toRgb(c))
       const launchCircle = () => {
         const launchId = launchCounter++
-        const ramp = new Ramp(3 + Math.random() * 3)
+        const launchSpeed = launchId % 2 == 0 ? 3 + Math.random() * 3 : lastSpeed
+        lastSpeed = launchSpeed
+        console.log("launchId/speed", launchId, launchSpeed)
+        const ramp = new Ramp(launchSpeed)
         ramp.trigger()
-        const circleId = crypto.randomUUID()
-        appState.drawFuncMap.set(circleId, (p: p5) => {
-          const pos = pathPos(appState.circles.list, ramp.val())
-          p.push()
-          p.fill(255, 0, 0)
-          p.circle(pos.x, pos.y, 10)
-          p.pop()
-        })
         ramp.onFinish = () => {
-          appState.drawFuncMap.delete(circleId)
           activeLaunches.delete(launchId)
           launchLines.delete(launchId)
           console.log("deleting launch", launchId)
@@ -182,6 +195,8 @@ onUnmounted(() => {
   shaderGraphEndNode?.disposeAll()
   clearListeners()
   timeLoops.forEach(tl => tl.cancel())
+  localStorage.setItem('generativePaths0', JSON.stringify(colorGui!!.colors))
+  colorGui!!.datGui.destroy() //todo api - save/load to/from localStorage by sketch name
 })
 
 </script>

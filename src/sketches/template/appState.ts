@@ -134,6 +134,8 @@ export const appState: TemplateAppState = {
 
 export const appStateName = 'templateAppState'
 
+//todo api - add caching/rehydrating of appState from local storage
+
 export const globalStore = defineStore(appStateName, () => {
   const appStateRef = ref(appState)
 
