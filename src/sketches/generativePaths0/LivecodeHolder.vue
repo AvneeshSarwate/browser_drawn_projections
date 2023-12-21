@@ -45,6 +45,7 @@ onMounted(() => {
     const savedColorStr = localStorage.getItem('generativePaths0')
     const savedColors = savedColorStr ? JSON.parse(savedColorStr) : undefined
     colorGui = setUpColorDatGui(savedColors)
+    colorGui.datGui.close()
 
     const initialCiclePos = appState.circles.list.map(c => ({ x: c.x, y: c.y }))
 
@@ -149,14 +150,13 @@ onMounted(() => {
         })
         p.pop()
       })
-      const speed = 1
+      const globalSpeedScale = 1
       let lastSpeed = 3 + Math.random() * 3
       let colors = [colorGui.colors.col0tet0, colorGui.colors.col0tet1, colorGui.colors.col0tet2, colorGui.colors.col0tet3].map(c => toRgb(c))
-      const launchCircle = () => {
-        const launchId = launchCounter++
+      const launchCircle = (launchId: number) => {
         const launchSpeed = launchId % 2 == 0 ? 3 + Math.random() * 3 : lastSpeed
         lastSpeed = launchSpeed
-        const ramp = new Ramp(launchSpeed * speed)
+        const ramp = new Ramp(launchSpeed * globalSpeedScale * 4)
         ramp.trigger()
 
         ramp.onFinish = () => {
@@ -193,18 +193,32 @@ onMounted(() => {
         }
       }
 
+      async function launchTriangle(lineId: number, ctx: TimeContext) {
+        ctx.branch(async (ctx) => {
+          launchCircle(lineId)
+          let ptWait = 0.2 + Math.random() * 0.2
+          const triSize = 0.2
+          await ctx.waitSec(ptWait * globalSpeedScale * triSize)
+          launchCircle(lineId + 1)
+          ptWait = 0.2 + Math.random() * 0.2
+          await ctx.waitSec(ptWait * globalSpeedScale * triSize)
+          launchCircle(lineId + 2)
+        })
+      }
+
       launchLoop(async (ctx) => {
         // eslint-disable-next-line no-constant-condition
         while (true) {
-          const waitTime = 0.2 + Math.random() * 0.2
-          await ctx.waitSec(waitTime * speed)
+          const triWait = 0.1 + Math.random() * 0.1
+          await ctx.waitSec(triWait * globalSpeedScale)
           if (appState.circles.list.length > 2) {
-            launchCircle()
+            launchCounter += 3
+            launchTriangle(launchCounter, ctx)
           }
         }
       })
 
-      singleKeydownEvent('l', launchCircle)
+      // singleKeydownEvent('l', launchCircle)
 
       
       appState.drawFunctions.push((p: p5) => {
