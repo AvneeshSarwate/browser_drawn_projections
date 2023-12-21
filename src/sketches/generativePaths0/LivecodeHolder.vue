@@ -9,7 +9,7 @@ import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN
 import { pathPos } from '@/utils/utils';
 import { setUpColorDatGui, type colorChoices, toRgb } from '@/rendering/palletteHelper';
 import type { GUI } from 'dat.gui';
-import tinycolor from 'tinycolor2';
+import { lerp } from 'three/src/math/MathUtils.js';
 
 const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
@@ -30,6 +30,10 @@ let colorGui: {
   datGui: GUI;
   colors: colorChoices;
 };
+
+type simpleVec2 = { x: number, y: number }
+
+//todo bug - something about hotreloading is causing a slowdown over time
 
 onMounted(() => {
   try {
@@ -104,50 +108,87 @@ onMounted(() => {
 
       let launchCounter = 0
       let activeLaunches = new Map<number, Ramp>()
-      let launchLines = new Map<number, { firstId: number, secondId: number }>()
+      let launchLines = new Map<number, { firstId: number, secondId: number, thirdId: number }>()
+
+      function drawCurve(p: p5, firstPos: simpleVec2, secondPos: simpleVec2, thirdPos: simpleVec2) {
+        p.beginShape()
+        p.curveVertex(firstPos.x, firstPos.y)
+        p.curveVertex(lerp(firstPos.x, secondPos.x, 0.5), lerp(firstPos.y, secondPos.y, 0.5))
+        p.curveVertex(secondPos.x, secondPos.y)
+        p.curveVertex(lerp(secondPos.x, thirdPos.x, 0.5), lerp(secondPos.y, thirdPos.y, 0.5))
+        p.curveVertex(thirdPos.x, thirdPos.y)
+        p.curveVertex(lerp(thirdPos.x, firstPos.x, 0.5), lerp(thirdPos.y, firstPos.y, 0.5))
+        p.curveVertex(firstPos.x, firstPos.y)
+        p.curveVertex(lerp(firstPos.x, secondPos.x, 0.5), lerp(firstPos.y, secondPos.y, 0.5))
+        p.curveVertex(secondPos.x, secondPos.y)
+        p.curveVertex(lerp(secondPos.x, thirdPos.x, 0.5), lerp(secondPos.y, thirdPos.y, 0.5))
+        p.endShape()        
+      }
+
+      const loopPath = false
 
       appState.drawFuncMap.set("launchLines", (p: p5) => {
         p.push()
         p.strokeWeight(10)
-        launchLines.forEach(({ firstId, secondId }) => {
+        launchLines.forEach(({ firstId, secondId, thirdId }) => {
 
-          const colorInd = (firstId / 2) % 4
+          const colorInd = (firstId / 3) % 4
           const color = colors[colorInd]
 
+          p.noFill()
           p.stroke(color.r, color.g, color.b)
-
           const firstRamp = activeLaunches.get(firstId) || { val: () => 0}
-          const secondRamp = activeLaunches.get(secondId) || { val: () => 0}
-          // if (firstRamp && secondRamp) {
-            const firstPos = pathPos(appState.circles.list, firstRamp.val())
-            const secondPos = pathPos(appState.circles.list, secondRamp.val())
-            p.line(firstPos.x, firstPos.y, secondPos.x, secondPos.y)
-          // }
+          const secondRamp = activeLaunches.get(secondId) || { val: () => 0 }
+          const thirdRamp = activeLaunches.get(thirdId) || { val: () => 0 }
+          const firstPos = pathPos(appState.circles.list, firstRamp.val(), loopPath)
+          const secondPos = pathPos(appState.circles.list, secondRamp.val(), loopPath)
+          const thirdPos = pathPos(appState.circles.list, thirdRamp.val(), loopPath)  
+
+          drawCurve(p, firstPos, secondPos, thirdPos)
+
         })
         p.pop()
       })
-
+      const speed = 1
       let lastSpeed = 3 + Math.random() * 3
       let colors = [colorGui.colors.col0tet0, colorGui.colors.col0tet1, colorGui.colors.col0tet2, colorGui.colors.col0tet3].map(c => toRgb(c))
       const launchCircle = () => {
         const launchId = launchCounter++
         const launchSpeed = launchId % 2 == 0 ? 3 + Math.random() * 3 : lastSpeed
         lastSpeed = launchSpeed
-        console.log("launchId/speed", launchId, launchSpeed)
-        const ramp = new Ramp(launchSpeed)
+        const ramp = new Ramp(launchSpeed * speed)
         ramp.trigger()
+
         ramp.onFinish = () => {
-          activeLaunches.delete(launchId)
-          launchLines.delete(launchId)
-          console.log("deleting launch", launchId)
+          if (loopPath) {
+            activeLaunches.delete(launchId)
+            launchLines.delete(launchId)
+          }
+          else {
+            if (launchId % 3 == 2) {
+              const lineId = Math.floor(launchId / 3) * 3
+              activeLaunches.delete(lineId)
+              activeLaunches.delete(lineId + 1)
+              activeLaunches.delete(lineId + 2)
+              launchLines.delete(lineId)
+            }
+          }
+          
         }
+
         activeLaunches.set(launchId, ramp)
-        if (launchId % 2 == 0) {
-          launchLines.set(launchId, { firstId: launchId, secondId: -1 })
+        
+        if (launchId % 3 == 0) {
+          launchLines.set(launchId, { firstId: launchId, secondId: -1, thirdId: -1 })
         } else {
-          const launchLine = launchLines.get(launchId - 1)
+          const lineId = Math.floor(launchId / 3) * 3
+          const launchLine = launchLines.get(lineId)
           if (launchLine) {
-            launchLine.secondId = launchId
+            if (launchLine.secondId == -1) {
+              launchLine.secondId = launchId
+            } else if (launchLine.thirdId == -1) {
+              launchLine.thirdId = launchId
+            }
           }
         }
       }
@@ -156,7 +197,7 @@ onMounted(() => {
         // eslint-disable-next-line no-constant-condition
         while (true) {
           const waitTime = 0.2 + Math.random() * 0.2
-          await ctx.waitSec(waitTime)
+          await ctx.waitSec(waitTime * speed)
           if (appState.circles.list.length > 2) {
             launchCircle()
           }
