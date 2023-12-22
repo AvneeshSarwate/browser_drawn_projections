@@ -224,6 +224,10 @@ export class UndoableList<T> {
   public moveItem(oldIndex: number, newIndex: number) {
     moveListItemCommandGenerator<T>(this, oldIndex, newIndex)
   }
+
+  public insertItem(item: T, index: number) {
+    addListCommandGenerator<T>(this, index, item)
+  }
 }
 
 
@@ -260,6 +264,11 @@ export class EntityList<T extends Entity> extends Entity implements UndoableList
 
   public moveItem(oldIndex: number, newIndex: number) {
     moveListItemCommandGenerator<T>(this, oldIndex, newIndex)
+  }
+
+  public insertItem(item: T, index: number) {
+    item.parent = this
+    addListCommandGenerator<T>(this, index, item)
   }
 
   public serialize() {

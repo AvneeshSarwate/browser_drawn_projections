@@ -29,6 +29,7 @@ export class PulseCircle extends Entity {
     b: number
   }
   debugDraw: boolean = true
+  debugInd = 0
 
   event?: Ramp
 
@@ -68,11 +69,15 @@ export class PulseCircle extends Entity {
     p.strokeWeight(15)
   }
 
+  debugSelected = false
+  textSize = 15
+
   setDebugStyle(p: p5) {
-    p.strokeWeight(1)
-    p.stroke(255, 255, 255)
+    p.strokeWeight(1.5)
+    if (this.debugSelected) p.stroke(0, 255, 0)
+    else p.stroke(255, 255, 255)
     p.fill(0, 0, 0, 0)
-    p.textSize(20)
+    p.textSize(15)
   }
 
   draw(p: p5) {
@@ -80,7 +85,9 @@ export class PulseCircle extends Entity {
       p.push()
       this.setDebugStyle(p)
       p.circle(this.x, this.y, this.rad)
-      p.text(`id: ${this.id}`, this.x, this.y)
+      const text = `${this.debugInd}`
+      p.text(text, this.x - (text.length * this.textSize / 2), this.y + this.textSize / 2)
+      p.fill(255, 255, 255)
       p.pop()
     } else {
       // if (this.event) {

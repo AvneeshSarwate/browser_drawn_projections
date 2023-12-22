@@ -47,8 +47,6 @@ onMounted(() => {
     colorGui = setUpColorDatGui(savedColors)
     colorGui.datGui.close()
 
-    const initialCiclePos = appState.circles.list.map(c => ({ x: c.x, y: c.y }))
-
     let p5Mouse = { x: 0, y: 0 }
     mousemoveEvent((ev) => {
       p5Mouse = targetToP5Coords(ev, p5i, threeCanvas)
@@ -91,13 +89,22 @@ onMounted(() => {
         }
       })
 
-      singleKeydownEvent('s', (ev) => {
+      singleKeydownEvent(' ', (ev) => {
         if (appState.drawing) {
-          const newCircle = new PulseCircle(p5Mouse.x, p5Mouse.y, 100)
-          // newCircle.debugDraw = false
-          appState.circles.pushItem(newCircle)
-          initialCiclePos.push({ x: newCircle.x, y: newCircle.y })
-          console.log("adding circle", newCircle)
+          const newCircle = new PulseCircle(p5Mouse.x, p5Mouse.y, 30)
+          newCircle.debugInd = appState.circles.list.length
+          console.log("adding circle", anyCircleSelected, nearestInd)
+          if (anyCircleSelected) {
+            appState.circles.list[nearestInd].debugSelected = false
+            newCircle.debugSelected = true
+            appState.circles.insertItem(newCircle, nearestInd + 1)
+            nearestInd++
+            appState.circles.list.forEach((c, i) => {
+             c.debugInd = i
+            })
+          } else {
+            appState.circles.pushItem(newCircle)
+          }
         }
       })
 
@@ -105,6 +112,26 @@ onMounted(() => {
       singleKeydownEvent('c', (ev) => {
         appState.circles.list.forEach(c => c.debugDraw = debugDraw)
         debugDraw = !debugDraw
+      })
+
+      let anyCircleSelected = false
+      let nearestInd = 0
+      singleKeydownEvent('s', (ev) => {
+        //find closest circle to mouse pos
+        
+        const closestCircle = appState.circles.list.reduce((prev, curr, i) => {
+          const prevDist = Math.sqrt((prev.x - p5Mouse.x) ** 2 + (prev.y - p5Mouse.y) ** 2)
+          const currDist = Math.sqrt((curr.x - p5Mouse.x) ** 2 + (curr.y - p5Mouse.y) ** 2)
+          nearestInd = currDist < prevDist ? i : nearestInd
+          return prevDist < currDist ? prev : curr
+        })
+        appState.circles.list.forEach((c, i) => {
+          if(i == nearestInd) return
+          c.debugSelected = false
+        })
+        closestCircle.debugSelected = !closestCircle.debugSelected
+        anyCircleSelected = closestCircle.debugSelected
+
       })
 
       let launchCounter = 0
@@ -126,9 +153,14 @@ onMounted(() => {
         p.endShape()        
       }
 
-      const loopPath = false
+      let showCurves = true
+      singleKeydownEvent("v", (ev) => {
+        showCurves = !showCurves
+      })
 
+      const loopPath = false
       appState.drawFuncMap.set("launchLines", (p: p5) => {
+        if(!showCurves) return
         p.push()
         p.strokeWeight(10)
         launchLines.forEach(({ firstId, secondId, thirdId }) => {
