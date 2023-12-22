@@ -292,10 +292,12 @@ export class CustomFeedbackShaderEffect extends CustomShaderEffect {
   }
 }
 
+//todo api - make custom shader inputs a single object/type with optional pars instead of having optional positional args
+
 export class Passthru extends CustomShaderEffect {
   effectName = "Passthru"
-  constructor(inputs: {src: ShaderSource},  width = 1280, height = 720, customOutput?: THREE.WebGLRenderTarget) {
-    super(passThruFS, inputs, width, height, customOutput)
+  constructor(inputs: {src: ShaderSource},  width = 1280, height = 720, customOutput?: THREE.WebGLRenderTarget, filterType: ('nearest' | 'linear') = 'linear') {
+    super(passThruFS, inputs, width, height, customOutput, filterType)
   }
 
   setSrcs(fx: {src: ShaderSource}): void {

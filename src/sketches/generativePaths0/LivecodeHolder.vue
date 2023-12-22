@@ -197,7 +197,7 @@ onMounted(() => {
         ctx.branch(async (ctx) => {
           launchCircle(lineId)
           let ptWait = 0.2 + Math.random() * 0.2
-          const triSize = 0.2
+          const triSize = 0.5
           await ctx.waitSec(ptWait * globalSpeedScale * triSize)
           launchCircle(lineId + 1)
           ptWait = 0.2 + Math.random() * 0.2
