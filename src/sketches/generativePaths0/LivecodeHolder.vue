@@ -6,10 +6,21 @@ import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
-import { pathPos } from '@/utils/utils';
-import { setUpColorDatGui, type colorChoices, toRgb } from '@/rendering/palletteHelper';
+import { pathPos, pathPosConstLen } from '@/utils/utils';
+import { setUpColorDatGui, type colorChoices, toRgb, palette } from '@/rendering/palletteHelper';
 import type { GUI } from 'dat.gui';
 import { lerp } from 'three/src/math/MathUtils.js';
+
+
+
+/**
+ * sketch ideas
+ * - more intentional color choices
+ * - have option to have constant speed along path
+ * - interpolate between different circle arrangements
+ * - have triangles randomly launch off path off screen 
+ * - post processing
+ */
 
 const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
@@ -127,7 +138,7 @@ onMounted(() => {
         })
         appState.circles.list.forEach((c, i) => {
           if(i == nearestInd) return
-          c.debugSelected = false
+          if(c.debugSelected) c.debugSelected = false
         })
         closestCircle.debugSelected = !closestCircle.debugSelected
         anyCircleSelected = closestCircle.debugSelected
@@ -173,18 +184,21 @@ onMounted(() => {
           const firstRamp = activeLaunches.get(firstId) || { val: () => 0}
           const secondRamp = activeLaunches.get(secondId) || { val: () => 0 }
           const thirdRamp = activeLaunches.get(thirdId) || { val: () => 0 }
-          const firstPos = pathPos(appState.circles.list, firstRamp.val(), loopPath)
-          const secondPos = pathPos(appState.circles.list, secondRamp.val(), loopPath)
-          const thirdPos = pathPos(appState.circles.list, thirdRamp.val(), loopPath)  
+          const firstPos = pathPosConstLen(appState.circles.list, firstRamp.val(), loopPath)
+          const secondPos = pathPosConstLen(appState.circles.list, secondRamp.val(), loopPath)
+          const thirdPos = pathPosConstLen(appState.circles.list, thirdRamp.val(), loopPath)  
 
           drawCurve(p, firstPos, secondPos, thirdPos)
 
         })
         p.pop()
       })
+
       const globalSpeedScale = 1
       let lastSpeed = 3 + Math.random() * 3
       let colors = [colorGui.colors.col0tet0, colorGui.colors.col0tet1, colorGui.colors.col0tet2, colorGui.colors.col0tet3].map(c => toRgb(c))
+      colors = palette(colorGui.colors.col0tet0, colorGui.colors.col0tet1, 4).map(c => c.toRgb())
+
       const launchCircle = (launchId: number) => {
         const launchSpeed = launchId % 2 == 0 ? 3 + Math.random() * 3 : lastSpeed
         lastSpeed = launchSpeed
