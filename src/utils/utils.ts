@@ -1,4 +1,4 @@
-type simpleVec2 = { x: number; y: number };
+type simpleVec2 = { x: number; y: number }
 
 export function pathPosConstLen(path: simpleVec2[], t: number, returnToStart = false): simpleVec2 {
   // Validate input
@@ -16,18 +16,18 @@ export function pathPosConstLen(path: simpleVec2[], t: number, returnToStart = f
 
   // Calculate the total length of the path and segment lengths
   let totalLength = 0
-  const segmentLengths: number[] = []
+  const cumulativeLengths: number[] = [0]
   for (let i = 0; i < path.length - 1; i++) {
     const length = Math.sqrt((path[i + 1].x - path[i].x) ** 2 + (path[i + 1].y - path[i].y) ** 2)
-    segmentLengths.push(length)
     totalLength += length
+    cumulativeLengths.push(totalLength)
   }
 
   // If returnToStart is true, close the path by adding the segment from the last point to the first
   if (returnToStart) {
     const closingLength = Math.sqrt((path[0].x - path[path.length - 1].x) ** 2 + (path[0].y - path[path.length - 1].y) ** 2)
-    segmentLengths.push(closingLength)
     totalLength += closingLength
+    cumulativeLengths.push(totalLength)
   }
 
   // Calculate the target length
@@ -40,22 +40,24 @@ export function pathPosConstLen(path: simpleVec2[], t: number, returnToStart = f
 
   // Binary search for the target segment
   let low = 0
-  let high = segmentLengths.length - 1
-  let currentLength = 0
+  let high = cumulativeLengths.length - 1
   while (low <= high) {
     const mid = Math.floor((low + high) / 2)
-    const nextLength = currentLength + segmentLengths[mid]
-    if (nextLength <= targetLength) {
-      currentLength = nextLength
+    const midLength = cumulativeLengths[mid]
+    if (midLength <= targetLength) {
       low = mid + 1
     } else {
       high = mid - 1
     }
   }
 
-  // Adjust for the case when the loop exits with low > segmentLengths.length
-  const segmentIndex = (low - 1) >= segmentLengths.length ? 0 : low - 1
-  const segmentT = (targetLength - currentLength) / segmentLengths[segmentIndex]
+  // Determine the segment index
+  const segmentIndex = (low > 0) ? low - 1 : 0;
+
+  // Calculate the interpolation factor (segmentT)
+  const segmentStartLength = cumulativeLengths[segmentIndex]
+  const segmentEndLength = cumulativeLengths[segmentIndex + 1]
+  const segmentT = (targetLength - segmentStartLength) / (segmentEndLength - segmentStartLength)
 
   // Calculate the start and end points of the target segment
   const startPoint = path[segmentIndex]
@@ -69,6 +71,26 @@ export function pathPosConstLen(path: simpleVec2[], t: number, returnToStart = f
 
   return interpolatedPoint
 }
+
+
+
+
+const testPts = [
+  { x: 0, y: 0 },
+  { x: 1, y: 0 },
+  { x: 2, y: 0 },
+  { x: 3, y: 0 },
+  { x: 4, y: 0 },
+  { x: 5, y: 0 },
+  { x: 6, y: 0 },
+  { x: 7, y: 0 },
+  { x: 8, y: 0 },
+  { x: 9, y: 0 },
+  { x: 10, y: 0 }
+]
+pathPosConstLen(testPts, 0.35, false)
+const outTest = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => pathPosConstLen(testPts, n/10+0.05, false))
+console.log("conPathTest", outTest)
 
 export function pathPos(path: simpleVec2[], t: number, returnToStart = false): simpleVec2 {
   // Validate input
