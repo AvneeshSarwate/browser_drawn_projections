@@ -1,6 +1,5 @@
-type simpleVec2 = { x: number; y: number }
+type simpleVec2 = { x: number; y: number };
 
-//todo bug - pathPosConstLen is buggy
 export function pathPosConstLen(path: simpleVec2[], t: number, returnToStart = false): simpleVec2 {
   // Validate input
   if (path.length === 0) {
@@ -24,32 +23,43 @@ export function pathPosConstLen(path: simpleVec2[], t: number, returnToStart = f
     totalLength += length
   }
 
-  //todo - add return to start logic - add a segment length for the last segment,
-  //and then add mod logic to the target segment index
+  // If returnToStart is true, close the path by adding the segment from the last point to the first
+  if (returnToStart) {
+    const closingLength = Math.sqrt((path[0].x - path[path.length - 1].x) ** 2 + (path[0].y - path[path.length - 1].y) ** 2)
+    segmentLengths.push(closingLength)
+    totalLength += closingLength
+  }
 
   // Calculate the target length
-  const targetLength = t * totalLength
+  let targetLength = t * totalLength
+
+  // Adjust targetLength for wrapping around
+  if (returnToStart) {
+    targetLength = targetLength % totalLength
+  }
 
   // Binary search for the target segment
   let low = 0
   let high = segmentLengths.length - 1
   let currentLength = 0
-  while (low < high) {
+  while (low <= high) {
     const mid = Math.floor((low + high) / 2)
     const nextLength = currentLength + segmentLengths[mid]
-    if (nextLength < targetLength) {
+    if (nextLength <= targetLength) {
       currentLength = nextLength
       low = mid + 1
     } else {
-      high = mid
+      high = mid - 1
     }
   }
 
-  const segmentT = (targetLength - currentLength) / segmentLengths[low]
+  // Adjust for the case when the loop exits with low > segmentLengths.length
+  const segmentIndex = (low - 1) >= segmentLengths.length ? 0 : low - 1
+  const segmentT = (targetLength - currentLength) / segmentLengths[segmentIndex]
 
   // Calculate the start and end points of the target segment
-  const startPoint = path[low]
-  const endPoint = path[low + 1]
+  const startPoint = path[segmentIndex]
+  const endPoint = path[(segmentIndex + 1) % path.length]
 
   // Interpolate between the start and end points
   const interpolatedPoint: simpleVec2 = {

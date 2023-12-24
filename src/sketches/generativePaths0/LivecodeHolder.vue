@@ -18,6 +18,10 @@ import { lerp } from 'three/src/math/MathUtils.js';
  * - more intentional color choices
  * - have option to have constant speed along path
  * - interpolate between different circle arrangements
+ * - multiple paths - each with their own color
+ * - control the randomization of the triangle sizes 
+ * - launch different shapes than triangles 
+ * - control/toggle the launch rate
  * - have triangles randomly launch off path off screen 
  * - post processing
  */
@@ -252,12 +256,18 @@ onMounted(() => {
         })
       }
 
+      let launching = true
+      singleKeydownEvent('l', (ev) => {
+        launching = !launching
+      })
+
+
       launchLoop(async (ctx) => {
         // eslint-disable-next-line no-constant-condition
         while (true) {
           const triWait = 0.1 + Math.random() * 0.1
           await ctx.waitSec(triWait * globalSpeedScale)
-          if (appState.circles.list.length > 2) {
+          if (appState.circles.list.length > 2 && launching) {
             launchCounter += 3
             launchTriangle(launchCounter, ctx)
           }
