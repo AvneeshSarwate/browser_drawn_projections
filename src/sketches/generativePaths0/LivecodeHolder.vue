@@ -133,6 +133,8 @@ onMounted(() => {
       let nearestInd = 0
       singleKeydownEvent('s', (ev) => {
         //find closest circle to mouse pos
+
+        //todo bug - selecting 0th circle doesn't seem to work properly
         
         const closestCircle = appState.circles.list.reduce((prev, curr, i) => {
           const prevDist = Math.sqrt((prev.x - p5Mouse.x) ** 2 + (prev.y - p5Mouse.y) ** 2)
