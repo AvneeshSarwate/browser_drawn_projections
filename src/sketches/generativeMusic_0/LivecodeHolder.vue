@@ -34,11 +34,17 @@ onMounted(async () => {
 
 
     const cMajScale = new Scale()
+    const cHarmonicMajorScale = new Scale([0, 2, 4, 5, 7, 8, 11, 12], 60)
 
-    const cMaj3 = cMajScale.getMultiple([0, 2, 4])
-    const cMaj7 = cMajScale.getMultiple([0, 2, 4, 6])
-    const shell9 = [0, 2, 6, 8]
-    const prog = [0, 2, 4, 3, 6, 5, 8, 7].map(r => cMajScale.getShapeFromInd(r, shell9))
+    // eslint-disable-next-line no-inner-declarations
+    function progGen(scale: Scale, roots: number[], shape: number[]) {
+      const shell9 = shape
+      const prog = roots.map(r => scale.getShapeFromInd(r, shell9))
+      return prog
+    }
+
+    let prog = progGen(cHarmonicMajorScale, [0, 2, 4, 3, 6, 5, 8, 7], [0, 2, 6, 8])
+
 
     await MIDI_READY
 
@@ -47,34 +53,16 @@ onMounted(async () => {
     const playNote = (pitch: number, velocity: number, ctx?: TimeContext, noteDur?: number) => {
       iac1.sendNoteOn(pitch, velocity)
       ctx?.branch(async ctx => {
-        await ctx?.wait(noteDur ?? 0.1)
+        await ctx?.wait((noteDur ?? 0.1) * 0.98)
         iac1.sendNoteOff(pitch)
       })
     }
 
-    const playPitchSeq = (pitches: number[], ctx: TimeContext, rollTime: number, noteDur: number) => {
+    const playPitchSeq = (pitches: number[], velocity: number, ctx: TimeContext, rollTime: number, noteDur: number) => {
       ctx?.branch(async ctx => {
         for (let i = 0; i < pitches.length; i++) {
-          playNote(pitches[i], 100, ctx, rollTime)
+          playNote(pitches[i], velocity, ctx, noteDur)
           await ctx?.wait(rollTime)
-        }
-      })
-    }
-
-    const notesOn = async (pitches: number[], velocity: number, ctx?: TimeContext, rollTime?: number) => {
-      ctx?.branch(async ctx => { 
-        for (let i = 0; i < pitches.length; i++) {
-          iac1.sendNoteOn(pitches[i], velocity)
-          await ctx?.wait(rollTime ?? 0.1)
-        }
-      })
-    }
-
-    const notesOff = async (pitches: number[], ctx?: TimeContext, rollTime?: number) => {
-      ctx?.branch(async ctx => {
-        for (let i = 0; i < pitches.length; i++) {
-          iac1.sendNoteOff(pitches[i])
-          await ctx?.wait(rollTime ?? 0.1)
         }
       })
     }
@@ -137,15 +125,17 @@ onMounted(async () => {
           const randProgStart = Math.floor(Math.random() * prog.length/2)
           const randProdLen = Math.floor(Math.random() * 4) + 1
           let useFull = Math.random() > 0.5 
+          let useHarmonic = Math.random() > 0.5
+          prog = progGen(useHarmonic ? cHarmonicMajorScale : cMajScale, [0, 2, 4, 3, 6, 5, 8, 7], [0, 2, 6, 8])
           const progSlice = useFull ? prog : prog.slice(randProgStart, randProgStart + randProdLen)
           console.log(randProgStart, randProdLen)
           for (let i = 0; i < progSlice.length; i++) {
             const chord = invertChord(shuffle(progSlice[i], shuffleSeed), shuffleSeed-2)
             const vel = velocity + Math.random() * 10
-            notesOn(chord, vel, ctx, noteWait)
-            await ctx.wait(1.95)
-            notesOff(chord, ctx, noteWait)
-            await ctx.wait(0.05)  
+
+            playPitchSeq(chord, vel, ctx, noteWait, 2)
+
+            await ctx.wait(1)
           }
         }
       })
