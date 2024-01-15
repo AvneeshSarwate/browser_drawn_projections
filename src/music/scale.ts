@@ -123,6 +123,10 @@ export class Scale {
     }
   }
 
+  getShapeFromInd(rootInd: number, shape: number[]): number[] {
+    return shape.map((degree) => this.getByIndex(rootInd + degree))
+  }
+
   getIndFromPitch(pitch: number): number {
     const rootDist = pitch - this.root
     const chroma = mod2(rootDist, Math.max(...this.degrees))

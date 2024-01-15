@@ -14,7 +14,8 @@ export const sketchNames = [
   'abletonClipComposing',
   'shaderInstanceTest',
   'colorHelperTest',
-  'generativePaths0'
+  'generativePaths0',
+  'generativeMusic_0'
 ]
 
 const sketchRoutes = sketchNames.map(name => {
