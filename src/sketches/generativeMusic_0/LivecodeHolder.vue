@@ -45,6 +45,12 @@ onMounted(async () => {
 
     let prog = progGen(cHarmonicMajorScale, [0, 2, 4, 3, 6, 5, 8, 7], [0, 2, 6, 8])
 
+    /**
+     * use drums to root the rhythms 
+     * miles okazaki - open music experiments
+     * kim cass - bassist - playing with subdivisions to change feel of tempo 
+     */
+
 
     await MIDI_READY
 
@@ -80,7 +86,7 @@ onMounted(async () => {
       return listCopy;
     }
 
-    const RUNNING = true
+    const RUNNING = false
 
     const mod2 = (n: number, m: number) =>  (n % m + m) % m
 
