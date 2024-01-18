@@ -49,6 +49,9 @@ onMounted(async () => {
      * use drums to root the rhythms 
      * miles okazaki - open music experiments
      * kim cass - bassist - playing with subdivisions to change feel of tempo 
+     * 
+     * when playing with guitar, can have midi switch the guitar tone/fx in corrdination
+     * with the generative scheme (or even switch the harmonizer with the key change)
      */
 
 
