@@ -25,6 +25,11 @@ const clearDrawFuncs = () => {
   appState.drawFuncMap = new Map()
 }
 
+let noteWait = ref(0.3)
+let noteWaitUseLfo = ref(true)
+let velocity = ref(100)
+let shuffleSeed = ref(2)
+
 onMounted(async () => {
   try {
 
@@ -89,7 +94,8 @@ onMounted(async () => {
       return listCopy;
     }
 
-    const RUNNING = false
+    const RUNNING = true
+    const PLAYING = true
 
     const mod2 = (n: number, m: number) =>  (n % m + m) % m
 
@@ -116,15 +122,12 @@ onMounted(async () => {
     const code = () => {
       clearDrawFuncs()
 
-      let noteWait = 0.3
-      let velocity = 100
-      let shuffleSeed = 2
       launchLoop(async ctx => {
         while (RUNNING) {
           await ctx.waitFrame()
-          noteWait = 0.1 + sinN(Date.now() / 1000 * 0.02) * 0.3 
-          velocity = sinN(Date.now() / 1000 * 0.17) * 30 + 80
-          shuffleSeed = Math.floor(1 + sinN(Date.now() / 1000 * 0.13) * 5)
+          if(noteWaitUseLfo.value) noteWait.value = 0.1 + sinN(Date.now() / 1000 * 0.02) * 0.3 
+          velocity.value = sinN(Date.now() / 1000 * 0.17) * 30 + 80
+          shuffleSeed.value = Math.floor(1 + sinN(Date.now() / 1000 * 0.13) * 5)
         }
       })
 
@@ -139,10 +142,10 @@ onMounted(async () => {
           const progSlice = useFull ? prog : prog.slice(randProgStart, randProgStart + randProdLen)
           console.log(randProgStart, randProdLen)
           for (let i = 0; i < progSlice.length; i++) {
-            const chord = invertChord(shuffle(progSlice[i], shuffleSeed), shuffleSeed-2)
-            const vel = velocity + Math.random() * 10
+            const chord = invertChord(shuffle(progSlice[i], shuffleSeed.value), shuffleSeed.value-2)
+            const vel = velocity.value + Math.random() * 10
 
-            playPitchSeq(chord, vel, ctx, noteWait, 2)
+            if(PLAYING) playPitchSeq(chord, vel, ctx, noteWait.value, 2)
 
             await ctx.wait(1)
           }
@@ -178,7 +181,15 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div></div>
+  <div>
+    <!-- create sliders for noteWait -->
+    <div>
+      <input type="checkbox" id="noteWaitLfo" v-model="noteWaitUseLfo">
+      <label for="noteWaitLfo">lfo</label>
+      <input type="range" min="0" max="1" step="0.01" id="noteWait" v-model="noteWait">
+      <label for="noteWait">Note Wait</label>
+    </div>
+  </div>
 </template>
 
 <style scoped></style>
