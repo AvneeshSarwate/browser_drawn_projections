@@ -28,7 +28,9 @@ const clearDrawFuncs = () => {
 let noteWait = ref(0.3)
 let noteWaitUseLfo = ref(true)
 let velocity = ref(100)
+let velocityUseLfo = ref(true)
 let shuffleSeed = ref(2)
+let shuffleSeedUseLfo = ref(true)
 
 onMounted(async () => {
   try {
@@ -110,7 +112,7 @@ onMounted(async () => {
       const deltaSet = new Set(deltas)
       deltaSet.add(12)
       const intervals = Array.from(deltaSet).sort((a, b) => a - b)
-      console.log(intervals)
+      // console.log(intervals)
 
       const scale = new Scale(intervals, root).invert(inversions)
 
@@ -126,8 +128,8 @@ onMounted(async () => {
         while (RUNNING) {
           await ctx.waitFrame()
           if(noteWaitUseLfo.value) noteWait.value = 0.1 + sinN(Date.now() / 1000 * 0.02) * 0.3 
-          velocity.value = sinN(Date.now() / 1000 * 0.17) * 30 + 80
-          shuffleSeed.value = Math.floor(1 + sinN(Date.now() / 1000 * 0.13) * 5)
+          if(velocityUseLfo.value) velocity.value = sinN(Date.now() / 1000 * 0.17) * 30 + 80
+          if(shuffleSeedUseLfo.value) shuffleSeed.value = Math.floor(1 + sinN(Date.now() / 1000 * 0.13) * 5)
         }
       })
 
@@ -140,11 +142,12 @@ onMounted(async () => {
           let useHarmonic = Math.random() > 0.5
           prog = progGen(useHarmonic ? cHarmonicMajorScale : cMajScale, [0, 2, 4, 3, 6, 5, 8, 7], [0, 2, 6, 8])
           const progSlice = useFull ? prog : prog.slice(randProgStart, randProgStart + randProdLen)
-          console.log(randProgStart, randProdLen)
+          // console.log(randProgStart, randProdLen)
           for (let i = 0; i < progSlice.length; i++) {
-            const chord = invertChord(shuffle(progSlice[i], shuffleSeed.value), shuffleSeed.value-2)
-            const vel = velocity.value + Math.random() * 10
-
+            const chord = invertChord(shuffle(progSlice[i], shuffleSeed.value), shuffleSeed.value - 2)
+            const velJit = velocity.value + Math.random() * 10
+            const vel = Math.min(velJit, 127)
+            console.log("vel", velocity.value, velJit, vel, Math.min(velJit, 127))
             if(PLAYING) playPitchSeq(chord, vel, ctx, noteWait.value, 2)
 
             await ctx.wait(1)
@@ -186,8 +189,18 @@ onUnmounted(() => {
     <div>
       <input type="checkbox" id="noteWaitLfo" v-model="noteWaitUseLfo">
       <label for="noteWaitLfo">lfo</label>
-      <input type="range" min="0" max="1" step="0.01" id="noteWait" v-model="noteWait">
+      <input type="range" min="0" max="1" step="0.01" id="noteWait" v-model.number="noteWait">
       <label for="noteWait">Note Wait</label>
+      <br>
+      <input type="checkbox" id="velocityLfo" v-model="velocityUseLfo">
+      <label for="velocityLfo">lfo</label>
+      <input type="range" min="0" max="127" step="1" id="velocity" v-model.number="velocity">
+      <label for="velocity">Velocity</label>
+      <br>
+      <input type="checkbox" id="shuffleSeedLfo" v-model="shuffleSeedUseLfo">
+      <label for="shuffleSeedLfo">lfo</label>
+      <input type="range" min="0" max="5" step="1" id="shuffleSeed" v-model.number="shuffleSeed">
+      <label for="shuffleSeed">Shuffle Seed</label>
     </div>
   </div>
 </template>
