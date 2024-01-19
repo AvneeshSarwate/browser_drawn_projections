@@ -45,8 +45,8 @@ function createAndLaunchContext<T, C extends TimeContext>(block: (ctx: C) => Pro
   const abortController = new AbortController()
   const promiseProxy = new CancelablePromisePoxy<T>(abortController)
   const newContext = new ctor(rootTime, abortController, contextId++)
+  if(parentContext) newContext.bpm = parentContext.bpm
   const blockPromise = block(newContext)
-  promiseProxy.promise = blockPromise
   const bp = blockPromise.catch((e) => {
     const err = e as Error
     console.log('promise catch error', err, err?.message, err?.stack)

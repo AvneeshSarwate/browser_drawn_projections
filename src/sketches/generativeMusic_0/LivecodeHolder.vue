@@ -32,6 +32,9 @@ let velocityUseLfo = ref(true)
 let shuffleSeed = ref(2)
 let shuffleSeedUseLfo = ref(true)
 
+const RUNNING = ref(true)
+const PLAYING = ref(true)
+
 onMounted(async () => {
   try {
 
@@ -96,9 +99,6 @@ onMounted(async () => {
       return listCopy;
     }
 
-    const RUNNING = true
-    const PLAYING = true
-
     const mod2 = (n: number, m: number) =>  (n % m + m) % m
 
     // eslint-disable-next-line no-inner-declarations
@@ -125,17 +125,19 @@ onMounted(async () => {
       clearDrawFuncs()
 
       launchLoop(async ctx => {
-        while (RUNNING) {
+        while (RUNNING.value) {
           await ctx.waitFrame()
           if(noteWaitUseLfo.value) noteWait.value = 0.1 + sinN(Date.now() / 1000 * 0.02) * 0.3 
-          if(velocityUseLfo.value) velocity.value = sinN(Date.now() / 1000 * 0.17) * 30 + 80
+          if(velocityUseLfo.value) velocity.value = sinN(Date.now() / 1000 * 0.17) * 30 + 50
           if(shuffleSeedUseLfo.value) shuffleSeed.value = Math.floor(1 + sinN(Date.now() / 1000 * 0.13) * 5)
         }
       })
 
+      let phraseCount = 0
+      let phraseRepeatTime = 1
       launchLoop(async (ctx) => {
         ctx.bpm = 90
-        while (RUNNING) {
+        while (RUNNING.value) {
           const randProgStart = Math.floor(Math.random() * prog.length/2)
           const randProdLen = Math.floor(Math.random() * 4) + 1
           let useFull = Math.random() > 0.5 
@@ -147,10 +149,19 @@ onMounted(async () => {
             const chord = invertChord(shuffle(progSlice[i], shuffleSeed.value), shuffleSeed.value - 2)
             const velJit = velocity.value + Math.random() * 10
             const vel = Math.min(velJit, 127)
-            console.log("vel", velocity.value, velJit, vel, Math.min(velJit, 127))
-            if(PLAYING) playPitchSeq(chord, vel, ctx, noteWait.value, 2)
 
-            await ctx.wait(1)
+            if (PLAYING.value) {
+              playPitchSeq(chord, vel, ctx, noteWait.value, 2)
+              let numBassNotes = phraseCount % 4 == 0 ? 2 : 1
+              const sorted = chord.map(n => n - 24).sort((a, b) => a - b).slice(0, numBassNotes)
+              console.log("sorted", sorted)
+              // playNote(Math.min(...chord)-24, vel, ctx, noteWait.value * chord.length)
+              playPitchSeq(sorted, vel, ctx, phraseRepeatTime / numBassNotes, 2)
+            } 
+            
+
+            await ctx.wait(phraseRepeatTime)
+            phraseCount++
           }
         }
       })
@@ -201,6 +212,11 @@ onUnmounted(() => {
       <label for="shuffleSeedLfo">lfo</label>
       <input type="range" min="0" max="5" step="1" id="shuffleSeed" v-model.number="shuffleSeed">
       <label for="shuffleSeed">Shuffle Seed</label>
+      <br>
+      <input type="checkbox" id="running" v-model="RUNNING">
+      <label for="running">Running</label>
+      <input type="checkbox" id="playing" v-model="PLAYING">
+      <label for="playing">Playing</label>
     </div>
   </div>
 </template>
