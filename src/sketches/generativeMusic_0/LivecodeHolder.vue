@@ -144,6 +144,8 @@ onMounted(async () => {
        * 
        * musical
        *  - more musically considered approach to chord progression slicing
+       *    - do it in such a way that you can practice playing over the changes 
+       *      (or at least make it structured enought that a "live score" is reasonably playable)
        *  - a mode where the rhythm is flat/straight 16ths
        * 
        * add visuals
