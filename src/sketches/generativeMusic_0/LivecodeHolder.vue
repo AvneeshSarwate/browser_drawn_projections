@@ -25,12 +25,12 @@ const clearDrawFuncs = () => {
   appState.drawFuncMap = new Map()
 }
 
-let noteWait = ref(0.3)
-let noteWaitUseLfo = ref(true)
-let velocity = ref(100)
-let velocityUseLfo = ref(true)
-let shuffleSeed = ref(2)
-let shuffleSeedUseLfo = ref(true)
+let noteWait = appState.UIState.noteWait
+let noteWaitUseLfo = appState.UIState.noteWaitUseLfo
+let velocity = appState.UIState.velocity
+let velocityUseLfo = appState.UIState.velocityUseLfo
+let shuffleSeed = appState.UIState.shuffleSeed
+let shuffleSeedUseLfo = appState.UIState.shuffleSeedUseLfo
 
 const RUNNING = ref(true)
 const PLAYING = ref(true)
@@ -52,8 +52,11 @@ onMounted(async () => {
       const prog = roots.map(r => scale.getShapeFromInd(r, shell9))
       return prog
     }
-
-    let prog = progGen(cHarmonicMajorScale, [0, 2, 4, 3, 6, 5, 8, 7], [0, 2, 6, 8])
+    const progRoots = [0, 2, 4, 3, 6, 5, 8, 7]
+    const triad = [0, 2, 4]
+    const shell9 = [0, 2, 6, 8]
+    let shape = triad
+    let prog = progGen(cHarmonicMajorScale, progRoots, shape)
 
     /**
      * use drums to root the rhythms 
@@ -102,7 +105,7 @@ onMounted(async () => {
     const mod2 = (n: number, m: number) =>  (n % m + m) % m
 
     // eslint-disable-next-line no-inner-declarations
-    function invertChord(chord: number[], inversions: number): number[] {
+    function invertChord(chord: number[], inversions: number): number[] { //todo - can be way simpler - just shift highest/lowest by 12 in a for loop
       const root = Math.min(...chord)
       const pitchSet = new Set(chord)
       const orderedPitches = Array.from(pitchSet).sort()
@@ -133,6 +136,22 @@ onMounted(async () => {
         }
       })
 
+      /**
+       * todo sketch:
+       *  - have some nice modularized LFO state/type/UI-component
+       *  - have LFOs run based on loop context time (and make sure a root context always starts at 0)
+       *  - take all Math.random calls and convert them to some kind of LFO or at least add a way to pause randomness and manually set them
+       * 
+       * musical
+       *  - more musically considered approach to chord progression slicing
+       *  - a mode where the rhythm is flat/straight 16ths
+       * 
+       * add visuals
+       *  - colors pallete for different scale or chord shapes 
+       *  - color variation for the other of scale/chord shape
+       *  - some type of complex shape(s) with interlocking movements for bass+melody for a single "two hand phrase"
+       */
+
       let phraseCount = 0
       let phraseRepeatTime = 1
       launchLoop(async (ctx) => {
@@ -142,7 +161,8 @@ onMounted(async () => {
           const randProdLen = Math.floor(Math.random() * 4) + 1
           let useFull = Math.random() > 0.5 
           let useHarmonic = Math.random() > 0.5
-          prog = progGen(useHarmonic ? cHarmonicMajorScale : cMajScale, [0, 2, 4, 3, 6, 5, 8, 7], [0, 2, 6, 8])
+          let useTriads = phraseCount % 32 < 8
+          prog = progGen(useHarmonic ? cHarmonicMajorScale : cMajScale, progRoots, useTriads ? triad : shell9)
           const progSlice = useFull ? prog : prog.slice(randProgStart, randProgStart + randProdLen)
           // console.log(randProgStart, randProdLen)
           for (let i = 0; i < progSlice.length; i++) {
@@ -210,7 +230,7 @@ onUnmounted(() => {
       <br>
       <input type="checkbox" id="shuffleSeedLfo" v-model="shuffleSeedUseLfo">
       <label for="shuffleSeedLfo">lfo</label>
-      <input type="range" min="0" max="5" step="1" id="shuffleSeed" v-model.number="shuffleSeed">
+      <input type="range" min="1" max="6" step="1" id="shuffleSeed" v-model.number="shuffleSeed">
       <label for="shuffleSeed">Shuffle Seed</label>
       <br>
       <input type="checkbox" id="running" v-model="RUNNING">

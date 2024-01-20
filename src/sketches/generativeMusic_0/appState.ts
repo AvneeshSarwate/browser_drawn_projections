@@ -4,7 +4,7 @@ import { Entity, EntityList } from '@/stores/undoCommands'
 
 import { Ramp } from '@/channels/channels'
 import { defineStore, acceptHMRUpdate } from 'pinia'
-import { ref } from 'vue'
+import { ref, type Ref } from 'vue'
 
 
 type PulseCircleSerialized = {
@@ -102,9 +102,28 @@ export class PulseCircle extends Entity {
   }
 }
 
+type UIState = {
+  noteWait: Ref<number>
+  noteWaitUseLfo: Ref<boolean>
+  velocity: Ref<number>
+  velocityUseLfo: Ref<boolean>
+  shuffleSeed: Ref<number>
+  shuffleSeedUseLfo: Ref<boolean>
+}
+
+const uiInitState: UIState = {
+  noteWait: ref(0.3),
+  noteWaitUseLfo: ref(true),
+  velocity: ref(100),
+  velocityUseLfo: ref(true),
+  shuffleSeed: ref(2),
+  shuffleSeedUseLfo: ref(true),
+}
+
 export type TemplateAppState = {
   circles: EntityList<PulseCircle>
   p5Instance: p5 | undefined
+  UIState: UIState,
   threeRenderer: THREE.WebGLRenderer | undefined
   codeStack: (() => void)[]
   codeStackIndex: number
@@ -121,6 +140,7 @@ export const appState: TemplateAppState = {
   circles: new EntityList(PulseCircle),
   p5Instance: undefined,
   threeRenderer: undefined,
+  UIState: uiInitState,
   codeStack: [],
   codeStackIndex: 0,
   drawFunctions: [],
