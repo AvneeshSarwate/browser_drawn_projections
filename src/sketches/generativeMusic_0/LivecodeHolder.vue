@@ -10,6 +10,26 @@ import { Scale } from '@/music/scale'
 import { MIDI_READY, midiOutputs } from '@/io/midi';
 import seedrandom from 'seedrandom'
 
+import { HyperFormula } from 'hyperformula';
+
+const options = {
+    licenseKey: 'gpl-v3'
+};
+
+const hfInstance = HyperFormula.buildEmpty(options);
+const sheetSize = 4
+const sheetData: string[][] = new Array(sheetSize).fill(0).map(() => new Array(sheetSize).fill(""))
+const testSheet = hfInstance.addSheet('test')
+const testSheetId = hfInstance.getSheetId(testSheet)!!
+hfInstance.setSheetContent(testSheetId, sheetData)
+hfInstance.setCellContents({ col: 0, row: 0, sheet: testSheetId }, "5")
+hfInstance.setCellContents({ col: 0, row: 1, sheet: testSheetId }, "=A1 * 2")
+const initData = hfInstance.getCellValue({ col: 0, row: 1, sheet: testSheetId })
+
+console.log("initData", initData)
+
+
+
 const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
 let timeLoops: CancelablePromisePoxy<any>[] = []
@@ -176,7 +196,7 @@ onMounted(async () => {
               playPitchSeq(chord, vel, ctx, noteWait.value, 2)
               let numBassNotes = phraseCount % 4 == 0 ? 2 : 1
               const sorted = chord.map(n => n - 24).sort((a, b) => a - b).slice(0, numBassNotes)
-              console.log("sorted", sorted)
+              // console.log("sorted", sorted)
               // playNote(Math.min(...chord)-24, vel, ctx, noteWait.value * chord.length)
               playPitchSeq(sorted, vel, ctx, phraseRepeatTime / numBassNotes, 2)
             } 
