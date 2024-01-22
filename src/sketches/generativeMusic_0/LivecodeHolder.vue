@@ -51,6 +51,8 @@ let velocity = appState.UIState.velocity
 let velocityUseLfo = appState.UIState.velocityUseLfo
 let shuffleSeed = appState.UIState.shuffleSeed
 let shuffleSeedUseLfo = appState.UIState.shuffleSeedUseLfo
+let noteLen = appState.UIState.noteLen
+let noteLenUseLfo = appState.UIState.noteLenUseLfo
 
 const RUNNING = ref(true)
 const PLAYING = ref(true)
@@ -152,7 +154,8 @@ onMounted(async () => {
           await ctx.waitFrame()
           if(noteWaitUseLfo.value) noteWait.value = 0.1 + sinN(Date.now() / 1000 * 0.02) * 0.3 
           if(velocityUseLfo.value) velocity.value = sinN(Date.now() / 1000 * 0.17) * 30 + 50
-          if(shuffleSeedUseLfo.value) shuffleSeed.value = Math.floor(1 + sinN(Date.now() / 1000 * 0.13) * 5)
+          if (shuffleSeedUseLfo.value) shuffleSeed.value = Math.floor(1 + sinN(Date.now() / 1000 * 0.13) * 5)
+          if (noteLenUseLfo.value) noteLen.value = 0.05 + Math.pow(tri(Date.now() / 1000 * 0.07), 1) * .95
         }
       })
 
@@ -193,12 +196,12 @@ onMounted(async () => {
             const vel = Math.min(velJit, 127)
 
             if (PLAYING.value) {
-              playPitchSeq(chord, vel, ctx, noteWait.value, 2)
+              playPitchSeq(chord, vel, ctx, noteWait.value, noteLen.value)
               let numBassNotes = phraseCount % 4 == 0 ? 2 : 1
               const sorted = chord.map(n => n - 24).sort((a, b) => a - b).slice(0, numBassNotes)
               // console.log("sorted", sorted)
               // playNote(Math.min(...chord)-24, vel, ctx, noteWait.value * chord.length)
-              playPitchSeq(sorted, vel, ctx, phraseRepeatTime / numBassNotes, 2)
+              playPitchSeq(sorted, vel, ctx, phraseRepeatTime / numBassNotes, noteLen.value)
             } 
             
 
@@ -254,6 +257,11 @@ onUnmounted(() => {
       <label for="shuffleSeedLfo">lfo</label>
       <input type="range" min="1" max="6" step="1" id="shuffleSeed" v-model.number="shuffleSeed">
       <label for="shuffleSeed">Shuffle Seed</label>
+      <br>
+      <input type="checkbox" id="noteLenLfo" v-model="noteLenUseLfo">
+      <label for="noteLenLfo">lfo</label>
+      <input type="range" min="0" max="2" step="0.01" id="noteLen" v-model.number="noteLen">
+      <label for="noteLen">Note Length</label>
       <br>
       <input type="checkbox" id="running" v-model="RUNNING">
       <label for="running">Running</label>

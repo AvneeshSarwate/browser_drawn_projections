@@ -109,6 +109,8 @@ type UIState = {
   velocityUseLfo: Ref<boolean>
   shuffleSeed: Ref<number>
   shuffleSeedUseLfo: Ref<boolean>
+  noteLen: Ref<number>
+  noteLenUseLfo: Ref<boolean>
 }
 
 const uiInitState: UIState = {
@@ -118,6 +120,8 @@ const uiInitState: UIState = {
   velocityUseLfo: ref(true),
   shuffleSeed: ref(2),
   shuffleSeedUseLfo: ref(true),
+  noteLen: ref(0.9),
+  noteLenUseLfo: ref(true),
 }
 
 export type TemplateAppState = {
