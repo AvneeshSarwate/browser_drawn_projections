@@ -11,6 +11,7 @@ import { MIDI_READY, midiOutputs } from '@/io/midi';
 import seedrandom from 'seedrandom'
 
 import { HyperFormula } from 'hyperformula';
+import { lerp } from 'three/src/math/MathUtils.js';
 
 const options = {
     licenseKey: 'gpl-v3'
@@ -93,19 +94,20 @@ onMounted(async () => {
     await MIDI_READY
 
     const iac1 = midiOutputs.get('IAC Driver Bus 1')!!
+    const iac2 = midiOutputs.get('IAC Driver Bus 2')!!
 
-    const playNote = (pitch: number, velocity: number, ctx?: TimeContext, noteDur?: number) => {
-      iac1.sendNoteOn(pitch, velocity)
+    const playNote = (pitch: number, velocity: number, ctx?: TimeContext, noteDur?: number, inst = iac1) => {
+      inst.sendNoteOn(pitch, velocity)
       ctx?.branch(async ctx => {
         await ctx?.wait((noteDur ?? 0.1) * 0.98)
-        iac1.sendNoteOff(pitch)
+        inst.sendNoteOff(pitch)
       })
     }
 
-    const playPitchSeq = (pitches: number[], velocity: number, ctx: TimeContext, rollTime: number, noteDur: number) => {
+    const playPitchSeq = (pitches: number[], velocity: number, ctx: TimeContext, rollTime: number, noteDur: number, inst = iac1) => {
       ctx?.branch(async ctx => {
         for (let i = 0; i < pitches.length; i++) {
-          playNote(pitches[i], velocity, ctx, noteDur)
+          playNote(pitches[i], velocity, ctx, noteDur, inst)
           await ctx?.wait(rollTime)
         }
       })
@@ -170,6 +172,7 @@ onMounted(async () => {
        *    - do it in such a way that you can practice playing over the changes 
        *      (or at least make it structured enought that a "live score" is reasonably playable)
        *  - a mode where the rhythm is flat/straight 16ths
+       *  - add more subdivisions and phrase types to the bass (or a counterpoint?) or counter point on middle voice
        * 
        * add visuals
        *  - colors pallete for different scale or chord shapes 
@@ -196,12 +199,20 @@ onMounted(async () => {
             const vel = Math.min(velJit, 127)
 
             if (PLAYING.value) {
-              playPitchSeq(chord, vel, ctx, noteWait.value, noteLen.value)
+
+              const canDouble = noteWait.value * chord.length < phraseRepeatTime
+              const doubledChord = canDouble && Math.random() < 0.5 ? chord.concat(chord) : chord
+
+              
+
+              playPitchSeq(doubledChord, vel, ctx, noteWait.value, noteLen.value)
               let numBassNotes = phraseCount % 4 == 0 ? 2 : 1
-              const sorted = chord.map(n => n - 24).sort((a, b) => a - b).slice(0, numBassNotes)
+              numBassNotes = phraseCount % 3 == 0 && !(phraseCount % 4 == 0) ? 4 : numBassNotes
+              const sorted = doubledChord.map(n => n - 24).sort((a, b) => a - b).slice(0, numBassNotes)
               // console.log("sorted", sorted)
               // playNote(Math.min(...chord)-24, vel, ctx, noteWait.value * chord.length)
-              playPitchSeq(sorted, vel, ctx, phraseRepeatTime / numBassNotes, noteLen.value)
+              const chordNoteWait = lerp(phraseRepeatTime / numBassNotes, noteWait.value, 0.2);
+              playPitchSeq(sorted, vel, ctx, chordNoteWait, noteLen.value, iac2)
             } 
             
 
