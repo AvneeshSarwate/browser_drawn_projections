@@ -151,3 +151,17 @@ export function lerpToCentroid(points: { x: number; y: number }[], t: number) {
   const p = { x: sum.x / numPoints, y: sum.y / numPoints }
   return { x: p.x + (c.x - p.x) * t, y: p.y + (c.y - p.y) * t }
 }
+
+export function weightedChoice<T>(choices: [T, number][]): T {
+  const totalWeight = choices.reduce((acc, [_, weight]) => acc + weight, 0)
+  const targetWeight = Math.random() * totalWeight
+  let currentWeight = 0
+  for (const [choice, weight] of choices) {
+    currentWeight += weight
+    if (currentWeight >= targetWeight) {
+      return choice
+    }
+  }
+  throw new Error('weightedChoice: unreachable code')
+}
+

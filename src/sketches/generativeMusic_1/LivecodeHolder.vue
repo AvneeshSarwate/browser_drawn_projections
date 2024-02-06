@@ -11,6 +11,7 @@ import { MIDI_READY, midiOutputs } from '@/io/midi';
 import seedrandom from 'seedrandom'
 
 import { lerp } from 'three/src/math/MathUtils.js';
+import { weightedChoice } from '@/utils/utils';
 
 const options = {
     licenseKey: 'gpl-v3'
@@ -44,7 +45,7 @@ let noteLen = appState.UIState.noteLen
 let noteLenUseLfo = appState.UIState.noteLenUseLfo
 
 const RUNNING = ref(true)
-const PLAYING = ref(true)
+const PLAYING = ref(false)
 
 onMounted(async () => {
   try {
@@ -85,6 +86,7 @@ onMounted(async () => {
     const iac2 = midiOutputs.get('IAC Driver Bus 2')!!
 
     const playNote = (pitch: number, velocity: number, ctx?: TimeContext, noteDur?: number, inst = iac1) => {
+      if(!PLAYING.value) return
       console.log("pitch play", pitch, velocity)
       inst.sendNoteOn(pitch, velocity)
       ctx?.branch(async ctx => {
@@ -190,7 +192,7 @@ onMounted(async () => {
             await ctx.wait(phraseRepeatTime)
           }
         })
-
+        let phraseCount2 = 0
         ctx.branch(async ctx => {
           while (RUNNING.value) {
             ctx.branch(async ctx => {
@@ -198,6 +200,31 @@ onMounted(async () => {
               if (Math.random() < 0.3) quickPlay(progNote(phraseCount, 5), ctx, velocity.value * 0.7)
               await ctx.wait(phraseRepeatTime * 0.25)
               quickPlay(progNote(phraseCount, 6), ctx, velocity.value * 0.7)
+              if (phraseCount % 4 == 0 && phraseCount2 % 2 == 0) {
+                // if (Math.random() < 0.3) {
+                //   ctx.branch(async ctx => {
+                //     playNote(progNote(phraseCount, 10), 100, ctx, phraseRepeatTime * 4, iac2)
+                //     await ctx.wait(phraseRepeatTime * 0.25)
+                //     playNote(progNote(phraseCount, 9), 100, ctx, phraseRepeatTime * 4, iac2)
+                //   })
+                // } else {
+                //   playNote(progNote(phraseCount, 9), 100, ctx, phraseRepeatTime * 4, iac2)
+                // }
+                const numNotes = weightedChoice([
+                  [1, 1],
+                  [2, 0.5],
+                  [3, 0.2],
+                  [4, 0.1]
+                ])
+                const notes = Array.from({length: numNotes}, (e, i) => progNote(phraseCount, 9 + numNotes - i))
+                ctx.branch(async ctx => {
+                  for (const note of notes) {
+                    playNote(note, 100, ctx, phraseRepeatTime * 4, iac2)
+                    await ctx.wait(phraseRepeatTime * 0.25)
+                  }
+                })
+              }
+              phraseCount2++
 
             })
             console.log("playing")
