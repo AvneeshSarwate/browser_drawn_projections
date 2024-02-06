@@ -15,7 +15,8 @@ export const sketchNames = [
   'shaderInstanceTest',
   'colorHelperTest',
   'generativePaths0',
-  'generativeMusic_0'
+  'generativeMusic_0',
+  'refined_fundamentals'
 ]
 
 const sketchRoutes = sketchNames.map(name => {
