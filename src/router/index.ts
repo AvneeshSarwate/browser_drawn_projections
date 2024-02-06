@@ -16,6 +16,7 @@ export const sketchNames = [
   'colorHelperTest',
   'generativePaths0',
   'generativeMusic_0',
+  'generativeMusic_1',
   'refined_fundamentals'
 ]
 
