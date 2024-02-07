@@ -165,3 +165,5 @@ export function weightedChoice<T>(choices: [T, number][]): T {
   throw new Error('weightedChoice: unreachable code')
 }
 
+export const brd = (n: number) => Math.random() < n
+

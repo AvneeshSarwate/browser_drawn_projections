@@ -11,7 +11,7 @@ import { MIDI_READY, midiOutputs } from '@/io/midi';
 import seedrandom from 'seedrandom'
 
 import { lerp } from 'three/src/math/MathUtils.js';
-import { weightedChoice } from '@/utils/utils';
+import { brd, weightedChoice } from '@/utils/utils';
 
 const options = {
     licenseKey: 'gpl-v3'
@@ -177,14 +177,19 @@ onMounted(async () => {
       let phraseCount = 0
       let phraseRepeatTime = 1
       launchLoop(async (ctx) => { //todo bug - cancelling a loop doesn't kill all branched children
-        ctx.bpm = 90
+        ctx.bpm = 70
         ctx.branch(async ctx => {
           while (RUNNING.value) {
             ctx.branch(async ctx => {
               quickPlay(progNote(phraseCount, 0), ctx, velocity.value)
-              if (Math.random() < 0.3) quickPlay(progNote(phraseCount, 2), ctx, velocity.value)
+              if (brd(0.3)) {
+                ctx.branch(async ctx => {
+                  if (brd(0.3)) await ctx.wait(phraseRepeatTime * 0.25)
+                  quickPlay(progNote(phraseCount, 2), ctx, velocity.value)
+                })
+              }
               await ctx.wait(phraseRepeatTime * 0.5)
-              if (Math.random() < 0.3) quickPlay(progNote(phraseCount, 1), ctx, velocity.value)
+              if (brd(0.3)) quickPlay(progNote(phraseCount, 1), ctx, velocity.value)
 
             })
             console.log("playing")
@@ -197,29 +202,23 @@ onMounted(async () => {
           while (RUNNING.value) {
             ctx.branch(async ctx => {
               quickPlay(progNote(phraseCount, 4), ctx, velocity.value * 0.7)
-              if (Math.random() < 0.3) quickPlay(progNote(phraseCount, 5), ctx, velocity.value * 0.7)
+              if (brd(0.3)) quickPlay(progNote(phraseCount, 5), ctx, velocity.value * 0.7)
               await ctx.wait(phraseRepeatTime * 0.25)
               quickPlay(progNote(phraseCount, 6), ctx, velocity.value * 0.7)
               if (phraseCount % 4 == 0 && phraseCount2 % 2 == 0) {
-                // if (Math.random() < 0.3) {
-                //   ctx.branch(async ctx => {
-                //     playNote(progNote(phraseCount, 10), 100, ctx, phraseRepeatTime * 4, iac2)
-                //     await ctx.wait(phraseRepeatTime * 0.25)
-                //     playNote(progNote(phraseCount, 9), 100, ctx, phraseRepeatTime * 4, iac2)
-                //   })
-                // } else {
-                //   playNote(progNote(phraseCount, 9), 100, ctx, phraseRepeatTime * 4, iac2)
-                // }
                 const numNotes = weightedChoice([
                   [1, 1],
                   [2, 0.5],
                   [3, 0.2],
                   [4, 0.1]
                 ])
-                const notes = Array.from({length: numNotes}, (e, i) => progNote(phraseCount, 9 + numNotes - i))
+                const ascDec = brd(0.5)
+                const dir = (i: number) => ascDec ? numNotes - i : i
+                const notes = Array.from({ length: numNotes }, (e, i) => progNote(phraseCount, 9 + dir(i)))
+                console.log("notes", notes)
                 ctx.branch(async ctx => {
                   for (const note of notes) {
-                    playNote(note, 100, ctx, phraseRepeatTime * 4, iac2)
+                    playNote(note, lerp(velocity.value, 100, 0.5), ctx, phraseRepeatTime * 4, iac2)
                     await ctx.wait(phraseRepeatTime * 0.25)
                   }
                 })
