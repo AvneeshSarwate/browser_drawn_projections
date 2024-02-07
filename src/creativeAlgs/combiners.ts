@@ -42,7 +42,20 @@ abstract class FiniteCombiner<T> {
       this.indexes[key] = 0;
     }
   }
+
+  directGet(n: number): CombinerOutput<T> {
+    const indices = this.directIndices(n);
+    const output: Partial<CombinerOutput<T>> = {};
+    for (const key in indices) {
+      const index = indices[key];
+      if (index !== undefined && this.lists[key] !== undefined) {
+        output[key] = this.lists[key][index];
+      }
+    }
+    return output as CombinerOutput<T>;
+  }
 }
+
 
 class Zipper<T> extends FiniteCombiner<T> {
   constructor(lists: CombinerInput<T>) {
@@ -65,6 +78,79 @@ class Zipper<T> extends FiniteCombiner<T> {
     return indices as { [K in keyof T]?: number };
   }
 }
+
+class RootLooper<T> extends FiniteCombiner<T> {
+  constructor(lists: CombinerInput<T>) {
+    super(lists);
+  }
+
+  updateIndices(): void {
+    const keys = Object.keys(this.lists) as Array<keyof T>;
+
+    keys.forEach((key, ind) => {
+      const list = this.lists[key];
+      const nextInd = (this.indexes[key] ?? 0) + 1;
+      const modCondition =
+        (this.indexes[keys[0]] === 0 && ind !== 0) || nextInd === list.length;
+
+      this.indexes[key] = modCondition ? 0 : nextInd;
+    });
+  }
+
+  directIndices(n: number): { [K in keyof T]?: number } {
+    const firstListSize = this.lists[Object.keys(this.lists)[0]].length;
+    const indices: Partial<{ [K in keyof T]?: number }> = {};
+
+    for (const key in this.lists) {
+      indices[key] = (n % firstListSize) % this.lists[key].length;
+    }
+
+    return indices as { [K in keyof T]?: number };
+  }
+}
+
+class Nester<T> extends FiniteCombiner<T> {
+  constructor(lists: CombinerInput<T>) {
+    super(lists);
+  }
+
+  directIndices(n: number): { [K in keyof T]?: number } {
+    const inOutLengths = Object.keys(this.lists).map(key => this.lists[key].length);
+    const numToIncrement: number[] = [inOutLengths[0]];
+
+    for (let i = 1; i < inOutLengths.length; i++) {
+      numToIncrement.push(inOutLengths[i] * numToIncrement[i - 1]);
+    }
+
+    const directIndices = inOutLengths.map((_, index) => {
+      if (index === 0) {
+        return n % numToIncrement[0];
+      } else {
+        return Math.floor((n % numToIncrement[index]) / numToIncrement[index - 1]);
+      }
+    });
+
+    const indices: Partial<{ [K in keyof T]?: number }> = {};
+    Object.keys(this.lists).forEach((key, index) => {
+      indices[key as keyof T] = directIndices[index];
+    });
+
+    return indices as { [K in keyof T]?: number };
+  }
+
+  updateIndices(): void {
+    let nextIndexNeedsUpdate = true;
+    Object.keys(this.lists).forEach(key => {
+      if (nextIndexNeedsUpdate) {
+        const lastVal = this.indexes[key] ?? 0;
+        this.indexes[key] = ((this.indexes[key] ?? 0) + 1) % this.lists[key].length;
+        nextIndexNeedsUpdate = lastVal > (this.indexes[key] ?? 0);
+      }
+    });
+  }
+}
+
+
 
 const stuff = {
   nums: [1, 2, 3],
