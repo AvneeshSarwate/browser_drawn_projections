@@ -13,6 +13,10 @@ import seedrandom from 'seedrandom'
 import { lerp } from 'three/src/math/MathUtils.js';
 import { brd, weightedChoice } from '@/utils/utils';
 
+import testJson from './test_json.json'
+
+const j = testJson.key1
+
 const options = {
     licenseKey: 'gpl-v3'
 };
@@ -180,7 +184,7 @@ onMounted(async () => {
         ctx.bpm = 70
 
         ctx.branch(async ctx => {
-          
+
         })
 
         ctx.branch(async ctx => {
