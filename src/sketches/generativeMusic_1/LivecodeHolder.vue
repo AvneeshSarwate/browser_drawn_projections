@@ -49,7 +49,7 @@ let noteLen = appState.UIState.noteLen
 let noteLenUseLfo = appState.UIState.noteLenUseLfo
 
 const RUNNING = ref(true)
-const PLAYING = ref(false)
+const PLAYING = ref(true)
 
 onMounted(async () => {
   try {
@@ -68,7 +68,7 @@ onMounted(async () => {
       const prog = roots.map(r => scale.getShapeFromInd(r, shell9))
       return prog
     }
-    const progRoots = [0, 4, 3]
+    const progRoots = [6, -4, -2]
     const triad = [0, 2, 4]
     const shell9 = [0, 2, 6, 8]
     let shape = triad
@@ -91,7 +91,7 @@ onMounted(async () => {
 
     const playNote = (pitch: number, velocity: number, ctx?: TimeContext, noteDur?: number, inst = iac1) => {
       if(!PLAYING.value) return
-      console.log("pitch play", pitch, velocity)
+      // console.log("pitch play", pitch, velocity)
       inst.sendNoteOn(pitch, velocity)
       ctx?.branch(async ctx => {
         await ctx?.wait((noteDur ?? 0.1) * 0.98)
@@ -201,7 +201,7 @@ onMounted(async () => {
               if (brd(0.3)) quickPlay(progNote(phraseCount, 1), ctx, velocity.value)
 
             })
-            console.log("playing")
+            // console.log("playing")
             phraseCount++
             await ctx.wait(phraseRepeatTime)
           }
@@ -224,7 +224,7 @@ onMounted(async () => {
                 const ascDec = brd(0.5)
                 const dir = (i: number) => ascDec ? numNotes - i : i
                 const notes = Array.from({ length: numNotes }, (e, i) => progNote(phraseCount, 9 + dir(i)))
-                console.log("notes", notes)
+                // console.log("notes", notes)
                 ctx.branch(async ctx => {
                   for (const note of notes) {
                     playNote(note, lerp(velocity.value, 100, 0.5), ctx, phraseRepeatTime * 4, iac2)
@@ -235,7 +235,7 @@ onMounted(async () => {
               phraseCount2++
 
             })
-            console.log("playing")
+            // console.log("playing")
             // phraseCount++
             await ctx.wait(phraseRepeatTime * 0.5)
           }

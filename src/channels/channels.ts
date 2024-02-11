@@ -9,6 +9,7 @@ import p5 from 'p5'
 export class CancelablePromisePoxy<T> implements Promise<T> {
   public promise?: Promise<T>
   public abortController: AbortController
+  public timeContext?: TimeContext
 
   constructor(ab: AbortController) {
     this.abortController = ab
@@ -16,6 +17,7 @@ export class CancelablePromisePoxy<T> implements Promise<T> {
 
   public cancel() {
     this.abortController.abort()
+    this.timeContext?.cancel() //todo api - need to detangle relations between promise, context, abort controller
   }
 
   [Symbol.toStringTag]: string = '[object CancelablePromisePoxy]'
@@ -33,6 +35,7 @@ export class CancelablePromisePoxy<T> implements Promise<T> {
     return this.promise!!.catch(onrejected)
   }
 
+  //todo bug - does this properly work? can use to to clean up note-offs
   finally(onfinally?: (() => void) | undefined | null): Promise<T> {
     return this.promise!!.finally(onfinally)
   }
@@ -40,12 +43,19 @@ export class CancelablePromisePoxy<T> implements Promise<T> {
 
 let contextId = 0
 
-type Constructor<T> = new (...args: any[]) => T;
+//todo api - is there a way to have this be both generic and type safe?
+type Constructor<T> = new (time: number, ab: AbortController, id: number, cancelPromise: CancelablePromisePoxy<any>) => T;
+
+
 function createAndLaunchContext<T, C extends TimeContext>(block: (ctx: C) => Promise<T>, rootTime: number, ctor: Constructor<C>, updateParent: boolean, parentContext?: C): CancelablePromisePoxy<T> {
   const abortController = new AbortController()
   const promiseProxy = new CancelablePromisePoxy<T>(abortController)
-  const newContext = new ctor(rootTime, abortController, contextId++)
-  if(parentContext) newContext.bpm = parentContext.bpm
+  const newContext = new ctor(rootTime, abortController, contextId++, promiseProxy)
+  promiseProxy.timeContext = newContext
+  if (parentContext) {
+    newContext.bpm = parentContext.bpm
+    parentContext.childContexts.add(newContext)
+  }
   const blockPromise = block(newContext)
   const bp = blockPromise.catch((e) => {
     const err = e as Error
@@ -54,7 +64,8 @@ function createAndLaunchContext<T, C extends TimeContext>(block: (ctx: C) => Pro
   if (parentContext) {
     bp.finally(() => {
       //todo bug - a branched child should only update it's parent's time when awaited
-      if(updateParent) parentContext.time = Math.max(newContext.time, parentContext.time) 
+      if (updateParent) parentContext.time = Math.max(newContext.time, parentContext.time) 
+      parentContext.childContexts.delete(newContext)
     })
   }
   return promiseProxy
@@ -78,8 +89,10 @@ export abstract class TimeContext {
   }
   public id: number
   public bpm: number = 120
+  public cancelPromise: CancelablePromisePoxy<any>
+  public childContexts: Set<TimeContext> = new Set()
 
-  constructor(time: number, ab: AbortController, id: number) {
+  constructor(time: number, ab: AbortController, id: number, cancelPromise: CancelablePromisePoxy<any>) {
     this.time = time
     this.startTime = time
     this.abortController = ab
@@ -88,7 +101,9 @@ export abstract class TimeContext {
       this.isCanceled = true
       console.log('abort')
     })
+    this.cancelPromise = cancelPromise
   }
+
   public branch<T>(block: (ctx: TimeContext) => Promise<T>): void {
     createAndLaunchContext(block, this.time, Object.getPrototypeOf(this).constructor, false, this)
   }
@@ -96,6 +111,11 @@ export abstract class TimeContext {
   public branchWait<T>(block: (ctx: TimeContext) => Promise<T>): CancelablePromisePoxy<T> {
     return createAndLaunchContext(block, this.time, Object.getPrototypeOf(this).constructor, true, this)
   } 
+
+  public cancel() {
+    this.abortController.abort()
+    this.childContexts.forEach((ctx) => ctx.cancel())
+  }
 
   public abstract waitSec(sec: number): Promise<void>
   public wait(beats: number) {
