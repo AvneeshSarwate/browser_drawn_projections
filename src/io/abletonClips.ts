@@ -110,14 +110,15 @@ export async function INITIALIZE_ABLETON_CLIPS(fileName: string) {
     ws.onmessage = (message) => {
       console.log(`Received message from server: ${message.data.slice(0, 100)}`);
       const mes = JSON.parse(message.data);
-      if (mes.type === 'fresh_clipMap') { //see alsParsing.ts for message types - fresh_clipMap indicates first load of a new file
+      if (mes.type === 'fresh_clipMap' || mes.type === 'clipMap') { //see alsParsing.ts for message types - fresh_clipMap indicates first load of a new file, clipMap is a hot reload
         clipMap.clear();
         Object.entries(mes.data).forEach(([key, value]: [string, AbletonClip]) => {
           const actualClip = new AbletonClip(value.name, value.duration, value.notes);
+          console.log("clip updated for", key)
           clipMap.set(key, actualClip);
         });
         console.log('clipMap updated', clipMap);
-        resolve()
+        if (mes.type === 'fresh_clipMap') resolve()
       }
     };
     

@@ -179,7 +179,7 @@ onMounted(async () => {
             const drum = drum0().clone()
             const notes = drum.notes.map((e, i) => drum.next())
             for (const [i, nextNote] of notes.entries()) {
-              console.log("drum note", nextNote)
+              // console.log("drum note", nextNote)
               await ctx.wait(nextNote.preDelta)
               playNote(nextNote.note.pitch, nextNote.note.velocity, ctx, nextNote.note.duration, iac3)
               if (nextNote.postDelta) await ctx.wait(nextNote.postDelta)
