@@ -90,28 +90,44 @@ export class AbletonClip {
     });
     return clone;
   }
-
 }
 
 export const clipMap = new Map<string, AbletonClip>();
+
 
 ws.onopen = () => {
   console.log('Connected to server');
 };
 
-ws.onmessage = (message) => {
-  console.log(`Received message from server: ${message.data.slice(0, 100)}`);
-  const mes = JSON.parse(message.data);
-  if (mes.type === 'clipMap') {
-    clipMap.clear();
-    Object.entries(mes.data).forEach(([key, value]: [string, AbletonClip]) => {
-      const actualClip = new AbletonClip(value.name, value.duration, value.notes);
-      clipMap.set(key, actualClip);
-    });
-    console.log('clipMap updated', clipMap);
-  }
-};
-
 ws.onclose = () => {
   console.log('Disconnected from server');
 };
+
+export async function INITIALIZE_ABLETON_CLIPS(fileName: string) {
+
+  const ABLETON_CLIPS_READY = new Promise<void>((resolve) => {
+
+    ws.onmessage = (message) => {
+      console.log(`Received message from server: ${message.data.slice(0, 100)}`);
+      const mes = JSON.parse(message.data);
+      if (mes.type === 'fresh_clipMap') { //see alsParsing.ts for message types - fresh_clipMap indicates first load of a new file
+        clipMap.clear();
+        Object.entries(mes.data).forEach(([key, value]: [string, AbletonClip]) => {
+          const actualClip = new AbletonClip(value.name, value.duration, value.notes);
+          clipMap.set(key, actualClip);
+        });
+        console.log('clipMap updated', clipMap);
+        resolve()
+      }
+    };
+    
+  })
+
+  ws.send(JSON.stringify({ type: 'file', fileName }))
+
+  return ABLETON_CLIPS_READY
+}
+
+
+
+

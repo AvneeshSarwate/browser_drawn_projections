@@ -14,6 +14,8 @@ import { lerp } from 'three/src/math/MathUtils.js';
 import { brd, weightedChoice } from '@/utils/utils';
 
 import testJson from './test_json.json'
+import { INITIALIZE_ABLETON_CLIPS, clipMap } from '@/io/abletonClips';
+import { playClip } from '@/music/clipPlayback';
 
 const j = testJson.key1
 
@@ -49,17 +51,21 @@ let noteLen = appState.UIState.noteLen
 let noteLenUseLfo = appState.UIState.noteLenUseLfo
 
 const RUNNING = ref(true)
-const PLAYING = ref(true)
+const PLAYING = ref(false)
 
 onMounted(async () => {
   try {
+
+    await MIDI_READY
+    await INITIALIZE_ABLETON_CLIPS('src/sketches/generativeMusic_1/synths Project/meld_experiments.als')
+
 
     const p5i = appState.p5Instance!!
     const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
     const threeCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
 
 
-    const cMajScale = new Scale()
+    let scale = new Scale()
     const cHarmonicMajorScale = new Scale([0, 2, 4, 5, 7, 8, 11, 12], 60)
 
     // eslint-disable-next-line no-inner-declarations
@@ -68,7 +74,10 @@ onMounted(async () => {
       const prog = roots.map(r => scale.getShapeFromInd(r, shell9))
       return prog
     }
-    const progRoots = [6, -4, -2]
+    const progRoots = [0, 1, 2, 9, 10]
+    // const progRoots = [0, 1, 2, 9, 10].map(e => e + 1)
+    // const progRoots = [0, 1, 2, 9, 10].map(e => e + 3)
+    // const progRoots = [0, 1, 2, 9, 10].map(e => e + 5)
     const triad = [0, 2, 4]
     const shell9 = [0, 2, 6, 8]
     let shape = triad
@@ -83,11 +92,11 @@ onMounted(async () => {
      * with the generative scheme (or even switch the harmonizer with the key change)
      */
 
-
-    await MIDI_READY
-
     const iac1 = midiOutputs.get('IAC Driver Bus 1')!!
     const iac2 = midiOutputs.get('IAC Driver Bus 2')!!
+    const iac3 = midiOutputs.get('IAC Driver Bus 3')!!
+
+    const drum0 = () => clipMap.get('drum0')!!
 
     const playNote = (pitch: number, velocity: number, ctx?: TimeContext, noteDur?: number, inst = iac1) => {
       if(!PLAYING.value) return
@@ -97,28 +106,6 @@ onMounted(async () => {
         await ctx?.wait((noteDur ?? 0.1) * 0.98)
         inst.sendNoteOff(pitch)
       })
-    }
-
-    const playPitchSeq = (pitches: number[], velocity: number, ctx: TimeContext, rollTime: number, noteDur: number, inst = iac1) => {
-      ctx?.branch(async ctx => {
-        for (let i = 0; i < pitches.length; i++) {
-          playNote(pitches[i], velocity, ctx, noteDur, inst)
-          await ctx?.wait(rollTime)
-        }
-      })
-    }
-
-    const shuffle = <T,>(list: T[], seed: number = 2): T[] => {
-      const rng = seedrandom(seed.toString())
-      let m = list.length, t: T, i: number;
-      let listCopy = list.slice()
-      while (m) {
-        i = Math.floor(rng() * m--);
-        t = listCopy[m];
-        listCopy[m] = listCopy[i];
-        listCopy[i] = t;
-      }
-      return listCopy;
     }
 
     const mod2 = (n: number, m: number) =>  (n % m + m) % m
@@ -142,6 +129,10 @@ onMounted(async () => {
     }
 
     console.log("inversion", invertChord([62, 61, 60], 2))
+
+    const drum = drum0().clone()
+    const notes = drum.notes.map((e, i) => [i, drum.next()])
+    console.log("notes", notes)
     
     const code = () => {
       clearDrawFuncs()
@@ -176,7 +167,7 @@ onMounted(async () => {
        */
 
       let quickPlay = (pitch: number, ctx: TimeContext, vel: number) => playNote(pitch, vel, ctx, noteLen.value, iac1)
-      let progNote = (progInd: number, dev: number) => cMajScale.getByIndex(progRoots[progInd % progRoots.length] + dev)
+      let progNote = (progInd: number, dev: number) => scale.getByIndex(progRoots[progInd % progRoots.length] + dev)
 
       let phraseCount = 0
       let phraseRepeatTime = 1
@@ -184,12 +175,29 @@ onMounted(async () => {
         ctx.bpm = 70
 
         ctx.branch(async ctx => {
-
+          while (RUNNING.value) {
+            const drum = drum0().clone()
+            const notes = drum.notes.map((e, i) => drum.next())
+            for (const [i, nextNote] of notes.entries()) {
+              console.log("drum note", nextNote)
+              await ctx.wait(nextNote.preDelta)
+              playNote(nextNote.note.pitch, nextNote.note.velocity, ctx, nextNote.note.duration, iac3)
+              if (nextNote.postDelta) await ctx.wait(nextNote.postDelta)
+            }
+          }
         })
 
         ctx.branch(async ctx => {
           while (RUNNING.value) {
+
             ctx.branch(async ctx => {
+              let circ5 = [1, 5, 2, 6, 3, 7, 4].map(e => e-1)
+              let circCount = Math.floor(phraseCount / progRoots.length / 2) % circ5.length
+              scale = new Scale([0, 2, 4, 5, 7, 9, 11, 12], 60 +  circ5[circCount])
+
+              const third = Math.random() < 0.5 ? 0 : 2
+              quickPlay(progNote(phraseCount, -12 + third), ctx, velocity.value)
+
               quickPlay(progNote(phraseCount, 0), ctx, velocity.value)
               if (brd(0.3)) {
                 ctx.branch(async ctx => {
@@ -212,8 +220,11 @@ onMounted(async () => {
             ctx.branch(async ctx => {
               quickPlay(progNote(phraseCount, 4), ctx, velocity.value * 0.7)
               if (brd(0.3)) quickPlay(progNote(phraseCount, 5), ctx, velocity.value * 0.7)
+
               await ctx.wait(phraseRepeatTime * 0.25)
+
               quickPlay(progNote(phraseCount, 6), ctx, velocity.value * 0.7)
+
               if (phraseCount % 4 == 0 && phraseCount2 % 2 == 0) {
                 const numNotes = weightedChoice([
                   [1, 1],
