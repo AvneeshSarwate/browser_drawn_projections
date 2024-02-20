@@ -24,7 +24,7 @@ function positionsToDeltas(positions: number[], totalTime?: number) {
 export class AbletonClip {
   name: string;
   duration: number;
-  notes: AbletonNote[];
+  notes: AbletonNote[]; //todo api - it is assumed these are sorted by note.position - enforce this
   index: number = 0
   constructor(name: string, duration: number, notes: AbletonNote[]) {
     this.name = name;
@@ -89,6 +89,23 @@ export class AbletonClip {
       note.pitch = scale.getByIndex(scale.getIndFromPitch(note.pitch) + tranpose)
     });
     return clone;
+  }
+
+  timeSlice(start: number, end: number) {
+    const clone = this.clone();
+    clone.notes = clone.notes.filter(note => note.position + note.duration >= start && note.position <= end)
+    clone.notes.filter(note => note.position + note.duration > end).forEach(note => note.duration = end - note.position)
+
+    clone.notes.filter(note => note.position < start).forEach(note => note.duration = note.duration - (start - note.position))
+    clone.notes.filter(note => note.position < start).forEach(note => note.position = start)
+
+    clone.notes.forEach(note => note.position -= start)
+    clone.duration = end - start
+    return clone
+  }
+
+  noteBuffer() {
+    return this.notes.map(() => this.next())
   }
 }
 

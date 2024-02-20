@@ -17,6 +17,7 @@ export const sketchNames = [
   'generativePaths0',
   'generativeMusic_0',
   'generativeMusic_1',
+  'generativeMusic_2',
   'refined_fundamentals'
 ]
 
