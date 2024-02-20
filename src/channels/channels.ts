@@ -64,7 +64,7 @@ function createAndLaunchContext<T, C extends TimeContext>(block: (ctx: C) => Pro
   })
   if (parentContext) {
     bp.finally(() => {
-      //todo bug - a branched child should only update it's parent's time when awaited
+      //todo bug - should be able to always update parent right? why does this only work when both flagged and awaited
       if (updateParent) parentContext.time = Math.max(newContext.time, parentContext.time) 
       parentContext.childContexts.delete(newContext)
     })
@@ -217,6 +217,10 @@ export const testCancel = async () => {
 
     console.log("parent context time elapsed", ctx.progTime.toFixed(3))
   })
+}
+
+const branchAndWaitTest = async () => {
+  
 }
 
 

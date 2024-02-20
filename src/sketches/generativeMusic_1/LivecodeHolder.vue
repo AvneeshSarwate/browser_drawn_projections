@@ -171,7 +171,7 @@ onMounted(async () => {
 
       let phraseCount = 0
       let phraseRepeatTime = 1
-      launchLoop(async (ctx) => { //todo bug - cancelling a loop doesn't kill all branched children
+      launchLoop(async (ctx) => {
         ctx.bpm = 70
 
         ctx.branch(async ctx => {
