@@ -110,8 +110,12 @@ onMounted(async () => {
       if(!PLAYING.value) return
       // console.log("pitch play", pitch, velocity)
       inst.sendNoteOn(pitch, velocity)
-      ctx?.branch(async ctx => {
+      let noteIsOn = true
+      ctx?.branchWait(async ctx => {
         await ctx?.wait((noteDur ?? 0.1) * 0.98)
+        inst.sendNoteOff(pitch)
+        noteIsOn = false
+      }).finally(() => {
         inst.sendNoteOff(pitch)
       })
     }

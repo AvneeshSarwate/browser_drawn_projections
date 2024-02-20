@@ -57,6 +57,7 @@ function createAndLaunchContext<T, C extends TimeContext>(block: (ctx: C) => Pro
     parentContext.childContexts.add(newContext)
   }
   const blockPromise = block(newContext)
+  promiseProxy.promise = blockPromise
   const bp = blockPromise.catch((e) => {
     const err = e as Error
     console.log('promise catch error', err, err?.message, err?.stack)
@@ -104,8 +105,8 @@ export abstract class TimeContext {
     this.cancelPromise = cancelPromise
   }
 
-  public branch<T>(block: (ctx: TimeContext) => Promise<T>): void {
-    createAndLaunchContext(block, this.time, Object.getPrototypeOf(this).constructor, false, this)
+  public branch<T>(block: (ctx: TimeContext) => Promise<T>): CancelablePromisePoxy<T> {
+    return createAndLaunchContext(block, this.time, Object.getPrototypeOf(this).constructor, false, this)
   }
 
   public branchWait<T>(block: (ctx: TimeContext) => Promise<T>): CancelablePromisePoxy<T> {
