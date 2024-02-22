@@ -165,5 +165,23 @@ export function weightedChoice<T>(choices: [T, number][]): T {
   throw new Error('weightedChoice: unreachable code')
 }
 
+export function choice<T>(choices: T[]): T {
+  return choices[Math.floor(Math.random() * choices.length)]
+}
+
+export function choiceN<T>(choices: T[], n: number): T[] {
+  const outputs: T[] = []
+  for (let i = 0; i < n; i++) {
+    outputs.push(choice(choices))
+  }
+  return outputs
+}
+
+export function choiceNoReplaceN<T>(choices: T[], n: number): T[] {
+  const choiceCopy = [...choices]
+  choiceCopy.sort(() => Math.random() - 0.5)
+  return choiceCopy.slice(0, n)
+}
+
 export const brd = (n: number) => Math.random() < n
 

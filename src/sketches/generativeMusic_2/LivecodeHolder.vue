@@ -11,10 +11,10 @@ import { MIDI_READY, midiOutputs } from '@/io/midi';
 import seedrandom from 'seedrandom'
 
 import { lerp } from 'three/src/math/MathUtils.js';
-import { brd, weightedChoice } from '@/utils/utils';
+import { brd, choiceNoReplaceN, weightedChoice } from '@/utils/utils';
 
 import testJson from './test_json.json'
-import { INITIALIZE_ABLETON_CLIPS, clipMap } from '@/io/abletonClips';
+import { AbletonClip, INITIALIZE_ABLETON_CLIPS, clipMap } from '@/io/abletonClips';
 import { playClip } from '@/music/clipPlayback';
 
 const j = testJson.key1
@@ -74,6 +74,7 @@ onMounted(async () => {
       const prog = roots.map(r => scale.getShapeFromInd(r, shell9))
       return prog
     }
+
     const progRoots = [0, 1, 2, 9, 10]
     // const progRoots = [0, 1, 2, 9, 10].map(e => e + 1)
     // const progRoots = [0, 1, 2, 9, 10].map(e => e + 3)
@@ -105,6 +106,7 @@ onMounted(async () => {
     const bass = () => clipMap.get('bass')!!.clone()
     const mel = () => clipMap.get('mel')!!.clone()
     const high = () => clipMap.get('high')!!.clone()
+    const liveClips = [drum0, bass, mel, high]
 
     const playNote = (pitch: number, velocity: number, ctx?: TimeContext, noteDur?: number, inst = iac1) => {
       if(!PLAYING.value) return
@@ -139,6 +141,82 @@ onMounted(async () => {
 
       return scale.getMultiple(indices)
     }
+
+    const straightPlay = async (ctx: TimeContext, clip: () => AbletonClip) => {
+      while (RUNNING.value) {
+        for (const [i, nextNote] of clip().noteBuffer().entries()) {
+          // console.log("drum note", nextNote)
+          await ctx.wait(nextNote.preDelta)
+          playNote(nextNote.note.pitch, nextNote.note.velocity, ctx, nextNote.note.duration, iac1)
+          await ctx.wait(nextNote.postDelta ?? 0)
+        }
+      }
+    }
+
+    /**
+     * 
+     * todo feature - an RNG where you can set a flag for whether to return the last random value or not
+     * - will let you have the same number across a set of invocations, useful for stuff like having all 
+     * random slice calls over multiple loops/branches all return the same slice area relative to their root clip
+     * 
+     * in general, think about ergonomic + musically relevant ways to communicate/coordinate across voices
+     */
+
+    const sliceFill = async (ctx: TimeContext, clip: () => AbletonClip) => {
+      let progInd = 0
+      while (RUNNING.value) {
+        const clipInstance = clip()
+        let beat = clipInstance
+
+        if (clipInstance.duration >= 4) {
+          const straight = clipInstance.timeSlice(0, 2)
+          const fill = Math.random() > 0.5 ? clipInstance.timeSlice(2, 4) : clipInstance.timeSlice(1, 3)
+          beat = progInd % 2 == 0 ? straight : fill
+        }
+
+        for (const [i, nextNote] of beat.noteBuffer().entries()) {
+          // console.log("drum note", nextNote)
+          await ctx.wait(nextNote.preDelta)
+          playNote(nextNote.note.pitch, nextNote.note.velocity, ctx, nextNote.note.duration, iac4)
+          await ctx.wait(nextNote.postDelta ?? 0)
+        }
+        progInd++
+      }
+    }
+
+    const twoBeatRandSlice = async (ctx: TimeContext, clip: () => AbletonClip) => {
+      while (RUNNING.value) {
+        const scale = 1
+        const clipInstance = clip()
+
+        let startBeat = Math.floor(Math.random() * (clipInstance.duration - 2))
+        startBeat = startBeat < 0 ? 0 : startBeat
+
+        let duration = clipInstance.duration < 2 ? clipInstance.duration : 2
+
+        const melSlice = clip().timeSlice(startBeat, startBeat + duration)
+        for (const [i, nextNote] of melSlice.noteBuffer().entries()) {
+          // console.log("drum note", nextNote)
+          await ctx.wait(nextNote.preDelta * scale)
+          playNote(nextNote.note.pitch, nextNote.note.velocity, ctx, nextNote.note.duration * scale, iac5)
+          await ctx.wait(nextNote.postDelta ?? 0 * scale)
+        }
+      }
+    }
+
+    const playTypes = [straightPlay, sliceFill, twoBeatRandSlice]
+
+    const drumLoop = async (ctx: TimeContext) => sliceFill(ctx, drum0)
+
+    const bassLoop = async (ctx: TimeContext) => straightPlay(ctx, bass)
+    
+    const melLoop = async (ctx: TimeContext) => straightPlay(ctx, mel)
+    
+    const melSliceLoop = async (ctx: TimeContext) => twoBeatRandSlice(ctx, mel)
+    
+    const highLoop = async (ctx: TimeContext) => straightPlay(ctx, high)
+
+    const loops = [drumLoop, bassLoop, melLoop, melSliceLoop, highLoop]
 
     console.log("inversion", invertChord([62, 61, 60], 2))
     
@@ -182,74 +260,13 @@ onMounted(async () => {
       launchLoop(async (ctx) => {
         ctx.bpm = 70
 
-        ctx.branch(async ctx => {
-          let progInd = 0
-          while (RUNNING.value) {
-            const straight = drum0().timeSlice(0, 2)
-            const fill = Math.random() > 0.5 ? drum0().timeSlice(2, 4) : drum0().timeSlice(1, 3)
-            const beat = progInd % 2 == 0 ? straight : fill
-            for (const [i, nextNote] of beat.noteBuffer().entries()) {
-              // console.log("drum note", nextNote)
-              await ctx.wait(nextNote.preDelta)
-              playNote(nextNote.note.pitch, nextNote.note.velocity, ctx, nextNote.note.duration, iac4)
-              await ctx.wait(nextNote.postDelta ?? 0)
-            }
-            progInd++
-          }
-        })
-
-        ctx.branch(async ctx => {
-          while (RUNNING.value) {
-            for (const [i, nextNote] of bass().noteBuffer().entries()) {
-              // console.log("drum note", nextNote)
-              await ctx.wait(nextNote.preDelta)
-              playNote(nextNote.note.pitch, nextNote.note.velocity, ctx, nextNote.note.duration, iac1)
-              await ctx.wait(nextNote.postDelta ?? 0)
-            }
-          }
-        })
-
-        ctx.branch(async ctx => {
-          while (RUNNING.value) {
-            const scale = 1
-            for (const [i, nextNote] of mel().noteBuffer().entries()) {
-              // console.log("drum note", nextNote)
-              await ctx.wait(nextNote.preDelta * scale)
-              playNote(nextNote.note.pitch, nextNote.note.velocity, ctx, nextNote.note.duration * scale, iac2)
-              await ctx.wait(nextNote.postDelta ?? 0 * scale)
-            }
-          }
-        })
-
-        ctx.branch(async ctx => {
-          while (RUNNING.value) {
-            const scale = 1
-            const startBeat = Math.floor(Math.random() * 14)
-            const melSlice = mel().timeSlice(startBeat, startBeat + 2)
-            for (const [i, nextNote] of melSlice.noteBuffer().entries()) {
-              // console.log("drum note", nextNote)
-              await ctx.wait(nextNote.preDelta * scale)
-              playNote(nextNote.note.pitch, nextNote.note.velocity, ctx, nextNote.note.duration * scale, iac5)
-              await ctx.wait(nextNote.postDelta ?? 0 * scale)
-            }
-          }
-        })
-
-        ctx.branch(async ctx => {
-          while (RUNNING.value) {
-            const scale = 1
-            for (const [i, nextNote] of high().noteBuffer().entries()) {
-              // console.log("drum note", nextNote)
-              await ctx.wait(nextNote.preDelta * scale)
-              playNote(nextNote.note.pitch, nextNote.note.velocity, ctx, nextNote.note.duration * scale, iac3)
-              await ctx.wait(nextNote.postDelta ?? 0 * scale)
-            }
-          }
-        })
-
-
-
-
+        while (RUNNING.value) {
+          const numLoops = Math.floor(Math.random() * loops.length) + 1
+          const loopsToRun = choiceNoReplaceN(loops, numLoops)
+          const loopHandles = loopsToRun.map(loop => ctx.branch(loop))
+          await ctx.wait(16)
+          loopHandles.forEach(handle => handle.cancel())
+        }
 
         
       })
