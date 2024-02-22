@@ -111,7 +111,7 @@ onMounted(async () => {
       // console.log("pitch play", pitch, velocity)
       inst.sendNoteOn(pitch, velocity)
       let noteIsOn = true
-      ctx?.branchWait(async ctx => {
+      ctx?.branch(async ctx => {
         await ctx?.wait((noteDur ?? 0.1) * 0.98)
         inst.sendNoteOff(pitch)
         noteIsOn = false
@@ -179,7 +179,7 @@ onMounted(async () => {
 
       let phraseCount = 0
       let phraseRepeatTime = 1
-      launchLoop(async (ctx) => { //todo bug - cancelling a loop doesn't kill all branched children
+      launchLoop(async (ctx) => {
         ctx.bpm = 70
 
         ctx.branch(async ctx => {

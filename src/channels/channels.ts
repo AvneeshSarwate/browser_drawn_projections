@@ -3,6 +3,7 @@ import { lerp } from 'three/src/math/MathUtils.js'
 import * as Tone from 'tone'
 import * as a from '@/sketches/devTest/planeAnimations'
 import p5 from 'p5'
+import { runTests } from './channelTests'
 
 
 //todo api - make then/catch/finally chainable on CancelablePromisePoxy
@@ -87,6 +88,9 @@ export abstract class TimeContext {
   public isCanceled: boolean = false
   public get progTime(): number {
     return this.time - this.startTime
+  }
+  public get progBeats(): number {
+    return this.progTime * this.bpm / 60
   }
   public id: number
   public bpm: number = 120
@@ -217,10 +221,6 @@ export const testCancel = async () => {
 
     console.log("parent context time elapsed", ctx.progTime.toFixed(3))
   })
-}
-
-const branchAndWaitTest = async () => {
-  
 }
 
 
@@ -539,3 +539,5 @@ export const steps = (start: number, end: number, count: number): number[] => {
   }
   return out
 }
+
+runTests()
