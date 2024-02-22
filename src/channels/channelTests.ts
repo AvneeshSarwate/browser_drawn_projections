@@ -48,10 +48,27 @@ const test1 = async () => {
   })
 }
 
+const test2 = async () => {
+  launch(async ctx => {
+    for (let i = 0; i < 10; i++) {
+
+      ctx.branchWait(async ctx => {
+        await ctx.wait(.1)
+      })
+
+      await ctx.wait(1)
+
+      console.log("progBeats-2", i, ctx.progBeats)
+    }
+    console.log("progBeats-2", "end", ctx.progBeats)
+  })
+}
+
 
 
 export function runTests() {
-  setTimeout(test0, 1000)
-  setTimeout(test1, 1000)
+  // setTimeout(test0, 1000)
+  // setTimeout(test1, 1000)
+  setTimeout(test2, 1000)
 }
 

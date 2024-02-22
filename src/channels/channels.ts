@@ -109,8 +109,20 @@ export abstract class TimeContext {
     this.cancelPromise = cancelPromise
   }
 
-  public branch<T>(block: (ctx: TimeContext) => Promise<T>): CancelablePromisePoxy<T> {
-    return createAndLaunchContext(block, this.time, Object.getPrototypeOf(this).constructor, false, this)
+  public branch<T>(block: (ctx: TimeContext) => Promise<T>) {
+    const promise = createAndLaunchContext(block, this.time, Object.getPrototypeOf(this).constructor, false, this)
+    //todo api - this allows you to manage a branch without accidentally awaiting on it in a way that
+    //would screw up parent context time. but in general, awaiting on anything other than
+    //ctx.wait[Time] or ctx.branchWait will screw up contextTime <=> wallClock time relationship.
+    //there might be no way to have a unified branch function.
+    return {
+      finally: (finalFunc: () => void) => {
+        promise.finally(finalFunc)
+      },
+      cancel: () => {
+        promise.cancel()
+      }
+    }
   }
 
   public branchWait<T>(block: (ctx: TimeContext) => Promise<T>): CancelablePromisePoxy<T> {
