@@ -239,6 +239,46 @@ onMounted(async () => {
       }
     }
 
+    abstract class AbstractAgent<T> {
+      name: string
+      ctx: TimeContext
+      runningLoop: LoopHandle | undefined
+      globalState: T
+      abstract play: () => void
+      constructor(ctx: TimeContext, name: string, globalState: T) {
+        this.ctx = ctx
+        this.name = name
+        this.globalState = globalState
+      }
+    }
+
+    class SyncableAgent<T extends {syncPoints: Map<string, number>}> extends AbstractAgent<T> {
+      clipGetter: () => AbletonClip
+      constructor(ctx: TimeContext, name: string, globalState: T, clipGetter: () => AbletonClip) {
+        super(ctx, name, globalState)
+        this.clipGetter = clipGetter
+      }
+      play = () => {
+        this.runningLoop = this.ctx.branch(async ctx => straightPlay(ctx, this.clipGetter))
+      }
+      resync = (waitTime: number) => {
+        this.runningLoop?.cancel()
+        this.runningLoop = this.ctx.branch(async ctx => {
+          await ctx.wait(waitTime)
+          while (!ctx.isCanceled) {
+            const clip = this.clipGetter()
+            this.globalState.syncPoints.set(this.name, ctx.beats + clip.duration)
+            for (const [i, nextNote] of clip.noteBuffer().entries()) {
+              // console.log("drum note", nextNote)
+              await ctx.wait(nextNote.preDelta)
+              playNote(nextNote.note.pitch, nextNote.note.velocity, ctx, nextNote.note.duration, iac1)
+              await ctx.wait(nextNote.postDelta ?? 0)
+            }
+          }
+        })
+      }
+    }
+
 
     const syncableAgent = (ctx: TimeContext, clipGetter: () => AbletonClip, name: string = 'syncableAgent') => {
       const agent = new Agent(ctx, name)
@@ -279,9 +319,6 @@ onMounted(async () => {
 
       //can have all agents in an array, and if one agent wants to act on agents of a specific type, 
       //it can just fitler the list using instanceof? does this typecheck well?
-      type SyncMessage = {
-        waitTime: number
-      }
       const agent = {
         name: name,
         ctx: ctx,
@@ -289,10 +326,10 @@ onMounted(async () => {
         play: () => {
           agent.runningLoop = agent.ctx.branch(async ctx => straightPlay(ctx, clipGetter))
         },
-        resync: (msg: SyncMessage) => {
+        resync: (waitTime: number) => {
           agent.runningLoop?.cancel()
           agent.runningLoop = ctx.branch(async ctx => {
-            await ctx.wait(msg.waitTime)
+            await ctx.wait(waitTime)
             straightPlay(ctx, drum0)
           })
         }

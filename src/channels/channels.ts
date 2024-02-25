@@ -89,6 +89,9 @@ export type LoopHandle = {
 export abstract class TimeContext {
   public abortController: AbortController
   public time: number
+  public get beats(): number {
+    return this.time * this.bpm / 60
+  }
   public startTime: number
   public isCanceled: boolean = false
   public get progTime(): number {
