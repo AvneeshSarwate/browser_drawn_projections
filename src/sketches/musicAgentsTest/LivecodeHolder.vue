@@ -240,7 +240,7 @@ onMounted(async () => {
     }
 
 
-    const syncableAgent = (ctx: TimeContext, name: string = 'syncableAgent') => {
+    const syncableAgent = (ctx: TimeContext, clipGetter: () => AbletonClip, name: string = 'syncableAgent') => {
       const agent = new Agent(ctx, name)
       agent.play = function() {
         this.runningLoop = this.ctx.branch(async ctx => straightPlay(ctx, drum0))
@@ -250,10 +250,54 @@ onMounted(async () => {
           this.runningLoop?.cancel()
           this.runningLoop = ctx.branch(async ctx => {
             await ctx.wait(msg.numbers[0])
+            straightPlay(ctx, clipGetter)
+          })
+        }
+      }
+      return agent
+    }
+
+    class ExampleClass {
+      public prop0: string = "prop0"
+      public prop1: string = "prop1"
+      public name: string
+      constructor(name: string) {
+        this.name = name
+      }
+    }
+
+    const ex1 = new ExampleClass('ex1')
+    const ex2 = new ExampleClass('ex2')
+    console.log("prototype equality check", Object.getPrototypeOf(ex1) === Object.getPrototypeOf(ex2), Object.getPrototypeOf(ex1), Object.getPrototypeOf(ex1).constructor.name)
+    //this works and returns the class name, but have to be careful about different modules implementing the same class name
+    //you only really need this if you have tons of agents and want to batch by type. 
+
+
+    const altSyncableAgent = (ctx: TimeContext, clipGetter: () => AbletonClip, name: string = 'syncableAgent') => {
+      //this is just equivalent to a class? and then diff types of agents have custom methods for the types of events
+      //they handle, instead of a common "handleMessage method?"
+
+      //can have all agents in an array, and if one agent wants to act on agents of a specific type, 
+      //it can just fitler the list using instanceof? does this typecheck well?
+      type SyncMessage = {
+        waitTime: number
+      }
+      const agent = {
+        name: name,
+        ctx: ctx,
+        runningLoop: ctx.branch(async ctx =>{}),
+        play: () => {
+          agent.runningLoop = agent.ctx.branch(async ctx => straightPlay(ctx, clipGetter))
+        },
+        resync: (msg: SyncMessage) => {
+          agent.runningLoop?.cancel()
+          agent.runningLoop = ctx.branch(async ctx => {
+            await ctx.wait(msg.waitTime)
             straightPlay(ctx, drum0)
           })
         }
       }
+
       return agent
     }
     
