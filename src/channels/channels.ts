@@ -80,6 +80,11 @@ export function launch<T>(block: (ctx: TimeContext) => Promise<T>): CancelablePr
   else return createAndLaunchContext(block, performance.now()/1000, DateTimeContext, false)
 }
 
+export type LoopHandle = {
+  cancel: () => void
+  finally: (finalFunc: () => void) => void
+}
+
 //todo draft - need to test generalized TimeContext implementation in loops
 export abstract class TimeContext {
   public abortController: AbortController
@@ -109,7 +114,7 @@ export abstract class TimeContext {
     this.cancelPromise = cancelPromise
   }
 
-  public branch<T>(block: (ctx: TimeContext) => Promise<T>) {
+  public branch<T>(block: (ctx: TimeContext) => Promise<T>): LoopHandle {
     const promise = createAndLaunchContext(block, this.time, Object.getPrototypeOf(this).constructor, false, this)
     //todo api - this allows you to manage a branch without accidentally awaiting on it in a way that
     //would screw up parent context time. but in general, awaiting on anything other than
