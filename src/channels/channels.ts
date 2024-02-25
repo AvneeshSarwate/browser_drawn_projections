@@ -117,6 +117,15 @@ export abstract class TimeContext {
     this.cancelPromise = cancelPromise
   }
 
+  /**
+   * todo api - a potenial way to solve the branch/branchWait split - 
+   * branch returns a function that returns the promise for the branch. 
+   * to wait on the branch, you have to write an extra line like
+   * const branchRet = ctx.branch(...)
+   * await branchRet()
+   * 
+   * the call to branchRet() is what gets you the extra layer to only apply the time update if the branch is awaited
+   */
   public branch<T>(block: (ctx: TimeContext) => Promise<T>): LoopHandle {
     const promise = createAndLaunchContext(block, this.time, Object.getPrototypeOf(this).constructor, false, this)
     //todo api - this allows you to manage a branch without accidentally awaiting on it in a way that

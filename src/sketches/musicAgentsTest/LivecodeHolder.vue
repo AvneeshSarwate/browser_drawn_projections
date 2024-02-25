@@ -10,7 +10,7 @@ import { Scale } from '@/music/scale'
 import { MIDI_READY, midiOutputs } from '@/io/midi';
 import seedrandom from 'seedrandom'
 
-import { lerp } from 'three/src/math/MathUtils.js';
+import { generateUUID, lerp } from 'three/src/math/MathUtils.js';
 import { brd, choiceNoReplaceN, weightedChoice } from '@/utils/utils';
 
 import testJson from './test_json.json'
@@ -249,6 +249,17 @@ onMounted(async () => {
         this.ctx = ctx
         this.name = name
         this.globalState = globalState
+      }
+    }
+
+    class SimplePlayerAgent<T> extends AbstractAgent<T> {
+      clipGetter: () => AbletonClip
+      constructor(ctx: TimeContext, name: string, globalState: T, clipGetter: () => AbletonClip) {
+        super(ctx, name, globalState)
+        this.clipGetter = clipGetter
+      }
+      play = () => {
+        this.runningLoop = this.ctx.branch(async ctx => straightPlay(ctx, this.clipGetter))
       }
     }
 
