@@ -267,7 +267,7 @@ onMounted(async () => {
           await ctx.wait(waitTime)
           while (!ctx.isCanceled) {
             const clip = this.clipGetter()
-            this.globalState.syncPoints.set(this.name, ctx.beats + clip.duration)
+            this.globalState.syncPoints.set(this.name, ctx.beats + clip.duration) //todo check - is this correct?
             for (const [i, nextNote] of clip.noteBuffer().entries()) {
               // console.log("drum note", nextNote)
               await ctx.wait(nextNote.preDelta)
@@ -278,6 +278,35 @@ onMounted(async () => {
         })
       }
     }
+    //general pattern - agents don't talk to each other directly, they talk to a global state
+    //eg, a sync agent doesn't trigger sync to other sync agents, a SyncOrchestrator designates
+    //when/who to sync
+
+    //should agents start themselves (yes unless otherwise necessary), or should they be started by a global orchestrator?
+    // current decsion -  minimize coupling between agent types
+    class SyncOrchestratorAgent<T extends { syncPoints: Map<string, number>, agents: AbstractAgent<T>[] }> extends AbstractAgent<T> {
+      syncInterval: number
+      syncLeaderName: string
+      constructor(ctx: TimeContext, name: string, globalState: T, syncInterval: number, syncLeader: string) {
+        super(ctx, name, globalState)
+        this.syncInterval = syncInterval
+        this.syncLeaderName = syncLeader
+      }
+      play = () => {
+        this.runningLoop = this.ctx.branch(async ctx => {
+          while (!ctx.isCanceled) {
+            await ctx.wait(this.syncInterval)
+            const syncableAgents = this.globalState.agents.filter(agent => agent instanceof SyncableAgent) as SyncableAgent<T>[]
+            const syncWait = this.globalState.syncPoints.get(this.syncLeaderName) ?? ctx.beats - ctx.beats //todo check - is this correct? 
+            await ctx.wait(syncWait)
+            for (const agent of syncableAgents) {
+              agent.resync(0)
+            }
+          }
+        })
+      }
+    }
+      
 
 
     const syncableAgent = (ctx: TimeContext, clipGetter: () => AbletonClip, name: string = 'syncableAgent') => {
