@@ -351,6 +351,7 @@ onMounted(async () => {
     console.log("prototype equality check", Object.getPrototypeOf(ex1) === Object.getPrototypeOf(ex2), Object.getPrototypeOf(ex1), Object.getPrototypeOf(ex1).constructor.name)
     //this works and returns the class name, but have to be careful about different modules implementing the same class name
     //you only really need this if you have tons of agents and want to batch by type. 
+    //If you need this, you can use the prototype as a key in a Map (but not an Object)
 
 
     const altSyncableAgent = (ctx: TimeContext, clipGetter: () => AbletonClip, name: string = 'syncableAgent') => {
