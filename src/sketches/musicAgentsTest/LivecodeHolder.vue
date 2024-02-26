@@ -16,6 +16,7 @@ import { brd, choiceNoReplaceN, weightedChoice } from '@/utils/utils';
 import testJson from './test_json.json'
 import { AbletonClip, INITIALIZE_ABLETON_CLIPS, clipMap } from '@/io/abletonClips';
 import { playClip } from '@/music/clipPlayback';
+import type { MIDIValOutput } from '@midival/core';
 
 const j = testJson.key1
 
@@ -57,7 +58,7 @@ onMounted(async () => {
   try {
 
     await MIDI_READY
-    await INITIALIZE_ABLETON_CLIPS('src/sketches/musicAgentsTest/synths Project/meld_experiments.als')
+    await INITIALIZE_ABLETON_CLIPS('src/sketches/musicAgentsTest/synths Project/polymeter.als')
 
 
     const p5i = appState.p5Instance!!
@@ -108,6 +109,10 @@ onMounted(async () => {
     const high = () => clipMap.get('high')!!.clone()
     const liveClips = [drum0, bass, mel, high]
 
+    const debugBass = () => clipMap.get('debugBass')!!.clone()
+    const debugMel = () => clipMap.get('debugMel')!!.clone()
+    const debugHigh = () => clipMap.get('debugHigh')!!.clone()
+
     const playNote = (pitch: number, velocity: number, ctx?: TimeContext, noteDur?: number, inst = iac1) => {
       if(!PLAYING.value) return
       // console.log("pitch play", pitch, velocity)
@@ -142,12 +147,12 @@ onMounted(async () => {
       return scale.getMultiple(indices)
     }
 
-    const straightPlay = async (ctx: TimeContext, clip: () => AbletonClip) => {
+    const straightPlay = async (ctx: TimeContext, clip: () => AbletonClip, midi: MIDIValOutput) => {
       while (!ctx.isCanceled) {
         for (const [i, nextNote] of clip().noteBuffer().entries()) {
           // console.log("drum note", nextNote)
           await ctx.wait(nextNote.preDelta)
-          playNote(nextNote.note.pitch, nextNote.note.velocity, ctx, nextNote.note.duration, iac1)
+          playNote(nextNote.note.pitch, nextNote.note.velocity, ctx, nextNote.note.duration, midi)
           await ctx.wait(nextNote.postDelta ?? 0)
         }
       }
@@ -208,43 +213,25 @@ onMounted(async () => {
 
     const drumLoop = async (ctx: TimeContext) => sliceFill(ctx, drum0)
 
-    const bassLoop = async (ctx: TimeContext) => straightPlay(ctx, bass)
+    const bassLoop = async (ctx: TimeContext) => straightPlay(ctx, bass, iac2)
     
-    const melLoop = async (ctx: TimeContext) => straightPlay(ctx, mel)
+    const melLoop = async (ctx: TimeContext) => straightPlay(ctx, mel, iac3)
     
     const melSliceLoop = async (ctx: TimeContext) => twoBeatRandSlice(ctx, mel)
     
-    const highLoop = async (ctx: TimeContext) => straightPlay(ctx, high)
+    const highLoop = async (ctx: TimeContext) => straightPlay(ctx, high, iac4)
 
     const loops = [drumLoop, bassLoop, melLoop, melSliceLoop, highLoop]
 
     console.log("inversion", invertChord([62, 61, 60], 2))
 
 
-    type AgentMessage = {
-      type: string
-      numbers: number[]
-      strings: string[]
-    }
-
-    class Agent {
-      name: string
-      ctx: TimeContext
-      runningLoop: LoopHandle | undefined
-      handleMessage: (msg: AgentMessage) => void = () => {}
-      play: () => void = () => { }
-      constructor(ctx: TimeContext, name: string) {
-        this.ctx = ctx
-        this.name = name
-      }
-    }
-
-    abstract class AbstractAgent<T> {
+    abstract class VoiceAgent<T> {
       name: string
       ctx: TimeContext
       runningLoop: LoopHandle | undefined
       globalState: T
-      abstract play: () => void
+      abstract play(): void
       constructor(ctx: TimeContext, name: string, globalState: T) {
         this.ctx = ctx
         this.name = name
@@ -252,25 +239,29 @@ onMounted(async () => {
       }
     }
 
-    class SimplePlayerAgent<T> extends AbstractAgent<T> {
+    class SimplePlayerAgent<T> extends VoiceAgent<T> {
       clipGetter: () => AbletonClip
-      constructor(ctx: TimeContext, name: string, globalState: T, clipGetter: () => AbletonClip) {
+      midiOut: MIDIValOutput
+      constructor(ctx: TimeContext, name: string, globalState: T, clipGetter: () => AbletonClip, midiOut: MIDIValOutput) {
         super(ctx, name, globalState)
         this.clipGetter = clipGetter
+        this.midiOut = midiOut
       }
-      play = () => {
-        this.runningLoop = this.ctx.branch(async ctx => straightPlay(ctx, this.clipGetter))
+      play() {
+        this.runningLoop = this.ctx.branch(async ctx => straightPlay(ctx, this.clipGetter, this.midiOut))
       }
     }
 
-    class SyncableAgent<T extends {syncPoints: Map<string, number>}> extends AbstractAgent<T> {
+    class SyncableAgent<T extends {syncPoints: Map<string, number>}> extends VoiceAgent<T> {
       clipGetter: () => AbletonClip
-      constructor(ctx: TimeContext, name: string, globalState: T, clipGetter: () => AbletonClip) {
+      midiOut: MIDIValOutput
+      constructor(ctx: TimeContext, name: string, globalState: T, clipGetter: () => AbletonClip, midiOut: MIDIValOutput) {
         super(ctx, name, globalState)
         this.clipGetter = clipGetter
+        this.midiOut = midiOut
       }
-      play = () => {
-        this.runningLoop = this.ctx.branch(async ctx => straightPlay(ctx, this.clipGetter))
+      play() {
+        this.runningLoop = this.ctx.branch(async ctx => straightPlay(ctx, this.clipGetter, this.midiOut))
       }
       resync = (waitTime: number) => {
         this.runningLoop?.cancel()
@@ -282,7 +273,7 @@ onMounted(async () => {
             for (const [i, nextNote] of clip.noteBuffer().entries()) {
               // console.log("drum note", nextNote)
               await ctx.wait(nextNote.preDelta)
-              playNote(nextNote.note.pitch, nextNote.note.velocity, ctx, nextNote.note.duration, iac1)
+              playNote(nextNote.note.pitch, nextNote.note.velocity, ctx, nextNote.note.duration, this.midiOut)
               await ctx.wait(nextNote.postDelta ?? 0)
             }
           }
@@ -291,11 +282,11 @@ onMounted(async () => {
     }
     //general pattern - agents don't talk to each other directly, they talk to a global state
     //eg, a sync agent doesn't trigger sync to other sync agents, a SyncOrchestrator designates
-    //when/who to sync
+    //when/who to sync. All agents should be given the SAME global state object
 
     //should agents start themselves (yes unless otherwise necessary), or should they be started by a global orchestrator?
     // current decsion -  minimize coupling between agent types
-    class SyncOrchestratorAgent<T extends { syncPoints: Map<string, number>, agents: AbstractAgent<T>[] }> extends AbstractAgent<T> {
+    class SyncOrchestratorAgent<T extends { syncPoints: Map<string, number>, agents: VoiceAgent<T>[] }> extends VoiceAgent<T> {
       syncInterval: number
       syncLeaderName: string
       constructor(ctx: TimeContext, name: string, globalState: T, syncInterval: number, syncLeader: string) {
@@ -303,94 +294,40 @@ onMounted(async () => {
         this.syncInterval = syncInterval
         this.syncLeaderName = syncLeader
       }
-      play = () => {
+      play() {
         this.runningLoop = this.ctx.branch(async ctx => {
           while (!ctx.isCanceled) {
             await ctx.wait(this.syncInterval)
-            const syncableAgents = this.globalState.agents.filter(agent => agent instanceof SyncableAgent) as SyncableAgent<T>[]
-            const syncWait = this.globalState.syncPoints.get(this.syncLeaderName) ?? ctx.beats - ctx.beats //todo check - is this correct? 
-            await ctx.wait(syncWait)
-            for (const agent of syncableAgents) {
-              agent.resync(0)
-            }
+            this.syncToLeader(ctx, this.syncLeaderName)
           }
         })
       }
+
+      async syncToLeader(ctx: TimeContext, syncLeaderName: string) {
+        const syncableAgents = this.globalState.agents.filter(agent => agent instanceof SyncableAgent) as SyncableAgent<T>[]
+        const syncWait = this.globalState.syncPoints.get(syncLeaderName) ?? ctx.beats - ctx.beats //todo check - is this correct? 
+        await ctx.wait(syncWait)
+        for (const agent of syncableAgents) {
+          agent.resync(0)
+        }
+      }
+
     }
       
 
-
-    const syncableAgent = (ctx: TimeContext, clipGetter: () => AbletonClip, name: string = 'syncableAgent') => {
-      const agent = new Agent(ctx, name)
-      agent.play = function() {
-        this.runningLoop = this.ctx.branch(async ctx => straightPlay(ctx, drum0))
-      }
-      agent.handleMessage = function(msg: AgentMessage) {
-        if (msg.type === 'sync') {
-          this.runningLoop?.cancel()
-          this.runningLoop = ctx.branch(async ctx => {
-            await ctx.wait(msg.numbers[0])
-            straightPlay(ctx, clipGetter)
-          })
-        }
-      }
-      return agent
-    }
-
-    class ExampleClass {
-      public prop0: string = "prop0"
-      public prop1: string = "prop1"
-      public name: string
-      constructor(name: string) {
-        this.name = name
-      }
-    }
-
-    const ex1 = new ExampleClass('ex1')
-    const ex2 = new ExampleClass('ex2')
-    console.log("prototype equality check", Object.getPrototypeOf(ex1) === Object.getPrototypeOf(ex2), Object.getPrototypeOf(ex1), Object.getPrototypeOf(ex1).constructor.name)
-    //this works and returns the class name, but have to be careful about different modules implementing the same class name
-    //you only really need this if you have tons of agents and want to batch by type. 
-    //If you need this, you can use the prototype as a key in a Map (but not an Object)
-
-
-    const altSyncableAgent = (ctx: TimeContext, clipGetter: () => AbletonClip, name: string = 'syncableAgent') => {
-      //this is just equivalent to a class? and then diff types of agents have custom methods for the types of events
-      //they handle, instead of a common "handleMessage method?"
-
-      //can have all agents in an array, and if one agent wants to act on agents of a specific type, 
-      //it can just fitler the list using instanceof? does this typecheck well?
-      const agent = {
-        name: name,
-        ctx: ctx,
-        runningLoop: ctx.branch(async ctx =>{}),
-        play: () => {
-          agent.runningLoop = agent.ctx.branch(async ctx => straightPlay(ctx, clipGetter))
-        },
-        resync: (waitTime: number) => {
-          agent.runningLoop?.cancel()
-          agent.runningLoop = ctx.branch(async ctx => {
-            await ctx.wait(waitTime)
-            straightPlay(ctx, drum0)
-          })
-        }
-      }
-
-      return agent
-    }
     
     const code = () => {
       clearDrawFuncs()
 
-      launchLoop(async ctx => {
-        while (RUNNING.value) {
-          await ctx.waitFrame()
-          if(noteWaitUseLfo.value) noteWait.value = 0.1 + sinN(Date.now() / 1000 * 0.02) * 0.3 
-          if(velocityUseLfo.value) velocity.value = sinN(Date.now() / 1000 * 0.17) * 30 + 50
-          if (shuffleSeedUseLfo.value) shuffleSeed.value = Math.floor(1 + sinN(Date.now() / 1000 * 0.13) * 5)
-          if (noteLenUseLfo.value) noteLen.value = 0.05 + Math.pow(tri(Date.now() / 1000 * 0.07), 1) * .95
-        }
-      })
+      // launchLoop(async ctx => {
+      //   while (RUNNING.value) {
+      //     await ctx.waitFrame()
+      //     if(noteWaitUseLfo.value) noteWait.value = 0.1 + sinN(Date.now() / 1000 * 0.02) * 0.3 
+      //     if(velocityUseLfo.value) velocity.value = sinN(Date.now() / 1000 * 0.17) * 30 + 50
+      //     if (shuffleSeedUseLfo.value) shuffleSeed.value = Math.floor(1 + sinN(Date.now() / 1000 * 0.13) * 5)
+      //     if (noteLenUseLfo.value) noteLen.value = 0.05 + Math.pow(tri(Date.now() / 1000 * 0.07), 1) * .95
+      //   }
+      // })
 
       /**
        * todo sketch:
@@ -411,20 +348,34 @@ onMounted(async () => {
        *  - some type of complex shape(s) with interlocking movements for bass+melody for a single "two hand phrase"
        */
 
+      type polymeterAgentState = {
+        syncPoints: Map<string, number>,
+        agents: VoiceAgent<any>[]
+      }
 
-      let phraseCount = 0
-      let phraseRepeatTime = 1
+      const agentState: polymeterAgentState = {
+        syncPoints: new Map(),
+        agents: []
+      }
+
       launchLoop(async (ctx) => {
+
         ctx.bpm = 70
 
-        while (RUNNING.value) {
-          const numLoops = Math.floor(Math.random() * loops.length) + 1
-          const loopsToRun = choiceNoReplaceN(loops, numLoops)
-          const loopHandles = loopsToRun.map(loop => ctx.branch(loop))
-          await ctx.wait(16)
-          loopHandles.forEach(handle => handle.cancel())
-        }
+        // const drumAgent = new SyncableAgent(ctx, 'drum0', agentState, drum0, iac1)
+        // const bassAgent = new SyncableAgent(ctx, 'bass', agentState, bass, iac2)
+        // const melAgent = new SyncableAgent(ctx, 'mel', agentState, mel, iac3)
+        // const highAgent = new SyncableAgent(ctx, 'high', agentState, high, iac4)
+        // const syncOrchestrator = new SyncOrchestratorAgent(ctx, 'syncOrchestrator', agentState, 16, 'drum0')
 
+        const debugBassAgent = new SimplePlayerAgent(ctx, 'debugBass', agentState, debugBass, iac2)
+        const debugMelAgent = new SimplePlayerAgent(ctx, 'debugMel', agentState, debugMel, iac3)
+        const debugHighAgent = new SimplePlayerAgent(ctx, 'debugHigh', agentState, debugHigh, iac4)
+        const syncOrchestrator = new SyncOrchestratorAgent(ctx, 'syncOrchestrator', agentState, 4, 'debugDrum')
+
+        agentState.agents = [debugBassAgent, debugMelAgent, debugHighAgent, syncOrchestrator]
+
+        agentState.agents.forEach(agent => agent.play())
         
       })
 
