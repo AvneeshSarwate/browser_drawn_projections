@@ -132,7 +132,7 @@ export const appState: TemplateAppState = {
   drawing: false,
 } 
 
-export const appStateName = 'templateAppState'
+export const appStateName = 'refined_fundamentals'
 
 //todo api - add caching/rehydrating of appState from local storage
 

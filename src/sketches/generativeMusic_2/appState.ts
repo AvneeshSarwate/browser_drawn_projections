@@ -156,7 +156,7 @@ export const appState: TemplateAppState = {
   drawing: false,
 } 
 
-export const appStateName = 'generativeMusic_0'
+export const appStateName = 'generativeMusic_2'
 
 //todo api - add caching/rehydrating of appState from local storage
 
