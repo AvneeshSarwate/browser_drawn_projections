@@ -64,11 +64,25 @@ const test2 = async () => {
   })
 }
 
-
+const cancelTest = async () => {
+  launch(async ctx => {
+    const handle = ctx.branch(async ctx => {
+      let counter = 0
+      while (!ctx.isCanceled) {
+        await ctx.wait(1)
+        console.log("canceltest", counter)
+        counter++
+      }
+    })
+    await ctx.wait(3)
+    console.log("canceltest", "cancelling")
+    handle.cancel()
+  })
+}
 
 export function runTests() {
   // setTimeout(test0, 1000)
   // setTimeout(test1, 1000)
-  setTimeout(test2, 1000)
+  setTimeout(cancelTest, 1000)
 }
 

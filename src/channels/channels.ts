@@ -153,7 +153,7 @@ export abstract class TimeContext {
 
   public abstract waitSec(sec: number): Promise<void>
   public wait(beats: number) {
-    return this.waitSec(beats * 60 / this.bpm)
+    return beats === 0 ? Promise.resolve() : this.waitSec(beats * 60 / this.bpm) //todo api - should this be in waitSec?
   }
   public waitFrame(): Promise<void> {
     if (this.isCanceled) {
@@ -569,4 +569,4 @@ export const steps = (start: number, end: number, count: number): number[] => {
   return out
 }
 
-// runTests()
+runTests()

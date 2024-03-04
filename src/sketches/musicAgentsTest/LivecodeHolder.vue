@@ -252,9 +252,12 @@ onMounted(async () => {
       }
     }
 
+    let syncCount = 0
+
     class SyncableAgent<T extends {syncPoints: Map<string, number>}> extends VoiceAgent<T> {
       clipGetter: () => AbletonClip
       midiOut: MIDIValOutput
+      localSyncCount = 0
       constructor(ctx: TimeContext, name: string, globalState: T, clipGetter: () => AbletonClip, midiOut: MIDIValOutput) {
         super(ctx, name, globalState)
         this.clipGetter = clipGetter
@@ -264,12 +267,16 @@ onMounted(async () => {
         this.runningLoop = this.ctx.branch(async ctx => straightPlay(ctx, this.clipGetter, this.midiOut))
       }
       resync = (waitTime: number) => {
+        console.log("sketchLog resyncing", this.runningLoop)
         this.runningLoop?.cancel()
-        this.runningLoop = this.ctx.branch(async ctx => {
+        this.localSyncCount++
+        this.runningLoop = this.ctx.branch<void>(async ctx => {
+          const snapShotSyncCount = this.localSyncCount + 0
           await ctx.wait(waitTime)
-          while (!ctx.isCanceled) {
+          while (!ctx.isCanceled) { //todo bug - bug cause found - this condition isn't escaping the loop when it's cancelled
             const clip = this.clipGetter()
             this.globalState.syncPoints.set(this.name, ctx.beats + clip.duration) //todo check - is this correct?
+            console.log("sketchLog setting end time", this.name, ctx.beats, clip.duration, "syncCount", syncCount, snapShotSyncCount)
             for (const [i, nextNote] of clip.noteBuffer().entries()) {
               // console.log("drum note", nextNote)
               await ctx.wait(nextNote.preDelta)
@@ -277,6 +284,7 @@ onMounted(async () => {
               await ctx.wait(nextNote.postDelta ?? 0)
             }
           }
+          console.log("sketchLog", this.name, "loop cancelled")
         })
       }
     }
@@ -305,11 +313,14 @@ onMounted(async () => {
 
       async syncToLeader(ctx: TimeContext, syncLeaderName: string) {
         const syncableAgents = this.globalState.agents.filter(agent => agent instanceof SyncableAgent) as SyncableAgent<T>[]
-        const syncWait = this.globalState.syncPoints.get(syncLeaderName) ?? ctx.beats - ctx.beats //todo check - is this correct? 
-        await ctx.wait(syncWait)
+        const syncWait = (this.globalState.syncPoints.get(syncLeaderName) ?? ctx.beats) - ctx.beats //todo check - is this correct? 
+        // await ctx.wait(syncWait)
+        let resyncCount = 0
         for (const agent of syncableAgents) {
           agent.resync(0)
+          resyncCount++
         }
+        console.log("sketchLog syncing to leader", syncLeaderName, "wait", syncWait, "time", ctx.progBeats, "syncCount", syncCount++, "resyncCount")
       }
 
     }
@@ -368,12 +379,12 @@ onMounted(async () => {
         // const highAgent = new SyncableAgent(ctx, 'high', agentState, high, iac4)
         // const syncOrchestrator = new SyncOrchestratorAgent(ctx, 'syncOrchestrator', agentState, 16, 'drum0')
 
-        const debugBassAgent = new SimplePlayerAgent(ctx, 'debugBass', agentState, debugBass, iac2)
-        const debugMelAgent = new SimplePlayerAgent(ctx, 'debugMel', agentState, debugMel, iac3)
-        const debugHighAgent = new SimplePlayerAgent(ctx, 'debugHigh', agentState, debugHigh, iac4)
-        const syncOrchestrator = new SyncOrchestratorAgent(ctx, 'syncOrchestrator', agentState, 4, 'debugDrum')
+        const debugBassAgent = new SyncableAgent(ctx, 'debugBass', agentState, debugBass, iac2)
+        // const debugMelAgent = new SyncableAgent(ctx, 'debugMel', agentState, debugMel, iac3)
+        // const debugHighAgent = new SyncableAgent(ctx, 'debugHigh', agentState, debugHigh, iac4)
+        const syncOrchestrator = new SyncOrchestratorAgent(ctx, 'syncOrchestrator', agentState, 4, 'debugBass')
 
-        agentState.agents = [debugBassAgent, debugMelAgent, debugHighAgent, syncOrchestrator]
+        agentState.agents = [debugBassAgent, syncOrchestrator]
 
         agentState.agents.forEach(agent => agent.play())
         
