@@ -122,30 +122,12 @@ onMounted(async () => {
         await ctx?.wait((noteDur ?? 0.1) * 0.98)
         inst.sendNoteOff(pitch)
         noteIsOn = false
-      }).finally(() => {
+      }, "note").finally(() => {
         inst.sendNoteOff(pitch)
       })
     }
 
-    const mod2 = (n: number, m: number) =>  (n % m + m) % m
 
-    // eslint-disable-next-line no-inner-declarations
-    function invertChord(chord: number[], inversions: number): number[] { //todo - can be way simpler - just shift highest/lowest by 12 in a for loop
-      const root = Math.min(...chord)
-      const pitchSet = new Set(chord)
-      const orderedPitches = Array.from(pitchSet).sort()
-      const indices = orderedPitches.map(p => chord.indexOf(p))
-
-      const deltas = chord.map(n => n - root).map(d => mod2(d, 12))
-      const deltaSet = new Set(deltas)
-      deltaSet.add(12)
-      const intervals = Array.from(deltaSet).sort((a, b) => a - b)
-      // console.log(intervals)
-
-      const scale = new Scale(intervals, root).invert(inversions)
-
-      return scale.getMultiple(indices)
-    }
 
     const straightPlay = async (ctx: TimeContext, clip: () => AbletonClip, midi: MIDIValOutput) => {
       while (!ctx.isCanceled) {
@@ -167,63 +149,6 @@ onMounted(async () => {
      * in general, think about ergonomic + musically relevant ways to communicate/coordinate across voices
      */
 
-    const sliceFill = async (ctx: TimeContext, clip: () => AbletonClip) => {
-      let progInd = 0
-      while (!ctx.isCanceled) {
-        const clipInstance = clip()
-        let beat = clipInstance
-
-        if (clipInstance.duration >= 4) {
-          const straight = clipInstance.timeSlice(0, 2)
-          const fill = Math.random() > 0.5 ? clipInstance.timeSlice(2, 4) : clipInstance.timeSlice(1, 3)
-          beat = progInd % 2 == 0 ? straight : fill
-        }
-
-        for (const [i, nextNote] of beat.noteBuffer().entries()) {
-          // console.log("drum note", nextNote)
-          await ctx.wait(nextNote.preDelta)
-          playNote(nextNote.note.pitch, nextNote.note.velocity, ctx, nextNote.note.duration, iac4)
-          await ctx.wait(nextNote.postDelta ?? 0)
-        }
-        progInd++
-      }
-    }
-
-    const twoBeatRandSlice = async (ctx: TimeContext, clip: () => AbletonClip) => {
-      while (!ctx.isCanceled) {
-        const scale = 1
-        const clipInstance = clip()
-
-        let startBeat = Math.floor(Math.random() * (clipInstance.duration - 2))
-        startBeat = startBeat < 0 ? 0 : startBeat
-
-        let duration = clipInstance.duration < 2 ? clipInstance.duration : 2
-
-        const melSlice = clip().timeSlice(startBeat, startBeat + duration)
-        for (const [i, nextNote] of melSlice.noteBuffer().entries()) {
-          // console.log("drum note", nextNote)
-          await ctx.wait(nextNote.preDelta * scale)
-          playNote(nextNote.note.pitch, nextNote.note.velocity, ctx, nextNote.note.duration * scale, iac5)
-          await ctx.wait(nextNote.postDelta ?? 0 * scale)
-        }
-      }
-    }
-
-    const playTypes = [straightPlay, sliceFill, twoBeatRandSlice]
-
-    const drumLoop = async (ctx: TimeContext) => sliceFill(ctx, drum0)
-
-    const bassLoop = async (ctx: TimeContext) => straightPlay(ctx, bass, iac2)
-    
-    const melLoop = async (ctx: TimeContext) => straightPlay(ctx, mel, iac3)
-    
-    const melSliceLoop = async (ctx: TimeContext) => twoBeatRandSlice(ctx, mel)
-    
-    const highLoop = async (ctx: TimeContext) => straightPlay(ctx, high, iac4)
-
-    const loops = [drumLoop, bassLoop, melLoop, melSliceLoop, highLoop]
-
-    console.log("inversion", invertChord([62, 61, 60], 2))
 
 
     abstract class VoiceAgent<T> {
@@ -248,7 +173,7 @@ onMounted(async () => {
         this.midiOut = midiOut
       }
       play() {
-        this.runningLoop = this.ctx.branch(async ctx => straightPlay(ctx, this.clipGetter, this.midiOut))
+        this.runningLoop = this.ctx.branch(async ctx => straightPlay(ctx, this.clipGetter, this.midiOut), "simple player")
       }
     }
 
@@ -264,28 +189,31 @@ onMounted(async () => {
         this.midiOut = midiOut
       }
       play() {
-        this.runningLoop = this.ctx.branch(async ctx => straightPlay(ctx, this.clipGetter, this.midiOut))
+        this.runningLoop = this.ctx.branch(async ctx => straightPlay(ctx, this.clipGetter, this.midiOut), "inital sync agent play")
       }
       resync = (waitTime: number) => {
         console.log("sketchLog resyncing", this.runningLoop)
         this.runningLoop?.cancel()
         this.localSyncCount++
-        this.runningLoop = this.ctx.branch<void>(async ctx => {
-          const snapShotSyncCount = this.localSyncCount + 0
-          await ctx.wait(waitTime)
+        const snapShotSyncCount = this.localSyncCount + 0
+        this.runningLoop = this.ctx.branch(async ctx => {
+          
+          console.log("sketchLog branch launch", this.name, snapShotSyncCount)
+          // await ctx.wait(waitTime)
           while (!ctx.isCanceled) { //todo bug - bug cause found - this condition isn't escaping the loop when it's cancelled
-            const clip = this.clipGetter()
-            this.globalState.syncPoints.set(this.name, ctx.beats + clip.duration) //todo check - is this correct?
-            console.log("sketchLog setting end time", this.name, ctx.beats, clip.duration, "syncCount", syncCount, snapShotSyncCount)
-            for (const [i, nextNote] of clip.noteBuffer().entries()) {
-              // console.log("drum note", nextNote)
-              await ctx.wait(nextNote.preDelta)
-              playNote(nextNote.note.pitch, nextNote.note.velocity, ctx, nextNote.note.duration, this.midiOut)
-              await ctx.wait(nextNote.postDelta ?? 0)
-            }
+            // const clip = this.clipGetter()
+            // this.globalState.syncPoints.set(this.name, ctx.beats + clip.duration) //todo check - is this correct?
+            console.log("sketchLog setting end time", this.name, ctx.beats, /*clip.duration,*/ "syncCount", syncCount, ctx.debugName)
+            // for (const [i, nextNote] of clip.noteBuffer().entries()) {
+            //   console.log("drum note", nextNote)
+            //   await ctx.wait(nextNote.preDelta)
+            //   playNote(nextNote.note.pitch, nextNote.note.velocity, ctx, nextNote.note.duration, this.midiOut)
+            //   await ctx.wait(nextNote.postDelta ?? 0)
+            // }
+            await ctx.wait(4)
           }
           console.log("sketchLog", this.name, "loop cancelled")
-        })
+        }, "playBranch-"+snapShotSyncCount)
       }
     }
     //general pattern - agents don't talk to each other directly, they talk to a global state
@@ -308,7 +236,7 @@ onMounted(async () => {
             await ctx.wait(this.syncInterval)
             this.syncToLeader(ctx, this.syncLeaderName)
           }
-        })
+        }, "orchestrator")
       }
 
       async syncToLeader(ctx: TimeContext, syncLeaderName: string) {
@@ -372,6 +300,7 @@ onMounted(async () => {
       launchLoop(async (ctx) => {
 
         ctx.bpm = 70
+        ctx.debugName = "parent"
 
         // const drumAgent = new SyncableAgent(ctx, 'drum0', agentState, drum0, iac1)
         // const bassAgent = new SyncableAgent(ctx, 'bass', agentState, bass, iac2)

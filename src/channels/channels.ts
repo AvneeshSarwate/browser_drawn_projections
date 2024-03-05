@@ -48,10 +48,11 @@ let contextId = 0
 type Constructor<T> = new (time: number, ab: AbortController, id: number, cancelPromise: CancelablePromisePoxy<any>) => T;
 
 
-function createAndLaunchContext<T, C extends TimeContext>(block: (ctx: C) => Promise<T>, rootTime: number, ctor: Constructor<C>, updateParent: boolean, parentContext?: C): CancelablePromisePoxy<T> {
+function createAndLaunchContext<T, C extends TimeContext>(block: (ctx: C) => Promise<T>, rootTime: number, ctor: Constructor<C>, updateParent: boolean, parentContext?: C, debugName: string = ""): CancelablePromisePoxy<T> {
   const abortController = new AbortController()
   const promiseProxy = new CancelablePromisePoxy<T>(abortController)
   const newContext = new ctor(rootTime, abortController, contextId++, promiseProxy)
+  newContext.debugName = debugName
   promiseProxy.timeContext = newContext
   if (parentContext) {
     newContext.bpm = parentContext.bpm
@@ -87,6 +88,7 @@ export type LoopHandle = {
 
 //todo draft - need to test generalized TimeContext implementation in loops
 export abstract class TimeContext {
+  public debugName = ""
   public abortController: AbortController
   public time: number
   public get beats(): number {
@@ -112,7 +114,7 @@ export abstract class TimeContext {
     this.id = id
     this.abortController.signal.addEventListener('abort', () => {
       this.isCanceled = true
-      console.log('abort')
+      console.log('sketchLog aborted timecontext', this.debugName)
     })
     this.cancelPromise = cancelPromise
   }
@@ -126,8 +128,8 @@ export abstract class TimeContext {
    * 
    * the call to branchRet() is what gets you the extra layer to only apply the time update if the branch is awaited
    */
-  public branch<T>(block: (ctx: TimeContext) => Promise<T>): LoopHandle {
-    const promise = createAndLaunchContext(block, this.time, Object.getPrototypeOf(this).constructor, false, this)
+  public branch<T>(block: (ctx: TimeContext) => Promise<T>, debugName: string = ""): LoopHandle {
+    const promise = createAndLaunchContext(block, this.time, Object.getPrototypeOf(this).constructor, false, this, debugName)
     //todo api - this allows you to manage a branch without accidentally awaiting on it in a way that
     //would screw up parent context time. but in general, awaiting on anything other than
     //ctx.wait[Time] or ctx.branchWait will screw up contextTime <=> wallClock time relationship.
@@ -142,8 +144,8 @@ export abstract class TimeContext {
     }
   }
 
-  public branchWait<T>(block: (ctx: TimeContext) => Promise<T>): CancelablePromisePoxy<T> {
-    return createAndLaunchContext(block, this.time, Object.getPrototypeOf(this).constructor, true, this)
+  public branchWait<T>(block: (ctx: TimeContext) => Promise<T>, debugName: string = ""): CancelablePromisePoxy<T> {
+    return createAndLaunchContext(block, this.time, Object.getPrototypeOf(this).constructor, true, this, debugName)
   } 
 
   public cancel() {
@@ -569,4 +571,4 @@ export const steps = (start: number, end: number, count: number): number[] => {
   return out
 }
 
-runTests()
+// runTests()

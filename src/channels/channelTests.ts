@@ -67,15 +67,31 @@ const test2 = async () => {
 const cancelTest = async () => {
   launch(async ctx => {
     const handle = ctx.branch(async ctx => {
+      
+      const innerHandle = ctx.branch(async ctx => {
+        let innerCounter = 0
+        while (!ctx.isCanceled) {
+          await ctx.wait(1)
+          console.log("canceltest 0", innerCounter)
+          innerCounter++
+        }
+      })
+
       let counter = 0
       while (!ctx.isCanceled) {
         await ctx.wait(1)
-        console.log("canceltest", counter)
+        console.log("canceltest 1", counter)
         counter++
+        if(counter === 5) {
+          innerHandle.cancel()
+        }
       }
     })
-    await ctx.wait(3)
+
+    await ctx.wait(10)
+
     console.log("canceltest", "cancelling")
+
     handle.cancel()
   })
 }
