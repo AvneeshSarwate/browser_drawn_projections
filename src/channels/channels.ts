@@ -196,21 +196,25 @@ class DateTimeContext extends TimeContext{
   public async waitSec(sec: number) {
     // console.log('wait', sec, this.id, this.time.toFixed(3))
     if (this.isCanceled) {
-      throw new Error('context is canceled')
+      // throw new Error('context is canceled')
     }
     const ctx = this
     return new Promise<void>((resolve, reject) => {
       const listener = () => { reject(); console.log('abort') }
       ctx.abortController.signal.addEventListener('abort', listener)
-      const waitTime = this.time + sec - performance.now() / 1000
+      const waitTime = this.time + sec - performance.now() / 1000 //todo bug - in usage in musicAgentTest sketch, time is not properly set and this becomes negative, causing problems
       const waitStart = performance.now()
       setTimeout(() => {
-        ctx.time += sec
-        ctx.abortController.signal.removeEventListener('abort', listener)
-        resolve()
-        const waitDuration = performance.now() - waitStart
-        // console.log('wait duration', (waitDuration / 1000).toFixed(3), 'wait time', waitTime.toFixed(3))
-        if(waitDuration/1000 - waitTime > 0.010) console.log('wait duration deviation greater than 10 ms')
+        try {
+          ctx.time += sec
+          ctx.abortController.signal.removeEventListener('abort', listener)
+          resolve()
+          const waitDuration = performance.now() - waitStart
+          // console.log('wait duration', (waitDuration / 1000).toFixed(3), 'wait time', waitTime.toFixed(3))
+          if(waitDuration/1000 - waitTime > 0.010) console.log('wait duration deviation greater than 10 ms')
+        } catch(e) {
+          console.log('wait error', e)
+        }
       }, waitTime * 1000)
     })
   }

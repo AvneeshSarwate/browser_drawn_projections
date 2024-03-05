@@ -196,24 +196,29 @@ onMounted(async () => {
         this.runningLoop?.cancel()
         this.localSyncCount++
         const snapShotSyncCount = this.localSyncCount + 0
+        const debugName = "playBranch-"+snapShotSyncCount
         this.runningLoop = this.ctx.branch(async ctx => {
-          
-          console.log("sketchLog branch launch", this.name, snapShotSyncCount)
+          const rand0 = Math.random().toFixed(3)
+          console.log("sketchLog branch launch", ctx.debugName, rand0, snapShotSyncCount)
           // await ctx.wait(waitTime)
           while (!ctx.isCanceled) { //todo bug - bug cause found - this condition isn't escaping the loop when it's cancelled
             // const clip = this.clipGetter()
             // this.globalState.syncPoints.set(this.name, ctx.beats + clip.duration) //todo check - is this correct?
-            console.log("sketchLog setting end time", this.name, ctx.beats, /*clip.duration,*/ "syncCount", syncCount, ctx.debugName)
+            const rand1 = Math.random().toFixed(3)
+            console.log("sketchLog setting end time", ctx.debugName, rand0, rand1)
             // for (const [i, nextNote] of clip.noteBuffer().entries()) {
             //   console.log("drum note", nextNote)
             //   await ctx.wait(nextNote.preDelta)
             //   playNote(nextNote.note.pitch, nextNote.note.velocity, ctx, nextNote.note.duration, this.midiOut)
             //   await ctx.wait(nextNote.postDelta ?? 0)
             // }
-            await ctx.wait(4)
+            await ctx.wait(5.01) //todo bug - this wait staement 
           }
           console.log("sketchLog", this.name, "loop cancelled")
-        }, "playBranch-"+snapShotSyncCount)
+        }, debugName)
+        this.runningLoop.finally(() => {
+          console.log("sketchLog", debugName, "loop finally")
+        })
       }
     }
     //general pattern - agents don't talk to each other directly, they talk to a global state
