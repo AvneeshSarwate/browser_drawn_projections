@@ -203,6 +203,9 @@ class DateTimeContext extends TimeContext{
       const listener = () => { reject(); console.log('abort') }
       ctx.abortController.signal.addEventListener('abort', listener)
       const waitTime = this.time + sec - performance.now() / 1000 //todo bug - in usage in musicAgentTest sketch, time is not properly set and this becomes negative, causing problems
+      // if (waitTime < 0) {
+      //   debugger
+      // }
       const waitStart = performance.now()
       setTimeout(() => {
         try {
