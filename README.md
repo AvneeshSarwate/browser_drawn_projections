@@ -1,12 +1,14 @@
+**Documentation in progress, bugs guaranteed**
+
 #### This is a collection of utility libraries for creative coding, with a focus on making audio-visual synchronicity easier to coordinate
 
-The goal is to build several different interoperable utilites rather than a top down framework. Ideally, each utility should be small and independent enough that an end-user can go in and understand the entire codebase and be able to modify it if it doesn't meet their needs. Practically, this leads to the current soft goal of keeping each utility < 1000 lines, and judicisously leveraging established third party libraries to tackle thorny problems in each utility. 
+The goal is to build several different interoperable utilites rather than a top down framework. Ideally, each utility should be small and independent enough that an end-user can go in and understand the entire codebase and be able to modify it if it doesn't meet their needs. Practically, this leads to the current soft goal of keeping each utility < 1000 lines, and judiciously leveraging established third party libraries to tackle thorny problems in each utility. 
 
 When wrapping an existing library with a utility, we aim to simplyify but not hide the usage of the underlying library. This means that the utility should be a thin wrapper around the library, and the end user should be able to access the underlying library if they need to. This is in contrast to a framework, which may hide the underlying library and provide a new API.
 
-For example, several of the graphics utilities are built on top of three.js, and the end user should be able to access the three.js scene and camera if they need to.
+For example, several of the graphics utilities are built on top of `three.js`, and the end user should be able to access the three.js scene and camera if they need to.
 
-the directory `src/sketches` contains a few examples of how to use the utilities. The overarching site is built using [Vue](https://vuejs.org/). Each sketch is a self-contained example with it's own state management and UI.
+The directory `src/sketches` contains a few examples of how to use the utilities. The overarching site is built using [Vue](https://vuejs.org/). Each sketch is a self-contained example with it's own state management and UI. The sketches are running live at https://avneeshsarwate-webart.netlify.app/, though some of the music sketches use hardcoded virutal MIDI port names to communicate with a local VST host. 
 
 
 #### The utilities so far
@@ -24,6 +26,7 @@ the directory `src/sketches` contains a few examples of how to use the utilities
 ##### Music
 - **MPE Synth** - A base class and interface for building MPE-compatible synthesizers. This module takes inspiration from  [Bitwig's PolyGrid](https://www.bitwig.com/the-grid/). The goal is to create a workflow that allows you to define an arbitrary graph of audio nodes, and then provide a utility that lets you use that graph to create a polyphonic MPE-compatible synthesizer without any extra effort. This workflow allows you to separate the sound design work of a custom synthesizer from the voice-management boiler plate. Similar to Bitwig, the vision is to allow you to use the same core tools to define both modular-synth style and traditional VST instrument/effect style workflows. Defined in `src/music/mpeSynth.ts`
 - **Scale** - A utility class for manipulating musical scales and chords. Has rudimentary support for patterns that do not conform to 12-EDO tuning and span more than an octave (proper expansions for non-western tunings and scales planned).  Defined in `src/music/scale.ts`
+- **Piano Roll** - A browser based piano roll interface. The goal is to provide a hackable piano roll for use in interactive applications, or as platform for implementing custom hotkeys for fast note editting. Defined in `src/music/pianoRoll.ts`
 
 
 

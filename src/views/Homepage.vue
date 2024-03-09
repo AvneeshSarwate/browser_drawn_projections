@@ -5,7 +5,7 @@ import { sketchNames } from '@/router';
 </script>
 
 <template>
-  <div>sup</div>
+  <div>Sketches:</div>
   <div id="sketchList">
     <router-link v-for="sketchName in sketchNames" :key="sketchName" :to="`/${sketchName}`">
       <div> {{ sketchName }} </div>
