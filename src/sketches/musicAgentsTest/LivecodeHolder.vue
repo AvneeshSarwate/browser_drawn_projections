@@ -115,7 +115,6 @@ onMounted(async () => {
 
     const playNote = (pitch: number, velocity: number, ctx?: TimeContext, noteDur?: number, inst = iac1) => {
       if(!PLAYING.value) return
-      // console.log("pitch play", pitch, velocity)
       inst.sendNoteOn(pitch, velocity)
       let noteIsOn = true
       ctx?.branch(async ctx => {
@@ -132,7 +131,6 @@ onMounted(async () => {
     const straightPlay = async (ctx: TimeContext, clip: () => AbletonClip, midi: MIDIValOutput) => {
       while (!ctx.isCanceled) {
         for (const [i, nextNote] of clip().noteBuffer().entries()) {
-          // console.log("drum note", nextNote)
           await ctx.wait(nextNote.preDelta)
           playNote(nextNote.note.pitch, nextNote.note.velocity, ctx, nextNote.note.duration, midi)
           await ctx.wait(nextNote.postDelta ?? 0)
@@ -197,7 +195,7 @@ onMounted(async () => {
         this.localSyncCount++
         const snapShotSyncCount = this.localSyncCount + 0
         const debugName = "playBranch-"+snapShotSyncCount
-        this.runningLoop = this.ctx.branch(async ctx => {
+        this.runningLoop = this.ctx.branchWait(async ctx => {
           const rand0 = Math.random().toFixed(3)
           console.log("sketchLog branch launch", ctx.debugName, rand0, snapShotSyncCount)
           // await ctx.wait(waitTime)
@@ -207,7 +205,6 @@ onMounted(async () => {
             const rand1 = Math.random().toFixed(3)
             console.log("sketchLog setting end time", ctx.debugName, rand0, rand1)
             // for (const [i, nextNote] of clip.noteBuffer().entries()) {
-            //   console.log("drum note", nextNote)
             //   await ctx.wait(nextNote.preDelta)
             //   playNote(nextNote.note.pitch, nextNote.note.velocity, ctx, nextNote.note.duration, this.midiOut)
             //   await ctx.wait(nextNote.postDelta ?? 0)
@@ -257,6 +254,22 @@ onMounted(async () => {
       }
 
     }
+
+    /**
+     * root cause of timing issue - what calls to wait() end up deriving a negative wait time for setTimeout:
+     * Bhere is root time context, and then 2 agents (syncer and syncee) that act on branches of the time context.
+     * Both of these agents call branch instead of branchWait, so the logical time of the root context never gets updated. 
+     * Thus, when you call wait() in the SyncableAgent.resync() function, that branch() call inherits the inital start time
+     * of the root context, but the derived wait time is (logicalTime + wait) - performance.now()/1000. That performance.now()
+     * has moved ahead in time in the "real world", but there have been no messages to the parent to update its time to the real world.
+     * Somehow, when you update a child context's logical time with a wait(), you also need to propgate the wait up to the 
+     * parent, so the parent is always as updated as it's most recently updated child. 
+     * 
+     * Alternatively, for every TimeContext, you need to give it some reference to its wallclock time of when it started so it can 
+     * operate its waits() independently?
+     * 
+     * Likely you need some combination of these to handle all edge cases.
+     */
       
 
     
@@ -304,7 +317,7 @@ onMounted(async () => {
 
       launchLoop(async (ctx) => {
 
-        ctx.bpm = 70
+        ctx.bpm = 60
         ctx.debugName = "parent"
 
         // const drumAgent = new SyncableAgent(ctx, 'drum0', agentState, drum0, iac1)
