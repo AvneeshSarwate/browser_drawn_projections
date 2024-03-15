@@ -269,6 +269,30 @@ onMounted(async () => {
      * operate its waits() independently?
      * 
      * Likely you need some combination of these to handle all edge cases.
+     * 
+     * Is it more ergonomic to have a clock abstraction like in supercollider?
+     * 
+     * 
+     * the way the kotlin system works
+     * - all coroutines are backed by a single supercollider clock
+     * - launchCoro sets the root of a branch tree - every branch tree is backed by a single  
+     *   "coroStart" value - the supercollider clock time when that root was started
+     * - every branch inherits its time from its parent
+     * - would above issue still be a problem in kotlin? maybe not, because SyncableAgent.resync() would by default update parent here?
+     * 
+     * 
+     * there are 2 different problems to solve:
+     * 1. adjusting for drift when using setTimeout
+     * 2. properly handling the logical time updates between parents and children 
+     * The are connected by the fact that ??? 
+     * 
+     * 
+     * in js TimeContexts, have several values and think of hwo to use all of them to resolve final time update
+     * - context.time
+     * - context.mostRecentDescendantTime 
+     * - context.acumulatedLogicalWaits
+     * - something to handle branchWait()? do we even need something for this if we have context.mostRecentDescendantTime?
+     * - performance.now()
      */
       
 
