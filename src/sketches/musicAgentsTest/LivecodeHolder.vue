@@ -287,12 +287,25 @@ onMounted(async () => {
      * The are connected by the fact that ??? 
      * 
      * 
-     * in js TimeContexts, have several values and think of hwo to use all of them to resolve final time update
+     * in js TimeContexts, have several values and think of how to use all of them to resolve final time update
      * - context.time
-     * - context.mostRecentDescendantTime 
+     * - context.mostRecentDescendantTime (aka root.mostRecentDescendentTime)
      * - context.acumulatedLogicalWaits
      * - something to handle branchWait()? do we even need something for this if we have context.mostRecentDescendantTime?
      * - performance.now()
+     * 
+     * idea - when branching, branch()'s start time is always root.mostRecentDescendentTime (assuming whole app rooted at a single time context)?
+     * - proof of correctness? - js is single threaded, so if code is executing, some wait must JUST have finished,
+     *   so logical time should be very close to wall clock time (e.g within jitter range)
+     * - corner case - when branching due to external input (UI/network), have a branchLive() that sets time to performance.now(),
+     *   and then have the branch's internal logic wait appropriately to get back on the grid if desired. 
+     * - corner case - cancelled loops? - wait() call needs to throw exception or something when canceleld so that the code after 
+     *   the wait call is not executed. abortHandler is already to reject() wait promise on cancel, but does it need an exception 
+     *   to fully guarantee that the code after the wait call is not executed? 
+     * 
+     * might also be useful to have some way to "backwards quantize" (e.g, simulate having branched earlaier) for the case where
+     * you want to launch a clip on the beat and are slightly off but don't want to wait a whole beat. This should
+     * probably be some helper for user-logic when playing a "clip" vs a part of the underlying timing API. 
      */
       
 
