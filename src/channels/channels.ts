@@ -55,8 +55,11 @@ function createAndLaunchContext<T, C extends TimeContext>(block: (ctx: C) => Pro
   newContext.debugName = debugName
   promiseProxy.timeContext = newContext
   if (parentContext) {
+    newContext.rootContext = parentContext.rootContext
     newContext.bpm = parentContext.bpm
     parentContext.childContexts.add(newContext)
+  } else {
+    newContext.rootContext = newContext
   }
   const blockPromise = block(newContext)
   promiseProxy.promise = blockPromise
@@ -88,6 +91,8 @@ export type LoopHandle = {
 
 //todo draft - need to test generalized TimeContext implementation in loops
 export abstract class TimeContext {
+  public rootContext: TimeContext | undefined
+  public mostRecentDescendentTime: number = 0
   public debugName = ""
   public abortController: AbortController
   public time: number
@@ -205,6 +210,10 @@ class DateTimeContext extends TimeContext{
       ctx.abortController.signal.addEventListener('abort', listener)
       const nowTime = performance.now() / 1000
       const targetTime = this.time + sec 
+
+      //todo - in progress
+      //const targetTime = Math.max(root.mostRecentDescendentTime, this.time) + sec
+      
       const waitTime = targetTime - nowTime //todo bug - in usage in musicAgentTest sketch, time is not properly set and this becomes negative, causing problems
       if (waitTime < 0) {
         const x = 5
@@ -214,8 +223,23 @@ class DateTimeContext extends TimeContext{
       setTimeout(() => {
         try {
           ctx.time += sec
+
+          //todo - in progress
+          //ctx.time = targetTime
+
           ctx.abortController.signal.removeEventListener('abort', listener)
           resolve()
+
+          /*
+          // todo - in progress
+          if (this.isCanceled) resolve()
+          else reject()
+          // console.log("setTimeout", this.debugName, this.isCanceled)
+          if (this.isCanceled) return 
+          
+          this.rootContext!!.mostRecentDescendentTime = targetTime
+          */
+
           const waitDuration = performance.now() - waitStart
           // console.log('wait duration', (waitDuration / 1000).toFixed(3), 'wait time', waitTime.toFixed(3))
           if(waitDuration/1000 - waitTime > 0.010) console.log('wait duration deviation greater than 10 ms')
@@ -582,4 +606,4 @@ export const steps = (start: number, end: number, count: number): number[] => {
   return out
 }
 
-// runTests()
+runTests()

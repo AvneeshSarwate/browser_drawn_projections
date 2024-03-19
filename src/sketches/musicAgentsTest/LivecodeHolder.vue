@@ -301,7 +301,8 @@ onMounted(async () => {
      *   and then have the branch's internal logic wait appropriately to get back on the grid if desired. 
      * - corner case - cancelled loops? - wait() call needs to throw exception or something when canceleld so that the code after 
      *   the wait call is not executed. abortHandler is already to reject() wait promise on cancel, but does it need an exception 
-     *   to fully guarantee that the code after the wait call is not executed? 
+     *   to fully guarantee that the code after the wait call is not executed?
+     *   -  actually, current implementation already seems to do that 
      * 
      * might also be useful to have some way to "backwards quantize" (e.g, simulate having branched earlaier) for the case where
      * you want to launch a clip on the beat and are slightly off but don't want to wait a whole beat. This should

@@ -96,9 +96,23 @@ const cancelTest = async () => {
   })
 }
 
+const postCancelTest = async () => {
+  launch(async ctx => {
+    const handle = ctx.branch(async ctx => {
+      console.log("postCancelTest a")
+      await ctx.wait(3)
+      console.log("postCancelTest b")
+    }, "postCancelTest")
+
+    await ctx.wait(2)
+
+    handle.cancel()
+  })
+}
+
 export function runTests() {
   // setTimeout(test0, 1000)
   // setTimeout(test1, 1000)
-  setTimeout(cancelTest, 1000)
+  setTimeout(postCancelTest, 1000)
 }
 
