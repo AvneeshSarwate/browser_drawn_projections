@@ -122,6 +122,9 @@ onMounted(async () => {
         inst.sendNoteOff(pitch)
         noteIsOn = false
       }, "note").finally(() => {
+        //todo bug - the finally block of closing notes when a loop is cancelled is not
+        //always exectuing in the time/order expected, sometimes cutting off the first note
+        //in the next iteration of a loop
         inst.sendNoteOff(pitch)
       })
     }
@@ -199,17 +202,16 @@ onMounted(async () => {
           const rand0 = Math.random().toFixed(3)
           console.log("sketchLog branch launch", ctx.debugName, rand0, snapShotSyncCount)
           // await ctx.wait(waitTime)
-          while (!ctx.isCanceled) { //todo bug - bug cause found - this condition isn't escaping the loop when it's cancelled
-            // const clip = this.clipGetter()
+          while (!ctx.isCanceled) {
+            const clip = this.clipGetter()
             // this.globalState.syncPoints.set(this.name, ctx.beats + clip.duration) //todo check - is this correct?
             const rand1 = Math.random().toFixed(3)
             console.log("sketchLog setting end time", ctx.debugName, rand0, rand1)
-            // for (const [i, nextNote] of clip.noteBuffer().entries()) {
-            //   await ctx.wait(nextNote.preDelta)
-            //   playNote(nextNote.note.pitch, nextNote.note.velocity, ctx, nextNote.note.duration, this.midiOut)
-            //   await ctx.wait(nextNote.postDelta ?? 0)
-            // }
-            await ctx.wait(5.01) //todo bug - this wait staement 
+            for (const [i, nextNote] of clip.noteBuffer().entries()) {
+              await ctx.wait(nextNote.preDelta)
+              playNote(nextNote.note.pitch, nextNote.note.velocity, ctx, nextNote.note.duration, this.midiOut)
+              await ctx.wait(nextNote.postDelta ?? 0)
+            }
           }
           console.log("sketchLog", this.name, "loop cancelled")
         }, debugName)
@@ -244,7 +246,7 @@ onMounted(async () => {
       async syncToLeader(ctx: TimeContext, syncLeaderName: string) {
         const syncableAgents = this.globalState.agents.filter(agent => agent instanceof SyncableAgent) as SyncableAgent<T>[]
         const syncWait = (this.globalState.syncPoints.get(syncLeaderName) ?? ctx.beats) - ctx.beats //todo check - is this correct? 
-        // await ctx.wait(syncWait)
+        await ctx.wait(syncWait)
         let resyncCount = 0
         for (const agent of syncableAgents) {
           agent.resync(0)
@@ -365,11 +367,11 @@ onMounted(async () => {
         // const syncOrchestrator = new SyncOrchestratorAgent(ctx, 'syncOrchestrator', agentState, 16, 'drum0')
 
         const debugBassAgent = new SyncableAgent(ctx, 'debugBass', agentState, debugBass, iac2)
-        // const debugMelAgent = new SyncableAgent(ctx, 'debugMel', agentState, debugMel, iac3)
+        const debugMelAgent = new SyncableAgent(ctx, 'debugMel', agentState, debugMel, iac3)
         // const debugHighAgent = new SyncableAgent(ctx, 'debugHigh', agentState, debugHigh, iac4)
         const syncOrchestrator = new SyncOrchestratorAgent(ctx, 'syncOrchestrator', agentState, 4, 'debugBass')
 
-        agentState.agents = [debugBassAgent, syncOrchestrator]
+        agentState.agents = [debugBassAgent, debugMelAgent, syncOrchestrator]
 
         agentState.agents.forEach(agent => agent.play())
         

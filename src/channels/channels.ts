@@ -6,7 +6,6 @@ import p5 from 'p5'
 import { runTests } from './channelTests'
 
 
-//todo api - make then/catch/finally chainable on CancelablePromisePoxy
 export class CancelablePromisePoxy<T> implements Promise<T> {
   public promise?: Promise<T>
   public abortController: AbortController
@@ -78,7 +77,6 @@ function createAndLaunchContext<T, C extends TimeContext>(block: (ctx: C) => Pro
 }
 
 const USE_TONE = false
-//todo hotreload - need to register all launches to global state so they can be canceled on hot reload
 export function launch<T>(block: (ctx: TimeContext) => Promise<T>): CancelablePromisePoxy<T> {
   if(USE_TONE) return createAndLaunchContext(block, Tone.Transport.immediate(), ToneTimeContext, false)
   else return createAndLaunchContext(block, performance.now()/1000, DateTimeContext, false)
@@ -209,10 +207,9 @@ class DateTimeContext extends TimeContext{
       const listener = () => { reject(); console.log('abort') }
       ctx.abortController.signal.addEventListener('abort', listener)
       const nowTime = performance.now() / 1000
-      const targetTime = this.time + sec 
 
       //todo - in progress
-      //const targetTime = Math.max(root.mostRecentDescendentTime, this.time) + sec
+      const targetTime = Math.max(this.rootContext!.mostRecentDescendentTime, this.time) + sec
       
       const waitTime = targetTime - nowTime //todo bug - in usage in musicAgentTest sketch, time is not properly set and this becomes negative, causing problems
       if (waitTime < 0) {
@@ -222,15 +219,14 @@ class DateTimeContext extends TimeContext{
       const waitStart = performance.now()
       setTimeout(() => {
         try {
-          ctx.time += sec
+          // ctx.time += sec
 
           //todo - in progress
-          //ctx.time = targetTime
+          ctx.time = targetTime
 
           ctx.abortController.signal.removeEventListener('abort', listener)
           resolve()
 
-          /*
           // todo - in progress
           if (this.isCanceled) resolve()
           else reject()
@@ -238,7 +234,6 @@ class DateTimeContext extends TimeContext{
           if (this.isCanceled) return 
           
           this.rootContext!!.mostRecentDescendentTime = targetTime
-          */
 
           const waitDuration = performance.now() - waitStart
           // console.log('wait duration', (waitDuration / 1000).toFixed(3), 'wait time', waitTime.toFixed(3))
