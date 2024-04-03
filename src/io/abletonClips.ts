@@ -21,6 +21,8 @@ function positionsToDeltas(positions: number[], totalTime?: number) {
   return deltas;
 }
 
+type NoteWithDelta = { note: AbletonNote, preDelta: number, postDelta?: number }
+
 export class AbletonClip {
   name: string;
   duration: number;
@@ -32,11 +34,11 @@ export class AbletonClip {
     this.notes = notes;
   }
 
-  deltas() {
+  deltas(): number[] {
     return positionsToDeltas(this.notes.map(note => note.position), this.duration);
   }
 
-  peek(): { note: AbletonNote, preDelta: number, postDelta?: number } {
+  peek(): NoteWithDelta {
     const note = this.notes[this.index];
     const deltas = this.deltas()
     const preDelta = deltas[this.index];
@@ -44,18 +46,18 @@ export class AbletonClip {
     return this.index === this.notes.length - 1 ? { note, preDelta, postDelta } : { note, preDelta };
   }
 
-  next(): { note: AbletonNote,  preDelta: number, postDelta?: number } {
+  next(): NoteWithDelta {
     const retVal = this.peek();
     this.index = (this.index + 1) % this.notes.length;
     return retVal
   }
 
-  clone() {
+  clone(): AbletonClip {
     const noteClone = this.notes.map(note => ({ ...note }));
     return new AbletonClip(this.name, this.duration, noteClone);
   }
 
-  scale(factor: number) {
+  scale(factor: number): AbletonClip {
     const clone = this.clone();
     clone.notes.forEach(note => {
       note.position *= factor;
@@ -65,7 +67,7 @@ export class AbletonClip {
     return clone;
   }
 
-  shift(delta: number) {
+  shift(delta: number): AbletonClip {
     const clone = this.clone();
     clone.notes.forEach(note => {
       note.position += delta;
@@ -75,7 +77,7 @@ export class AbletonClip {
     return clone;
   }
 
-  transpose(delta: number) {
+  transpose(delta: number): AbletonClip {
     const clone = this.clone();
     clone.notes.forEach(note => {
       note.pitch += delta;
@@ -83,7 +85,7 @@ export class AbletonClip {
     return clone;
   }
 
-  scaleTranspose(tranpose: number, scale: Scale) {
+  scaleTranspose(tranpose: number, scale: Scale): AbletonClip {
     const clone = this.clone();
     clone.notes.forEach(note => {
       note.pitch = scale.getByIndex(scale.getIndFromPitch(note.pitch) + tranpose)
@@ -91,7 +93,7 @@ export class AbletonClip {
     return clone;
   }
 
-  timeSlice(start: number, end: number) {
+  timeSlice(start: number, end: number): AbletonClip {
     const clone = this.clone();
     clone.notes = clone.notes.filter(note => note.position + note.duration >= start && note.position <= end)
     clone.notes.filter(note => note.position + note.duration > end).forEach(note => note.duration = end - note.position)
@@ -104,8 +106,24 @@ export class AbletonClip {
     return clone
   }
 
-  noteBuffer() {
+  noteBuffer(): NoteWithDelta[] {
     return this.notes.map(() => this.next())
+  }
+
+  static concat(...clips: AbletonClip[]): AbletonClip {
+    const durations = clips.map(clip => clip.duration)
+    const startShifts = [0]
+    durations.slice(0, -1).forEach((duration, i) => {
+      startShifts.push(startShifts[i] + duration)
+    })
+    const totalDuration = durations.reduce((sum, duration) => sum + duration, 0)
+    const clones = clips.map((clip, i) => clip.shift(startShifts[i]))
+    return new AbletonClip('concat', totalDuration, clones.flatMap(clip => clip.notes))
+  }
+
+  loop(n: number) {
+    const shallowClones = Array.from({ length: n }, () => this)
+    return AbletonClip.concat(...shallowClones)
   }
 }
 

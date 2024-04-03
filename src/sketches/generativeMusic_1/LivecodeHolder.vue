@@ -11,7 +11,7 @@ import { MIDI_READY, midiOutputs } from '@/io/midi';
 import seedrandom from 'seedrandom'
 
 import { lerp } from 'three/src/math/MathUtils.js';
-import { brd, weightedChoice } from '@/utils/utils';
+import { brd, choice, weightedChoice } from '@/utils/utils';
 
 import testJson from './test_json.json'
 import { INITIALIZE_ABLETON_CLIPS, clipMap } from '@/io/abletonClips';
@@ -175,15 +175,23 @@ onMounted(async () => {
         ctx.bpm = 70
 
         ctx.branch(async ctx => {
+          let loopCount = 0
           while (RUNNING.value) {
             const drum = drum0().clone()
-            const notes = drum.notes.map((e, i) => drum.next())
+            let notes = drum.noteBuffer()
+            if (loopCount % 2 == 0) {
+              const sliceStartTime = choice([0, 1, 2, 3, 4, 5, 6, 7, 8].map(e => e * 0.25))
+              const sliceEndTime = sliceStartTime + 1
+              const slice = drum.timeSlice(sliceStartTime, sliceEndTime).loop(2)
+              notes = slice.noteBuffer()
+            }
             for (const [i, nextNote] of notes.entries()) {
               // console.log("drum note", nextNote)
               await ctx.wait(nextNote.preDelta)
               playNote(nextNote.note.pitch, nextNote.note.velocity, ctx, nextNote.note.duration, iac3)
               if (nextNote.postDelta) await ctx.wait(nextNote.postDelta)
             }
+            loopCount++
           }
         })
 

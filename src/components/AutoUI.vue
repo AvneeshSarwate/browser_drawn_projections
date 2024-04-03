@@ -20,11 +20,6 @@ const renderInputs = computed(() => {
   })
 })
 
-function setPropValue(key: string, value: string | number) {
-  // eslint-disable-next-line vue/no-mutating-props
-  props.objectToEdit[key] = value
-}
-
 </script>
   
 <template>
