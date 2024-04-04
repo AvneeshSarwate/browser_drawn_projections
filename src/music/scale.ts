@@ -100,26 +100,44 @@ export class Scale {
     return deltas
   }
 
-  getByIndex(index: number): number {
-    if (index === 0) return this.root
-    if (index > 0) {
-      const numOctaves = integerDivision(index, this.degrees.length - 1)
-      const octaveShift = this.degrees[this.degrees.length - 1] * numOctaves
-      const degree = this.degrees[index % (this.degrees.length - 1)]
-      return this.root + octaveShift + degree
+  getByIndex(index: number | string): number {
+    if (typeof index === 'string') {
+      if (index.includes("+")) {
+        const [base, delta] = index.split("+")
+        const intBase = parseInt(base)
+        const intDelta = parseInt(delta)
+        if (isNaN(intBase) || isNaN(intDelta)) {
+          throw new Error(`Invalid index: ${index}`)
+        }
+        return this.getByIndex(intBase) + intDelta
+      } else {
+        const intIndex = parseInt(index)
+        if (isNaN(intIndex)) {
+          throw new Error(`Invalid index: ${index}`)
+        }
+        return this.root + intIndex
+      }
     } else {
-      const negDeltas = this.deltas().reverse()
-      const negNotes = [0]
-      let runningNote = 0
-      negDeltas.forEach((delta) => {
-        runningNote += delta
-        negNotes.push(runningNote)
-      })
+      if (index === 0) return this.root
+      if (index > 0) {
+        const numOctaves = integerDivision(index, this.degrees.length - 1)
+        const octaveShift = this.degrees[this.degrees.length - 1] * numOctaves
+        const degree = this.degrees[index % (this.degrees.length - 1)]
+        return this.root + octaveShift + degree
+      } else {
+        const negDeltas = this.deltas().reverse()
+        const negNotes = [0]
+        let runningNote = 0
+        negDeltas.forEach((delta) => {
+          runningNote += delta
+          negNotes.push(runningNote)
+        })
 
-      const numOctaves = integerDivision(index, this.degrees.length - 1)
-      const octaveShift = this.degrees[this.degrees.length - 1] * numOctaves
-      const degree = -negNotes[Math.abs(index) % (negNotes.length - 1)]
-      return this.root + octaveShift + degree
+        const numOctaves = integerDivision(index, this.degrees.length - 1)
+        const octaveShift = this.degrees[this.degrees.length - 1] * numOctaves
+        const degree = -negNotes[Math.abs(index) % (negNotes.length - 1)]
+        return this.root + octaveShift + degree
+      }
     }
   }
 
@@ -139,7 +157,7 @@ export class Scale {
     return ind
   }
 
-  getMultiple(indices: number[]): number[] {
+  getMultiple(indices: (number | string)[]): number[] {
     return indices.map((index) => this.getByIndex(index))
   }
 
