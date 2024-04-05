@@ -168,13 +168,14 @@ function replaceListCommandGenerator<T>(list: UndoableList<T>, index: number, ne
   return executeAndAddCommand(command, isPartOfComplexCommand)
 }
 
-function moveListItemCommandGenerator<T>(list: UndoableList<T>, oldIndex: number, newIndex: number) {
+//todo api - what if this is also part of a complex command?
+function moveListItemCommandGenerator<T>(list: UndoableList<T>, oldIndex: number, newIndex: number, isPartOfComplexCommand = false) {
   const item = list.list[oldIndex]
   const removeCommand = removeListCommandGenerator<T>(list, oldIndex, true)
   const addCommand = addListCommandGenerator<T>(list, newIndex, item, true)
   const moveCommand = new CompoundCommand(`moveListItemCommand ${grabId(item)} ${oldIndex} ${newIndex}`, [removeCommand, addCommand])
 
-  return executeAndAddCommand(moveCommand, false)
+  return executeAndAddCommand(moveCommand, isPartOfComplexCommand)
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -189,6 +190,24 @@ function modifyEntityCommandGenerator<T>(entity: T, prop: keyof T, value: any, i
   
   return executeAndAddCommand(command, isPartOfComplexCommand)
 }
+
+//todo api - see how this plays with a top-level wrapping in a vue ref
+class UndoWrapper<T> {
+  instance: T
+  constructor(ctor: Constructor<T>, ...args: any[]) {
+    this.instance = new ctor(...args)
+  }
+  set(prop: keyof T, value: any) {
+    modifyEntityCommandGenerator(this.instance, prop, value)
+  }
+  setTemp(prop: keyof T, value: any) {
+    this.instance[prop] = value
+  }
+  get(prop: keyof T) {
+    return this.instance[prop]
+  }
+}
+
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 function modifySnapshotPropEntityCommandGenerator<T>(entity: T, snapshotProp: keyof T, liveProp: keyof T, value: any, isPartOfComplexCommand = false) {

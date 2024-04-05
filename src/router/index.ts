@@ -19,7 +19,8 @@ export const sketchNames = [
   'generativeMusic_1',
   'generativeMusic_2',
   'musicAgentsTest',
-  'refined_fundamentals'
+  'refined_fundamentals',
+  'runners_modifiers_0'
 ]
 
 const sketchRoutes = sketchNames.map(name => {
