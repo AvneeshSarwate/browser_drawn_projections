@@ -398,7 +398,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   console.log("disposing livecoded resources")
-  shaderGraphEndNode?.disposeAll()
+  // shaderGraphEndNode?.disposeAll()
   clearListeners()
   timeLoops.forEach(tl => tl.cancel())
 })

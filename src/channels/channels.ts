@@ -106,7 +106,7 @@ export abstract class TimeContext {
     return this.progTime * this.bpm / 60
   }
   public id: number
-  public bpm: number = 120
+  public bpm: number = 60
   public cancelPromise: CancelablePromisePoxy<any>
   public childContexts: Set<TimeContext> = new Set()
 

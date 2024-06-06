@@ -138,6 +138,7 @@ ws.onclose = () => {
   console.log('Disconnected from server');
 };
 
+//requires alsParsing.ts to be running
 export async function INITIALIZE_ABLETON_CLIPS(fileName: string) {
 
   const ABLETON_CLIPS_READY = new Promise<void>((resolve) => {
