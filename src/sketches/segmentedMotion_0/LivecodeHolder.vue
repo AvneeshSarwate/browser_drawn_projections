@@ -3,10 +3,11 @@
 import { type SegMo0State, PulseCircle, appStateName } from './appState';
 import { inject, onMounted, onUnmounted } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
-import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
+import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords, keydownEvent, mouseupEvent, keyupEvent } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri, type LoopHandle, now } from '@/channels/channels';
 import { choice } from '@/utils/utils';
+import { lerp } from 'three/src/math/MathUtils.js';
 
 const appState = inject<SegMo0State>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
@@ -17,6 +18,8 @@ const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromis
   timeLoops.push(loop)
   return loop
 }
+
+const dist = (v1: {x: number, y: number}, v2: {x: number, y: number}) => Math.sqrt((v1.x-v2.x)**2 + (v1.y-v2.y)**2)
 
 const clearDrawFuncs = () => {
   appState.drawFunctions = []
@@ -61,6 +64,14 @@ onMounted(() => {
     }
 
     const randomDirection = () => choice([{ x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 }])
+    const directionToMouse = (pos: {x: number, y: number}) => {
+      const xD = p5Mouse.x - pos.x
+      const yD = p5Mouse.y - pos.y
+      const mag = Math.sqrt(xD**2 + yD**2)
+      return {x: xD/mag * 3, y: yD/mag * 3}
+    }
+
+    let steerToMouse = false
 
     class RunnerAgent extends LoopAgent<RunnerMap> {
       constructor(ctx: TimeContext, name: string, globalState: RunnerMap) {
@@ -75,6 +86,9 @@ onMounted(() => {
           let lastTurnTime = now() //todo - how to get progTime to work with waitFrame?
           let turnWait = 0.5 + Math.random()
           while (true) {
+            if(steerToMouse) {
+              this.direction = directionToMouse(this.pos)
+            }
             if (now() - lastTurnTime > turnWait) {
               this.direction = randomDirection()
               lastTurnTime = now()
@@ -100,12 +114,26 @@ onMounted(() => {
     
       launchLoop(async (ctx) => {
 
+        let placingDot = false
+
+        keydownEvent(ev => {
+          if(ev.key == "d") {
+            const newRunner = new RunnerAgent(ctx, `runner${runners.size}`, runners)
+            newRunner.pos = { x: p5Mouse.x, y: p5Mouse.y }
+            newRunner.direction = randomDirection()
+            newRunner.run()
+          }
+        })
+
+        
+
         mousedownEvent((ev) => {
-          const newRunner = new RunnerAgent(ctx, `runner${runners.size}`, runners)
-          newRunner.pos = { x: p5Mouse.x, y: p5Mouse.y }
-          newRunner.direction = randomDirection()
-          newRunner.run()
+          steerToMouse = true
         }, threeCanvas)
+
+        mouseupEvent(ev => {
+          steerToMouse = false
+        })
         
         await ctx.wait(10000000)
       })
@@ -115,7 +143,10 @@ onMounted(() => {
         // appState.circles.list.forEach(c => c.draw(p))
         runners.forEach((pos, name) => {
           p.fill(255)
-          p.ellipse(pos.x, pos.y, 10, 10)
+          //todo sketch - add envelope in/out of size after click/release of steerToMouse
+          const scale = Math.min(Math.max(lerp(100, 0, (dist(pos, p5Mouse)/300) ** 2), 10), 100)
+          const rad = steerToMouse ? scale : 10
+          p.ellipse(pos.x, pos.y, rad, rad)
         })
       })
 
