@@ -79,7 +79,7 @@ function createAndLaunchContext<T, C extends TimeContext>(block: (ctx: C) => Pro
 const USE_TONE = false
 export function launch<T>(block: (ctx: TimeContext) => Promise<T>): CancelablePromisePoxy<T> {
   if(USE_TONE) return createAndLaunchContext(block, Tone.Transport.immediate(), ToneTimeContext, false)
-  else return createAndLaunchContext(block, performance.now()/1000, DateTimeContext, false)
+  else return createAndLaunchContext(block, dateNow(), DateTimeContext, false)
 }
 
 export type LoopHandle = {
@@ -132,11 +132,12 @@ export abstract class TimeContext {
    * the call to branchRet() is what gets you the extra layer to only apply the time update if the branch is awaited
    */
   public branch<T>(block: (ctx: TimeContext) => Promise<T>, debugName: string = ""): LoopHandle {
-    const promise = createAndLaunchContext(block, this.time, Object.getPrototypeOf(this).constructor, false, this, debugName)
+    const promise = createAndLaunchContext(block, now(), Object.getPrototypeOf(this).constructor, false, this, debugName)
     //todo api - this allows you to manage a branch without accidentally awaiting on it in a way that
     //would screw up parent context time. but in general, awaiting on anything other than
     //ctx.wait[Time] or ctx.branchWait will screw up contextTime <=> wallClock time relationship.
     //there might be no way to have a unified branch function.
+    //could make a linter here to warn users?
     return {
       finally: (finalFunc: () => void) => {
         promise.finally(finalFunc)
@@ -206,7 +207,7 @@ class DateTimeContext extends TimeContext{
     return new Promise<void>((resolve, reject) => {
       const listener = () => { reject(); console.log('abort') }
       ctx.abortController.signal.addEventListener('abort', listener)
-      const nowTime = performance.now() / 1000
+      const nowTime = dateNow()
 
       //todo - in progress
       const targetTime = Math.max(this.rootContext!.mostRecentDescendentTime, this.time) + sec
@@ -216,7 +217,7 @@ class DateTimeContext extends TimeContext{
         const x = 5
         console.log("sketchLog", "negative wait time", this.debugName, nowTime.toFixed(3), targetTime.toFixed(3), waitTime.toFixed(3))
       }
-      const waitStart = performance.now()
+      const waitStart = dateNow()
       setTimeout(() => {
         try {
           // ctx.time += sec
@@ -235,9 +236,9 @@ class DateTimeContext extends TimeContext{
           
           this.rootContext!!.mostRecentDescendentTime = targetTime
 
-          const waitDuration = performance.now() - waitStart
+          const waitDuration = dateNow() - waitStart
           // console.log('wait duration', (waitDuration / 1000).toFixed(3), 'wait time', waitTime.toFixed(3))
-          if(waitDuration/1000 - waitTime > 0.010) console.log('wait duration deviation greater than 10 ms')
+          if(waitDuration - waitTime > 0.010) console.log('wait duration deviation greater than 10 ms')
         } catch(e) {
           console.log('wait error', e)
         }

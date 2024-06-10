@@ -70,6 +70,7 @@ onMounted(() => {
       mag = 1
       direction = { x: 1, y: 0 }
       run() {
+        console.log("runner launched at time", now())
         this.runningLoop = this.ctx.branch(async (ctx) => {
           let lastTurnTime = now() //todo - how to get progTime to work with waitFrame?
           let turnWait = 0.5 + Math.random()
