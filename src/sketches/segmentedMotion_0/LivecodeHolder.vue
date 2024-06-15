@@ -95,6 +95,8 @@ onMounted(() => {
             const scale = Math.min(Math.max(lerp(100, 0, (dist(this.runner, p5Mouse)/300) ** 2), 10), 100)
             // this.runner.rad = steerToMouse ? scale : 10
 
+
+            //todo pattern - this type of interactive ramp/decay pattern seems common
             if(true) {
               if(steerToMouse) {
                 const targetRad = Math.min(Math.max(lerp(100, 0, (dist(this.runner, p5Mouse)/300) ** 2), 10), 100)
