@@ -43,8 +43,8 @@ onMounted(() => {
       p5Mouse = targetToP5Coords(ev, p5i, threeCanvas)
     }, threeCanvas)
 
-    const code = () => {
-      clearDrawFuncs()
+    const code = () => { //todo template - is this code-array pattern really needed in the template?
+      clearDrawFuncs() //todo template - move this to cleanup block?
       appState.circles.list.forEach(c => c.debugDraw = false)
 
       const drawingCursor = (p: p5) => {

@@ -7,7 +7,7 @@ import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, tar
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri, type LoopHandle, now } from '@/channels/channels';
 import { choice } from '@/utils/utils';
-import { lerp } from 'three/src/math/MathUtils.js';
+import { clamp, lerp } from 'three/src/math/MathUtils.js';
 
 const appState = inject<SegMo0State>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
@@ -19,18 +19,9 @@ const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromis
   return loop
 }
 
-const dist = (v1: {x: number, y: number}, v2: {x: number, y: number}) => Math.sqrt((v1.x-v2.x)**2 + (v1.y-v2.y)**2)
-
 const clearDrawFuncs = () => {
   appState.drawFunctions = []
   appState.drawFuncMap = new Map()
-}
-
-function circleArr(n: number, rad: number, p: p5) {
-  const center = { x: p.width / 2, y: p.height / 2 }
-  const sin1 = (x: number) => Math.sin(x * 2 * Math.PI)
-  const cos1 = (x: number) => Math.cos(x * 2 * Math.PI)
-  return xyZip(0, cos1, sin1, n).map(({ x, y }) => ({x: x*rad + center.x, y: y*rad + center.y}))
 }
 
 onMounted(() => {
@@ -47,8 +38,9 @@ onMounted(() => {
       p5Mouse = targetToP5Coords(ev, p5i, threeCanvas)
     }, threeCanvas)
 
-    const runners = new Map<string, {x: number, y: number}>()
-    type RunnerMap = Map<string, {x: number, y: number}>
+    type Runner = {x: number, y: number, rad: number, radGrowSnapshot: number}
+    const runners = new Map<string, Runner>()
+    type RunnerMap = Map<string, Runner>
 
     abstract class LoopAgent<T> {
       name: string
@@ -70,14 +62,16 @@ onMounted(() => {
       const mag = Math.sqrt(xD**2 + yD**2)
       return {x: xD/mag * 3, y: yD/mag * 3}
     }
+    const dist = (v1: {x: number, y: number}, v2: {x: number, y: number}) => Math.sqrt((v1.x-v2.x)**2 + (v1.y-v2.y)**2)
 
     let steerToMouse = false
+    let lastMouseDownTime = 0
 
     class RunnerAgent extends LoopAgent<RunnerMap> {
       constructor(ctx: TimeContext, name: string, globalState: RunnerMap) {
         super(ctx, name, globalState)
       }
-      pos = { x: 0, y: 0 }
+      runner: Runner = { x: 0, y: 0, rad: 10, radGrowSnapshot: -1 }
       mag = 1
       direction = { x: 1, y: 0 }
       run() {
@@ -87,15 +81,31 @@ onMounted(() => {
           let turnWait = 0.5 + Math.random()
           while (true) {
             if(steerToMouse) {
-              this.direction = directionToMouse(this.pos)
+              this.direction = directionToMouse(this.runner)
             }
             if (now() - lastTurnTime > turnWait) {
               this.direction = randomDirection()
               lastTurnTime = now()
               turnWait = 0.5 + Math.random()
             }
-            this.pos = { x: this.pos.x + this.direction.x * this.mag, y: this.pos.y + this.direction.y * this.mag }
-            this.globalState.set(this.name, this.pos)
+            const newPos = { x: this.runner.x + this.direction.x * this.mag, y: this.runner.y + this.direction.y * this.mag }
+            this.runner.x = newPos.x
+            this.runner.y = newPos.y 
+
+            const scale = Math.min(Math.max(lerp(100, 0, (dist(this.runner, p5Mouse)/300) ** 2), 10), 100)
+            // this.runner.rad = steerToMouse ? scale : 10
+
+            if(true) {
+              if(steerToMouse) {
+                const targetRad = Math.min(Math.max(lerp(100, 0, (dist(this.runner, p5Mouse)/300) ** 2), 10), 100)
+                const fractToMouse = clamp((now() - lastMouseDownTime) / 0.3, 0, 1)
+                this.runner.rad = lerp(this.runner.radGrowSnapshot, targetRad, fractToMouse)
+              } else {
+                this.runner.rad = Math.max(10, this.runner.rad * 0.95)
+              }
+            }
+
+            this.globalState.set(this.name, this.runner)
             //todo bug - why does this have a bunch of errors with negative wait time, then stabilize?
             
             //todo api/deep design - transport based animation is "simpler" for creating
@@ -114,21 +124,21 @@ onMounted(() => {
     
       launchLoop(async (ctx) => {
 
-        let placingDot = false
-
         keydownEvent(ev => {
           if(ev.key == "d") {
             const newRunner = new RunnerAgent(ctx, `runner${runners.size}`, runners)
-            newRunner.pos = { x: p5Mouse.x, y: p5Mouse.y }
+            newRunner.runner = { x: p5Mouse.x, y: p5Mouse.y, rad: 10, radGrowSnapshot: -1}
             newRunner.direction = randomDirection()
             newRunner.run()
           }
         })
 
-        
-
         mousedownEvent((ev) => {
           steerToMouse = true
+          lastMouseDownTime = now()
+          runners.forEach((pos, name) => {
+            pos.radGrowSnapshot = pos.rad
+          })
         }, threeCanvas)
 
         mouseupEvent(ev => {
@@ -139,14 +149,11 @@ onMounted(() => {
       })
       
       appState.drawFunctions.push((p: p5) => {
-        // console.log("drawing circles", appState.circles.list.length)
-        // appState.circles.list.forEach(c => c.draw(p))
         runners.forEach((pos, name) => {
+          p.push()
           p.fill(255)
-          //todo sketch - add envelope in/out of size after click/release of steerToMouse
-          const scale = Math.min(Math.max(lerp(100, 0, (dist(pos, p5Mouse)/300) ** 2), 10), 100)
-          const rad = steerToMouse ? scale : 10
-          p.ellipse(pos.x, pos.y, rad, rad)
+          p.ellipse(pos.x, pos.y, pos.rad, pos.rad)
+          p.pop()
         })
       })
 
@@ -174,6 +181,7 @@ onUnmounted(() => {
   shaderGraphEndNode?.disposeAll()
   clearListeners()
   timeLoops.forEach(tl => tl.cancel())
+  clearDrawFuncs()
 })
 
 </script>
