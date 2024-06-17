@@ -36,9 +36,64 @@ onMounted(() => {
       p5Mouse = targetToP5Coords(ev, p5i, threeCanvas)
     }, threeCanvas)
 
-    type Runner = {x: number, y: number, rad: number, radGrowSnapshot: number, turnPoints: {x: number, y: number, time: number}[], trailColor: {r: number, g: number, b: number}}
+    type Runner = {
+      x: number, 
+      y: number, 
+      rad: number, 
+      radGrowSnapshot: number, 
+      turnPoints: { x: number, y: number, time: number }[], 
+      trailColor: { r: number, g: number, b: number },
+      turnWait: number,
+      direction: { x: number, y: number }
+    }
     const runners = new Map<string, Runner>()
     type RunnerMap = Map<string, Runner>
+
+    //@ts-ignore
+    window.appState = runners
+
+    const getWindowedTrailPoints = (runner: Runner, lookbackTime: number) => {
+      const windowedTrailPoints: {x: number, y: number, time: number}[] = []
+      for(let i = runner.turnPoints.length - 1; i >= 0; i--) {
+        if(now() - runner.turnPoints[i].time < lookbackTime) {
+          windowedTrailPoints.push(runner.turnPoints[i])
+        } else {
+          break
+        }
+      }
+      windowedTrailPoints.reverse()
+      return windowedTrailPoints
+    }
+
+    const doSegmentsIntersect = (s1: {x1: number, y1: number, x2: number, y2: number}, s2: {x1: number, y1: number, x2: number, y2: number}) => {
+      const det = (a: number, b: number, c: number, d: number) => a * d - b * c
+      const s = { x: s1.x2 - s1.x1, y: s1.y2 - s1.y1 }
+      const t = { x: s2.x2 - s2.x1, y: s2.y2 - s2.y1 }
+      const denom = det(s.x, -t.x, s.y, -t.y)
+      if(denom == 0) {
+        return false
+      }
+      const t1 = det(s2.x1 - s1.x1, -t.x, s2.y1 - s1.y1, -t.y) / denom
+      const t2 = det(s2.x1 - s1.x1, s.x, s2.y1 - s1.y1, s.y) / denom
+      return t1 >= 0 && t1 <= 1 && t2 >= 0 && t2 <= 1
+    }
+
+    //todo sketch bug - still some kind of issue with the intersection detection and deletion
+    const doRunnersIntersect = (headRunner: Runner, trailRunner: Runner, lookbackTime: number) => {
+      if(headRunner.turnPoints.length < 1) {
+        debugger
+      }
+      const headSegment = { x1: headRunner.x, y1: headRunner.y, x2: headRunner.turnPoints[headRunner.turnPoints.length - 1].x, y2: headRunner.turnPoints[headRunner.turnPoints.length - 1].y }
+      const trailPoints = getWindowedTrailPoints(trailRunner, lookbackTime)
+      trailPoints.push({ x: trailRunner.x, y: trailRunner.y, time: now() })
+      for(let i = 0; i < trailPoints.length - 1; i++) {
+        const trailSegment = { x1: trailPoints[i].x, y1: trailPoints[i].y, x2: trailPoints[i + 1].x, y2: trailPoints[i + 1].y }
+        if(doSegmentsIntersect(headSegment, trailSegment)) {
+          return true
+        }
+      }
+      return false
+    }
 
     abstract class LoopAgent<T> {
       name: string
@@ -67,28 +122,43 @@ onMounted(() => {
     let lastMouseDownTime = 0
 
     class RunnerAgent extends LoopAgent<RunnerMap> {
-      constructor(ctx: TimeContext, name: string, globalState: RunnerMap) {
+      constructor(ctx: TimeContext, name: string, runner: Runner, globalState: RunnerMap) {
         super(ctx, name, globalState)
+        this.runner = runner
+        this.globalState.set(this.name, runner)
       }
-      runner: Runner = { x: 0, y: 0, rad: 10, radGrowSnapshot: -1, turnPoints: [], trailColor: {r: 255, g: 255, b: 255}}
-      mag = 1
-      direction = { x: 1, y: 0 }
+
+      runner: Runner
+
       run() {
         console.log("runner launched at time", now())
         this.runningLoop = this.ctx.branch(async (ctx) => {
           let lastTurnTime = now() //todo - how to get progTime to work with waitFrame?
-          let turnWait = 0.5 + Math.random()
           while (true) {
-            if(steerToMouse) {
-              this.direction = directionToMouse(this.runner)
+
+            let intersectsWithOtherRunner = false
+            runners.forEach((r, name) => {
+              if(name != this.name && doRunnersIntersect(this.runner, r, 5)) {
+                intersectsWithOtherRunner = true
+              }
+            })
+
+            if(intersectsWithOtherRunner) {
+              runners.delete(this.name)
+              return
             }
-            if (now() - lastTurnTime > turnWait) {
-              this.direction = randomDirection()
+
+
+            if(steerToMouse) {
+              this.runner.direction = directionToMouse(this.runner)
+            }
+            if (now() - lastTurnTime > this.runner.turnWait) {
+              this.runner.direction = randomDirection()
               lastTurnTime = now()
-              turnWait = 0.5 + Math.random()
+              this.runner.turnWait = 0.1 + Math.random()**2
               this.runner.turnPoints.push({ x: this.runner.x, y: this.runner.y, time: lastTurnTime })
             }
-            const newPos = { x: this.runner.x + this.direction.x * this.mag, y: this.runner.y + this.direction.y * this.mag }
+            const newPos = { x: this.runner.x + this.runner.direction.x, y: this.runner.y + this.runner.direction.y }
             this.runner.x = newPos.x
             this.runner.y = newPos.y 
 
@@ -106,8 +176,6 @@ onMounted(() => {
                 this.runner.rad = Math.max(10, this.runner.rad * 0.95)
               }
             }
-
-            this.globalState.set(this.name, this.runner)
             //todo bug - why does this have a bunch of errors with negative wait time, then stabilize?
             
             //todo api/deep design - transport based animation is "simpler" for creating
@@ -121,25 +189,28 @@ onMounted(() => {
       }
     }
 
+    let runnerId = 0
+
     const code = () => {
       clearDrawFuncs()
     
       launchLoop(async (ctx) => {
 
+
         keydownEvent(ev => {
           if(ev.key == "d") {
-            const newRunner = new RunnerAgent(ctx, `runner${runners.size}`, runners)
-            newRunner.runner = { x: p5Mouse.x, y: p5Mouse.y, rad: 10, radGrowSnapshot: -1, turnPoints: [], trailColor: randColor()}
-            newRunner.direction = randomDirection()
+            
+            const startPos = { x: p5Mouse.x, y: p5Mouse.y, time: now()}
+            const runner: Runner = { x: startPos.x, y: startPos.y, rad: 10, radGrowSnapshot: -1, turnPoints: [startPos], trailColor: randColor(), turnWait: 0.3, direction: randomDirection() }
+            const newRunner = new RunnerAgent(ctx, `runner_${runnerId++}`, runner, runners)
             newRunner.run()
           }
           if(ev.key == "m") {
             for(let i = 0; i < 10; i++) {
               const color = randColor()
-              const nearMousePos = { x: p5Mouse.x + Math.random() * 100 - 50, y: p5Mouse.y + Math.random() * 100 - 50 }
-              const newRunner = new RunnerAgent(ctx, `runner${runners.size}`, runners)
-              newRunner.runner = { x: nearMousePos.x, y: nearMousePos.y, rad: 10, radGrowSnapshot: -1, turnPoints: [], trailColor: color}
-              newRunner.direction = randomDirection()
+              const startPos = { x: p5Mouse.x + Math.random() * 100 - 50, y: p5Mouse.y + Math.random() * 100 - 50, time: now()}
+              const runner = { x: startPos.x, y: startPos.y, rad: 10, radGrowSnapshot: -1, turnPoints: [startPos], trailColor: color, turnWait: 0.3, direction: randomDirection()}
+              const newRunner = new RunnerAgent(ctx, `runner${runnerId++}`, runner, runners)
               newRunner.run()
             }
           }
@@ -170,10 +241,9 @@ onMounted(() => {
         p.stroke(runner.trailColor.r, runner.trailColor.g, runner.trailColor.b)
         p.strokeWeight(2)
         p.beginShape()
-        runner.turnPoints.forEach((pos, i) => {
-          if(now() - pos.time < lookbackTime) {
-            p.vertex(pos.x, pos.y)
-          }
+        const windowedTrailPoints = getWindowedTrailPoints(runner, lookbackTime)
+        windowedTrailPoints.forEach(pos => {
+          p.vertex(pos.x, pos.y)
         })
         p.vertex(runner.x, runner.y)
         p.endShape()
