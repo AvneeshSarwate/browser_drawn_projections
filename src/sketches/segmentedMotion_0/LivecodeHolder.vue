@@ -31,14 +31,12 @@ onMounted(() => {
     const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
     const threeCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
 
-    const initialCiclePos = appState.circles.list.map(c => ({ x: c.x, y: c.y }))
-
     let p5Mouse = { x: 0, y: 0 }
     mousemoveEvent((ev) => {
       p5Mouse = targetToP5Coords(ev, p5i, threeCanvas)
     }, threeCanvas)
 
-    type Runner = {x: number, y: number, rad: number, radGrowSnapshot: number}
+    type Runner = {x: number, y: number, rad: number, radGrowSnapshot: number, turnPoints: {x: number, y: number, time: number}[], trailColor: {r: number, g: number, b: number}}
     const runners = new Map<string, Runner>()
     type RunnerMap = Map<string, Runner>
 
@@ -63,6 +61,7 @@ onMounted(() => {
       return {x: xD/mag * 3, y: yD/mag * 3}
     }
     const dist = (v1: {x: number, y: number}, v2: {x: number, y: number}) => Math.sqrt((v1.x-v2.x)**2 + (v1.y-v2.y)**2)
+    const randColor = () => ({r: Math.random() * 255, g: Math.random() * 255, b: Math.random() * 255})
 
     let steerToMouse = false
     let lastMouseDownTime = 0
@@ -71,7 +70,7 @@ onMounted(() => {
       constructor(ctx: TimeContext, name: string, globalState: RunnerMap) {
         super(ctx, name, globalState)
       }
-      runner: Runner = { x: 0, y: 0, rad: 10, radGrowSnapshot: -1 }
+      runner: Runner = { x: 0, y: 0, rad: 10, radGrowSnapshot: -1, turnPoints: [], trailColor: {r: 255, g: 255, b: 255}}
       mag = 1
       direction = { x: 1, y: 0 }
       run() {
@@ -87,6 +86,7 @@ onMounted(() => {
               this.direction = randomDirection()
               lastTurnTime = now()
               turnWait = 0.5 + Math.random()
+              this.runner.turnPoints.push({ x: this.runner.x, y: this.runner.y, time: lastTurnTime })
             }
             const newPos = { x: this.runner.x + this.direction.x * this.mag, y: this.runner.y + this.direction.y * this.mag }
             this.runner.x = newPos.x
@@ -129,26 +129,56 @@ onMounted(() => {
         keydownEvent(ev => {
           if(ev.key == "d") {
             const newRunner = new RunnerAgent(ctx, `runner${runners.size}`, runners)
-            newRunner.runner = { x: p5Mouse.x, y: p5Mouse.y, rad: 10, radGrowSnapshot: -1}
+            newRunner.runner = { x: p5Mouse.x, y: p5Mouse.y, rad: 10, radGrowSnapshot: -1, turnPoints: [], trailColor: randColor()}
             newRunner.direction = randomDirection()
             newRunner.run()
+          }
+          if(ev.key == "m") {
+            for(let i = 0; i < 10; i++) {
+              const color = randColor()
+              const nearMousePos = { x: p5Mouse.x + Math.random() * 100 - 50, y: p5Mouse.y + Math.random() * 100 - 50 }
+              const newRunner = new RunnerAgent(ctx, `runner${runners.size}`, runners)
+              newRunner.runner = { x: nearMousePos.x, y: nearMousePos.y, rad: 10, radGrowSnapshot: -1, turnPoints: [], trailColor: color}
+              newRunner.direction = randomDirection()
+              newRunner.run()
+            }
           }
         })
 
         mousedownEvent((ev) => {
           steerToMouse = true
           lastMouseDownTime = now()
-          runners.forEach((pos, name) => {
-            pos.radGrowSnapshot = pos.rad
+          runners.forEach((r, name) => {
+            r.radGrowSnapshot = r.rad
+            r.turnPoints.push({ x: r.x, y: r.y, time: lastMouseDownTime })
           })
         }, threeCanvas)
 
         mouseupEvent(ev => {
           steerToMouse = false
+          runners.forEach((r, name) => {
+            r.turnPoints.push({ x: r.x, y: r.y, time: now() })
+          })
         })
         
         await ctx.wait(10000000)
       })
+
+      const drawRunnerTrail = (p: p5, runner: Runner, lookbackTime: number) => {
+        p.push()
+        p.noFill()
+        p.stroke(runner.trailColor.r, runner.trailColor.g, runner.trailColor.b)
+        p.strokeWeight(2)
+        p.beginShape()
+        runner.turnPoints.forEach((pos, i) => {
+          if(now() - pos.time < lookbackTime) {
+            p.vertex(pos.x, pos.y)
+          }
+        })
+        p.vertex(runner.x, runner.y)
+        p.endShape()
+        p.pop()
+      }
       
       appState.drawFunctions.push((p: p5) => {
         runners.forEach((pos, name) => {
@@ -156,6 +186,7 @@ onMounted(() => {
           p.fill(255)
           p.ellipse(pos.x, pos.y, pos.rad, pos.rad)
           p.pop()
+          drawRunnerTrail(p, pos, 5)
         })
       })
 
@@ -175,8 +206,6 @@ onMounted(() => {
   }
 
 })
-
-
 
 onUnmounted(() => {
   console.log("disposing livecoded resources")

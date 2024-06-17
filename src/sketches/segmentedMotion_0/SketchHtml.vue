@@ -3,6 +3,11 @@
     <canvas id="p5Canvas" width="1280" height="720" abitrary-prop="somethi"></canvas>
     <canvas id="threeCanvas" width="1280" height="720" abitrary-prop="somethi"></canvas>
   </div>
+  <div id="description">
+    <p>press D to drop a point where your mouse is</p>
+    <p>press M to drop 10 points in the vicinity of your mouse</p>
+    <p>Hold down your mouse to attract points to it (can also drag them around)</p>
+  </div>
   <div id="debugInfo"></div>
 </template>
 
