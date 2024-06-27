@@ -152,6 +152,27 @@ export abstract class TimeContext {
     return createAndLaunchContext(block, this.time, Object.getPrototypeOf(this).constructor, true, this, debugName)
   } 
 
+  public segmentWait<T>(block: (prog: number) => void, segmentBeats: number, frameTime: number = 0, debugName: string = ""): CancelablePromisePoxy<void> {
+    return this.branchWait(async (ctx) => {
+      const segmentStartBeats = this.beats
+      const loopHandle = this.branch(async (ctx) => {
+        while(beatNow(this.bpm) - segmentStartBeats < segmentBeats) {
+          block((beatNow(this.bpm) - segmentStartBeats) / segmentBeats)
+          
+          if(frameTime > 0) {
+            await ctx.waitSec(frameTime)
+          } else {
+            await ctx.waitFrame()
+          }
+        }
+      })
+      await this.wait(segmentBeats)
+      loopHandle.cancel()
+      block(1)
+    })
+  }
+  //usage await ctx.segmentWait((prog) => { filterMidi.sendCC(50 + prog) *20) }, 4)
+
   public cancel() {
     this.abortController.abort()
     this.childContexts.forEach((ctx) => ctx.cancel())
@@ -367,6 +388,7 @@ function dateDelay(callback: () => void, nowTime: number, delayTime: number): vo
 const toneNow = () => Tone.Transport.immediate()
 const startTime = performance.now() / 1000
 const dateNow = () => performance.now() / 1000 - startTime
+const beatNow = (bpm: number) => dateNow() * bpm / 60
 
 export const now = USE_TONE ? toneNow : dateNow
 const delayFunc = USE_TONE ? toneDelay : dateDelay

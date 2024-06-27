@@ -205,3 +205,70 @@ export const getMPESynth = () => {
   const synth = new MPEPolySynth(FatOscillatorVoice)
   return synth
 }
+
+
+
+import {el, type ElemNode} from '@elemaudio/core';
+import WebRenderer from '@elemaudio/web-renderer';
+ 
+const ctx = new AudioContext();
+const core = new WebRenderer();
+
+let node = await core.initialize(ctx, {
+  numberOfInputs: 0,
+  numberOfOutputs: 1,
+  outputChannelCount: [2],
+});
+
+node.connect(ctx.destination);
+ 
+// (async function main() {
+//   let node = await core.initialize(ctx, {
+//     numberOfInputs: 0,
+//     numberOfOutputs: 1,
+//     outputChannelCount: [2],
+//   });
+ 
+//   node.connect(ctx.destination);
+ 
+//   let stats = await core.render(el.cycle(440), el.cycle(441));
+//   console.log("Elementary stats", stats);
+// })();
+
+
+const elemVoiceRegistry: ElemNode[] = []
+/**
+ * a global voice registry is needed for VoiceGraphs made with elementary to work with the 
+ * current MPEPolySynth implementation, as MPEPolySynth assumes that each voice is responsible
+ * for connecting itself to the final output destination. It is not set up to be modularly 
+ * routed into an effect. If you wanted to set up modular ouputs on each voice, you would need
+ * each voice to have a specific output node, and MPEPolySynth would need it's own output
+ * node that all voices connect to, which then connects to the final output destination.
+ * 
+ * For VoiceGraphs made with Elementary, you could give each voice it's own WebRenderer, 
+ * because each webRenderer is just an audioWorkletNode. 
+ * 
+ * For Tone.js you could also try to pull out the underlying webAudio nodes and connect them, 
+ * but it might not work that well because Tone.js uses the wrapper library for the AudioContext.
+ * Still, if you can get the actual underlying audio context from the wrapper, you could maybe
+ * use it as the source context for Elementary nodes, allowing interop
+ *  
+ */
+
+//@ts-ignore
+export class ElementaryBasicVoice implements MPEVoiceGraph {
+
+  constructor() {
+    const [adsrTriggerNode, setAdsrTrigger] = core.createRef('const', {value: 0}, [])
+    const adsr = el.adsr(0.01, 0.2, 0.9, 0.05, adsrTriggerNode as ElemNode);
+    const [osc, setOscFreq] = core.createRef('cycle', {frequency: 440}, [])
+
+    const outNode = el.mul(osc as ElemNode, adsr)
+
+    elemVoiceRegistry.push(outNode)
+    core.render(...elemVoiceRegistry)
+  }
+    
+
+
+}
