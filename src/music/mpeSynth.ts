@@ -1,4 +1,5 @@
 import * as Tone from 'tone'
+import { v4 as uuidv4 } from 'uuid';
 
 type Constructor<T> = new (...args: any[]) => T
 
@@ -24,6 +25,7 @@ class MPEPolySynth<T extends MPEVoiceGraph> {
   maxVoices: number
   voices: Map<number, T> //map of voices by creation time via Date.now()
 
+  //todo api - add a "preallocateVoices" flag for MPEPolySynth if voice graphs are heavy
   constructor(vGraph: Constructor<T>, maxVoices: number = 32) {
     this.vGraphCtor = vGraph
     this.maxVoices = maxVoices
@@ -236,7 +238,11 @@ node.connect(ctx.destination);
 // })();
 
 
-const elemVoiceRegistry: ElemNode[] = []
+const elemVoiceRegistry = new Map<string, ElemNode>()
+function refreshElemVoiceRegistry() {
+  const nodes = Array.from(elemVoiceRegistry.values())
+  core.render(...nodes)
+}
 /**
  * a global voice registry is needed for VoiceGraphs made with elementary to work with the 
  * current MPEPolySynth implementation, as MPEPolySynth assumes that each voice is responsible
@@ -255,20 +261,58 @@ const elemVoiceRegistry: ElemNode[] = []
  *  
  */
 
-//@ts-ignore
+const midi2freq = (midi: number) => Tone.Midi(midi).toFrequency()
+
 export class ElementaryBasicVoice implements MPEVoiceGraph {
 
+  private pitchSetter: (value: number) => void
+  private gainSetter: (value: number) => void
+  private asdrTrigger: (value: number) => void
+  private id: string
+
   constructor() {
+    this.id = uuidv4()
     const [adsrTriggerNode, setAdsrTrigger] = core.createRef('const', {value: 0}, [])
     const adsr = el.adsr(0.01, 0.2, 0.9, 0.05, adsrTriggerNode as ElemNode);
     const [osc, setOscFreq] = core.createRef('cycle', {frequency: 440}, [])
+    const [gain, setGain] = core.createRef('const', {value: 0}, [])
+    this.pitchSetter = setOscFreq as (value: number) => void
+    this.gainSetter = setGain as (value: number) => void
+    this.asdrTrigger = setAdsrTrigger as (value: number) => void
 
-    const outNode = el.mul(osc as ElemNode, adsr)
+    const outNode = el.mul(el.mul(osc as ElemNode, adsr), gain as ElemNode)
 
-    elemVoiceRegistry.push(outNode)
-    core.render(...elemVoiceRegistry)
+    elemVoiceRegistry.set(this.id, outNode)
+    refreshElemVoiceRegistry()
   }
-    
 
+  set pitch(value: number) {
+    this.pitchSetter(midi2freq(value))
+  }
 
+  noteOn(note: number, velocity: number, pressure: number, slide: number): void {
+    this.pitch = note
+    this.gainSetter(velocity)
+    this.asdrTrigger(1)
+  }
+
+  noteOff(): void {
+    this.asdrTrigger(0)
+  }
+
+  forceFinish(): void {
+    this.noteOff()
+  }
+
+  pressure: number = 0
+  slide: number = 0
+
+  dispose(): void {
+    elemVoiceRegistry.delete(this.id)
+    refreshElemVoiceRegistry()
+  }
+}
+
+export function getElementarySynth() {
+  return new MPEPolySynth(ElementaryBasicVoice)
 }
