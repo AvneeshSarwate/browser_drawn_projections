@@ -202,6 +202,39 @@ export class FatOscillatorVoice implements MPEVoiceGraph {
   }
 }
 
+//todo - both this and the replicated-channel version need to do midi_chan<=>on_note management
+
+//todo - how ot handle multuple note ons for same pitch 
+export class MidiMPEVoiceGraph implements MPEVoiceGraph {
+  midiDevice: MIDIValOutput
+  onNotes = new Map<number, number>() //map of <midi_channel, time note is on>
+  freeNotes = [1, 2, 3, 4, 5, 6, 7, 8 ,9, 10, 11, 12, 13, 14]
+
+  constructor(midiDevice: MIDIValOutput) {
+    this.midiDevice = midiDevice
+  }
+
+  noteOn(note: number, velocity: number, pressure?: number, slide?: number, bend?: number): void {
+    if (this.freeNotes.length == 0) {
+      console.warn("no free notes")
+    } else {
+      const chan = this.freeNotes.shift()!!
+      this.onNotes.set(chan, Date.now())
+      this.midiDevice.sendNoteOn(note, velocity, chan)
+      if (pressure) {
+        this.midiDevice.sendChannelPressure(pressure, chan)
+      }
+      if (slide) {
+        this.midiDevice.sendControlChange(74, slide, chan)
+      }
+      if (bend) {
+        this.midiDevice.sendPitchBend(bend, chan)
+      }
+    }
+  }
+
+
+}
 
 export const getMPESynth = () => {
   const synth = new MPEPolySynth(FatOscillatorVoice)
@@ -212,11 +245,12 @@ export const getMPESynth = () => {
 
 import {el, type ElemNode} from '@elemaudio/core';
 import WebRenderer from '@elemaudio/web-renderer';
+import type { MIDIValOutput } from '@midival/core';
  
 const ctx = new AudioContext();
 const core = new WebRenderer();
 
-let node = await core.initialize(ctx, {
+const node = await core.initialize(ctx, {
   numberOfInputs: 0,
   numberOfOutputs: 1,
   outputChannelCount: [2],
@@ -316,3 +350,5 @@ export class ElementaryBasicVoice implements MPEVoiceGraph {
 export function getElementarySynth() {
   return new MPEPolySynth(ElementaryBasicVoice)
 }
+
+
