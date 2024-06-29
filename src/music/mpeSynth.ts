@@ -19,7 +19,14 @@ export interface MPEVoiceGraph extends VoiceGraph {
 }
 
 //todo api - for now, all of the voices need to connect to the output destination themselves
-
+/**
+ * todo api - create a voice-manager object that allocates ids for voices based on noteon/off.
+ * the set of ids is passed in as an argument - the MPE set of voices is a special case of 1-14.
+ * Add this voiceID mapper into the MPEPolySynth implementation, and have all voices get an id.
+ * that ID is then the voice channel used for MPE stuff. Have both a max voices param and 
+ * a mpe flag, and if maxVoices > 14 and also mpe is true, throw an error. if not mpe, the 
+ * ids of the voice-manager are just 1-maxVoices
+ */
 class MPEPolySynth<T extends MPEVoiceGraph> {
   vGraphCtor: Constructor<T>
   maxVoices: number
