@@ -11,11 +11,13 @@ interface VoiceGraph {
   dispose(): void
 }
 
+//todo api - in MPEVoiceGraph, directly setting pitch (and for actual MPE implementation, calculating bend) vs setting bend directly?
 export interface MPEVoiceGraph extends VoiceGraph {
   //should be implemented as getters/setters on the implementing class
   pitch: number
   pressure: number
   slide: number
+  id: number
 }
 
 //todo api - for now, all of the voices need to connect to the output destination themselves
@@ -31,19 +33,23 @@ class MPEPolySynth<T extends MPEVoiceGraph> {
   vGraphCtor: Constructor<T>
   maxVoices: number
   voices: Map<number, T> //map of voices by creation time via Date.now()
+  idGenerator = 1
 
   //todo api - add a "preallocateVoices" flag for MPEPolySynth if voice graphs are heavy
-  constructor(vGraph: Constructor<T>, maxVoices: number = 32) {
+  constructor(vGraph: Constructor<T>, maxVoices: number = 32, isActualMpe: boolean = false) {
     this.vGraphCtor = vGraph
     this.maxVoices = maxVoices
     this.voices = new Map()
+    if(isActualMpe && maxVoices > 14) {
+      throw new Error("MPEPolySynth: maxVoices must be less than or equal to 14 for actual MPE")
+    }
   }
 
   noteOn(note: number, velocity: number, pressure: number, slide: number): T {
     let voice: T
 
     if (this.voices.size < this.maxVoices) {
-      voice = new this.vGraphCtor()
+      voice = new this.vGraphCtor(this.idGenerator++)
       voice.noteOn(note, velocity, pressure, slide)
       this.voices.set(Date.now(), voice)
     } else {
@@ -86,8 +92,10 @@ export class FatOscillatorVoice implements MPEVoiceGraph {
   private _pitch: number
   private _pressure: number
   private _slide: number
+  id: number
 
-  constructor() {
+  constructor(id: number) {
+    this.id = id
     this.oscillator = new Tone.FatOscillator().start()
     this.filter = new Tone.Filter({ type: "lowpass" })
     this.filter.Q.value = 25
@@ -175,8 +183,8 @@ export class FatOscillatorVoice implements MPEVoiceGraph {
 
   noteOn(note: number, velocity: number, pressure: number, slide: number): void {
     this.pitch = note
-    this.pressure = pressure
-    this.slide = slide
+    this._pressure = pressure
+    this._slide = slide
     this.envelope.triggerAttack(Tone.now(), velocity)
   }
 
@@ -213,34 +221,73 @@ export class FatOscillatorVoice implements MPEVoiceGraph {
 
 //todo - how ot handle multuple note ons for same pitch 
 export class MidiMPEVoiceGraph implements MPEVoiceGraph {
+  channel: number
   midiDevice: MIDIValOutput
-  onNotes = new Map<number, number>() //map of <midi_channel, time note is on>
-  freeNotes = [1, 2, 3, 4, 5, 6, 7, 8 ,9, 10, 11, 12, 13, 14]
+  note: number = -1
+  _pressure: number = 0
+  _slide: number = 0
+  _pitch: number = 0
+  pitchBendRange: number
+  id: number
 
-  constructor(midiDevice: MIDIValOutput) {
+  constructor(id: number, channel: number, midiDevice: MIDIValOutput, pitchBendRange: number = 48) {
+    this.id = channel
+    this.channel = channel
     this.midiDevice = midiDevice
+    this.pitchBendRange = pitchBendRange
   }
 
-  noteOn(note: number, velocity: number, pressure?: number, slide?: number, bend?: number): void {
-    if (this.freeNotes.length == 0) {
-      console.warn("no free notes")
-    } else {
-      const chan = this.freeNotes.shift()!!
-      this.onNotes.set(chan, Date.now())
-      this.midiDevice.sendNoteOn(note, velocity, chan)
-      if (pressure) {
-        this.midiDevice.sendChannelPressure(pressure, chan)
-      }
-      if (slide) {
-        this.midiDevice.sendControlChange(74, slide, chan)
-      }
-      if (bend) {
-        this.midiDevice.sendPitchBend(bend, chan)
-      }
-    }
+  noteOn(note: number, velocity: number, pressure: number, slide: number): void {
+    this.note = note
+    this._pressure = pressure
+    this._slide = slide
+    this.midiDevice.sendNoteOn(note, velocity, this.channel)
+    this.midiDevice.sendControlChange(74, slide, this.channel)
+    this.midiDevice.sendChannelPressure(pressure, this.channel)
   }
 
+  noteOff(): void {
+    this.midiDevice.sendNoteOff(this.note, this.channel)
+    this.midiDevice.sendControlChange(74, 0, this.channel)
+    this.midiDevice.sendChannelPressure(0, this.channel)
+    this.note = -1
+  }
 
+  forceFinish(): void {
+    this.noteOff()
+  }
+
+  get pressure(): number {
+    return this._pressure
+  }
+
+  set pressure(value: number) {
+    this._pressure = value
+    this.midiDevice.sendChannelPressure(value, this.channel)
+  }
+
+  get slide(): number {
+    return this._slide
+  }
+
+  set slide(value: number) {
+    this._slide = value
+    this.midiDevice.sendControlChange(74, value, this.channel)
+  }
+
+  get pitch(): number {
+    return this._pitch
+  }
+
+  set pitch(value: number) {
+    this._pitch = value
+    const normalizedBend = (value - this.note) / this.pitchBendRange
+    this.midiDevice.sendPitchBend(normalizedBend, this.channel)
+  }
+
+  dispose(): void {
+    this.forceFinish()
+  }
 }
 
 export const getMPESynth = () => {
@@ -309,10 +356,13 @@ export class ElementaryBasicVoice implements MPEVoiceGraph {
   private pitchSetter: (value: number) => void
   private gainSetter: (value: number) => void
   private asdrTrigger: (value: number) => void
-  private id: string
+  private elementaryId: string
+  private _pitch: number = 0
+  id: number
 
-  constructor() {
-    this.id = uuidv4()
+  constructor(id: number) {
+    this.id = id
+    this.elementaryId = uuidv4()
     const [adsrTriggerNode, setAdsrTrigger] = core.createRef('const', {value: 0}, [])
     const adsr = el.adsr(0.01, 0.2, 0.9, 0.05, adsrTriggerNode as ElemNode);
     const [osc, setOscFreq] = core.createRef('cycle', {frequency: 440}, [])
@@ -323,8 +373,12 @@ export class ElementaryBasicVoice implements MPEVoiceGraph {
 
     const outNode = el.mul(el.mul(osc as ElemNode, adsr), gain as ElemNode)
 
-    elemVoiceRegistry.set(this.id, outNode)
+    elemVoiceRegistry.set(this.elementaryId, outNode)
     refreshElemVoiceRegistry()
+  }
+
+  get pitch(): number {
+    return this._pitch
   }
 
   set pitch(value: number) {
@@ -345,11 +399,27 @@ export class ElementaryBasicVoice implements MPEVoiceGraph {
     this.noteOff()
   }
 
-  pressure: number = 0
-  slide: number = 0
+  _pressure: number = 0
+  _slide: number = 0
+
+  get pressure(): number {
+    return this._pressure
+  }
+
+  set pressure(value: number) {
+    this._pressure = value
+  }
+
+  get slide(): number {
+    return this._slide
+  }
+
+  set slide(value: number) {
+    this._slide = value
+  }
 
   dispose(): void {
-    elemVoiceRegistry.delete(this.id)
+    elemVoiceRegistry.delete(this.elementaryId)
     refreshElemVoiceRegistry()
   }
 }
