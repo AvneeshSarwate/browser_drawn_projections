@@ -1,4 +1,4 @@
-import { RedBlackBST } from './redBlack_chatgpt'; // Adjust the import path as needed
+import { RedBlackBST } from './redBlack_claude'; // Adjust the import path as needed
 
 function testBasicOperations() {
   console.log("Testing basic operations...");
@@ -81,6 +81,8 @@ function testCustomComparator() {
   assert(bst.get(5) === "five", "Get operation failed with custom comparator");
   assert(bst.get(2) === "two", "Get operation failed with custom comparator");
   assert(bst.get(7) === "seven", "Get operation failed with custom comparator");
+  assert(bst.min() === 7, "Min operation failed with custom comparator");
+  assert(bst.max() === 2, "Max operation failed with custom comparator");
   
   console.log("Custom comparator tests passed.");
 }

@@ -112,7 +112,7 @@ export class RedBlackBST<K, V> {
         node = this.moveRedRight(node);
       }
       if (this.comparator(key, node.key) === 0) {
-        const minNode = this.min(node.right!);
+        const minNode = this.minNode(node.right!);
         node.key = minNode.key;
         node.value = minNode.value;
         node.right = this.deleteMin(node.right!);
@@ -179,9 +179,14 @@ export class RedBlackBST<K, V> {
     return node;
   }
 
-  public min(node: Node<K, V>): Node<K, V> {
+  private minNode(node: Node<K, V>): Node<K, V> {
     if (node.left === null) return node;
-    return this.min(node.left);
+    return this.minNode(node.left);
+  }
+
+  public min(): K | null {
+    if (this.isEmpty()) return null;
+    return this.minNode(this.root!).key;
   }
 
   public deleteMin(node: Node<K, V>): Node<K, V> | null {
@@ -195,9 +200,14 @@ export class RedBlackBST<K, V> {
     return this.balance(node);
   }
 
-  public max(node: Node<K, V>): Node<K, V> {
+  private maxNode(node: Node<K, V>): Node<K, V> {
     if (node.right === null) return node;
-    return this.max(node.right);
+    return this.maxNode(node.right);
+  }
+
+  public max(): K | null {
+    if (this.isEmpty()) return null;
+    return this.maxNode(this.root!).key;
   }
 
   public deleteMax(node: Node<K, V>): Node<K, V> | null {
