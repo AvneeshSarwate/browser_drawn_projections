@@ -7,7 +7,6 @@ function testBasicOperations() {
   
   // Test put and get
   bst.put(5, "five");
-  
   bst.put(2, "two");
   bst.put(7, "seven");
   bst.put(1, "one");
@@ -174,10 +173,6 @@ function testBalanceAfterOperations() {
 }
 
 function getTreeHeight(bst: RedBlackBST<number, string>): number {
-  // This is a helper function to get the height of the tree
-  // You'll need to add a public method in your RedBlackBST class to expose this functionality
-  // For example: return bst.height();
-  // Implement the height() method in your RedBlackBST class
   return bst.height();
 }
 
@@ -212,6 +207,42 @@ function testStringKeys() {
   console.log("String keys test passed.");
 }
 
+function testCustomObjectKeys() {
+  console.log("Testing with custom object keys...");
+
+  class CustomKey {
+    constructor(public id: number, public name: string) {}
+  }
+
+  const customComparator = (a: CustomKey, b: CustomKey) => a.id - b.id;
+  const bst = new RedBlackBST<CustomKey, string>(customComparator);
+
+  const keys = [
+    new CustomKey(1, "one"),
+    new CustomKey(2, "two"),
+    new CustomKey(3, "three")
+  ];
+
+  keys.forEach((key, index) => {
+    bst.put(key, `value${index}`);
+  });
+
+  assert(bst.size() === keys.length, `Size should be ${keys.length}`);
+
+  // Check if all keys are present
+  keys.forEach((key, index) => {
+    assert(bst.contains(key), `Tree should contain key "${key.name}"`);
+    assert(bst.get(key) === `value${index}`, `Value for key "${key.name}" should be "value${index}"`);
+  });
+
+  // Delete a key
+  bst.delete(keys[1]);
+  assert(bst.size() === keys.length - 1, `Size should be ${keys.length - 1} after deletion`);
+  assert(!bst.contains(keys[1]), `Tree should not contain "${keys[1].name}" after deletion`);
+
+  console.log("Custom object keys test passed.");
+}
+
 function assert(condition: boolean, message: string) {
   if (!condition) {
     throw new Error(`Assertion failed: ${message}`);
@@ -219,18 +250,19 @@ function assert(condition: boolean, message: string) {
 }
 
 function runTests() {
-    console.log("Running Red-Black BST Tests");
-  
-    testBasicOperations();
-    testDuplicateKeys();
-    testDeletion();
-    testCustomComparator();
-    testEdgeCases();
-    testLargeDataset();
-    testBalanceAfterOperations();
-    testStringKeys();
-  
-    console.log("All tests completed.");
-  }
+  console.log("Running Red-Black BST Tests");
+
+  testBasicOperations();
+  testDuplicateKeys();
+  testDeletion();
+  testCustomComparator();
+  testEdgeCases();
+  testLargeDataset();
+  testBalanceAfterOperations();
+  testStringKeys();
+  testCustomObjectKeys();
+
+  console.log("All tests completed.");
+}
 
 runTests();
