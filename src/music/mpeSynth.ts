@@ -304,13 +304,16 @@ import type { MIDIValOutput } from '@midival/core';
 const ctx = new AudioContext();
 const core = new WebRenderer();
 
-const node = await core.initialize(ctx, {
-  numberOfInputs: 0,
-  numberOfOutputs: 1,
-  outputChannelCount: [2],
-});
 
-node.connect(ctx.destination);
+async function initializeElementaryRenderer() {
+  const node = await core.initialize(ctx, {
+    numberOfInputs: 0,
+    numberOfOutputs: 1,
+    outputChannelCount: [2],
+  });
+
+  node.connect(ctx.destination);
+}
  
 // (async function main() {
 //   let node = await core.initialize(ctx, {
