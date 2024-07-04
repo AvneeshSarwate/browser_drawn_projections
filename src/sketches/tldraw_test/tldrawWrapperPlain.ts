@@ -157,19 +157,32 @@ export function CustomRenderer(props: MyTldrawWrapperProps) {
 
 export function p5FreehandTldrawRender(editor: Editor, p5: p5) {
   p5.push()
+  
   const camera = editor.getCamera()
   p5.scale(camera.z, camera.z)
   p5.translate(camera.x, camera.y)
+  
+  // const screenBounds = editor.getViewportScreenBounds()
+  // p5.translate(-screenBounds.minX, -screenBounds.minY)
+
+  // const screenCenter = editor.getViewportScreenCenter()
+  // p5.translate(-screenCenter.x, -screenCenter.y)
+
+  // camera.
+
   const renderingShapes = editor.getRenderingShapes()
   for (const { shape, opacity } of renderingShapes) {
     if (editor.isShapeOfType<TLDrawShape>(shape, 'draw')) {
-      // p5.stroke(shape.props.color)
+      p5.push()
       p5.stroke(255)
+      p5.noFill()
       p5.strokeWeight(4)
       p5.beginShape()
       if (shape.props.fill !== 'none' && shape.props.isClosed) {
         p5.fill(shape.props.color)
       }
+      //todo - "default" coordinates for tldraw are (0,0) in screen center, vs (0,0) in top left corner for p5
+      p5.translate(shape.x, shape.y)
       for (const segment of shape.props.segments) {
         if (segment.type === 'straight') {
           p5.vertex(segment.points[0].x, segment.points[0].y)
@@ -181,7 +194,8 @@ export function p5FreehandTldrawRender(editor: Editor, p5: p5) {
         }
       }
       p5.endShape()
+      p5.pop()
     }
   }
-  p5.pop()
+  
 }

@@ -70,14 +70,15 @@ onBeforeUnmount(() => {
   /* position: absolute;
   top: 0;
   left: 0; */
-  visibility: visible;
+  /* visibility: visible; */
+  display: none;
 }
 
 
 #tldrawContainer {
   border: 1px solid black;
-  width: 500px;
-  height: 500px;
+  width: 1280px;
+  height: 720px;
   visibility: visible;
 }
 </style>
