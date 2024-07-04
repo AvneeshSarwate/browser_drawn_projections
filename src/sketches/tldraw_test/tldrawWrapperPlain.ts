@@ -9,6 +9,7 @@ import {
   DefaultCanvas
 } from 'tldraw'
 import 'tldraw/tldraw.css'
+import type p5 from 'p5';
 
 interface MyTldrawWrapperProps {
   onEditorReady: (editor: Editor) => void
@@ -151,4 +152,36 @@ export function CustomRenderer(props: MyTldrawWrapperProps) {
   }, [editor])
 
   return React.createElement('canvas', { ref: rCanvas })
+}
+
+
+export function p5FreehandTldrawRender(editor: Editor, p5: p5) {
+  p5.push()
+  const camera = editor.getCamera()
+  p5.scale(camera.z, camera.z)
+  p5.translate(camera.x, camera.y)
+  const renderingShapes = editor.getRenderingShapes()
+  for (const { shape, opacity } of renderingShapes) {
+    if (editor.isShapeOfType<TLDrawShape>(shape, 'draw')) {
+      // p5.stroke(shape.props.color)
+      p5.stroke(255)
+      p5.strokeWeight(4)
+      p5.beginShape()
+      if (shape.props.fill !== 'none' && shape.props.isClosed) {
+        p5.fill(shape.props.color)
+      }
+      for (const segment of shape.props.segments) {
+        if (segment.type === 'straight') {
+          p5.vertex(segment.points[0].x, segment.points[0].y)
+          p5.vertex(segment.points[1].x, segment.points[1].y)
+        } else {
+          for (const point of segment.points) {
+            p5.vertex(point.x, point.y)
+          }
+        }
+      }
+      p5.endShape()
+    }
+  }
+  p5.pop()
 }

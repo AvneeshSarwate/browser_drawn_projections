@@ -5,6 +5,7 @@ import { Entity, EntityList } from '@/stores/undoCommands'
 import { Ramp } from '@/channels/channels'
 import { defineStore, acceptHMRUpdate } from 'pinia'
 import { ref } from 'vue'
+import type { Editor } from 'tldraw'
 
 
 type PulseCircleSerialized = {
@@ -102,7 +103,7 @@ export class PulseCircle extends Entity {
   }
 }
 
-export type TemplateAppState = {
+export type TldrawTestAppState = {
   circles: EntityList<PulseCircle>
   p5Instance: p5 | undefined
   threeRenderer: THREE.WebGLRenderer | undefined
@@ -114,10 +115,11 @@ export type TemplateAppState = {
   shaderDrawFunc: (() => void) | undefined
   stats?: { begin: () => void, end: () => void }
   paused: boolean
-  drawing: boolean
+  drawing: boolean,
+  tldrawEditor: any
 }
 
-export const appState: TemplateAppState = {
+export const appState: TldrawTestAppState = {
   circles: new EntityList(PulseCircle),
   p5Instance: undefined,
   threeRenderer: undefined,
@@ -130,9 +132,10 @@ export const appState: TemplateAppState = {
   stats: undefined,
   paused: false,
   drawing: false,
+  tldrawEditor: undefined
 } 
 
-export const appStateName = 'templateAppState'
+export const appStateName = 'tldrawTestAppState'
 
 //todo api - add caching/rehydrating of appState from local storage
 

@@ -1,7 +1,7 @@
-import { type TemplateAppState } from './appState'
+import { type TldrawTestAppState } from './appState'
 import p5 from 'p5'
 
-export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => TemplateAppState): p5 {
+export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => TldrawTestAppState): p5 {
 
   const sketch = (p: p5) => {
 

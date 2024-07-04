@@ -14,18 +14,22 @@
 
 <script setup lang="ts">
 
-import { onMounted, onBeforeUnmount, ref } from 'vue';
+import { onMounted, onBeforeUnmount, ref, inject } from 'vue';
 import { createRoot, type Root } from 'react-dom/client';
 // import { MyTldrawWrapper, TestComponent, SimpleComponent } from './tldrawWrapper';
 import { MyTldrawWrapper } from './tldrawWrapperPlain';
 import { type Editor } from 'tldraw';
+import { appStateName, type TldrawTestAppState } from './appState';
 
 const reactRoot = ref<HTMLElement | null>(null);
 let root: Root | null = null;
 
+const appState = inject<TldrawTestAppState>(appStateName)!!
+
 const handleEditorReady = (editor: Editor) => {
   // Use the editor instance in your Vue app
   console.log('Editor is ready:', editor);
+  appState.tldrawEditor = editor
   // You can store it in a reactive property or use it directly
 };
 
@@ -55,17 +59,17 @@ onBeforeUnmount(() => {
 #p5Canvas {
   border: 1px solid black;
   /* position: absolute; */
-  top: 0;
+  /* top: 0;
   left: 0;
-  z-index: -1;
-  visibility: hidden;
+  z-index: -1; */
+  /* visibility: hidden; */
 }
 
 #threeCanvas {
   border: 1px solid black;
-  position: absolute;
+  /* position: absolute;
   top: 0;
-  left: 0;
+  left: 0; */
   visibility: visible;
 }
 
