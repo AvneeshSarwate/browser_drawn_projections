@@ -21,7 +21,9 @@ export const sketchNames = [
   'musicAgentsTest',
   'refined_fundamentals',
   'runners_modifiers_0',
-  'segmentedMotion_0'
+  'segmentedMotion_0',
+  'squareTrails',
+  'tldraw_test'
 ]
 
 const sketchRoutes = sketchNames.map(name => {

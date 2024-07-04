@@ -42,3 +42,6 @@ To build for github pages:
 To configure for netlify and have vue-router work:
 - remeber the _redirects file for netlify https://docs.netlify.com/routing/redirects/
 - https://stackoverflow.com/a/53337147
+
+build fix todo:
+- tsconfig to get react types to work properly
