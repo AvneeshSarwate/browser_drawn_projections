@@ -33,7 +33,7 @@ export const MyTldrawWrapper: React.FC<MyTldrawWrapperProps> = ({
     React.createElement(Tldraw, {
       persistenceKey: 'example',
       components: {
-        Background: CustomRenderer,
+        Background: () => React.createElement(CustomRenderer, { onEditorReady }),
         Canvas: DefaultCanvas
       }
     })
@@ -45,10 +45,10 @@ export function RendererWrapper(props: MyTldrawWrapperProps) {
   return React.createElement(CustomRenderer, props)
 }
 
-export function CustomRenderer() {
+export function CustomRenderer(props: MyTldrawWrapperProps) {
   const editor = useEditor()
   const rCanvas = useRef<HTMLCanvasElement>(null)
-  // props.onEditorReady(editor);
+  props.onEditorReady(editor);
 
   useLayoutEffect(() => {
     const canvas = rCanvas.current
