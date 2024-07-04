@@ -1,13 +1,15 @@
 <template>
+  <br><br>
+  <div id="description">
+    <p>Tldraw-p5 "custom renderer" proof of concept (adapted from tldraw custom renderer example on the docs site)</p>
+    <p>Tldraw instance on top.</p>
+    <p>P5 sketch rendering freehand tldraw shapes on bottom</p>
+    <p>Shader post-processing with three.js</p>
+  </div>
   <div id="tldrawContainer" ref="reactRoot"></div>
   <div id="canvasContainer">
     <canvas id="p5Canvas" width="1280" height="720" abitrary-prop="somethi"></canvas>
     <canvas id="threeCanvas" width="1280" height="720" abitrary-prop="somethi"></canvas>
-  </div>
-  <div id="description">
-    <p>Press D to enter draw mode</p>
-    <p>Press S to add a circle</p>
-    <p>Press F to animate the circle arrangement</p>
   </div>
   <div id="debugInfo"></div>
 </template>
@@ -71,7 +73,7 @@ onBeforeUnmount(() => {
   top: 0;
   left: 0; */
   /* visibility: visible; */
-  display: none;
+  /* display: none; */
 }
 
 
