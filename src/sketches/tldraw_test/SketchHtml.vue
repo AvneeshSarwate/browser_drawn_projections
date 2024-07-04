@@ -3,12 +3,19 @@
   <div id="description">
     <p>Tldraw-p5 "custom renderer" proof of concept (adapted from tldraw custom renderer example on the docs site)</p>
     <p>Tldraw instance on top.</p>
-    <p>P5 sketch rendering freehand tldraw shapes on bottom</p>
-    <p>Shader post-processing with three.js</p>
+    <p>P5 sketch rendering freehand tldraw shapes in the middle</p>
+    <p>Shader post-processing with three.js on the bottom</p>
   </div>
+  <h3>Tldraw instance</h3>
   <div id="tldrawContainer" ref="reactRoot"></div>
+  
   <div id="canvasContainer">
+    <p><h3>P5 sketch rendering freehand tldraw shapes</h3></p>
+    <br>
     <canvas id="p5Canvas" width="1280" height="720" abitrary-prop="somethi"></canvas>
+    <br>
+    <p><h3>Shader post-processing with three.js</h3></p>
+    <br>
     <canvas id="threeCanvas" width="1280" height="720" abitrary-prop="somethi"></canvas>
   </div>
   <div id="debugInfo"></div>
@@ -65,6 +72,10 @@ onBeforeUnmount(() => {
   left: 0;
   z-index: -1; */
   /* visibility: hidden; */
+}
+
+h3 {
+  background-color: white;
 }
 
 #threeCanvas {

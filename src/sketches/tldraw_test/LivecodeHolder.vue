@@ -2,11 +2,12 @@
 <script setup lang="ts">
 import { type TldrawTestAppState, PulseCircle, appStateName } from './appState';
 import { inject, onMounted, onUnmounted } from 'vue';
-import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
+import { CanvasPaint, FeedbackNode, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
 import { p5FreehandTldrawRender } from './tldrawWrapperPlain';
+import { HorizontalBlur, LayerBlend, Transform, VerticalBlur } from '@/rendering/customFX';
 
 const appState = inject<TldrawTestAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
@@ -48,9 +49,14 @@ onMounted(() => {
         }
       })
 
-      const passthru = new Passthru({ src: p5Canvas })
-      const canvasPaint = new CanvasPaint({ src: passthru })
-
+      const p5Passthru = new Passthru({ src: p5Canvas })
+      const feedback = new FeedbackNode(p5Passthru)
+      const vertBlur = new VerticalBlur({ src: feedback })
+      const horBlur = new HorizontalBlur({ src: vertBlur })
+      const transform = new Transform({ src: horBlur })
+      const layerOverlay = new LayerBlend({ src1: p5Passthru, src2: transform })
+      feedback.setFeedbackSrc(layerOverlay)
+      const canvasPaint = new CanvasPaint({ src: layerOverlay })
       shaderGraphEndNode = canvasPaint
       appState.shaderDrawFunc = () => shaderGraphEndNode!!.renderAll(appState.threeRenderer!!)
       
