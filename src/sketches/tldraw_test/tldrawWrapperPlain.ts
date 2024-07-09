@@ -55,6 +55,87 @@ export function CustomRenderer(props: MyTldrawWrapperProps) {
 }
 
 
+function multiplyMatrices(a: number[][], b: number[][]): number[][] {
+  const result = Array.from({ length: 3 }, () => Array(3).fill(0));
+
+  for (let i = 0; i < 3; i++) {
+    for (let j = 0; j < 3; j++) {
+      for (let k = 0; k < 3; k++) {
+        result[i][j] += a[i][k] * b[k][j];
+      }
+    }
+  }
+
+  return result;
+}
+
+function applyMatrix(matrix: number[][], pt: {x: number, y: number}): {x: number, y: number} {
+  return {
+    x: matrix[0][0] * pt.x + matrix[0][1] * pt.y + matrix[0][2],
+    y: matrix[1][0] * pt.x + matrix[1][1] * pt.y + matrix[1][2]
+  }
+}
+
+function cameraTransform(editor: Editor): number[][] {
+  const camera = editor.getCamera()
+
+  const scaleMatrix = [
+    [camera.z, 0, 0],
+    [0, camera.z, 0],
+    [0, 0, 1]
+  ];
+  
+  const translationMatrix = [
+    [1, 0, camera.x],
+    [0, 1, camera.y],
+    [0, 0, 1]
+  ];
+
+  return multiplyMatrices(scaleMatrix, translationMatrix)
+}
+
+function shapeTransform(shape: TLDrawShape): number[][] {
+  const translationMatrix = [
+    [1, 0, shape.x],
+    [0, 1, shape.y],
+    [0, 0, 1]
+  ];
+
+  const rotationMatrix = [
+    [Math.cos(shape.rotation), -Math.sin(shape.rotation), 0],
+    [Math.sin(shape.rotation), Math.cos(shape.rotation), 0],
+    [0, 0, 1]
+  ];
+
+  return multiplyMatrices(translationMatrix, rotationMatrix)
+}
+ 
+
+export function getFreehandShapes(editor: Editor) {
+  const shapes: {x: number, y: number}[][] = []
+  const renderingShapes = editor.getRenderingShapes()
+
+  for (const { shape, opacity, util } of renderingShapes) {
+    const shapePts: {x: number, y: number}[] = []
+
+    if (editor.isShapeOfType<TLDrawShape>(shape, 'draw')) {
+
+      const totalTransform = multiplyMatrices(cameraTransform(editor), shapeTransform(shape))
+      
+      for (const segment of shape.props.segments) {
+        for (const point of segment.points) {
+          const transformedPt = applyMatrix(totalTransform, point)
+          shapePts.push(transformedPt)
+        }
+      }
+
+      shapes.push(shapePts)
+    }
+  }
+
+  return shapes
+}
+
 export function p5FreehandTldrawRender(editor: Editor, p5: p5) {
   p5.push()
   

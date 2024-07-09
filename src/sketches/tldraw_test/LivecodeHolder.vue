@@ -6,7 +6,7 @@ import { CanvasPaint, FeedbackNode, Passthru, type ShaderEffect } from '@/render
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
-import { p5FreehandTldrawRender } from './tldrawWrapperPlain';
+import { getFreehandShapes, p5FreehandTldrawRender } from './tldrawWrapperPlain';
 import { HorizontalBlur, LayerBlend, Transform, VerticalBlur } from '@/rendering/customFX';
 
 const appState = inject<TldrawTestAppState>(appStateName)!!
@@ -45,7 +45,27 @@ onMounted(() => {
       appState.drawFuncMap.set('tldrawRender', () => {
         if (appState.tldrawEditor) {
           if(drawTicks++ % 10 === 0) console.log("rendering tldraw")
-          p5FreehandTldrawRender(appState.tldrawEditor, p5i)
+          // p5FreehandTldrawRender(appState.tldrawEditor, p5i)
+
+          p5i.push()
+          p5i.stroke(255)
+          p5i.noFill()
+          p5i.strokeWeight(4)
+
+          const shapes = getFreehandShapes(appState.tldrawEditor)
+          for (const shape of shapes) {
+            p5i.noFill()
+            p5i.beginShape()
+            for (const pt of shape) {
+              p5i.vertex(pt.x, pt.y)
+            }
+            p5i.endShape()
+
+            p5i.fill(255, 0, 0)
+            const shapePt = shape[Math.floor((drawTicks / 4 % shape.length) )]
+            p5i.circle(shapePt.x, shapePt.y, 30)
+          }
+          p5i.pop()
         }
       })
 
@@ -79,7 +99,6 @@ onUnmounted(() => {
   clearListeners()
   timeLoops.forEach(tl => tl.cancel())
 })
-
 </script>
 
 <template>
