@@ -47,6 +47,7 @@ export function RendererWrapper(props: MyTldrawWrapperProps) {
 }
 
 export function CustomRenderer(props: MyTldrawWrapperProps) {
+  console.log('CustomRenderer')
   const editor = useEditor()
   const rCanvas = useRef<HTMLCanvasElement>(null)
   props.onEditorReady(editor);
@@ -110,7 +111,8 @@ function shapeTransform(shape: TLDrawShape): number[][] {
   return multiplyMatrices(translationMatrix, rotationMatrix)
 }
  
-
+//todo sketch - can chache this and update on shape changes, and also add ids or return val (see link below)
+//https://tldraw.dev/examples/editor-api/after-create-update-shape
 export function getFreehandShapes(editor: Editor) {
   const shapes: {x: number, y: number}[][] = []
   const renderingShapes = editor.getRenderingShapes()
