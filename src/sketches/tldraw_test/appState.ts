@@ -3,108 +3,14 @@ import { Entity, EntityList } from '@/stores/undoCommands'
 
 
 import { Ramp } from '@/channels/channels'
-import { defineStore, acceptHMRUpdate } from 'pinia'
+import { defineStore, acceptHMRUpdate, type StoreDefinition } from 'pinia'
 import { ref } from 'vue'
 import type { Editor } from 'tldraw'
 
 
-type PulseCircleSerialized = {
-  center: ({ x: number, y: number })
-  rad: number
-  color: {
-    r: number
-    g: number
-    b: number
-  },
-  id: number
-}
 
-export class PulseCircle extends Entity {
-  name: string
-  x: number
-  y: number
-  rad: number
-  color: {
-    r: number
-    g: number
-    b: number
-  }
-  debugDraw: boolean = false
-
-  event?: Ramp
-
-  public serialize(): PulseCircleSerialized {
-    const serialized: PulseCircleSerialized = {
-      center: { x: this.x, y: this.y },
-      rad: this.rad,
-      color: this.color,
-      id: this.id
-    }
-    return serialized
-  }
-
-  public hydrate(serialized: object): void {
-    const parsed = serialized as PulseCircleSerialized
-    this.x = parsed.center.x
-    this.y = parsed.center.y
-    this.rad = parsed.rad
-    this.color = parsed.color
-    this.id = parsed.id
-  }
-
-  constructor(x: number, y: number, rad: number, createId = true) {
-    super(createId)
-    this.x = x
-    this.y = y
-    this.rad = rad
-    const r = () => Math.random()
-    this.color = { r: r(), g: r(), b: r() }
-    this.name = 'PulseCircle'
-  }
-
-  setStyle(p: p5) {
-    const {r, g, b} = this.color
-    p.stroke(r*255, g*255, b*255)
-    p.fill(r*255, g*255, b*255)
-    p.strokeWeight(15)
-  }
-
-  setDebugStyle(p: p5) {
-    p.strokeWeight(1)
-    p.stroke(255, 255, 255)
-    p.fill(0, 0, 0, 0)
-    p.textSize(20)
-  }
-
-  draw(p: p5) {
-    if (this.debugDraw) {
-      p.push()
-      this.setDebugStyle(p)
-      p.circle(this.x, this.y, this.rad)
-      p.text(`id: ${this.id}`, this.x, this.y)
-      p.pop()
-    } else {
-      if (this.event) {
-        p.push()
-        this.setStyle(p)
-        p.circle(this.x, this.y, this.rad * this.event.val())
-        p.pop()
-      }
-    }
-  }
-
-  trigger() {
-    this.event?.cancel()
-    this.event = new Ramp(1)
-    this.event.onFinish = () => {
-      this.event = undefined
-    }
-    this.event.trigger()
-  }
-}
 
 export type TldrawTestAppState = {
-  circles: EntityList<PulseCircle>
   p5Instance: p5 | undefined
   threeRenderer: THREE.WebGLRenderer | undefined
   codeStack: (() => void)[]
@@ -116,11 +22,11 @@ export type TldrawTestAppState = {
   stats?: { begin: () => void, end: () => void }
   paused: boolean
   drawing: boolean,
-  tldrawEditor: any
+  tldrawEditor: Editor | undefined,
+  tldrawInteractionCount: number
 }
 
 export const appState: TldrawTestAppState = {
-  circles: new EntityList(PulseCircle),
   p5Instance: undefined,
   threeRenderer: undefined,
   codeStack: [],
@@ -132,14 +38,15 @@ export const appState: TldrawTestAppState = {
   stats: undefined,
   paused: false,
   drawing: false,
-  tldrawEditor: undefined
+  tldrawEditor: undefined,
+  tldrawInteractionCount: 0
 } 
 
 export const appStateName = 'tldrawTestAppState'
 
 //todo api - add caching/rehydrating of appState from local storage
 
-export const globalStore = defineStore(appStateName, () => {
+export const globalStore: StoreDefinition = defineStore(appStateName, () => {
   const appStateRef = ref(appState)
 
   //@ts-ignore

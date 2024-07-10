@@ -1,13 +1,15 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
-import { type TldrawTestAppState, PulseCircle, appStateName } from './appState';
-import { inject, onMounted, onUnmounted } from 'vue';
+import { type TldrawTestAppState, appStateName } from './appState';
+import { inject, onMounted, onUnmounted, ref } from 'vue';
 import { CanvasPaint, FeedbackNode, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
 import { getFreehandShapes, p5FreehandTldrawRender } from './tldrawWrapperPlain';
 import { HorizontalBlur, LayerBlend, Transform, VerticalBlur } from '@/rendering/customFX';
+import AutoUI from '@/components/AutoUI.vue';
+import type { Editor } from 'tldraw';
 
 const appState = inject<TldrawTestAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
@@ -24,6 +26,11 @@ const clearDrawFuncs = () => {
   appState.drawFuncMap = new Map()
 }
 
+const drawParams = ref({
+  showLines: true,
+  showCircles: true, 
+  showConnectors: true
+})
 
 onMounted(() => {
   try {
@@ -44,26 +51,42 @@ onMounted(() => {
       let drawTicks = 0
       appState.drawFuncMap.set('tldrawRender', () => {
         if (appState.tldrawEditor) {
-          if(drawTicks++ % 10 === 0) console.log("rendering tldraw")
+          if(drawTicks++ % 10 === 0){
+            console.log("rendering tldraw")
+
+            console.log(appState.tldrawEditor.getInstanceState())
+          }
           // p5FreehandTldrawRender(appState.tldrawEditor, p5i)
 
           p5i.push()
-          p5i.stroke(255)
-          p5i.noFill()
           p5i.strokeWeight(4)
 
           const shapes = getFreehandShapes(appState.tldrawEditor)
+          const shapeCirclePts: {x: number, y: number}[] = []
           for (const shape of shapes) {
             p5i.noFill()
+            p5i.stroke(255)
             p5i.beginShape()
-            for (const pt of shape) {
-              p5i.vertex(pt.x, pt.y)
+            if (drawParams.value.showLines) {
+              for (const pt of shape) {
+                p5i.vertex(pt.x, pt.y)
+              }
+              p5i.endShape()
             }
-            p5i.endShape()
 
-            p5i.fill(255, 0, 0)
             const shapePt = shape[Math.floor((drawTicks / 4 % shape.length) )]
-            p5i.circle(shapePt.x, shapePt.y, 30)
+            shapeCirclePts.push(shapePt)
+
+            if (drawParams.value.showCircles) {
+              p5i.fill(255, 0, 0)
+              p5i.circle(shapePt.x, shapePt.y, 30)
+            }
+          }
+          if(drawParams.value.showConnectors) {
+            p5i.stroke(0, 255 * sinN(drawTicks / 400), 255 * cosN(drawTicks / 400))
+            for (let i = 0; i < shapeCirclePts.length - 1; i++) {
+              p5i.line(shapeCirclePts[i].x, shapeCirclePts[i].y, shapeCirclePts[i + 1].x, shapeCirclePts[i + 1].y)
+            }
           }
           p5i.pop()
         }
@@ -103,6 +126,7 @@ onUnmounted(() => {
 
 <template>
   <div></div>
+  <AutoUI :object-to-edit="drawParams"/>
 </template>
 
 <style scoped></style>
