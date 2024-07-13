@@ -12,6 +12,7 @@ interface VoiceGraph {
 }
 
 //todo api - in MPEVoiceGraph, directly setting pitch (and for actual MPE implementation, calculating bend) vs setting bend directly?
+//todo api - all implementations need to take input 0-127 for pressure/slide and appropriate range for pitch, and handle scaling to internal param
 export interface MPEVoiceGraph extends VoiceGraph {
   //should be implemented as getters/setters on the implementing class
   pitch: number
@@ -29,7 +30,7 @@ export interface MPEVoiceGraph extends VoiceGraph {
  * a mpe flag, and if maxVoices > 14 and also mpe is true, throw an error. if not mpe, the 
  * ids of the voice-manager are just 1-maxVoices
  */
-class MPEPolySynth<T extends MPEVoiceGraph> {
+export class MPEPolySynth<T extends MPEVoiceGraph> {
   vGraphCtor: Constructor<T>
   maxVoices: number
   voices: Map<number, T> //map of voices by creation time via Date.now()
@@ -45,11 +46,19 @@ class MPEPolySynth<T extends MPEVoiceGraph> {
     }
   }
 
-  noteOn(note: number, velocity: number, pressure: number, slide: number): T {
+  allNotesOff() {
+    this.voices.forEach(voice => {
+      voice.forceFinish()
+    })
+  }
+
+  //extra id parameter here to make it easy to coordinate an instance with actual external midi controllers, who will provide their own voice id
+  //todo testing - see how this external id plays with voice stealing and voice allocation
+  noteOn(note: number, velocity: number, pressure: number, slide: number, id?: number): T {
     let voice: T
 
     if (this.voices.size < this.maxVoices) {
-      voice = new this.vGraphCtor(this.idGenerator++)
+      voice = new this.vGraphCtor(id ?? this.idGenerator++)
       voice.noteOn(note, velocity, pressure, slide)
       this.voices.set(Date.now(), voice)
     } else {
