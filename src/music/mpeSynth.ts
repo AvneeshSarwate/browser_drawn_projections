@@ -146,7 +146,7 @@ export class FatOscillatorVoice implements MPEVoiceGraph {
 
   set pressure(value: number) {
     this._pressure = value
-    this.filter.frequency.value = 100 + value * 3000 // Example mapping
+    this.filter.frequency.value = 100 + (value/127) * 3000 // Example mapping
   }
 
   get slide(): number {
@@ -155,7 +155,7 @@ export class FatOscillatorVoice implements MPEVoiceGraph {
 
   set slide(value: number) {
     this._slide = value
-    this.distortion.distortion = Math.pow(value, 2.5) // Example mapping
+    this.distortion.distortion = Math.pow(value/127, 2.5) // Example mapping
   }
 
   get attack(): number {

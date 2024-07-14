@@ -31,39 +31,43 @@ MIDIVal.onOutputDeviceDisconnected((accessObject) => {
   midiOutputs.delete(accessObject.name);
 })
 
-function mapMidiInputToMpeSynth<T extends MPEVoiceGraph>(input: MIDIValInput, synth: MPEPolySynth<T>) {
-  const midiPitchToVoiceId = new Map<number, number>();
+
+//todo api - handle hot reloading
+export function mapMidiInputToMpeSynth<T extends MPEVoiceGraph>(input: MIDIValInput, synth: MPEPolySynth<T>) {
+  const midiPitchToVoiceId = new Map<number, T>();
   
   input.onAllNotesOff((event) => {
     synth.allNotesOff()
   })
 
   input.onAllNoteOn((event) => {
-    const voice = synth.noteOn(event.note, event.velocity, 0, 0)
-    midiPitchToVoiceId.set(event.note, voice.id)
+    const voice = synth.noteOn(event.note, event.velocity, 0, 0, event.channel)
+    midiPitchToVoiceId.set(event.channel, voice)
+    // console.log("all note on", event, 'chan', event.channel, "voice_id", voice.id)
   })
 
   input.onAllNoteOff((event) => {
-    const voice = synth.voices.get(midiPitchToVoiceId.get(event.note) ?? -1)
+    const voice = midiPitchToVoiceId.get(event.channel)
+    // console.log("all note off", event, voice)
     if(voice) synth.noteOff(voice)
   })
   
   input.onChannelPressure((event) => {
-    const voice = synth.voices.get(midiPitchToVoiceId.get(event.channel) ?? -1)
+    const voice = midiPitchToVoiceId.get(event.channel)
     if (voice) {
       voice.pressure = event.data1 //todo api - is this correct?
     }
   })
 
   input.onPitchBend((event) => {
-    const voice = synth.voices.get(midiPitchToVoiceId.get(event.channel) ?? -1)
+    const voice = midiPitchToVoiceId.get(event.channel)
     if (voice) {
       voice.pitch = event.value //todo api - is this correct?
     }
   })
 
   input.onControlChange(74, (event) => {
-    const voice = synth.voices.get(midiPitchToVoiceId.get(event.channel) ?? -1)
+    const voice = midiPitchToVoiceId.get(event.channel)
     if (voice) {
       voice.slide = event.data2 //todo api - is this correct?
     }
