@@ -92,6 +92,32 @@ export class MPEPolySynth<T extends MPEVoiceGraph> {
   }
 }
 
+type SynthParamDef = {
+  low: number
+  high: number
+}
+
+
+//a decorator for parameters of a setter of mpeVoiceGraph that sets the high/low limits
+function param(low: number, high: number) {
+  return function<T>(setter: (value: number) => void, context: ClassSetterDecoratorContext) {
+
+    //add setter name, low, high to decorator metadata
+    (context.metadata!.setterParams as Record<string, SynthParamDef>) ??= {}
+    const setterParams = context.metadata!.setterParams as Record<string, SynthParamDef>
+    setterParams[context.name as string] = {low, high}
+
+    return function(this: any, value: number) {
+      setter(Math.min(Math.max(value, low), high))
+    }
+  }
+}
+
+function testDecorator(ths: any, context: any, other: any) {
+  return
+}
+
+
 export class FatOscillatorVoice implements MPEVoiceGraph {
   private oscillator: Tone.FatOscillator
   private filter: Tone.Filter
@@ -151,6 +177,15 @@ export class FatOscillatorVoice implements MPEVoiceGraph {
 
   get slide(): number {
     return this._slide
+  }
+
+  get filterQ(): number {
+    return this.filter.Q.value
+  }
+
+  // @testDecorator
+  set filterQ(value: number) {
+    this.filter.Q.value = value
   }
 
   set slide(value: number) {
@@ -225,6 +260,11 @@ export class FatOscillatorVoice implements MPEVoiceGraph {
     this.envelope.dispose()
   }
 }
+
+
+const fatOscVoice = new FatOscillatorVoice(1)
+fatOscVoice.filterQ = 20
+console.log("fastOsc Q", fatOscVoice.filterQ)
 
 //todo - both this and the replicated-channel version need to do midi_chan<=>on_note management
 
