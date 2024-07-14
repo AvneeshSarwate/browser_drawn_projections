@@ -21,6 +21,10 @@ export interface MPEVoiceGraph extends VoiceGraph {
   id: number
 }
 
+type NumberKeys<T> = {
+  [K in keyof T]: T[K] extends number ? K : never
+}[keyof T];
+
 //todo api - for now, all of the voices need to connect to the output destination themselves
 /**
  * todo api - create a voice-manager object that allocates ids for voices based on noteon/off.
@@ -45,6 +49,19 @@ export class MPEPolySynth<T extends MPEVoiceGraph> {
       throw new Error("MPEPolySynth: maxVoices must be less than or equal to 14 for actual MPE")
     }
   }
+
+  setParam(param: NumberKeys<T>, value: number) {
+    this.voices.forEach(voice => {
+      voice[param] = value as any
+    })
+  }
+  
+  //alternate typing - learn why these are different?
+  // setParam<K extends NumberKeys<T>>(param: K, value: number) {
+  //   this.voices.forEach(voice => {
+  //     voice[param] = value as any;
+  //   });
+  // }
 
   allNotesOff() {
     this.voices.forEach(voice => {
@@ -128,6 +145,8 @@ export class FatOscillatorVoice implements MPEVoiceGraph {
   private _pressure: number
   private _slide: number
   id: number
+
+  voiceName: string = "fatOsc"
 
   constructor(id: number) {
     this.id = id
