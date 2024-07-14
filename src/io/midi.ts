@@ -32,11 +32,19 @@ MIDIVal.onOutputDeviceDisconnected((accessObject) => {
 })
 
 
-//todo api - handle hot reloading
+/**
+ debugging
+ - all notes off not interacting properly when stopping a midi clip in ableton
+ - audio randomly turns off - might be a browser-focus issue with webaudio?
+ - mpe for slide/pressure seems to work but need to test with sounds better suited to debugging
+ */
+
+//todo api - handle hot reloading for mapMidiInputToMpeSynth
 export function mapMidiInputToMpeSynth<T extends MPEVoiceGraph>(input: MIDIValInput, synth: MPEPolySynth<T>) {
   const midiPitchToVoiceId = new Map<number, T>();
   
   input.onAllNotesOff((event) => {
+    midiPitchToVoiceId.clear()
     synth.allNotesOff()
   })
 
