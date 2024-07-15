@@ -1,6 +1,32 @@
 import * as Tone from 'tone'
 import { v4 as uuidv4 } from 'uuid';
 
+
+//polyfil for Symbol.metadata (typescript doesnt emit a polyfil for backwards compat reasons? discussion in links below)
+//polyfill used from https://github.com/tc39/proposal-decorator-metadata/issues/14#issuecomment-2136289464
+//similar solution https://github.com/microsoft/TypeScript/issues/53461#issuecomment-1738762398
+declare global {
+  interface SymbolConstructor {
+    readonly metadata: unique symbol
+  }
+}
+
+;(Symbol as any).metadata ??= Symbol.for('Symbol.metadata')
+
+const _metadata = Object.create(null)
+
+if (typeof Symbol === 'function' && Symbol.metadata) {
+  Object.defineProperty(globalThis, Symbol.metadata, {
+    enumerable: true,
+    configurable: true,
+    writable: true,
+    value: _metadata
+  })
+}
+
+
+
+
 type Constructor<T> = new (...args: any[]) => T
 
 interface VoiceGraph {
@@ -45,6 +71,11 @@ export class MPEPolySynth<T extends MPEVoiceGraph> {
     this.vGraphCtor = vGraph
     this.maxVoices = maxVoices
     this.voices = new Map()
+
+    // @ts-expect-error
+    const voiceMetadata = vGraph[Symbol.metadata]
+    console.log("voiceMetadata", voiceMetadata)
+    
     if(isActualMpe && maxVoices > 14) {
       throw new Error("MPEPolySynth: maxVoices must be less than or equal to 14 for actual MPE")
     }
@@ -131,6 +162,8 @@ function param(low: number, high: number) {
 }
 
 function testDecorator(ths: any, context: any) {
+  // context.metadata ??= {}
+  context.metadata[context.name] = context.name
   return
 }
 
@@ -499,4 +532,24 @@ export function getElementarySynth() {
   return new MPEPolySynth(ElementaryBasicVoice)
 }
 
+//example pulled from TS 5.2 announcement for decorator metadata
+// interface Context {
+//   name: string;
+//   metadata: Record<PropertyKey, unknown>;
+// }
+// function setMetadata(_target: any, context: any) {
+//   context.metadata ??= {}
+//   context.metadata[context.name] = true;
+// }
+// class SomeClass {
+//   @setMetadata
+//   foo = 123;
+//   @setMetadata
+//   accessor bar = "hello!";
+//   @setMetadata
+//   baz() { }
+// }
 
+// // @ts-ignore
+// const ourMetadata = SomeClass[Symbol.metadata];
+// console.log("docs metadata test", JSON.stringify(ourMetadata));
