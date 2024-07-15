@@ -148,15 +148,16 @@ type SynthParamDef = {
 
 //a decorator for parameters of a setter of mpeVoiceGraph that sets the high/low limits
 function param(low: number, high: number) {
-  return function<T>(setter: (value: number) => void, context: ClassSetterDecoratorContext) {
+  return function(setter: (value: number) => void, context: ClassSetterDecoratorContext) {
 
     //add setter name, low, high to decorator metadata
     (context.metadata!.setterParams as Record<string, SynthParamDef>) ??= {}
-    const setterParams = context.metadata!.setterParams as Record<string, SynthParamDef>
+    const setterParams = context.metadata.setterParams as Record<string, SynthParamDef>
     setterParams[context.name as string] = {low, high}
 
-    return function(this: any, value: number) {
-      setter(Math.min(Math.max(value, low), high))
+    return function boundedSetter(this: any, value: number) {
+      const clampedValue = Math.min(Math.max(value, low), high)
+      setter.call(this, clampedValue)
     }
   }
 }
@@ -235,7 +236,8 @@ export class FatOscillatorVoice implements MPEVoiceGraph {
     return this.filter.Q.value
   }
 
-  @testDecorator
+  // @testDecorator
+  @param(0, 10)
   set filterQ(value: number) {
     this.filter.Q.value = value
   }
