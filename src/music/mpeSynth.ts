@@ -130,7 +130,7 @@ function param(low: number, high: number) {
   }
 }
 
-function testDecorator(ths: any, context: any, other: any) {
+function testDecorator(ths: any, context: any) {
   return
 }
 
@@ -202,7 +202,7 @@ export class FatOscillatorVoice implements MPEVoiceGraph {
     return this.filter.Q.value
   }
 
-  // @testDecorator
+  @testDecorator
   set filterQ(value: number) {
     this.filter.Q.value = value
   }
