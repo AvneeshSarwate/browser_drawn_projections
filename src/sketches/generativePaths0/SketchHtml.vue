@@ -16,12 +16,17 @@
 
 
 <style scoped>
+
+/* 
+go into base.css and change the body.background to rgba(0, 0, 0, 0)
+*/
+
 #canvasContainer {
-  background-color: black;
+  background-color: rgba(0, 0, 0, 0);
 }
 
 #p5Canvas {
-  border: 1px solid black;
+  border: 1px solid rgba(0, 0, 0, 0);
   /* position: absolute; */
   top: 0;
   left: 0;
@@ -34,7 +39,7 @@
 }
 
 #threeCanvas {
-  border: 1px solid black;
+  border: 1px solid rgba(0, 0, 0, 0);
   position: absolute;
   top: 0;
   left: 0;

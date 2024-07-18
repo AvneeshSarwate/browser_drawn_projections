@@ -105,6 +105,7 @@ onMounted(() => {
       })
 
       singleKeydownEvent(' ', (ev) => {
+        ev.preventDefault() //stops spacebar from scrolling when page loaded in touchdesigner
         if (appState.drawing) {
           const newCircle = new PulseCircle(p5Mouse.x, p5Mouse.y, 30)
           newCircle.debugInd = appState.circles.list.length
