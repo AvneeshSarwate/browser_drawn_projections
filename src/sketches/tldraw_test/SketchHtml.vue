@@ -48,7 +48,9 @@ const handleEditorReady = (editor: Editor) => {
     appState.tldrawEditor = editor
 
     //@ts-ignore
-    editor.loadSnapshot(snapshot1 as Partial<TLEditorSnapshot>)
+    editor.loadSnapshot(snapshot2 as Partial<TLEditorSnapshot>)
+    
+    // editor.getSnapshot()
     snapshotLoaded = true
   }
   // You can store it in a reactive property or use it directly
