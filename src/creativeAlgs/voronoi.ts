@@ -1,7 +1,6 @@
 //disable eslint for this file
 /* eslint-disable */
 
-// @ts-nocheck
 
 
 /*!
@@ -1805,8 +1804,38 @@ Voronoi.prototype.compute = function (sites: {x: number, y: number, voronoiId?: 
     return diagram;
 };
 
+type VDiagram = {
+  cells: VCell[],
+}
+
+type VCell = {
+  site: VSite,
+  halfedges: VHalfedge[]
+}
+
+type VSite = {
+  x: number,
+  y: number,
+  voronoiId: number
+}
+
+type VHalfedge = {
+  getStartpoint(): { x: number, y: number },
+  getEndpoint(): { x: number, y: number }
+}
+
+function getVoronoiPolygons(diagram: VDiagram, origSiteList?: VSite[]): { x: number, y: number }[][] {
+  const idSortedCells = origSiteList?.map(s => diagram.cells[s.voronoiId]) ?? diagram.cells
+  return idSortedCells.map(cell => {
+    return cell.halfedges.map(halfedge => {
+      return halfedge.getStartpoint()
+    })
+  })
+}
+
 /******************************************************************************/
 
 export {
-    Voronoi
+    Voronoi,
+    getVoronoiPolygons
 }

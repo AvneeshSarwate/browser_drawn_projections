@@ -24,7 +24,8 @@ export const sketchNames = [
   'segmentedMotion_0',
   'squareTrails',
   'tldraw_test',
-  'mpeDesignerTest'
+  'mpeDesignerTest',
+  'voronoiTest'
 ]
 
 const sketchRoutes = sketchNames.map(name => {
