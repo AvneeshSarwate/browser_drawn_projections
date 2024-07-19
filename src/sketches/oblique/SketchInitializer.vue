@@ -36,10 +36,10 @@ const neutralizeSketch = (instance: p5) => {
 
 
 onMounted(() => {
-  const stats = new Stats();
-  stats.showPanel(1); // 0: fps, 1: ms, 2: mb, 3+: custom
-  appState.stats = stats
-  document.body.appendChild(stats.dom);
+  // const stats = new Stats();
+  // stats.showPanel(1); // 0: fps, 1: ms, 2: mb, 3+: custom
+  // appState.stats = stats
+  // document.body.appendChild(stats.dom);
 
   //explanation - the closest you can get to removing a p5 instance without removing the underlying canvas
   if(appState.p5Instance) neutralizeSketch(appState.p5Instance)

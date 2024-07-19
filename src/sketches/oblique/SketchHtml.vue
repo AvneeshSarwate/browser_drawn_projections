@@ -12,6 +12,8 @@
 <style scoped>
 #canvasContainer {
   background-color: black;
+  width: 100%;
+  height: 100%;
 }
 
 #p5Canvas {
@@ -20,7 +22,7 @@
   top: 0;
   left: 0;
   z-index: -1;
-  visibility: hidden;
+  /* visibility: hidden; */
 }
 
 #threeCanvas {
@@ -28,6 +30,6 @@
   position: absolute;
   top: 0;
   left: 0;
-  visibility: visible;
+  visibility: hidden;
 }
 </style>

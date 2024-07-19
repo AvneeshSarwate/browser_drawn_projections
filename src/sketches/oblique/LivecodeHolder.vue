@@ -76,7 +76,8 @@ let drawQuoteCard = (p: p5, quoteInd: number, blowup: number) => {
 }
 
 let blowup = 0
-let transitionRamp = new Ramp(4)
+const rampTime = 2
+let transitionRamp = new Ramp(rampTime)
 let quoteCycleRamp: Ramp | undefined = undefined
 const nextQuote = () => {
   if(quoteCycleRamp && quoteCycleRamp.val() < 1) {
@@ -85,9 +86,9 @@ const nextQuote = () => {
     console.log("qqq interupted transition")
   }
   
-  transitionRamp = new Ramp(4)
+  transitionRamp = new Ramp(rampTime)
   transitionRamp.trigger()
-  quoteCycleRamp = new Ramp(2)
+  quoteCycleRamp = new Ramp(rampTime/2)
   quoteCycleRamp.onFinish = () => {
     currentInd = nextInd
     nextInd = randQuoteInd()
@@ -119,16 +120,21 @@ onMounted(() => {
         // drawQuoteCard(p, currentInd, logisticSigmoid(sinN(now()*0.2), 0.1))
         blowup = transitionRamp.val()
         const blowupTri = tri(blowup)
-        drawQuoteCard(p, currentInd, blowupTri)
+        drawQuoteCard(p, currentInd, blowupTri**2)
       })
 
       const passthru = new Passthru({ src: p5Canvas })
       const canvasPaint = new CanvasPaint({ src: passthru })
 
+      document.body.onclick = () => {
+        console.log("clicked")
+        nextQuote()
+      }
+
+      document.body.style.backgroundColor = "black"
+
       shaderGraphEndNode = canvasPaint
-      appState.shaderDrawFunc = () => shaderGraphEndNode!!.renderAll(appState.threeRenderer!!)
-      
-      singleKeydownEvent('p', (ev) => { appState.paused = !appState.paused })
+      // appState.shaderDrawFunc = () => shaderGraphEndNode!!.renderAll(appState.threeRenderer!!)
     }
 
     appState.codeStack.push(code)
@@ -153,7 +159,7 @@ onUnmounted(() => {
 <template>
   <div></div>
   <div>
-    <button @click="nextQuote">Next Quote</button>
+    <!-- <button @click="nextQuote">Next Quote</button> -->
   </div>
 </template>
 
