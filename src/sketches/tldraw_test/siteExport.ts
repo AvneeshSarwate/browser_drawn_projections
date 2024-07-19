@@ -1,5 +1,13 @@
 //todo - write a function that translates json export from tldraw.com to a tldraw snapshot
 
+/**
+ take an existing snapshot and then.
+ - remove the exist shapes (the keys in document.store that start with "shape:"")
+ - add the new shapes from the site export to document.store, with the shape.id as the key
+   (with the same value as the shape in the site export)
+
+ */
+
 export const siteExport = {
   schema: {
     schemaVersion: 2,

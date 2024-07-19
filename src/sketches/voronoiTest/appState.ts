@@ -114,7 +114,8 @@ export type TemplateAppState = {
   shaderDrawFunc: (() => void) | undefined
   stats?: { begin: () => void, end: () => void }
   paused: boolean
-  drawing: boolean
+  drawing: boolean,
+  voronoiSites: {x: number, y: number}[]
 }
 
 export const appState: TemplateAppState = {
@@ -130,6 +131,7 @@ export const appState: TemplateAppState = {
   stats: undefined,
   paused: false,
   drawing: false,
+  voronoiSites: []
 } 
 
 export const appStateName = 'voronoiTestAppState'

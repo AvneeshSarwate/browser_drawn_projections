@@ -5,7 +5,7 @@ import { inject, onMounted, onUnmounted, ref } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
-import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
+import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri, EventChop } from '@/channels/channels';
 import { Voronoi, getVoronoiPolygons } from '@/creativeAlgs/voronoi';
 
 const appState = inject<TemplateAppState>(appStateName)!!
@@ -28,6 +28,13 @@ function circleArr(n: number, rad: number, p: p5) {
   const sin1 = (x: number) => Math.sin(x * 2 * Math.PI)
   const cos1 = (x: number) => Math.cos(x * 2 * Math.PI)
   return xyZip(0, cos1, sin1, n).map(({ x, y }) => ({x: x*rad + center.x, y: y*rad + center.y}))
+}
+
+const seedRand = (n: number) => {
+  return (Math.sin(100 +n * 12523.9898)+1)/2
+}
+const randRGB = (seed: number) => {
+  return { r: seedRand(seed) * 255, g: seedRand(seed + 1.3) * 255, b: seedRand(seed + 2.4) * 255 }
 }
 
 let drawVoronoi = ref(false)
@@ -59,51 +66,10 @@ onMounted(() => {
         p.pop()
       }
 
-      let seqInd = 0
-      launchLoop(async (ctx) => {
-        // eslint-disable-next-line no-constant-condition
-        while (true) {
-          if (appState.circles.list.length > 0) {
-            const randIndex = Math.floor(Math.random() * appState.circles.list.length)
-            seqInd = (seqInd + 1) % appState.circles.list.length
-            appState.circles.list[seqInd].trigger()
-          }
-          await ctx.waitSec(0.05)
-        }
-      })
 
-      let lerpEvt = new Ramp(1)
-      let lerpLoop: CancelablePromisePoxy<any> | undefined = undefined
-      singleKeydownEvent('f', (ev) => {
-        const basePositions = appState.circles.list.map(c => ({ x: c.x, y: c.y }))
-        const targetPositions = circleArr(appState.circles.list.length, 300, p5i)
+      type CircleEvent = {x: number, y: number, numCirc: number, radius: number, color: {r: number, g: number, b: number}}
 
-        const lerp = (t: number) => {
-          appState.circles.list.forEach((c, i) => {
-            c.x = initialCiclePos[i].x + (targetPositions[i].x - initialCiclePos[i].x) * t
-            c.y = initialCiclePos[i].y + (targetPositions[i].y - initialCiclePos[i].y) * t
-          })
-        }
-
-        lerpLoop?.cancel()
-        lerpEvt = new Ramp(8)
-        lerpEvt.trigger()
-        lerpLoop = launchLoop(async (ctx) => {
-          while (lerpEvt.val() < 1) {
-            const v  =lerpEvt.val()
-            const triVal = tri(v)
-            // console.log("triVal", triVal)
-            lerp(triVal)
-            await ctx.waitFrame()
-          }
-          appState.circles.list.forEach((c, i) => {
-            c.x = initialCiclePos[i].x
-            c.y = initialCiclePos[i].y
-          })
-
-        })
-      })
-
+      let evtChop = new EventChop<CircleEvent>()
 
       //sketchTodo - make all of these listen on threeCanvas
       singleKeydownEvent('d', (ev) => {
@@ -118,52 +84,80 @@ onMounted(() => {
 
       singleKeydownEvent('s', (ev) => {
         if (appState.drawing) {
-          const newCircle = new PulseCircle(p5Mouse.x, p5Mouse.y, 100)
-          newCircle.debugDraw = false
-          appState.circles.pushItem(newCircle)
-          initialCiclePos.push({ x: newCircle.x, y: newCircle.y })
-          console.log("adding circle", newCircle)
+          const color = randRGB(Math.random())
+          evtChop.ramp(3, { x: p5Mouse.x, y: p5Mouse.y, numCirc: 40, radius: 250, color })
         }
       })
 
       const voronoi = new Voronoi()
       const initialPts = [{ x: 300, y: 300 }, { x: 600, y: 600 }]
       const p5bbox = { xl: 0, xr: 1280, yt: 0, yb: 720 }
-      let diagram = voronoi.compute(initialPts, p5bbox)
+      //todo don't need normalizing - bug fixed with noise preventing sites in perfect circles
+      const normBbox = { xl: 0, xr: 1, yt: 0, yb: 1 }
+      const normInitialPts = initialPts.map(pt => ({ x: pt.x / p5bbox.xr, y: pt.y / p5bbox.yb }))
+      let diagram = voronoi.compute(normInitialPts, normBbox)
 
-
-      const seedRand = (n: number) => {
-        return (Math.sin(100 +n * 12523.9898)+1)/2
-      }
-      const randRGB = (seed: number) => {
-        return { r: seedRand(seed) * 255, g: seedRand(seed + 1.3) * 255, b: seedRand(seed + 2.4) * 255 }
-      }
+      let lastPolygons: {x: number, y: number}[][] = [] 
+      let lastColors: {r: number, g: number, b: number}[] = []
       
       appState.drawFunctions.push((p: p5) => {
         // console.log("drawing circles", appState.circles.list.length)
-        const circlePts = appState.circles.list.map(c => ({ x: c.x, y: c.y }))
-        voronoi.recycle(diagram)
-        diagram = voronoi.compute(circlePts, p5bbox)
+        // const circlePts = appState.circles.list.map(c => ({ x: c.x, y: c.y }))
 
+        appState.voronoiSites.splice(0, appState.voronoiSites.length)
+        const colors: {r: number, g: number, b: number}[] = []
+        evtChop.events.forEach(evt => {
+          const circleData = evt.metadata
+          const time = evt.evt.val()
+          for(let i = 0; i < circleData.numCirc; i++) {
 
-        //todo api - indicate that compute mutates the input array to have voronoiId
-        const polygons = getVoronoiPolygons(diagram, circlePts)
+            //add some noise to the angle to avoid too many straight lines, which crashes the voronoi algorithm
+            const angle = i * 2 * Math.PI / circleData.numCirc + Math.random() * 0.001
+
+            const x = circleData.x + Math.cos(angle) * circleData.radius * time
+            const y = circleData.y + Math.sin(angle) * circleData.radius * time
+            appState.voronoiSites.push({ x: x / p5bbox.xr, y: y / p5bbox.yb })
+            colors.push(circleData.color)
+          }
+        })
+
+        try {
+          voronoi.recycle(diagram)
+          diagram = voronoi.compute(appState.voronoiSites, normBbox)
+          //todo api - indicate that compute mutates the input array to have voronoiId
+          lastPolygons = getVoronoiPolygons(diagram, appState.voronoiSites)
+          lastColors = colors
+        } catch (e) {
+          console.warn("voronoi compute failed", e)
+        }
 
 
         const x = 5
         if (drawVoronoi.value) {
           p.push()
-          polygons.forEach((polygon, i) => {
-            const color = randRGB(i)
-            p.fill(color.r, color.g, color.b)
-            p.noStroke()
+          p.stroke(0)
+          p.strokeWeight(2)
+          lastPolygons.forEach((polygon, i) => {
+            const color = lastColors[i]
+            try {
+              p.fill(color.r, color.g, color.b)
+            } catch (e) {
+              console.warn("color fill failed", color, e)
+            }
             p.beginShape()
-            polygon.forEach(pt => p.vertex(pt.x, pt.y))
+            polygon.forEach(pt => p.vertex(pt.x * p5bbox.xr, pt.y * p5bbox.yb))
             p.endShape(p.CLOSE)
           })
           p.pop()
         } else {
-          appState.circles.list.forEach(c => c.draw(p))
+          p.push()
+          appState.voronoiSites.forEach((site, i) => {
+            const color = colors[i]
+            p.fill(color.r, color.g, color.b)
+            p.noStroke()
+            p.circle(site.x * p5bbox.xr, site.y * p5bbox.yb, 10)
+          })
+          p.pop()
         }
       })
 
