@@ -10,6 +10,7 @@ import { pathPos, pathPosConstLen } from '@/utils/utils';
 import { setUpColorDatGui, type colorChoices, toRgb, palette } from '@/rendering/palletteHelper';
 import type { GUI } from 'dat.gui';
 import { lerp } from 'three/src/math/MathUtils.js';
+import { Voronoi } from '@/creativeAlgs/voronoi';
 
 
 
