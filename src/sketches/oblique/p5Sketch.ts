@@ -6,7 +6,7 @@ export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => Templa
   const sketch = (p: p5) => {
 
     p.setup = () => {
-      p.createCanvas(1280, 720, canvas)
+      p.createCanvas(p.windowWidth, p.windowHeight, canvas)
       p.noSmooth()
       // p.noLoop()
     }
@@ -24,6 +24,10 @@ export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => Templa
       }
 
       appState().stats?.end()
+    }
+
+    p.windowResized = () => {
+      p.resizeCanvas(p.windowWidth, p.windowHeight)
     }
   }
 

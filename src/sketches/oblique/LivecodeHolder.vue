@@ -44,8 +44,6 @@ const quoteIndStack = [randQuoteInd()]
 let currentInd = quoteIndStack[0]
 let nextInd = randQuoteInd()
 
-let center = { x: 1280/2, y: 720/2 }
-
 const normedCirclePts = (numPts: number) => {
   const pts = []
   for (let i = 0; i < numPts; i++) {
@@ -57,11 +55,21 @@ const normedCirclePts = (numPts: number) => {
 
 //at blowup == 0, the text is written normally - at 1, the letters are positioned along a circle
 let drawQuoteCard = (p: p5, quoteInd: number, blowup: number) => {
+  const center = { x: p.windowWidth / 2, y: p.windowHeight / 2 }
+  const maxDim = Math.max(p.windowWidth, p.windowHeight)
+  const maxDimCenter = maxDim/2
+  const minDim = Math.min(p.windowWidth, p.windowHeight)
+  const minDimCenter = minDim/2
+
   p.textFont('monospace')
   p.textSize(30)
   const quote = quotes[quoteInd]
   const numChars =quote.length
-  const textWidth = p.textWidth(quote)
+  let textWidth = p.textWidth(quote)
+  while (textWidth > maxDim) {
+    p.textSize(p.textSize() * 0.9)
+    textWidth = p.textWidth(quote)
+  }
   const charWidth = textWidth / numChars
   const rad = 700
   const circlePts = normedCirclePts(numChars).map(pt => ({ x: pt.x * rad, y: pt.y * rad })).map(pt => ({ x: pt.x + center.x, y: pt.y + center.y }))
@@ -69,6 +77,11 @@ let drawQuoteCard = (p: p5, quoteInd: number, blowup: number) => {
   const lerpCharPts = charPts.map((pt, i) => ({ x: lerp(pt.x, circlePts[i].x, blowup), y: lerp(pt.y, circlePts[i].y, blowup) }))
 
   p.push()
+  if (p.windowHeight > p.windowWidth) {
+    p.translate(center.x, center.y)
+    p.rotate(Math.PI/2)
+    p.translate(-center.x, -center.y)
+  }
   p.fill(255)
   lerpCharPts.forEach((pt, i) => {
     p.text(quote[i], pt.x, pt.y)

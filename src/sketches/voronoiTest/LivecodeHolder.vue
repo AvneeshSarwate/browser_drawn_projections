@@ -37,6 +37,10 @@ const randRGB = (seed: number) => {
   return { r: seedRand(seed) * 255, g: seedRand(seed + 1.3) * 255, b: seedRand(seed + 2.4) * 255 }
 }
 
+const trueRandRgb = () => {
+  return { r: Math.random() * 255, g: Math.random() * 255, b: Math.random() * 255 }
+}
+
 let drawVoronoi = ref(false)
 
 onMounted(() => {
@@ -84,8 +88,8 @@ onMounted(() => {
 
       singleKeydownEvent('s', (ev) => {
         if (appState.drawing) {
-          const color = randRGB(Math.random())
-          evtChop.ramp(3, { x: p5Mouse.x, y: p5Mouse.y, numCirc: 40, radius: 250, color })
+          const color = trueRandRgb()
+          evtChop.ramp(5, { x: p5Mouse.x, y: p5Mouse.y, numCirc: 40, radius: 450, color })
         }
       })
 
