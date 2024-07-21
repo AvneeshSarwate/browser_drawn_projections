@@ -1,7 +1,7 @@
 <template>
   <div id="canvasContainer">
     <canvas id="p5Canvas" width="1280" height="720" abitrary-prop="somethi"></canvas>
-    <canvas id="threeCanvas" width="1280" height="720" abitrary-prop="somethi"></canvas>
+    <!-- <canvas id="threeCanvas" width="1280" height="720" abitrary-prop="somethi"></canvas> -->
   </div>
   <div id="description">
   </div>

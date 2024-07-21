@@ -115,12 +115,6 @@ onMounted(() => {
 
     const p5i = appState.p5Instance!!
     const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
-    const threeCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
-
-    let p5Mouse = { x: 0, y: 0 }
-    mousemoveEvent((ev) => {
-      p5Mouse = targetToP5Coords(ev, p5i, threeCanvas)
-    }, threeCanvas)
 
     const code = () => { //todo template - is this code-array pattern really needed in the template?
       clearDrawFuncs() //todo template - move this to cleanup block?
@@ -131,6 +125,23 @@ onMounted(() => {
       appState.drawFunctions.push((p: p5) => {
         // console.log("drawing circles", appState.circles.list.length)
         // drawQuoteCard(p, currentInd, logisticSigmoid(sinN(now()*0.2), 0.1))
+        // if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        //   p.background(255)
+        //   p.fill(0)
+        // } else {
+        //   p.background(0)
+        //   p.fill(255)
+        // }
+
+        // p.color(255)
+        // p.rect(0, 0, p.windowWidth, p.windowHeight)
+        // p.fill(0)
+        // p.color(0)
+        // p.stroke(0)
+
+        p.background(0, 255)
+        p.fill(255)
+        
         blowup = transitionRamp.val()
         const blowupTri = tri(blowup)
         drawQuoteCard(p, currentInd, blowupTri**2)
@@ -145,6 +156,7 @@ onMounted(() => {
       }
 
       document.body.style.backgroundColor = "black"
+      document.body.style.overflow = "hidden"
 
       shaderGraphEndNode = canvasPaint
       // appState.shaderDrawFunc = () => shaderGraphEndNode!!.renderAll(appState.threeRenderer!!)
