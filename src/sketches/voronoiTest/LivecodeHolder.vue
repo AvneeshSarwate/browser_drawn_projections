@@ -7,6 +7,9 @@ import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, tar
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri, EventChop } from '@/channels/channels';
 import { Voronoi, getVoronoiPolygons } from '@/creativeAlgs/voronoi';
+import { tdVoronoiData } from './tdWebsocket';
+
+console.log("tdv x", tdVoronoiData.x)
 
 const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
@@ -42,6 +45,7 @@ const trueRandRgb = () => {
 }
 
 let drawVoronoi = ref(false)
+let useTdVoronoi = ref(false)
 
 onMounted(() => {
   try {
@@ -125,12 +129,18 @@ onMounted(() => {
           }
         })
 
+        const tdSites = tdVoronoiData.x.map((x, i) => ({ x, y: tdVoronoiData.y[i] + Math.random() * 0.00001 }))
+        const tdColors = tdVoronoiData.r.map((r, i) => ({ r: r * 255, g: tdVoronoiData.g[i] * 255, b: tdVoronoiData.b[i] * 255 }))
+
+        const sites = useTdVoronoi.value ? tdSites : appState.voronoiSites
+        const cols = useTdVoronoi.value ? tdColors : colors
+
         try {
           voronoi.recycle(diagram)
-          diagram = voronoi.compute(appState.voronoiSites, normBbox)
+          diagram = voronoi.compute(sites, normBbox)
           //todo api - indicate that compute mutates the input array to have voronoiId
-          lastPolygons = getVoronoiPolygons(diagram, appState.voronoiSites)
-          lastColors = colors
+          lastPolygons = getVoronoiPolygons(diagram, sites)
+          lastColors = cols
         } catch (e) {
           console.warn("voronoi compute failed", e)
         }
@@ -155,8 +165,8 @@ onMounted(() => {
           p.pop()
         } else {
           p.push()
-          appState.voronoiSites.forEach((site, i) => {
-            const color = colors[i]
+          sites.forEach((site, i) => {
+            const color = cols[i]
             p.fill(color.r, color.g, color.b)
             p.noStroke()
             p.circle(site.x * p5bbox.xr, site.y * p5bbox.yb, 10)
@@ -196,6 +206,7 @@ onUnmounted(() => {
 <template>
   <div></div>
   <button @click="drawVoronoi = !drawVoronoi">Draw Voronoi</button>
+  <button @click="useTdVoronoi = !useTdVoronoi">Use td Voronoi</button>
 </template>
 
 <style scoped></style>
