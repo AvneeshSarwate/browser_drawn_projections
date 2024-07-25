@@ -7,9 +7,7 @@ import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, tar
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri, EventChop } from '@/channels/channels';
 import { Voronoi, getVoronoiPolygons } from '@/creativeAlgs/voronoi';
-import { frameUpdates, tdVoronoiData } from './tdWebsocket';
-
-console.log("tdv x", tdVoronoiData.x)
+import { getVoronoiData } from './tdWebsocket';
 
 const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
@@ -46,7 +44,6 @@ const trueRandRgb = () => {
 
 let drawVoronoi = ref(true)
 let useTdVoronoi = ref(true)
-let lastFrameId = 0
 
 onMounted(() => {
   try {
@@ -130,12 +127,10 @@ onMounted(() => {
           }
         })
 
+        const tdVoronoiData = getVoronoiData()
+
         const tdSites = tdVoronoiData.x.map((x, i) => ({ x, y: tdVoronoiData.y[i] + Math.random() * 0.00001 }))
         const tdColors = tdVoronoiData.r.map((r, i) => ({ r: r * 255, g: tdVoronoiData.g[i] * 255, b: tdVoronoiData.b[i] * 255 }))
-        if(tdVoronoiData.frameId != lastFrameId+1) {
-          console.log("td frameId didn't advance", tdVoronoiData.frameId, frameUpdates - lastFrameId)
-        }
-        lastFrameId = tdVoronoiData.frameId
 
         const sites = useTdVoronoi.value ? tdSites : appState.voronoiSites
         const cols = useTdVoronoi.value ? tdColors : colors

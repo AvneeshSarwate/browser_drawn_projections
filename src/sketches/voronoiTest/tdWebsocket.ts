@@ -37,9 +37,51 @@ class VoronoiData {
   get frameId() { return getParamData('frameId') }
 }
 
+const setDataLive = (data: voronoiData) => {
+  perPointData.set('x', data.x)
+  perPointData.set('y', data.y)
+  perPointData.set('r', data.r)
+  perPointData.set('g', data.g)
+  perPointData.set('b', data.b)
+  paramData.set('lineThickness', data.lineThickness)
+  paramData.set('frameId', data.frameId)
+}
+
+
 export const tdVoronoiData = new VoronoiData()
 
+let writeFrameId = 0
+let readFrameId = -1
+let lastData: voronoiData | undefined = undefined
 
+const dataMap = new Map<number, voronoiData>()
+const handleMessageMap = (message: {data: string}) => {
+  const data = JSON.parse(message.data) as voronoiData;
+  data.frameId = writeFrameId
+  dataMap.set(data.frameId, data)
+  writeFrameId++
+}
+
+export const getVoronoiData = (): voronoiData => {
+  if(readFrameId == -1) {
+    readFrameId = tdVoronoiData.frameId - lookbackSize
+  } else {
+    if(writeFrameId - readFrameId > lookbackSize + 3) {
+      console.log('lag of', (writeFrameId - readFrameId) - lookbackSize, 'frames')
+    }
+    while(writeFrameId - readFrameId > lookbackSize) {
+      readFrameId++
+    }
+  }
+
+  lastData = dataMap.get(readFrameId)
+  if(lastData) {
+    setDataLive(lastData)
+    dataMap.delete(readFrameId)
+  }
+
+  return tdVoronoiData
+}
 
 
 
@@ -70,16 +112,16 @@ const buildMockData = () => {
 
 
 const bufferSize = 10
-const lookbackSize = 5
+const lookbackSize = 2
 const dataBuffer: voronoiData[] = []
 export let frameUpdates = 0
 const updateDataOnFrame = () => {
   frameUpdates++
   let bufferIndex = 0
-  while (bufferIndex < dataBuffer.length && dataBuffer[bufferIndex].frameId != frameId - lookbackSize) {
+  while (bufferIndex < dataBuffer.length && dataBuffer[bufferIndex].frameId != writeFrameId - lookbackSize) {
     bufferIndex++
   }
-  if( dataBuffer.length > 0 && dataBuffer[bufferIndex] && dataBuffer[bufferIndex].frameId != frameId - lookbackSize) {
+  if( dataBuffer.length > 0 && dataBuffer[bufferIndex] && dataBuffer[bufferIndex].frameId != writeFrameId - lookbackSize) {
     console.log('Frame mismatch')
   }
 
@@ -92,29 +134,20 @@ const updateDataOnFrame = () => {
   requestAnimationFrame(updateDataOnFrame)
 }
 
-const setDataLive = (data: voronoiData) => {
-  perPointData.set('x', data.x)
-  perPointData.set('y', data.y)
-  perPointData.set('r', data.r)
-  perPointData.set('g', data.g)
-  perPointData.set('b', data.b)
-  paramData.set('lineThickness', data.lineThickness)
-  paramData.set('frameId', data.frameId)
-}
 
-
-const USE_BUFFERED_DATA_READ = true
+const USE_OLD_BUFFERED_DATA_READ = false
 const USE_MOCK_DATA = false //colors more red/purple ish with TD data
 const USE_MOCK_DATA_LOOP = false
 
-if(USE_BUFFERED_DATA_READ) {
+if(USE_OLD_BUFFERED_DATA_READ) {
   updateDataOnFrame()
 }
 
 
 
-let frameId = 0
 const parseTimes: number[] = []
+
+
 
 const handleMessage = (message: {data: string}) => {
   const parseStart = performance.now()
@@ -122,8 +155,8 @@ const handleMessage = (message: {data: string}) => {
   const parseTime = performance.now() - parseStart
   parseTimes.push(parseTime)
 
-  data.frameId = frameId
-  frameId++
+  data.frameId = writeFrameId
+  writeFrameId++
 
   if (parseTimes.length > 30) {
     parseTimes.shift()
@@ -132,7 +165,7 @@ const handleMessage = (message: {data: string}) => {
   //   console.log('Average parse time: ', parseTimes.reduce((a, b) => a + b, 0) / parseTimes.length)
   // }
 
-  if(USE_BUFFERED_DATA_READ) {
+  if(USE_OLD_BUFFERED_DATA_READ) {
     dataBuffer.push(data)
     if (dataBuffer.length > bufferSize) {
       dataBuffer.shift()
@@ -184,7 +217,7 @@ ws.onmessage = (message) => {
       const data = buildMockData()
       handleMessage(data)
     } else {
-      handleMessage(message)
+      handleMessageMap(message)
     }
   }
 }
