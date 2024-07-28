@@ -59,14 +59,14 @@ onMounted(() => {
 
     const p5i = appState.p5Instance!!
     const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
-    const threeCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
+    // const threeCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
 
     const initialCiclePos = appState.circles.list.map(c => ({ x: c.x, y: c.y }))
 
     let p5Mouse = { x: 0, y: 0 }
     mousemoveEvent((ev) => {
-      p5Mouse = targetToP5Coords(ev, p5i, threeCanvas)
-    }, threeCanvas)
+      p5Mouse = targetToP5Coords(ev, p5i, p5Canvas)
+    }, p5Canvas)
 
     const code = () => { //todo template - is this code-array pattern really needed in the template?
       clearDrawFuncs() //todo template - move this to cleanup block?
@@ -174,7 +174,7 @@ onMounted(() => {
         if (drawVoronoi.value) {
           p.push()
           p.stroke(0)
-          p.strokeWeight(2)
+          p.strokeWeight(tdVoronoiData.lineThickness)
           lastPolygons.forEach((polygon, i) => {
             const color = lastColors[i]
             try {
@@ -208,11 +208,11 @@ onMounted(() => {
         }
       })
 
-      const passthru = new Passthru({ src: p5Canvas })
-      const canvasPaint = new CanvasPaint({ src: passthru })
+      // const passthru = new Passthru({ src: p5Canvas })
+      // const canvasPaint = new CanvasPaint({ src: passthru })
 
-      shaderGraphEndNode = canvasPaint
-      appState.shaderDrawFunc = () => shaderGraphEndNode!!.renderAll(appState.threeRenderer!!)
+      // shaderGraphEndNode = canvasPaint
+      // appState.shaderDrawFunc = () => shaderGraphEndNode!!.renderAll(appState.threeRenderer!!)
       
       singleKeydownEvent('p', (ev) => { appState.paused = !appState.paused })
     }
