@@ -41,7 +41,16 @@ function filterSimilarPoints(points: { x: number, y: number }[], threshold: numb
     indexesTooCloseToPrevious.add(points.length-1)
   }
 
-  return points.filter((pt, i) => !indexesTooCloseToPrevious.has(i))
+  const filteredPts = points.filter((pt, i) => !indexesTooCloseToPrevious.has(i))
+
+  //check first and last point - if too close, remove last point - quick hack instead of making sure logic above catches this
+  const pt2 = filteredPts[0]
+  const nextPt2 = filteredPts[filteredPts.length-1]
+  if(Math.abs(pt2.x - nextPt2.x) < threshold && Math.abs(pt2.y - nextPt2.y) < threshold) {
+    filteredPts.pop()
+  }
+
+  return filteredPts
 }
 
 const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromisePoxy<any> => {
@@ -147,6 +156,13 @@ onMounted(() => {
 
       let lastPolygons: {x: number, y: number}[][] = [] 
       let lastColors: {r: number, g: number, b: number}[] = []
+
+      let centroidMap = new Map<number, { x: number, y: number }>()
+      let numPtsMap = new Map<number, number[]>()
+      Array.from(Array(20).keys()).forEach(i => {
+        centroidMap.set(i, { x: 0, y: 0 })
+        numPtsMap.set(i, [])
+      })
       
       appState.drawFunctions.push((p: p5) => {
         // console.log("drawing circles", appState.circles.list.length)
@@ -221,11 +237,24 @@ onMounted(() => {
             centroid.y /= poly.length
 
             const centroidLerp = tdVoronoiData.centroidLerp
+            let numPtslist = numPtsMap.get(i)!
+            numPtslist.push(poly.length)
+            if (numPtslist.length > 3) numPtslist.shift()
 
-            if (i == 0) {
-              console.log("centroid", filteredPolygon.length - polygon.length)
-              p.endShape(p.CLOSE)
-              // return
+            //if all 3 items in numPtsList are different, then we have a new centroid
+            if(numPtslist[0] !== numPtslist[1] && numPtslist[1] !== numPtslist[2]) {
+              console.log("thrasing")
+            }
+
+
+            // if (i == 0) {
+            //   console.log("centroid", filteredPolygon.length - polygon.length)
+            //   p.endShape(p.CLOSE)
+            //   // return
+            // }
+            if (filteredPolygon.length > 4) {
+              const fp = filteredPolygon.map(v => ({x: v.x , y: v.y }))
+              console.log("filteredPolygon", filteredPolygon.length, "polygon", polygon.length)
             }
 
             polygon.forEach(pt => p.vertex(lerp(pt.x, centroid.x, centroidLerp) * p5bbox.xr, lerp(pt.y, centroid.y, centroidLerp) * p5bbox.yb))
