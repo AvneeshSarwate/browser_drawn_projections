@@ -201,20 +201,22 @@ onMounted(() => {
         const cols = useTdVoronoi.value ? tdColors : colors
 
         try {
-          voronoi.recycle(diagram)
+          if(diagram) voronoi.recycle(diagram)
           diagram = voronoi.compute(sites, normBbox)
           //todo api - indicate that compute mutates the input array to have voronoiId
           lastPolygons = getVoronoiPolygons(diagram, sites)
           lastColors = cols
         } catch (e) {
           console.warn("voronoi compute failed", e)
+          diagram = null
         }
 
 
         const x = 5
         if (drawVoronoi.value) {
           p.push()
-          p.stroke(255)
+          const strokeColor = { r: tdVoronoiData.borderR * 255, g: tdVoronoiData.borderG * 255, b: tdVoronoiData.borderB * 255 }
+          p.stroke(strokeColor.r, strokeColor.g, strokeColor.b)
           p.strokeWeight(tdVoronoiData.lineThickness)
           lastPolygons.forEach((polygon, i) => {
             const color = lastColors[i]

@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { cosN, sinN } from "@/channels/channels"
 
-const ws = new WebSocket('ws://localhost:9980')
+const ws = new WebSocket('ws://localhost:9981')
 
 ws.onopen = () => {
   console.log('Connected to server')
@@ -18,6 +18,9 @@ type voronoiData = {
   r: number[];
   g: number[];
   b: number[];
+  borderR: number;
+  borderG: number;
+  borderB: number;
   lineThickness: number;
   frameId: number;
   centroidLerp: number;
@@ -33,7 +36,10 @@ class VoronoiData {
   get y() {return getPtData('y')}
   get r() {return getPtData('r')}
   get g() {return getPtData('g')}
-  get b() {return getPtData('b')}
+  get b() { return getPtData('b') }
+  get borderR() { return getParamData('borderR') }
+  get borderG() { return getParamData('borderG') }
+  get borderB() { return getParamData('borderB') }
   get lineThickness() { return getParamData('lineThickness') }
   get frameId() { return getParamData('frameId') }
   get centroidLerp() { return getParamData('centroidLerp') }
@@ -45,6 +51,9 @@ const setDataLive = (data: voronoiData) => {
   perPointData.set('r', data.r)
   perPointData.set('g', data.g)
   perPointData.set('b', data.b)
+  paramData.set('borderR', data.borderR)
+  paramData.set('borderG', data.borderG)
+  paramData.set('borderB', data.borderB)
   paramData.set('lineThickness', data.lineThickness)
   paramData.set('frameId', data.frameId)
   paramData.set('centroidLerp', data.centroidLerp)
