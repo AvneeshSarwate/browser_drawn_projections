@@ -39,7 +39,18 @@ onMounted(() => {
   const stats = new Stats();
   stats.showPanel(1); // 0: fps, 1: ms, 2: mb, 3+: custom
   appState.stats = stats
-  document.body.appendChild(stats.dom);
+
+  document.body.style.backgroundColor = "rgb(0, 0, 0, 0)"
+  const inTDQueryParam = new URLSearchParams(window.location.search).get("inTD")
+  if(inTDQueryParam === "true") {
+    const canvasContainer = document.getElementById('canvasContainer')
+    if(canvasContainer) {
+      canvasContainer.style.backgroundColor = "rgb(0, 0, 0, 0)"
+      console.log("setting canvasContainer background color to black")
+    } else {
+      document.body.appendChild(stats.dom);
+    }
+  }
 
   //explanation - the closest you can get to removing a p5 instance without removing the underlying canvas
   if(appState.p5Instance) neutralizeSketch(appState.p5Instance)

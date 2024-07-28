@@ -9,6 +9,7 @@ import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN
 import { Voronoi, getVoronoiPolygons } from '@/creativeAlgs/voronoi';
 import { getVoronoiData } from './tdWebsocket';
 import seedrandom from 'seedrandom'
+import { lerp } from 'three/src/math/MathUtils.js';
 
 const myrng = seedrandom('hello')
 console.log("rng", myrng())
@@ -21,7 +22,27 @@ const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
 let timeLoops: CancelablePromisePoxy<any>[] = []
 
-let pressedPts: {x: number, y: number}[] = []
+let pressedPts: { x: number, y: number }[] = []
+
+//a list of points in a polygon in the order they appear in the polygon
+function filterSimilarPoints(points: { x: number, y: number }[], threshold: number=0.002) {
+  const indexesTooCloseToPrevious = new Set<number>()
+  for (let i = 0; i < points.length-1; i++) {
+    const pt = points[i]
+    const nextPt = points[i+1]
+    if(Math.abs(pt.x - nextPt.x) < threshold && Math.abs(pt.y - nextPt.y) < threshold) {
+      indexesTooCloseToPrevious.add(i+1)
+    }
+  }
+
+  const pt = points[0]
+  const nextPt = points[points.length-1]
+  if(Math.abs(pt.x - nextPt.x) < threshold && Math.abs(pt.y - nextPt.y) < threshold) {
+    indexesTooCloseToPrevious.add(points.length-1)
+  }
+
+  return points.filter((pt, i) => !indexesTooCloseToPrevious.has(i))
+}
 
 const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromisePoxy<any> => {
   const loop = launch(block)
@@ -153,7 +174,11 @@ onMounted(() => {
 
         const tdVoronoiData = getVoronoiData()
 
-        const tdSites = tdVoronoiData.x.map((x, i) => ({ x, y: tdVoronoiData.y[i] + Math.random() * 0.00001 }))
+        //whether to add noise to fix parallel line crashes.
+        //noise affects stability of filtered centroid calculations
+        const addNoise = false
+
+        const tdSites = tdVoronoiData.x.map((x, i) => ({ x, y: tdVoronoiData.y[i] + (addNoise?Math.random() * 0.00001:0) }))
         const tdColors = tdVoronoiData.r.map((r, i) => ({ r: r * 255, g: tdVoronoiData.g[i] * 255, b: tdVoronoiData.b[i] * 255 }))
 
         const sites = useTdVoronoi.value ? tdSites : appState.voronoiSites
@@ -173,7 +198,7 @@ onMounted(() => {
         const x = 5
         if (drawVoronoi.value) {
           p.push()
-          p.stroke(0)
+          p.stroke(255)
           p.strokeWeight(tdVoronoiData.lineThickness)
           lastPolygons.forEach((polygon, i) => {
             const color = lastColors[i]
@@ -182,8 +207,28 @@ onMounted(() => {
             } catch (e) {
               console.warn("color fill failed", color, e)
             }
+            
+
             p.beginShape()
-            polygon.forEach(pt => p.vertex(pt.x * p5bbox.xr, pt.y * p5bbox.yb))
+            let centroid = { x: 0, y: 0 }
+            const filteredPolygon = filterSimilarPoints(polygon, 0.02)
+            const poly = filteredPolygon
+            poly.forEach(pt => {
+              centroid.x += pt.x
+              centroid.y += pt.y
+            })
+            centroid.x /= poly.length
+            centroid.y /= poly.length
+
+            const centroidLerp = tdVoronoiData.centroidLerp
+
+            if (i == 0) {
+              console.log("centroid", filteredPolygon.length - polygon.length)
+              p.endShape(p.CLOSE)
+              // return
+            }
+
+            polygon.forEach(pt => p.vertex(lerp(pt.x, centroid.x, centroidLerp) * p5bbox.xr, lerp(pt.y, centroid.y, centroidLerp) * p5bbox.yb))
             p.endShape(p.CLOSE)
           })
           p.pop()

@@ -14,11 +14,11 @@
 
 <style scoped>
 #canvasContainer {
-  background-color: black;
+  /* background-color: black; */
 }
 
 #p5Canvas {
-  border: 1px solid black;
+  /* border: 1px solid black; */
   /* position: absolute; */
   top: 0;
   left: 0;
@@ -27,7 +27,7 @@
 }
 
 #threeCanvas {
-  border: 1px solid black;
+  /* border: 1px solid black; */
   position: absolute;
   top: 0;
   left: 0;
