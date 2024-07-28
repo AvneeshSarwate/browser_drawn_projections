@@ -8,10 +8,20 @@ import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri, EventChop } from '@/channels/channels';
 import { Voronoi, getVoronoiPolygons } from '@/creativeAlgs/voronoi';
 import { getVoronoiData } from './tdWebsocket';
+import seedrandom from 'seedrandom'
+
+const myrng = seedrandom('hello')
+console.log("rng", myrng())
+console.log("rng", myrng())
+console.log("rng", myrng())
+console.log("rng", myrng())
+
 
 const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
 let timeLoops: CancelablePromisePoxy<any>[] = []
+
+let pressedPts: {x: number, y: number}[] = []
 
 const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromisePoxy<any> => {
   const loop = launch(block)
@@ -31,11 +41,9 @@ function circleArr(n: number, rad: number, p: p5) {
   return xyZip(0, cos1, sin1, n).map(({ x, y }) => ({x: x*rad + center.x, y: y*rad + center.y}))
 }
 
-const seedRand = (n: number) => {
-  return (Math.sin(100 +n * 12523.9898)+1)/2
-}
 const randRGB = (seed: number) => {
-  return { r: seedRand(seed) * 255, g: seedRand(seed + 1.3) * 255, b: seedRand(seed + 2.4) * 255 }
+  const rng = seedrandom(seed.toString())
+  return { r: rng() * 255, g: rng() * 255, b: rng() * 255 }
 }
 
 const trueRandRgb = () => {
@@ -44,6 +52,7 @@ const trueRandRgb = () => {
 
 let drawVoronoi = ref(true)
 let useTdVoronoi = ref(true)
+let drawSites = ref(false)
 
 onMounted(() => {
   try {
@@ -95,6 +104,18 @@ onMounted(() => {
         }
       })
 
+      singleKeydownEvent('c', (ev) => {
+        if(appState.drawing) {
+          pressedPts.push({ x: p5Mouse.x / p5bbox.xr, y: p5Mouse.y / p5bbox.yb })
+        }
+      })
+
+      singleKeydownEvent('r', (ev) => {
+        if(appState.drawing) {
+          pressedPts.splice(0, pressedPts.length)
+        }
+      })
+
       const voronoi = new Voronoi()
       const initialPts = [{ x: 300, y: 300 }, { x: 600, y: 600 }]
       const p5bbox = { xl: 0, xr: 1280, yt: 0, yb: 720 }
@@ -126,6 +147,9 @@ onMounted(() => {
             colors.push(circleData.color)
           }
         })
+
+        appState.voronoiSites.push(...pressedPts)
+        colors.push(...pressedPts.map((pt, i) => randRGB(i)))
 
         const tdVoronoiData = getVoronoiData()
 
@@ -173,6 +197,15 @@ onMounted(() => {
           })
           p.pop()
         }
+
+        if(drawSites.value) {
+          p.push()
+          sites.forEach(site => {
+            p.fill(255)
+            p.circle(site.x * p5bbox.xr, site.y * p5bbox.yb, 10)
+          })
+          p.pop()
+        }
       })
 
       const passthru = new Passthru({ src: p5Canvas })
@@ -205,8 +238,12 @@ onUnmounted(() => {
 
 <template>
   <div></div>
-  <button @click="drawVoronoi = !drawVoronoi">Draw Voronoi</button>
-  <button @click="useTdVoronoi = !useTdVoronoi">Use td Voronoi</button>
+  <span>Draw Voronoi</span>
+  <input type="checkbox" v-model="drawVoronoi" />
+  <span>Use td Voronoi</span>
+  <input type="checkbox" v-model="useTdVoronoi" />
+  <span>Draw Sites</span>
+  <input type="checkbox" v-model="drawSites" />
 </template>
 
 <style scoped></style>
