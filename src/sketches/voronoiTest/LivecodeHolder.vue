@@ -244,9 +244,9 @@ onMounted(() => {
             if (numPtslist.length > 3) numPtslist.shift()
 
             //if all 3 items in numPtsList are different, then we have a new centroid
-            if(numPtslist[0] !== numPtslist[1] && numPtslist[1] !== numPtslist[2]) {
-              console.log("thrasing")
-            }
+            // if(numPtslist[0] !== numPtslist[1] && numPtslist[1] !== numPtslist[2]) {
+            //   console.log("thrasing")
+            // }
 
 
             // if (i == 0) {
@@ -254,10 +254,10 @@ onMounted(() => {
             //   p.endShape(p.CLOSE)
             //   // return
             // }
-            if (filteredPolygon.length > 4) {
-              const fp = filteredPolygon.map(v => ({x: v.x , y: v.y }))
-              console.log("filteredPolygon", filteredPolygon.length, "polygon", polygon.length)
-            }
+            // if (filteredPolygon.length > 4) {
+            //   const fp = filteredPolygon.map(v => ({x: v.x , y: v.y }))
+            //   console.log("filteredPolygon", filteredPolygon.length, "polygon", polygon.length)
+            // }
 
             polygon.forEach(pt => p.vertex(lerp(pt.x, centroid.x, centroidLerp) * p5bbox.xr, lerp(pt.y, centroid.y, centroidLerp) * p5bbox.yb))
             p.endShape(p.CLOSE)
