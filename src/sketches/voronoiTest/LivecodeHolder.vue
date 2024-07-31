@@ -199,6 +199,12 @@ onMounted(() => {
 
         const sites = useTdVoronoi.value ? tdSites : appState.voronoiSites
         const cols = useTdVoronoi.value ? tdColors : colors
+        if(sites.length != lastPolygons.length) {
+          console.log("sites length changed", sites.length, lastPolygons.length)
+        }
+        if(sites.length != cols.length) {
+          console.log("site col mismatch", sites.length, cols.length)
+        }
 
         try {
           if(diagram) voronoi.recycle(diagram)
@@ -211,6 +217,10 @@ onMounted(() => {
           diagram = null
         }
 
+        if(sites.length != lastPolygons.length || sites.length != lastColors.length) {
+          console.log("sites length changed - STILL OFF", sites.length, lastPolygons.length, lastColors.length)
+        }
+
 
         const x = 5
         if (drawVoronoi.value) {
@@ -220,10 +230,13 @@ onMounted(() => {
           p.strokeWeight(tdVoronoiData.lineThickness)
           lastPolygons.forEach((polygon, i) => {
             const color = lastColors[i]
-            try {
+            if (tdVoronoiData.edgeUsesPalleteCols) {
+              p.stroke(color.r, color.g, color.b)
+            } 
+            if(tdVoronoiData.edgeOnly) {
+              p.noFill()
+            } else {
               p.fill(color.r, color.g, color.b)
-            } catch (e) {
-              console.warn("color fill failed", color, e)
             }
             
 
@@ -239,9 +252,11 @@ onMounted(() => {
             centroid.y /= poly.length
 
             const centroidLerp = tdVoronoiData.centroidLerp
-            let numPtslist = numPtsMap.get(i)!
-            numPtslist.push(poly.length)
-            if (numPtslist.length > 3) numPtslist.shift()
+
+            //todo - need to define numPtsMap with keys equal to actual num polysites
+            // let numPtslist = numPtsMap.get(i)!
+            // numPtslist.push(poly.length)
+            // if (numPtslist.length > 3) numPtslist.shift()
 
             //if all 3 items in numPtsList are different, then we have a new centroid
             // if(numPtslist[0] !== numPtslist[1] && numPtslist[1] !== numPtslist[2]) {

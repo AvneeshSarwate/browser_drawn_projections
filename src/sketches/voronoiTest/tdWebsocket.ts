@@ -24,6 +24,8 @@ type voronoiData = {
   lineThickness: number;
   frameId: number;
   centroidLerp: number;
+  edgeOnly: number;
+  edgeUsesPalleteCols: number;
 }
 
 const perPointData: Map<string, number[]> = new Map()
@@ -43,6 +45,8 @@ class VoronoiData {
   get lineThickness() { return getParamData('lineThickness') }
   get frameId() { return getParamData('frameId') }
   get centroidLerp() { return getParamData('centroidLerp') }
+  get edgeOnly() { return getParamData('edgeOnly') }
+  get edgeUsesPalleteCols() { return getParamData('edgeUsesPalleteCols') }
 }
 
 const setDataLive = (data: voronoiData) => {
@@ -57,6 +61,8 @@ const setDataLive = (data: voronoiData) => {
   paramData.set('lineThickness', data.lineThickness)
   paramData.set('frameId', data.frameId)
   paramData.set('centroidLerp', data.centroidLerp)
+  paramData.set('edgeOnly', data.edgeOnly)
+  paramData.set('edgeUsesPalleteCols', data.edgeUsesPalleteCols)
 }
 
 
