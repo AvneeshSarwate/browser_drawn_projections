@@ -83,10 +83,11 @@ Basic strategy for implementing multi-note modifications -
 
 type EnvelopePoint = {t: number, y: number, id: number, selected: boolean}
 
-class EnvelopeEditor {
+export class EnvelopeEditor {
   numEnvelopes: number = 8
   envelopes: EnvelopePoint[][] = Array.from({length: this.numEnvelopes}, () => [])
   idToPointMap: Map<number, EnvelopePoint> = new Map()
+  idToCircleMap: Map<number, Circle> = new Map()
   pointIdToLinesMap: Map<number, {to?: Line, from?: Line}> = new Map()
   selectedEnvelopeIndex: number = 0
   svgRoot: Svg
@@ -127,23 +128,29 @@ class EnvelopeEditor {
 
   createBackground() {
 
+    //create enevelope box that fills the rest of the svg
+    this.envelopeBackground = this.svgRoot.rect(this.quarterNoteWidth * this.numMeasures * 4, this.viewportHeight - this.tabBoxHeight).fill('#000').opacity(0.5)
+    this.envelopeGroup = this.svgRoot.group().add(this.envelopeBackground)
+
     //create tab box 
     this.tabBoxGroup = this.svgRoot.group()
+
+    this.tabBoxGroup.on('mousedown', (event) => {
+      console.log("clicked tab box", event)
+    })
+
     for(let i = 0; i < this.numEnvelopes; i++) {
       //create a tab group, which has a background rect and a text label
-      const tabGroup = this.tabBoxGroup.group().move(i * this.tabBoxWidth, 0)
-      const tabBackground = tabGroup.rect(this.tabBoxWidth, this.tabBoxHeight).fill('#000')
-      const tabLabel = tabGroup.text("env " + i.toString()).font({size: 10, weight: 'bold'}).fill('#fff')
+      const tabGroup = this.tabBoxGroup.group().translate(i * this.tabBoxWidth, 0)
+      const tabBackground = tabGroup.rect(this.tabBoxWidth, this.tabBoxHeight).fill('#5f5')
+      const tabLabel = tabGroup.text("env " + i.toString()).font({size: 10, weight: 'bold'}).move(0, this.tabBoxHeight/2)
 
-      tabGroup.on('click', () => {
+      tabGroup.on('mousedown', () => {
+        console.log("clicked tab group", i)
         this.selectedEnvelopeIndex = i
         this.renderEnvelope(i)
       })
     }    
-
-    //create enevelope box that fills the rest of the svg
-    this.envelopeBackground = this.svgRoot.rect(this.quarterNoteWidth * this.numMeasures * 4, this.viewportHeight - this.tabBoxHeight).fill('#000').opacity(0.5)
-    this.envelopeGroup = this.svgRoot.group().add(this.envelopeBackground)
 
     //add handler for scroll 
 
@@ -194,14 +201,53 @@ class EnvelopeEditor {
       this.renderEnvelope(envelopeIndex)
     })
 
+    circle.on('mousedown', (event) => {
+      const mouseXY = this.svgMouseCoord(event as MouseEvent);
+      this.startDraggingPoint(envelopeIndex, point)
+    })
+
     //todo, add drag handler - moves point and changes its lines
 
+  }
+
+  startDraggingPoint(envelopeIndex: number, point: EnvelopePoint) {
+    //add red border
+    point.selected = true
+    const circle = this.idToCircleMap.get(point.id)!
+    circle.stroke({color: '#f00'})
+
+    const pointIndex = this.envelopes[envelopeIndex].indexOf(point)
+    const prevPoint: EnvelopePoint | undefined = this.envelopes[envelopeIndex][pointIndex - 1]
+    const nextPoint: EnvelopePoint | undefined = this.envelopes[envelopeIndex][pointIndex + 1]
+
+    const clampT = (t: number) => {
+      if(prevPoint) t = Math.max(t, prevPoint.t)
+      else t = Math.max(t, 0)
+    
+      if(nextPoint) t = Math.min(t, nextPoint.t)
+      return t
+    }
+
+    circle.on('mousemove', (event) => {
+      const mouseXY = this.svgMouseCoord(event as MouseEvent);
+      const rawTVal = this.pxToT(mouseXY.x)
+      const clampedTVal = clampT(rawTVal)
+      point.y = this.pxToY(mouseXY.y)
+      circle.move(this.tToPx(clampedTVal), this.yToPx(point.y))
+    })
+
+    circle.on('mouseup', () => {
+      circle.off('mousemove')
+    })
+    
   }
 
   renderEnvelope(envelopeIndex: number) {
     
     //clear envelope group
     this.envelopeGroup.clear()
+    this.idToCircleMap.clear()
+    this.pointIdToLinesMap.clear()
 
     //draw points
     //attach handlers for delete/move (delete just re-renders envelope)
@@ -209,6 +255,8 @@ class EnvelopeEditor {
       const x = this.tToPx(point.t)
       const y = this.yToPx(point.y) 
       const circle = this.envelopeGroup.circle(5).fill('#fff').move(x, y)
+
+      this.idToCircleMap.set(point.id, circle)
 
       this.attachHandlersToPoint(envelopeIndex, point, circle)
     })

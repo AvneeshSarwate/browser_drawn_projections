@@ -26,7 +26,8 @@ export const sketchNames = [
   'tldraw_test',
   'mpeDesignerTest',
   'voronoiTest',
-  'oblique'
+  'oblique',
+  'envelopeEditorTest'
 ]
 
 const sketchRoutes = sketchNames.map(name => {
