@@ -1,4 +1,4 @@
-import { Circle, Element, Rect, SVG, Svg, Text } from '@svgdotjs/svg.js'
+import { Circle, Element, G, Line, Rect, SVG, Svg, Text } from '@svgdotjs/svg.js'
 
 /*
 basic strategy for using SVG:
@@ -68,6 +68,252 @@ Basic strategy for implementing multi-note modifications -
 - Calulate the mouse motion/deviation from the mousedown point on the target element
 - Use this mouse deviation info to control movement/resizing of all selected elements
 */
+
+
+
+/**
+ basic layout strategy for envelope editor over piano roll 
+ - separate svg document over piano roll, envelope editor has translucent background to show notes
+ - width is same as piano roll, height is constant
+ - x dimension of viewbox + scroll gets bounced back and forth between the two
+ - piano roll object contains the envelope editor object
+ - tab box for envelope selection is fixed with in the svg, and gets shifted along with scroll
+   - it's height is subtracted from element height to give range for [0-1] y values
+ */
+
+type EnvelopePoint = {t: number, y: number, id: number, selected: boolean}
+
+class EnvelopeEditor {
+  numEnvelopes: number = 8
+  envelopes: EnvelopePoint[][] = Array.from({length: this.numEnvelopes}, () => [])
+  idToPointMap: Map<number, EnvelopePoint> = new Map()
+  pointIdToLinesMap: Map<number, {to?: Line, from?: Line}> = new Map()
+  selectedEnvelopeIndex: number = 0
+  svgRoot: Svg
+  containerElementId: string
+  viewportWidth: number
+  viewportHeight: number
+  tabBoxHeight: number = 20
+  tabBoxWidth: number = 40
+  tabBoxGroup!: G 
+
+  envelopeBackground!: Rect 
+  envelopeGroup!: G 
+
+  //todo - link these to piano roll
+  quarterNoteWidth: number = 120
+  numMeasures: number = 100
+  envelopePointIdGenerator: number = 0
+
+  mouseDownPoint: {x: number, y: number} = {x: 0, y: 0}
+  mouseScrollActive = false;
+  mouseZoomActive = false;
+  mouseMoveRootNeedsReset = true;
+  mouseMoveRoot = {mouseX: 0, mouseY: 0, svgX: 0, svgY: 0, vbX: 0, vbY: 0, vbWidth: 0, vbHeight: 0, zoom: 0};
+  maxZoom: number = 0;
+
+
+
+  constructor(containerElementId: string, viewportWidth: number, viewportHeight: number) {
+    this.containerElementId = containerElementId
+    this.viewportWidth = viewportWidth
+    this.viewportHeight = viewportHeight
+    this.svgRoot = SVG().addTo("#"+this.containerElementId).attr('id', 'envelopeEditorSVG').size(this.viewportWidth, this.viewportHeight);
+    this.refPt = this.svgRoot.node.createSVGPoint();
+    this.maxZoom = 20/180 //taken from piano roll constants
+
+    this.createBackground()
+  }
+
+  createBackground() {
+
+    //create tab box 
+    this.tabBoxGroup = this.svgRoot.group()
+    for(let i = 0; i < this.numEnvelopes; i++) {
+      //create a tab group, which has a background rect and a text label
+      const tabGroup = this.tabBoxGroup.group().move(i * this.tabBoxWidth, 0)
+      const tabBackground = tabGroup.rect(this.tabBoxWidth, this.tabBoxHeight).fill('#000')
+      const tabLabel = tabGroup.text("env " + i.toString()).font({size: 10, weight: 'bold'}).fill('#fff')
+
+      tabGroup.on('click', () => {
+        this.selectedEnvelopeIndex = i
+        this.renderEnvelope(i)
+      })
+    }    
+
+    //create enevelope box that fills the rest of the svg
+    this.envelopeBackground = this.svgRoot.rect(this.quarterNoteWidth * this.numMeasures * 4, this.viewportHeight - this.tabBoxHeight).fill('#000').opacity(0.5)
+    this.envelopeGroup = this.svgRoot.group().add(this.envelopeBackground)
+
+    //add handler for scroll 
+
+    //add hadler for add point
+  }
+
+  createEnvelopePoint(envelopeId: number, t: number, y: number, selected: boolean) {
+    //add to data collection 
+
+    const id = this.envelopePointIdGenerator++
+
+    const point = {t, y, id, selected}
+
+    this.envelopes[envelopeId].push(point)
+    this.envelopes[envelopeId].sort((a, b) => a.t - b.t)
+
+    //re-render envelope
+    this.renderEnvelope(envelopeId)
+  }
+
+
+  tToPx(t: number) {
+    return t * this.quarterNoteWidth
+  }
+
+  pxToT(px: number) {
+    return px / this.quarterNoteWidth
+  }
+
+  yToPx(y: number) {
+    return (1 - y) * (this.viewportHeight - this.tabBoxHeight) + this.tabBoxHeight
+  }
+
+  pxToY(px: number) {
+    return 1 - (px - this.tabBoxHeight) / (this.viewportHeight - this.tabBoxHeight)
+  }
+
+  attachHandlersToPoint(envelopeIndex: number, point: EnvelopePoint, circle: Circle) {
+    circle.on('click', () => {
+      point.selected = !point.selected
+      //add red border
+      circle.stroke({width: point.selected ? 2 : 0, color: '#f00'})
+    })
+
+    //delete on double click
+    circle.on('dblclick', () => {
+      this.envelopes[envelopeIndex] = this.envelopes[envelopeIndex].filter(p => p.id !== point.id)
+      this.renderEnvelope(envelopeIndex)
+    })
+
+    //todo, add drag handler - moves point and changes its lines
+
+  }
+
+  renderEnvelope(envelopeIndex: number) {
+    
+    //clear envelope group
+    this.envelopeGroup.clear()
+
+    //draw points
+    //attach handlers for delete/move (delete just re-renders envelope)
+    this.envelopes[envelopeIndex].forEach(point => {
+      const x = this.tToPx(point.t)
+      const y = this.yToPx(point.y) 
+      const circle = this.envelopeGroup.circle(5).fill('#fff').move(x, y)
+
+      this.attachHandlersToPoint(envelopeIndex, point, circle)
+    })
+
+    //draw lines
+    for(let i = 0; i < this.envelopes[envelopeIndex].length - 1; i++) {
+      const p1 = this.envelopes[envelopeIndex][i]
+      const p2 = this.envelopes[envelopeIndex][i + 1]
+      const x1 = this.tToPx(p1.t)
+      const y1 = this.yToPx(p1.y)
+      const x2 = this.tToPx(p2.t)
+      const y2 = this.yToPx(p2.y)
+      const line = this.envelopeGroup.line(x1, y1, x2, y2).stroke({width: 1, color: '#fff'})
+
+      if(!this.pointIdToLinesMap.has(p1.id)) {
+        this.pointIdToLinesMap.set(p1.id, {})
+      }
+      const p1Lines = this.pointIdToLinesMap.get(p1.id)
+      if(p1Lines) {
+        p1Lines.to = line
+      }
+
+      if(!this.pointIdToLinesMap.has(p2.id)) {
+        this.pointIdToLinesMap.set(p2.id, {})
+      }
+      const p2Lines = this.pointIdToLinesMap.get(p2.id)
+      if(p2Lines) {
+        p2Lines.from = line
+      }
+    }
+
+  }
+
+  refPt!: DOMPoint;
+
+  // Get point in global SVG space from mousemove event
+  svgMouseCoord(evt: MouseEvent){
+    this.refPt.x = evt.clientX; 
+    this.refPt.y = evt.clientY;
+    return this.refPt.matrixTransform(this.svgRoot.node.getScreenCTM()!.inverse());
+  }
+
+  // need to calculate mouse delta from screen coordinates rather than SVG coordinates because
+  // the SVG view moves after every frame, thus changing the read mouse coordintates and creating
+  // wild feedback. root is the mouse position 'snapshot' against which the delta is measured
+  getMouseDelta(event: MouseEvent, root: MouseMoveRoot){
+    return {x: event.clientX - root.mouseX, y: event.clientY - root.mouseY};
+  }
+
+  //take a snapshot of the mouse position and viewbox size/position
+  resetMouseMoveRoot(event: MouseEvent){
+    const vb = this.svgRoot.viewbox();
+    const svgXY = this.svgMouseCoord(event);
+    this.mouseMoveRoot = {
+      mouseX: event.clientX,
+      mouseY: event.clientY,
+      svgX: svgXY.x,
+      svgY: svgXY.y,
+      vbX: vb.x,
+      vbY: vb.y,
+      vbWidth: vb.width,
+      vbHeight: vb.height,
+      zoom: this.svgRoot.zoom() //todo refactor check
+    };
+    this.mouseMoveRootNeedsReset = false;
+  }
+
+  mouseScrollHandler(event: MouseEvent){
+    if (this.mouseMoveRootNeedsReset) this.resetMouseMoveRoot(event);
+    if (this.mouseScrollActive){
+      const mouseDetla = this.getMouseDelta(event, this.mouseMoveRoot);
+      const boundVal = (n: number, l: number, h: number) => Math.min(h, Math.max(l, n));
+      
+      //inverted scrolling
+      const scrollFactor = 1/this.mouseMoveRoot.zoom;
+      const newVBPos = {
+        x: boundVal(this.mouseMoveRoot.vbX - mouseDetla.x * scrollFactor, 0, this.quarterNoteWidth * this.numMeasures * 4 - this.mouseMoveRoot.vbWidth),
+      };
+      this.svgRoot.viewbox(newVBPos.x, this.mouseMoveRoot.vbY, this.mouseMoveRoot.vbWidth, this.mouseMoveRoot.vbHeight);
+    }
+  }
+
+  mouseZoomHandler(event: MouseEvent){
+    if (this.mouseMoveRootNeedsReset) this.resetMouseMoveRoot(event);
+    if (this.mouseZoomActive){
+      const mouseDetla = this.getMouseDelta(event, this.mouseMoveRoot);
+      const boundVal = (n: number, l: number, h: number) => Math.min(h, Math.max(l, n));
+
+      const zoomChange = (4**(mouseDetla.y/this.mouseMoveRoot.zoom / this.mouseMoveRoot.vbHeight));
+      const zoomFactor = this.mouseMoveRoot.zoom * zoomChange;
+      if (zoomFactor < this.maxZoom) return;
+      
+      const svgMouseVBOffsetX = this.mouseMoveRoot.svgX - this.mouseMoveRoot.vbX;
+
+      const newWidth = this.mouseMoveRoot.vbWidth/zoomChange;
+
+      const newVBPos = {
+        x: boundVal(this.mouseMoveRoot.svgX - svgMouseVBOffsetX/zoomChange, 0, this.quarterNoteWidth * this.numMeasures * 4 - newWidth),
+      };
+
+      this.svgRoot.viewbox(newVBPos.x, this.mouseMoveRoot.vbY, newWidth, this.mouseMoveRoot.vbHeight);
+    }
+  }
+}
+
 
 export type NoteInfo<T> = {pitch: number, position: number, duration: number, velocity: number, metadata?: T}
 
@@ -332,6 +578,7 @@ export class PianoRoll<T> {
 
 
   //duration is number of quarter notes, pitch is 0-indexed MIDI
+  //todo pianoRoll - refactor this to use groups
   addNote(pitch: number, position: number, duration: number, avoidHistoryManipulation: boolean = false) {
     const xPos = position * this.quarterNoteWidth
     const yPos = (127 - pitch) * this.noteHeight
