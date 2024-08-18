@@ -153,6 +153,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   console.log("disposing livecoded resources")
+  document.getElementById('envelopeEditor')!.innerHTML = ""
   shaderGraphEndNode?.disposeAll()
   clearListeners()
   timeLoops.forEach(tl => tl.cancel())

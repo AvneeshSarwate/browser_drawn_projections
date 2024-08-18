@@ -112,6 +112,8 @@ export class EnvelopeEditor {
   mouseMoveRootNeedsReset = true;
   mouseMoveRoot = {mouseX: 0, mouseY: 0, svgX: 0, svgY: 0, vbX: 0, vbY: 0, vbWidth: 0, vbHeight: 0, zoom: 0};
   maxZoom: number = 0;
+  ptRadius: number = 5
+  tabBackgrounds: Rect[] = []
 
 
 
@@ -129,7 +131,7 @@ export class EnvelopeEditor {
   createBackground() {
 
     //create enevelope box that fills the rest of the svg
-    this.envelopeBackground = this.svgRoot.rect(this.quarterNoteWidth * this.numMeasures * 4, this.viewportHeight - this.tabBoxHeight).fill('#000').opacity(0.5)
+    this.envelopeBackground = this.svgRoot.rect(this.quarterNoteWidth * this.numMeasures * 4, this.viewportHeight - this.tabBoxHeight).id('envelopeBackground').fill('#777').opacity(0.5)
     this.envelopeGroup = this.svgRoot.group().add(this.envelopeBackground)
 
     //create tab box 
@@ -143,10 +145,21 @@ export class EnvelopeEditor {
       //create a tab group, which has a background rect and a text label
       const tabGroup = this.tabBoxGroup.group().translate(i * this.tabBoxWidth, 0)
       const tabBackground = tabGroup.rect(this.tabBoxWidth, this.tabBoxHeight).fill('#5f5')
+      if(i === 0) {
+        tabBackground.stroke({width: 2, color: '#f00'})
+      }
+      this.tabBackgrounds.push(tabBackground)
       const tabLabel = tabGroup.text("env " + i.toString()).font({size: 10, weight: 'bold'}).move(0, this.tabBoxHeight/2)
 
-      tabGroup.on('mousedown', () => {
+      tabGroup.on('click', () => {
         console.log("clicked tab group", i)
+        this.tabBackgrounds.forEach((tabBackground, index) => {
+          if(index === i) {
+            tabBackground.stroke({width: 2, color: '#f00'})
+          } else {
+            tabBackground.stroke({width: 0, color: '#f00'})
+          }
+        })
         this.selectedEnvelopeIndex = i
         this.renderEnvelope(i)
       })
@@ -155,6 +168,10 @@ export class EnvelopeEditor {
     //add handler for scroll 
 
     //add hadler for add point
+    this.envelopeGroup.on('dblclick', (event) => {
+      const mouseXY = this.svgMouseCoord(event as MouseEvent);
+      this.createEnvelopePoint(this.selectedEnvelopeIndex, this.pxToT(mouseXY.x), this.pxToY(mouseXY.y), false)
+    })
   }
 
   createEnvelopePoint(envelopeId: number, t: number, y: number, selected: boolean) {
@@ -188,6 +205,15 @@ export class EnvelopeEditor {
     return 1 - (px - this.tabBoxHeight) / (this.viewportHeight - this.tabBoxHeight)
   }
 
+  tyToPx(t: number, y: number) {
+    return {x: this.tToPx(t), y: this.yToPx(y)}
+  }
+
+  tyToCirclePx(t: number, y: number) {
+    const px = this.tyToPx(t, y)
+    return {x: px.x - this.ptRadius/2, y: px.y - this.ptRadius/2}
+  }
+
   attachHandlersToPoint(envelopeIndex: number, point: EnvelopePoint, circle: Circle) {
     circle.on('click', () => {
       point.selected = !point.selected
@@ -219,6 +245,7 @@ export class EnvelopeEditor {
     const pointIndex = this.envelopes[envelopeIndex].indexOf(point)
     const prevPoint: EnvelopePoint | undefined = this.envelopes[envelopeIndex][pointIndex - 1]
     const nextPoint: EnvelopePoint | undefined = this.envelopes[envelopeIndex][pointIndex + 1]
+    console.log("prevIndex", pointIndex - 1, "nextIndex", pointIndex + 1)
 
     const clampT = (t: number) => {
       if(prevPoint) t = Math.max(t, prevPoint.t)
@@ -228,16 +255,31 @@ export class EnvelopeEditor {
       return t
     }
 
-    circle.on('mousemove', (event) => {
+    this.envelopeGroup.on('mousemove', (event) => {
       const mouseXY = this.svgMouseCoord(event as MouseEvent);
       const rawTVal = this.pxToT(mouseXY.x)
       const clampedTVal = clampT(rawTVal)
       point.y = this.pxToY(mouseXY.y)
-      circle.move(this.tToPx(clampedTVal), this.yToPx(point.y))
+      const circPX = this.tyToCirclePx(clampedTVal, point.y)
+      circle.move(circPX.x, circPX.y)
+      const mousePX = this.tyToPx(clampedTVal, point.y)
+
+      //move lines as well 
+      const lineToPoint = this.pointIdToLinesMap.get(point.id)?.to
+      const lineFromPoint = this.pointIdToLinesMap.get(point.id)?.from
+      if(lineToPoint) {
+        const prevXY = prevPoint ? this.tyToPx(prevPoint.t, prevPoint.y) : {x: 0, y: this.yToPx(0.5)}
+        lineToPoint.plot(prevXY.x, prevXY.y, mousePX.x, mousePX.y)
+      }
+      if(lineFromPoint) {
+        const nextXY = nextPoint ? this.tyToPx(nextPoint.t, nextPoint.y) : {x: 10000, y: this.yToPx(0.5)}
+        lineFromPoint.plot(mousePX.x, mousePX.y, nextXY.x, nextXY.y)
+      }
     })
 
     circle.on('mouseup', () => {
-      circle.off('mousemove')
+      this.envelopeGroup.off('mousemove')
+      circle.stroke({color: '#fff'})
     })
     
   }
@@ -245,16 +287,19 @@ export class EnvelopeEditor {
   renderEnvelope(envelopeIndex: number) {
     
     //clear envelope group
-    this.envelopeGroup.clear()
+    this.envelopeGroup.children().forEach(child => {
+      if(child.id() !== 'envelopeBackground') {
+        child.remove()
+      }
+    })
     this.idToCircleMap.clear()
     this.pointIdToLinesMap.clear()
 
     //draw points
     //attach handlers for delete/move (delete just re-renders envelope)
     this.envelopes[envelopeIndex].forEach(point => {
-      const x = this.tToPx(point.t)
-      const y = this.yToPx(point.y) 
-      const circle = this.envelopeGroup.circle(5).fill('#fff').move(x, y)
+      const px = this.tyToCirclePx(point.t, point.y)
+      const circle = this.envelopeGroup.circle(this.ptRadius).fill('#fff').move(px.x, px.y)
 
       this.idToCircleMap.set(point.id, circle)
 
