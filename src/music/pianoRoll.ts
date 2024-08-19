@@ -112,7 +112,7 @@ export class EnvelopeEditor {
   mouseMoveRootNeedsReset = true;
   mouseMoveRoot = {mouseX: 0, mouseY: 0, svgX: 0, svgY: 0, vbX: 0, vbY: 0, vbWidth: 0, vbHeight: 0, zoom: 0};
   maxZoom: number = 0;
-  ptRadius: number = 5
+  ptRadius: number = 8
   tabBackgrounds: Rect[] = []
 
 
@@ -236,6 +236,8 @@ export class EnvelopeEditor {
 
   }
 
+
+
   startDraggingPoint(envelopeIndex: number, point: EnvelopePoint) {
     //add red border
     point.selected = true
@@ -259,6 +261,7 @@ export class EnvelopeEditor {
       const mouseXY = this.svgMouseCoord(event as MouseEvent);
       const rawTVal = this.pxToT(mouseXY.x)
       const clampedTVal = clampT(rawTVal)
+      point.t = clampedTVal
       point.y = this.pxToY(mouseXY.y)
       const circPX = this.tyToCirclePx(clampedTVal, point.y)
       circle.move(circPX.x, circPX.y)
@@ -268,24 +271,31 @@ export class EnvelopeEditor {
       const lineToPoint = this.pointIdToLinesMap.get(point.id)?.to
       const lineFromPoint = this.pointIdToLinesMap.get(point.id)?.from
       if(lineToPoint) {
-        const prevXY = prevPoint ? this.tyToPx(prevPoint.t, prevPoint.y) : {x: 0, y: this.yToPx(0.5)}
+        const prevXY = prevPoint ? this.tyToPx(prevPoint.t, prevPoint.y) : {x: 0, y: mousePX.y}
         lineToPoint.plot(prevXY.x, prevXY.y, mousePX.x, mousePX.y)
       }
       if(lineFromPoint) {
-        const nextXY = nextPoint ? this.tyToPx(nextPoint.t, nextPoint.y) : {x: 10000, y: this.yToPx(0.5)}
+        const nextXY = nextPoint ? this.tyToPx(nextPoint.t, nextPoint.y) : {x: this.viewportWidth, y: mousePX.y}
         lineFromPoint.plot(mousePX.x, mousePX.y, nextXY.x, nextXY.y)
       }
     })
 
-    circle.on('mouseup', () => {
+    const mouseUpHandler = () => {
       this.envelopeGroup.off('mousemove')
       circle.stroke({color: '#fff'})
-    })
+    }
+
+    this.svgRoot.on('mouseup', mouseUpHandler)
+
+    circle.on('mouseup', mouseUpHandler)
     
   }
 
   renderEnvelope(envelopeIndex: number) {
     
+    //todo - consolidate line so that only 2 pts are at a single t value 
+    //(might need to add move-time metadata to point to help determine which ones to keep)
+
     //clear envelope group
     this.envelopeGroup.children().forEach(child => {
       if(child.id() !== 'envelopeBackground') {
@@ -306,7 +316,16 @@ export class EnvelopeEditor {
       this.attachHandlersToPoint(envelopeIndex, point, circle)
     })
 
-    //draw lines
+    //draw line before first point
+    if(this.envelopes[envelopeIndex].length > 0 && this.envelopes[envelopeIndex][0].t > 0) {
+      const p1 = this.envelopes[envelopeIndex][0]
+      const x1 = this.tToPx(p1.t)
+      const y1 = this.yToPx(p1.y)
+      const line = this.envelopeGroup.line(0, y1, x1, y1).stroke({width: 1, color: '#fff'})
+      this.pointIdToLinesMap.set(p1.id, {from: line})
+    }
+
+    //draw lines between points
     for(let i = 0; i < this.envelopes[envelopeIndex].length - 1; i++) {
       const p1 = this.envelopes[envelopeIndex][i]
       const p2 = this.envelopes[envelopeIndex][i + 1]
@@ -331,6 +350,15 @@ export class EnvelopeEditor {
       if(p2Lines) {
         p2Lines.from = line
       }
+    }
+
+    //draw line after last point
+    if(this.envelopes[envelopeIndex].length > 0) {
+      const p1 = this.envelopes[envelopeIndex][this.envelopes[envelopeIndex].length - 1]
+      const x1 = this.tToPx(p1.t)
+      const y1 = this.yToPx(p1.y)
+      const line = this.envelopeGroup.line(x1, y1, this.viewportWidth, y1).stroke({width: 1, color: '#fff'})
+      this.pointIdToLinesMap.get(p1.id)!.to = line
     }
 
   }
