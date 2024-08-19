@@ -322,7 +322,7 @@ export class EnvelopeEditor {
       const x1 = this.tToPx(p1.t)
       const y1 = this.yToPx(p1.y)
       const line = this.envelopeGroup.line(0, y1, x1, y1).stroke({width: 1, color: '#fff'})
-      this.pointIdToLinesMap.set(p1.id, {from: line})
+      this.pointIdToLinesMap.set(p1.id, {to: line})
     }
 
     //draw lines between points
@@ -340,7 +340,7 @@ export class EnvelopeEditor {
       }
       const p1Lines = this.pointIdToLinesMap.get(p1.id)
       if(p1Lines) {
-        p1Lines.to = line
+        p1Lines.from = line
       }
 
       if(!this.pointIdToLinesMap.has(p2.id)) {
@@ -348,7 +348,7 @@ export class EnvelopeEditor {
       }
       const p2Lines = this.pointIdToLinesMap.get(p2.id)
       if(p2Lines) {
-        p2Lines.from = line
+        p2Lines.to = line
       }
     }
 
@@ -358,7 +358,7 @@ export class EnvelopeEditor {
       const x1 = this.tToPx(p1.t)
       const y1 = this.yToPx(p1.y)
       const line = this.envelopeGroup.line(x1, y1, this.viewportWidth, y1).stroke({width: 1, color: '#fff'})
-      this.pointIdToLinesMap.get(p1.id)!.to = line
+      this.pointIdToLinesMap.get(p1.id)!.from = line
     }
 
   }
