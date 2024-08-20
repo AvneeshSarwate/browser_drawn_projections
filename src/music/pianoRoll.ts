@@ -159,7 +159,7 @@ export class EnvelopeEditor {
     if (kEvt.altKey && !kEvt.ctrlKey){
       this.mouseMoveRootNeedsReset = true;
       this.mouseZoomActive = true;
-      this.temporaryMouseMoveHandler = ev => this.mouseZoomHandler(ev as MouseEvent);
+      this.temporaryMouseMoveHandler = ev => this.mouseZoomHandler2(ev as MouseEvent);
       this.containerElement!!.addEventListener('mousemove', this.temporaryMouseMoveHandler);
     }
   }
@@ -249,11 +249,11 @@ export class EnvelopeEditor {
 
 
   tToPx(t: number) {
-    return t * this.quarterNoteWidth
+    return t * this.quarterNoteWidth / this.zoomLevel
   }
 
   pxToT(px: number) {
-    return px / this.quarterNoteWidth
+    return px / this.quarterNoteWidth * this.zoomLevel
   }
 
   yToPx(y: number) {
@@ -453,7 +453,7 @@ export class EnvelopeEditor {
       vbY: vb.y,
       vbWidth: vb.width,
       vbHeight: vb.height,
-      zoom: this.svgRoot.zoom() //todo refactor check
+      zoom: this.zoomLevel
     };
     console.log("resetMouseMoveRoot", this.mouseMoveRoot)
     this.mouseMoveRootNeedsReset = false;
@@ -492,36 +492,9 @@ export class EnvelopeEditor {
   mouseZoomHandler2(event: MouseEvent) {
     if (this.mouseMoveRootNeedsReset) this.resetMouseMoveRoot(event);
     if (this.mouseZoomActive){
-      const mouseDetla = this.getMouseDelta(event, this.mouseMoveRoot);
-
-
-    }
-  }
-
-  mouseZoomHandler(event: MouseEvent){
-    if (this.mouseMoveRootNeedsReset) this.resetMouseMoveRoot(event);
-    if (this.mouseZoomActive){
-      const mouseDetla = this.getMouseDelta(event, this.mouseMoveRoot);
-      const boundVal = (n: number, l: number, h: number) => Math.min(h, Math.max(l, n));
-
-      const zoomChange = (4**(mouseDetla.y/this.mouseMoveRoot.zoom / this.viewportHeight));
-      const zoomFactor = this.mouseMoveRoot.zoom * zoomChange;
-      if (zoomFactor < this.maxZoom) return;
-      
-      const svgMouseVBOffsetX = this.mouseMoveRoot.svgX - this.mouseMoveRoot.vbX;
-
-      const newWidth = this.mouseMoveRoot.vbWidth/zoomChange;
-
-      const newVBPos = {
-        x: boundVal(this.mouseMoveRoot.svgX - svgMouseVBOffsetX/zoomChange, 0, this.quarterNoteWidth * this.numMeasures * 4 - newWidth),
-        y: this.mouseMoveRoot.vbY,
-        w: newWidth,
-        h: this.mouseMoveRoot.vbHeight
-      };
-
-      console.log("envelope zoom", newVBPos)
-
-      this.svgRoot.viewbox(newVBPos.x, newVBPos.y, newVBPos.w, newVBPos.h);
+      const mouseDelta = this.getMouseDelta(event, this.mouseMoveRoot);
+      this.zoomLevel = this.mouseMoveRoot.zoom * 4 ** (mouseDelta.y / this.viewportHeight)
+      this.renderEnvelope(this.selectedEnvelopeIndex)
     }
   }
 }
