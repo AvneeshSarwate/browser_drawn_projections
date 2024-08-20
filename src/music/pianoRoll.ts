@@ -114,7 +114,7 @@ export class EnvelopeEditor {
   maxZoom: number = 0;
   ptRadius: number = 8
   tabBackgrounds: Rect[] = []
-
+  containerElement: HTMLElement
 
 
   constructor(containerElementId: string, viewportWidth: number, viewportHeight: number) {
@@ -122,16 +122,40 @@ export class EnvelopeEditor {
     this.viewportWidth = viewportWidth
     this.viewportHeight = viewportHeight
     this.svgRoot = SVG().addTo("#"+this.containerElementId).attr('id', 'envelopeEditorSVG').size(this.viewportWidth, this.viewportHeight);
+    this.containerElement = document.getElementById(this.containerElementId)!!
     this.refPt = this.svgRoot.node.createSVGPoint();
     this.maxZoom = 20/180 //taken from piano roll constants
 
     this.createBackground()
   }
 
+  mouseXY!: DOMPoint
+
+  backgroundMouseMoveHandler(evt: Event) {
+    this.mouseXY = this.svgMouseCoord(evt as MouseEvent);
+    //todo - make sure this translates properly into xy coord for enevelope group area
+  }
+
+  backgroundKeyDownHandler(evt: Event) {
+    const kEvt = evt as KeyboardEvent
+    console.log("envelope key", evt)
+    if(kEvt.key == "d") {
+      const t = this.pxToT(this.mouseXY.x)
+      const y = this.pxToY(this.mouseXY.y)
+      this.createEnvelopePoint(this.selectedEnvelopeIndex, t, y, false)
+    }
+  }
+
   createBackground() {
 
     //create enevelope box that fills the rest of the svg
     this.envelopeBackground = this.svgRoot.rect(this.quarterNoteWidth * this.numMeasures * 4, this.viewportHeight - this.tabBoxHeight).id('envelopeBackground').fill('#777').opacity(0.5)
+    this.envelopeBackground.on('mousemove', (e) => this.backgroundMouseMoveHandler(e))
+    this.containerElement.addEventListener('keypress', (e) => this.backgroundKeyDownHandler(e))
+    this.containerElement.onmouseenter = () => {
+      this.containerElement.focus()
+      console.log("mouse entered")
+    }
     this.envelopeGroup = this.svgRoot.group().add(this.envelopeBackground)
 
     //create tab box 
@@ -170,6 +194,7 @@ export class EnvelopeEditor {
     //add hadler for add point
     this.envelopeGroup.on('dblclick', (event) => {
       const mouseXY = this.svgMouseCoord(event as MouseEvent);
+      console.log("env create point")
       this.createEnvelopePoint(this.selectedEnvelopeIndex, this.pxToT(mouseXY.x), this.pxToY(mouseXY.y), false)
     })
   }
@@ -222,9 +247,11 @@ export class EnvelopeEditor {
     })
 
     //delete on double click
-    circle.on('dblclick', () => {
+    circle.on('dblclick', (e) => {
+      console.log("delete point", point)
       this.envelopes[envelopeIndex] = this.envelopes[envelopeIndex].filter(p => p.id !== point.id)
       this.renderEnvelope(envelopeIndex)
+      e.stopImmediatePropagation()
     })
 
     circle.on('mousedown', (event) => {

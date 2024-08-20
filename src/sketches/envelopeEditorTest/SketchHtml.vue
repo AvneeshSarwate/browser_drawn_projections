@@ -1,7 +1,7 @@
 <template>
   <div id="canvasContainer">
     <canvas id="p5Canvas" width="1280" height="720" abitrary-prop="somethi"></canvas>
-    <canvas id="threeCanvas" width="1280" height="720" abitrary-prop="somethi"></canvas>
+    <canvas id="threeCanvas" width="1280" height="720" abitrary-prop="somethi" tabindex="0"></canvas>
   </div>
   <div id="description">
     <p>Press D to enter draw mode</p>
@@ -10,7 +10,7 @@
   </div>
   <div id="debugInfo"></div>
   <div id="envelopeEditorContainer">
-    <div id="envelopeEditor"></div>
+    <div id="envelopeEditor" tabindex="1"></div>
   </div>
 </template>
 

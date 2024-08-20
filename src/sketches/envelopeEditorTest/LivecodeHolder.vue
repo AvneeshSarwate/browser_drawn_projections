@@ -36,6 +36,7 @@ onMounted(() => {
     const p5i = appState.p5Instance!!
     const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
     const threeCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
+    console.log("threecanvas", threeCanvas)
 
     const initialCiclePos = appState.circles.list.map(c => ({ x: c.x, y: c.y }))
 
@@ -108,13 +109,13 @@ onMounted(() => {
       //sketchTodo - make all of these listen on threeCanvas
       singleKeydownEvent('d', (ev) => {
         appState.drawing = !appState.drawing
-        console.log("drawing: " + appState.drawing)
+        // console.log("drawing: " + appState.drawing)
         if (appState.drawing) {
           appState.drawFuncMap.set("debugDraw", drawingCursor)
         } else {
           appState.drawFuncMap.delete("debugDraw")
         }
-      })
+      }, threeCanvas)
 
       singleKeydownEvent('s', (ev) => {
         if (appState.drawing) {
