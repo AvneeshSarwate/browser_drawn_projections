@@ -115,6 +115,8 @@ export class EnvelopeEditor {
   ptRadius: number = 8
   tabBackgrounds: Rect[] = []
   containerElement: HTMLElement
+  scrollPos = 0
+  scrollCallback = (x: number) => {}
 
 
   constructor(containerElementId: string, viewportWidth: number, viewportHeight: number) {
@@ -415,7 +417,7 @@ export class EnvelopeEditor {
       const p1 = this.envelopes[envelopeIndex][this.envelopes[envelopeIndex].length - 1]
       const x1 = this.tToPx(p1.t)
       const y1 = this.yToPx(p1.y)
-      const line = this.envelopeGroup.line(x1, y1, this.viewportWidth, y1).stroke({width: 1, color: '#fff'})
+      const line = this.envelopeGroup.line(x1, y1, this.quarterNoteWidth * this.numMeasures * 4, y1).stroke({width: 1, color: '#fff'})
       this.pointIdToLinesMap.get(p1.id)!.from = line
     }
 
@@ -466,15 +468,22 @@ export class EnvelopeEditor {
       const newVBPos = {
         x: boundVal(this.mouseMoveRoot.vbX - mouseDetla.x * scrollFactor, 0, this.quarterNoteWidth * this.numMeasures * 4 - this.mouseMoveRoot.vbWidth),
       };
+      this.scrollPos = newVBPos.x
 
       // console.log("scroll x", newVBPos.x)
       // console.log("viewbox", newVBPos.x, this.mouseMoveRoot.vbY, this.mouseMoveRoot.vbWidth, this.mouseMoveRoot.vbHeight)
 
       //todo - change tab box to scroll to the new position
       this.tabBoxGroup.move(newVBPos.x, this.tabBoxGroup.y())
-
       this.svgRoot.viewbox(newVBPos.x, this.mouseMoveRoot.vbY, this.mouseMoveRoot.vbWidth, this.mouseMoveRoot.vbHeight);
+
+      this.scrollCallback(this.scrollPos)
     }
+  }
+
+  seXScrollDirectly(x: number) {
+    const vbd = {w: this.svgRoot.viewbox().width, h: this.svgRoot.viewbox().height, y: this.svgRoot.viewbox().y}
+    this.svgRoot.viewbox(x, vbd.y, vbd.w, vbd.h)
   }
 
   mouseZoomHandler(event: MouseEvent){
@@ -596,6 +605,9 @@ export class PianoRoll<T> {
   wIsDown: any;
   private debugCircle0: Circle
   private debugCircle1: Circle
+  scrollPos = 0
+  scrollCallback = (x: number) => {}
+
   constructor(containerElementId: string, playHandler: (pitch: number) => void, noteOnOffHandler: (pitch: number, onOff: ('on' | 'off')) => void){
     this.svgRoot; //the svg root element
 
@@ -929,6 +941,13 @@ export class PianoRoll<T> {
     return {x: event.clientX - root.mouseX, y: event.clientY - root.mouseY};
   }
 
+
+  seXScrollDirectly(x: number) {
+    const vbd = {w: this.svgRoot.viewbox().width, h: this.svgRoot.viewbox().height, y: this.svgRoot.viewbox().y}
+    const zoom = this.svgRoot.zoom()
+    this.svgRoot.viewbox(x / zoom, vbd.y, vbd.w, vbd.h)
+  }
+
   //take a snapshot of the mouse position and viewbox size/position
   resetMouseMoveRoot(event: MouseEvent){
     const vb = this.svgRoot.viewbox();
@@ -960,6 +979,9 @@ export class PianoRoll<T> {
         y: boundVal(this.mouseMoveRoot.vbY - mouseDetla.y * scrollFactor, 0, this.pianoRollHeight - this.mouseMoveRoot.vbHeight)
       };
       this.svgRoot.viewbox(newVBPos.x, newVBPos.y, this.mouseMoveRoot.vbWidth, this.mouseMoveRoot.vbHeight);
+
+      this.scrollPos = newVBPos.x
+      this.scrollCallback(this.scrollPos)
     }
   }
 

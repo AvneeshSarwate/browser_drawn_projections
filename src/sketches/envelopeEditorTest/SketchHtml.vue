@@ -9,8 +9,11 @@
     <p>Press F to animate the circle arrangement</p>
   </div>
   <div id="debugInfo"></div>
-  <div id="envelopeEditorContainer">
-    <div id="envelopeEditor" tabindex="1"></div>
+  <div id="pianoEnvelopeHolder">
+    <div id="pianoRollHolder"></div>
+    <div id="envelopeEditorContainer">
+      <div id="envelopeEditor" tabindex="1"></div>
+    </div>
   </div>
 </template>
 
@@ -37,10 +40,24 @@
   visibility: visible;
 }
 
+#pianoEnvelopeHolder {
+  position: relative;
+}
+
 #envelopeEditorContainer {
-  display: flex;
+  /* display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: center; */
+  position: absolute;
+  top: 0;
+  left: 0;
 }
+
+#pianoRollHolder {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
 </style>

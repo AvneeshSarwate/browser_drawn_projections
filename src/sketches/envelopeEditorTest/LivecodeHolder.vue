@@ -6,7 +6,8 @@ import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
-import { EnvelopeEditor } from '@/music/pianoRoll';
+import { EnvelopeEditor, PianoRoll } from '@/music/pianoRoll';
+import { Scale } from '@/music/scale';
 
 const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
@@ -40,7 +41,19 @@ onMounted(() => {
 
     const initialCiclePos = appState.circles.list.map(c => ({ x: c.x, y: c.y }))
 
-    const envelopeEditor = new EnvelopeEditor("envelopeEditor", 640, 480)
+    const envelopeEditor = new EnvelopeEditor("envelopeEditor", 640, 360)
+    const scale = new Scale(undefined, 48)
+
+    const pitches = scale.getMultiple([1, 3, 5, 6, 8, 10, 12])
+    const notes = pitches.map((p, i) => ({ pitch: p, duration: 1, position: i, velocity: 0.5 }))
+
+    const pianoRoll = new PianoRoll<any>("pianoRollHolder", () => null, () => null)
+    pianoRoll.setNoteData(notes)
+    pianoRoll.setViewportToShowAllNotes()
+
+    pianoRoll.scrollCallback = (x) => envelopeEditor.seXScrollDirectly(x)
+    envelopeEditor.scrollCallback = (x) => pianoRoll.seXScrollDirectly(x)
+
 
     let p5Mouse = { x: 0, y: 0 }
     mousemoveEvent((ev) => {
