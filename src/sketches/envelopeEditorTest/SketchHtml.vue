@@ -1,3 +1,12 @@
+<script setup lang="ts">
+import { ref } from 'vue';
+
+
+const toggleEnvelopeEditor = ref(false)
+const togglePianoRoll = ref(true)
+
+</script>
+
 <template>
   <div id="canvasContainer">
     <canvas id="p5Canvas" width="1280" height="720" abitrary-prop="somethi"></canvas>
@@ -8,10 +17,14 @@
     <p>Press S to add a circle</p>
     <p>Press F to animate the circle arrangement</p>
   </div>
+  <input id="toggleEnvelopeEditor" type="checkbox" v-model="toggleEnvelopeEditor" />
+  <label for="toggleEnvelopeEditor">Toggle Envelope Editor</label>
+  <input id="togglePianoRoll" type="checkbox" v-model="togglePianoRoll">
+  <label for="togglePianoRoll">Toggle Piano Roll</label>
   <div id="debugInfo"></div>
   <div id="pianoEnvelopeHolder">
-    <div id="pianoRollHolder"></div>
-    <div id="envelopeEditorContainer">
+    <div id="pianoRollHolder" :style="togglePianoRoll ? {visibility: 'visible'} : {visibility: 'hidden'}"></div>
+    <div id="envelopeEditorContainer" :style="toggleEnvelopeEditor ? {visibility: 'visible'} : {visibility: 'hidden'}">
       <div id="envelopeEditor" tabindex="1"></div>
     </div>
   </div>

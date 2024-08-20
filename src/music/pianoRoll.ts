@@ -129,6 +129,7 @@ export class EnvelopeEditor {
     this.maxZoom = 20/180 //taken from piano roll constants
 
     this.createBackground()
+    this.svgRoot.attr('preserveAspectRatio', 'none')
     this.svgRoot.viewbox(0, 0, this.viewportWidth, this.viewportHeight)
   }
 
@@ -486,13 +487,24 @@ export class EnvelopeEditor {
     this.svgRoot.viewbox(x, vbd.y, vbd.w, vbd.h)
   }
 
+  zoomLevel = 1
+
+  mouseZoomHandler2(event: MouseEvent) {
+    if (this.mouseMoveRootNeedsReset) this.resetMouseMoveRoot(event);
+    if (this.mouseZoomActive){
+      const mouseDetla = this.getMouseDelta(event, this.mouseMoveRoot);
+
+
+    }
+  }
+
   mouseZoomHandler(event: MouseEvent){
     if (this.mouseMoveRootNeedsReset) this.resetMouseMoveRoot(event);
     if (this.mouseZoomActive){
       const mouseDetla = this.getMouseDelta(event, this.mouseMoveRoot);
       const boundVal = (n: number, l: number, h: number) => Math.min(h, Math.max(l, n));
 
-      const zoomChange = (4**(mouseDetla.y/this.mouseMoveRoot.zoom / this.mouseMoveRoot.vbHeight));
+      const zoomChange = (4**(mouseDetla.y/this.mouseMoveRoot.zoom / this.viewportHeight));
       const zoomFactor = this.mouseMoveRoot.zoom * zoomChange;
       if (zoomFactor < this.maxZoom) return;
       
@@ -502,9 +514,14 @@ export class EnvelopeEditor {
 
       const newVBPos = {
         x: boundVal(this.mouseMoveRoot.svgX - svgMouseVBOffsetX/zoomChange, 0, this.quarterNoteWidth * this.numMeasures * 4 - newWidth),
+        y: this.mouseMoveRoot.vbY,
+        w: newWidth,
+        h: this.mouseMoveRoot.vbHeight
       };
 
-      this.svgRoot.viewbox(newVBPos.x, this.mouseMoveRoot.vbY, newWidth, this.mouseMoveRoot.vbHeight);
+      console.log("envelope zoom", newVBPos)
+
+      this.svgRoot.viewbox(newVBPos.x, newVBPos.y, newVBPos.w, newVBPos.h);
     }
   }
 }
