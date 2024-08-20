@@ -127,6 +127,7 @@ export class EnvelopeEditor {
     this.maxZoom = 20/180 //taken from piano roll constants
 
     this.createBackground()
+    this.svgRoot.viewbox(0, 0, this.viewportWidth, this.viewportHeight)
   }
 
   mouseXY!: DOMPoint
@@ -136,6 +137,8 @@ export class EnvelopeEditor {
     //todo - make sure this translates properly into xy coord for enevelope group area
   }
 
+  temporaryMouseMoveHandler: (evt: Event) => void = () => {}
+
   backgroundKeyDownHandler(evt: Event) {
     const kEvt = evt as KeyboardEvent
     console.log("envelope key", evt)
@@ -144,6 +147,33 @@ export class EnvelopeEditor {
       const y = this.pxToY(this.mouseXY.y)
       this.createEnvelopePoint(this.selectedEnvelopeIndex, t, y, false)
     }
+    if (kEvt.ctrlKey && !kEvt.altKey){
+      this.mouseMoveRootNeedsReset = true;
+      this.mouseScrollActive = true;
+      this.temporaryMouseMoveHandler = ev => this.mouseScrollHandler(ev as MouseEvent);
+      this.containerElement!!.addEventListener('mousemove', this.temporaryMouseMoveHandler);
+    }
+    if (kEvt.altKey && !kEvt.ctrlKey){
+      this.mouseMoveRootNeedsReset = true;
+      this.mouseZoomActive = true;
+      this.temporaryMouseMoveHandler = ev => this.mouseZoomHandler(ev as MouseEvent);
+      this.containerElement!!.addEventListener('mousemove', this.temporaryMouseMoveHandler);
+    }
+  }
+
+  backgroundKeyUpHanlder(evt: Event) {
+    const kEvt = evt as KeyboardEvent
+    if (!kEvt.ctrlKey && this.mouseScrollActive) {
+      console.log('disengaging scroll')
+      this.mouseScrollActive = false;
+      this.containerElement!!.removeEventListener('mousemove', this.temporaryMouseMoveHandler!!);
+      this.temporaryMouseMoveHandler = () => {}
+    }
+    if (!kEvt.altKey && this.mouseZoomActive) {
+      this.mouseZoomActive = false;
+      this.containerElement!!.removeEventListener('mousemove', this.temporaryMouseMoveHandler!!);
+      this.temporaryMouseMoveHandler = () => {}
+    }
   }
 
   createBackground() {
@@ -151,7 +181,8 @@ export class EnvelopeEditor {
     //create enevelope box that fills the rest of the svg
     this.envelopeBackground = this.svgRoot.rect(this.quarterNoteWidth * this.numMeasures * 4, this.viewportHeight - this.tabBoxHeight).id('envelopeBackground').fill('#777').opacity(0.5)
     this.envelopeBackground.on('mousemove', (e) => this.backgroundMouseMoveHandler(e))
-    this.containerElement.addEventListener('keypress', (e) => this.backgroundKeyDownHandler(e))
+    this.containerElement.addEventListener('keydown', (e) => this.backgroundKeyDownHandler(e))
+    this.containerElement.addEventListener('keyup', (e) => this.backgroundKeyUpHanlder(e))
     this.containerElement.onmouseenter = () => {
       this.containerElement.focus()
       console.log("mouse entered")
@@ -421,6 +452,7 @@ export class EnvelopeEditor {
       vbHeight: vb.height,
       zoom: this.svgRoot.zoom() //todo refactor check
     };
+    console.log("resetMouseMoveRoot", this.mouseMoveRoot)
     this.mouseMoveRootNeedsReset = false;
   }
 
@@ -429,12 +461,18 @@ export class EnvelopeEditor {
     if (this.mouseScrollActive){
       const mouseDetla = this.getMouseDelta(event, this.mouseMoveRoot);
       const boundVal = (n: number, l: number, h: number) => Math.min(h, Math.max(l, n));
-      
       //inverted scrolling
       const scrollFactor = 1/this.mouseMoveRoot.zoom;
       const newVBPos = {
         x: boundVal(this.mouseMoveRoot.vbX - mouseDetla.x * scrollFactor, 0, this.quarterNoteWidth * this.numMeasures * 4 - this.mouseMoveRoot.vbWidth),
       };
+
+      // console.log("scroll x", newVBPos.x)
+      // console.log("viewbox", newVBPos.x, this.mouseMoveRoot.vbY, this.mouseMoveRoot.vbWidth, this.mouseMoveRoot.vbHeight)
+
+      //todo - change tab box to scroll to the new position
+      this.tabBoxGroup.move(newVBPos.x, this.tabBoxGroup.y())
+
       this.svgRoot.viewbox(newVBPos.x, this.mouseMoveRoot.vbY, this.mouseMoveRoot.vbWidth, this.mouseMoveRoot.vbHeight);
     }
   }
