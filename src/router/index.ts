@@ -27,7 +27,8 @@ export const sketchNames = [
   'mpeDesignerTest',
   'voronoiTest',
   'oblique',
-  'envelopeEditorTest'
+  'envelopeEditorTest',
+  'p5sketch_0'
 ]
 
 const sketchRoutes = sketchNames.map(name => {
