@@ -45,3 +45,5 @@ To configure for netlify and have vue-router work:
 
 build fix todo:
 - tsconfig to get react types to work properly
+
+need to install deno plugin for vscode to get intellisense for use with deno jupyter kernel in vscode 

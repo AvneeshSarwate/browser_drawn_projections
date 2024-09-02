@@ -23,7 +23,7 @@ abstract class FiniteCombiner<T> {
     const output: Partial<CombinerOutput<T>> = {};
     for (const key in this.lists) {
       const index = this.indexes[key] ?? 0;
-      output[key] = this.lists[key][index];
+      output[key] = this.lists[key][index] as T[Extract<keyof T, string>];
     }
     this.updateIndices();
     return output as CombinerOutput<T>;
@@ -49,7 +49,7 @@ abstract class FiniteCombiner<T> {
     for (const key in indices) {
       const index = indices[key];
       if (index !== undefined && this.lists[key] !== undefined) {
-        output[key] = this.lists[key][index];
+        output[key] = this.lists[key][index] as T[Extract<keyof T, string>];
       }
     }
     return output as CombinerOutput<T>;
@@ -57,7 +57,7 @@ abstract class FiniteCombiner<T> {
 }
 
 
-class Zipper<T> extends FiniteCombiner<T> {
+export class Zipper<T> extends FiniteCombiner<T> {
   constructor(lists: CombinerInput<T>) {
     super(lists);
   }
@@ -79,7 +79,7 @@ class Zipper<T> extends FiniteCombiner<T> {
   }
 }
 
-class RootLooper<T> extends FiniteCombiner<T> {
+export class RootLooper<T> extends FiniteCombiner<T> {
   constructor(lists: CombinerInput<T>) {
     super(lists);
   }
@@ -98,7 +98,7 @@ class RootLooper<T> extends FiniteCombiner<T> {
   }
 
   directIndices(n: number): { [K in keyof T]?: number } {
-    const firstListSize = this.lists[Object.keys(this.lists)[0]].length;
+    const firstListSize = this.lists[(Object.keys(this.lists) as Array<keyof T>)[0]].length;
     const indices: Partial<{ [K in keyof T]?: number }> = {};
 
     for (const key in this.lists) {
@@ -109,13 +109,13 @@ class RootLooper<T> extends FiniteCombiner<T> {
   }
 }
 
-class Nester<T> extends FiniteCombiner<T> {
+export class Nester<T> extends FiniteCombiner<T> {
   constructor(lists: CombinerInput<T>) {
     super(lists);
   }
 
   directIndices(n: number): { [K in keyof T]?: number } {
-    const inOutLengths = Object.keys(this.lists).map(key => this.lists[key].length);
+    const inOutLengths = (Object.keys(this.lists) as Array<keyof T>).map(key => this.lists[key].length);
     const numToIncrement: number[] = [inOutLengths[0]];
 
     for (let i = 1; i < inOutLengths.length; i++) {
@@ -140,7 +140,7 @@ class Nester<T> extends FiniteCombiner<T> {
 
   updateIndices(): void {
     let nextIndexNeedsUpdate = true;
-    Object.keys(this.lists).forEach(key => {
+    (Object.keys(this.lists) as Array<keyof T>).forEach((key: keyof T) => {
       if (nextIndexNeedsUpdate) {
         const lastVal = this.indexes[key] ?? 0;
         this.indexes[key] = ((this.indexes[key] ?? 0) + 1) % this.lists[key].length;
@@ -159,8 +159,8 @@ const stuff = {
 
 const z = new Zipper(stuff)
 const out10 = z.nextN(10)
-console.log(out10)
+// console.log(out10)
 
 
-
+export const testConst = "testConst"
 

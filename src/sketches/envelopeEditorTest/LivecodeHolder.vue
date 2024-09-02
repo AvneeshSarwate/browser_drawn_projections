@@ -168,6 +168,7 @@ onMounted(() => {
 onUnmounted(() => {
   console.log("disposing livecoded resources")
   document.getElementById('envelopeEditor')!.innerHTML = ""
+  document.getElementById('pianoRollHolder')!.innerHTML = ""
   shaderGraphEndNode?.disposeAll()
   clearListeners()
   timeLoops.forEach(tl => tl.cancel())

@@ -110,7 +110,7 @@ export class EnvelopeEditor {
   mouseScrollActive = false;
   mouseZoomActive = false;
   mouseMoveRootNeedsReset = true;
-  mouseMoveRoot = {mouseX: 0, mouseY: 0, svgX: 0, svgY: 0, vbX: 0, vbY: 0, vbWidth: 0, vbHeight: 0, zoom: 0};
+  mouseMoveRoot = {mouseX: 0, mouseY: 0, svgX: 0, svgY: 0, vbX: 0, vbY: 0, vbWidth: 0, vbHeight: 0, zoom: 0, zoomXShift: 0};
   maxZoom: number = 0;
   ptRadius: number = 8
   tabBackgrounds: Rect[] = []
@@ -159,7 +159,7 @@ export class EnvelopeEditor {
     if (kEvt.altKey && !kEvt.ctrlKey){
       this.mouseMoveRootNeedsReset = true;
       this.mouseZoomActive = true;
-      this.temporaryMouseMoveHandler = ev => this.mouseZoomHandler2(ev as MouseEvent);
+      this.temporaryMouseMoveHandler = ev => this.mouseZoomHandler(ev as MouseEvent);
       this.containerElement!!.addEventListener('mousemove', this.temporaryMouseMoveHandler);
     }
   }
@@ -453,7 +453,8 @@ export class EnvelopeEditor {
       vbY: vb.y,
       vbWidth: vb.width,
       vbHeight: vb.height,
-      zoom: this.zoomLevel
+      zoom: this.zoomLevel,
+      zoomXShift: this.zoomXShift
     };
     console.log("resetMouseMoveRoot", this.mouseMoveRoot)
     this.mouseMoveRootNeedsReset = false;
@@ -478,7 +479,7 @@ export class EnvelopeEditor {
       this.tabBoxGroup.move(newVBPos.x, this.tabBoxGroup.y())
       this.svgRoot.viewbox(newVBPos.x, this.mouseMoveRoot.vbY, this.mouseMoveRoot.vbWidth, this.mouseMoveRoot.vbHeight);
 
-      this.scrollCallback(this.scrollPos)
+      this.scrollCallback(this.scrollPos) //this.scrollPos/zoom?
     }
   }
 
@@ -488,12 +489,17 @@ export class EnvelopeEditor {
   }
 
   zoomLevel = 1
-
-  mouseZoomHandler2(event: MouseEvent) {
+  zoomXShift = 0
+  mouseZoomHandler(event: MouseEvent) {
     if (this.mouseMoveRootNeedsReset) this.resetMouseMoveRoot(event);
     if (this.mouseZoomActive){
       const mouseDelta = this.getMouseDelta(event, this.mouseMoveRoot);
       this.zoomLevel = this.mouseMoveRoot.zoom * 4 ** (mouseDelta.y / this.viewportHeight)
+
+      //the shift done so that zooming stays centered on where mouseX is when zoom starts
+      const moveRootT = this.pxToT(this.mouseMoveRoot.svgX)
+      // this.zoomXShift = 
+
       this.renderEnvelope(this.selectedEnvelopeIndex)
     }
   }
@@ -521,7 +527,7 @@ type MouseMoveRoot = {
   vbY: number,
   vbWidth: number,
   vbHeight: number,
-  zoom: number
+  zoom: number,
 }
 
 type Box = {

@@ -555,3 +555,14 @@ export function getElementarySynth() {
 // // @ts-ignore
 // const ourMetadata = SomeClass[Symbol.metadata];
 // console.log("docs metadata test", JSON.stringify(ourMetadata));
+
+
+
+const audioStart = async () => {
+  await Tone.start()
+  Tone.Transport.start()
+  console.log('audio is ready', Tone.Transport.bpm.value, Tone.context.lookAhead)
+  // setTimeout(testCancel, 50)
+  document.querySelector('body')?.removeEventListener('click', audioStart)
+}
+document.querySelector('body')?.addEventListener('click', audioStart)
