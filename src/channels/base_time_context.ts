@@ -11,7 +11,7 @@ const startTime = performance.now() / 1000
 const dateNow = () => performance.now() / 1000 - startTime
 const beatNow = (bpm: number) => dateNow() * bpm / 60
 
-export const now = dateNow
+const now = dateNow
 const delayFunc = dateDelay
 
 export class CancelablePromisePoxy<T> implements Promise<T> {
