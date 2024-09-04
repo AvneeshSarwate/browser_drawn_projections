@@ -1,12 +1,12 @@
 {
     "deno.enable": true,
     "deno.enablePaths": [
-        "/Users/avneeshsarwate/browser_drawn_projections/notebook_stuff",
         "/Users/avneeshsarwate/browser_drawn_projections/src/music/scale.ts",
         "/Users/avneeshsarwate/browser_drawn_projections/src/creativeAlgs/combiners.ts",
         "/Users/avneeshsarwate/browser_drawn_projections/src/creativeAlgs/transformTree.ts",
         "/Users/avneeshsarwate/browser_drawn_projections/src/channels/base_time_context.ts",
-        "/Users/avneeshsarwate/browser_drawn_projections/src/io/osc.js",
-        "/Users/avneeshsarwate/browser_drawn_projections/src/io/osc.d.ts"
+        // "/Users/avneeshsarwate/browser_drawn_projections/src/io/osc.js",
+        // "/Users/avneeshsarwate/browser_drawn_projections/src/io/osc.d.ts",
+        "/Users/avneeshsarwate/browser_drawn_projections/deno_notebook_stuff/",
     ]
 }

@@ -8,7 +8,7 @@
 
 /* global require, module, process, Buffer, Long, util */
 
-var osc = osc || {};
+export var osc = osc || {};
 
 (function () {
 
