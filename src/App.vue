@@ -48,6 +48,7 @@ console.log("isRouterComp", isRouterComp, comp)
 
   <div>
     Below is a set of demos for the creative coding library being developed. They may be incomplete or buggy, but hopefully interesting nonetheless. And they will improve over time.
+    For the time being, they are best viewed on a desktop/laptop in the Chrome browser.
   </div>
   
   <br>
