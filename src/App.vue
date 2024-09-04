@@ -26,6 +26,32 @@ console.log("isRouterComp", isRouterComp, comp)
   
   <!-- <DevSketch></DevSketch> -->
 
+
+  <div>
+    We are <a href="http://www.avneeshsarwate.com/">Avneesh Sarwate</a> and <a href="https://www.acrosspolyethylene.com/">Sumanth Srinivasan</a>
+  </div>
+
+  <br>
+
+  <div>
+    We are building tools for creating art in the browser. The source code and early experiments are here
+    <a href="https://github.com/avneeshsarwate/browser_drawn_projections">here</a>
+  </div>
+
+  <br>
+
+  <div>
+    If you want to read about the motivation and design of the library, you can read about it <a href="https://docs.google.com/presentation/d/1SzhiWNNl4-cxMOKpqOuUeGhP_3eecu0_Rg3aw3Hg2Kg">here</a>
+  </div>
+  
+  <br>
+
+  <div>
+    Below is a set of demos for the creative coding library being developed. They may be incomplete or buggy, but hopefully interesting nonetheless. And they will improve over time.
+  </div>
+  
+  <br>
+
   <div v-if="!isRouterComp">
     No page at this path!
   </div>
