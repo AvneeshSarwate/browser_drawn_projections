@@ -38,10 +38,13 @@ let root: Root | null = null;
 const appState = inject<TldrawTestAppState>(appStateName)!!
 let snapshotLoaded = false
 
+
+
 //todo sketch - this can be handled with react hooks instead of a flag (see link below)
 //can also replace the CustomRenderer component with this
 //alternatively, could use the custom renderer component to display element names next to the elements
 //something like this - https://tldraw.dev/examples/editor-api/store-events
+//Could also use this - https://tldraw.dev/reference/editor/Editor#getSelectedShapeIds to grab the ids of the selected shapes
 const handleEditorReady = (editor: Editor) => {
   if(!snapshotLoaded) {
     console.log('Editor is ready:', editor);
