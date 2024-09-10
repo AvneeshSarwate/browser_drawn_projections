@@ -9,7 +9,7 @@
   <h3>Tldraw instance</h3>
   <div id="tldrawContainer" ref="reactRoot"></div>
   <div id="selectedShapeIds">
-    <p>Selected shape ids: {{ selectedShapeIds }}</p>
+    Selected shape ids: {{ selectedShapeIds }}
   </div>
   <button @click="downloadSnapshot">Download snapshot</button>
   <div id="canvasContainer">
@@ -92,6 +92,9 @@ onMounted(() => {
       console.log("mouse up")
       appState.tldrawInteractionCount++
       selectedShapeIds.value = appState.tldrawEditor?.getSelectedShapeIds() ?? []
+    }
+    reactRoot.value.onmouseout = () => {
+      appState.tldrawEditor?.blur()
     }
   }
 });
