@@ -114,7 +114,7 @@ function shapeTransform(shape: TLDrawShape): number[][] {
 //todo sketch - can chache this and update on shape changes, and also add ids or return val (see link below)
 //https://tldraw.dev/examples/editor-api/after-create-update-shape
 export function getFreehandShapes(editor: Editor) {
-  const shapes: {x: number, y: number}[][] = []
+  const shapes: Map<string, {x: number, y: number}[]> = new Map()
   const renderingShapes = editor.getRenderingShapes()
 
   for (const { shape, opacity, util } of renderingShapes) {
@@ -131,7 +131,7 @@ export function getFreehandShapes(editor: Editor) {
         }
       }
 
-      shapes.push(shapePts)
+      shapes.set(shape.id, shapePts)
     }
   }
 

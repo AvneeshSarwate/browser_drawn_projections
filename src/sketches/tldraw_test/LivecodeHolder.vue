@@ -61,7 +61,12 @@ onMounted(() => {
           p5i.push()
           p5i.strokeWeight(4)
 
-          const shapes = getFreehandShapes(appState.tldrawEditor)
+          const idOrder = ["shape:Rvhc4yQGjjpnYKY7CFDS-",  "shape:PFsSv12VXFBpTZBL9Q6q2",  "shape:WB4IVPgNV5Z5lDVMAX3Gw", "shape:FI4cdvy-4WCST1lBcXFpj"]
+
+          const shapeMap = getFreehandShapes(appState.tldrawEditor)
+
+          const shapes = idOrder.map(id => shapeMap.get(id)) as {x: number, y: number}[][]
+
           const shapeCirclePts: {x: number, y: number}[] = []
           for (const shape of shapes) {
             p5i.noFill()
