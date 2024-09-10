@@ -52,9 +52,9 @@ onMounted(() => {
       appState.drawFuncMap.set('tldrawRender', () => {
         if (appState.tldrawEditor) {
           if(drawTicks++ % 10 === 0){
-            console.log("rendering tldraw")
+            // console.log("rendering tldraw")
 
-            console.log(appState.tldrawEditor.getInstanceState())
+            // console.log(appState.tldrawEditor.getInstanceState())
           }
           // p5FreehandTldrawRender(appState.tldrawEditor, p5i)
 

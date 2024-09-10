@@ -8,7 +8,9 @@
   </div>
   <h3>Tldraw instance</h3>
   <div id="tldrawContainer" ref="reactRoot"></div>
-  
+  <div id="selectedShapeIds">
+    <p>Selected shape ids: {{ selectedShapeIds }}</p>
+  </div>
   <div id="canvasContainer">
     <p><h3>P5 sketch rendering freehand tldraw shapes</h3></p>
     <br>
@@ -50,14 +52,18 @@ const handleEditorReady = (editor: Editor) => {
     console.log('Editor is ready:', editor);
     appState.tldrawEditor = editor
 
+    console.log('shape ids', editor.getCurrentPageShapeIds())
+  
     //@ts-ignore
-    editor.loadSnapshot(snapshot2 as Partial<TLEditorSnapshot>)
+    editor.loadSnapshot(snapshot1 as Partial<TLEditorSnapshot>)
     
     // editor.getSnapshot()
     snapshotLoaded = true
   }
   // You can store it in a reactive property or use it directly
 };
+
+const selectedShapeIds = ref<string[]>([])
 
 onMounted(() => {
   console.log('reactRoot.value', reactRoot.value);
@@ -68,6 +74,7 @@ onMounted(() => {
     reactRoot.value.onmouseup = () => {
       console.log("mouse up")
       appState.tldrawInteractionCount++
+      selectedShapeIds.value = appState.tldrawEditor?.getSelectedShapeIds() ?? []
     }
   }
 });
