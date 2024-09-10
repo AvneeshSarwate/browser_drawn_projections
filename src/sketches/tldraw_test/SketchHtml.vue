@@ -11,6 +11,7 @@
   <div id="selectedShapeIds">
     <p>Selected shape ids: {{ selectedShapeIds }}</p>
   </div>
+  <button @click="downloadSnapshot">Download snapshot</button>
   <div id="canvasContainer">
     <p><h3>P5 sketch rendering freehand tldraw shapes</h3></p>
     <br>
@@ -33,6 +34,7 @@ import { type Editor, type TLEditorSnapshot } from 'tldraw';
 import { appStateName, type TldrawTestAppState } from './appState';
 import { snapshot1 } from './snapshot1';
 import { snapshot2 } from './snapshot2';
+import { snapshot3 } from './snapshot3';
 
 const reactRoot = ref<HTMLElement | null>(null);
 let root: Root | null = null;
@@ -62,6 +64,21 @@ const handleEditorReady = (editor: Editor) => {
   }
   // You can store it in a reactive property or use it directly
 };
+
+const downloadSnapshot = () => {
+  const snapshot = appState.tldrawEditor?.getSnapshot()
+  const snapshotString = JSON.stringify(snapshot)
+
+  //download the string as a file
+  const blob = new Blob([snapshotString], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `snapshot_${new Date().toISOString()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  a.remove();
+}
 
 const selectedShapeIds = ref<string[]>([])
 
