@@ -27,7 +27,8 @@ console.log("isRouterComp", isRouterComp, comp)
   <!-- <DevSketch></DevSketch> -->
 
 
-  <div>
+  <div class="intro">
+    <div>
     We are <a href="http://www.avneeshsarwate.com/">Avneesh Sarwate</a> and <a href="https://www.acrosspolyethylene.com/">Sumanth Srinivasan</a>
   </div>
 
@@ -52,11 +53,14 @@ console.log("isRouterComp", isRouterComp, comp)
   </div>
   
   <br>
-
-  <div v-if="!isRouterComp">
-    No page at this path!
   </div>
-  <RouterView v-else></RouterView>
+
+  <div class="sketchlist">
+    <div v-if="!isRouterComp">
+      No page at this path!
+    </div>
+    <RouterView v-else></RouterView>
+  </div>
 
   <!-- used for used for inspection and fixes -->
   <OneshotCode></OneshotCode>
@@ -71,5 +75,13 @@ console.log("isRouterComp", isRouterComp, comp)
   visibility: hidden;
 }
 
+.intro {
+  width:80%;
+  margin:24px;
+}
+
+.sketchlist {
+  margin:24px;
+}
 
 </style>
