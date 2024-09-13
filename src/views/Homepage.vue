@@ -14,7 +14,7 @@ import { sketchNames } from '@/router';
       <br>
 
       <div>
-        We are building tools for creating art in the browser. The source code and early experiments are here
+        We are building tools for creating art in the browser. The source code and early experiments are
         <a href="https://github.com/avneeshsarwate/browser_drawn_projections">here</a>
       </div>
 
@@ -26,19 +26,17 @@ import { sketchNames } from '@/router';
       
       <br>
 
-      <div>
-        Below is a set of demos for the creative coding library being developed. They may be incomplete or buggy, but hopefully interesting nonetheless. And they will improve over time.
-        For the time being, they are best viewed on a desktop/laptop in the Chrome browser.
-      </div>
-      
-      <br>
     </div>
     <div class="sketchlist">
-      <div>Sketches:</div>
-        <div id="sketchList">
-          <router-link v-for="sketchName in sketchNames" :key="sketchName" :to="`/${sketchName}`">
-            <div> {{ sketchName }} </div>
-          </router-link>
+      <!-- <div>Sketches:</div> -->
+      <div>
+        Here is a set of demos for the WIP coding library. They may be incomplete or buggy, but hopefully interesting nonetheless. And they will improve over time.
+        For the time being, they are best viewed on a desktop/laptop in the Chrome browser.
+      </div>
+      <div id="sketchList">
+        <router-link v-for="sketchName in sketchNames" :key="sketchName" :to="`/${sketchName}`">
+          <div> {{ sketchName }} </div>
+        </router-link>
       </div>
     </div>
   </div>
@@ -46,8 +44,10 @@ import { sketchNames } from '@/router';
 
 <style scoped>
 .homepage-wrapper {
-  display: block;
+  display: flex;
+  flex-direction: row;
   width: 100%;
+  padding: 0 10% 0 10%;
   background-color: #fad6f8;
   color: #333;
   overflow: auto;
@@ -55,23 +55,37 @@ import { sketchNames } from '@/router';
 
 .intro {
   display: block;
-  width:80%;
+  width:50%;
   margin:24px;
+  font-size: 16px;
 }
 
-.intro > div > a {
+.intro > div > a, #sketchList > a {
   color: #333;
   text-decoration:underline;
+  text-underline-offset: 8px;
+  text-decoration-thickness: 1px; 
+  text-decoration-color: #aaa;
+}
+
+.intro > div > a:hover, #sketchList > a:hover {
+  color: #333;
+  text-decoration:underline;
+  text-underline-offset: 8px;
+  text-decoration-thickness: 1px;
+  text-decoration-color: #333; 
 }
 
 .sketchlist {
   margin:24px;
+  width: 50%;
 }
 
 #sketchList {
   display: flex;
   flex-direction: column;
   margin-left: 10px;
+  margin-top: 10px;
 }
 
 </style>
