@@ -53,6 +53,12 @@ import { sketchNames } from '@/router';
   overflow: auto;
 }
 
+@media (max-width: 720px) {
+  .homepage-wrapper {
+    flex-direction: column;
+  }
+}
+
 .intro {
   display: block;
   width:50%;
