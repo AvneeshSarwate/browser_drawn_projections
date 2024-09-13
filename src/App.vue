@@ -19,10 +19,10 @@ console.log("isRouterComp", isRouterComp, comp)
 </script>
 
 <template>
-  <div id="controlContainer">
+  <!-- <div id="controlContainer">
     <button @click="commandHistory.undo">Undo</button>
     <button @click="commandHistory.redo">Redo</button>
-  </div>
+  </div> -->
   
   <!-- <DevSketch></DevSketch> -->
 
@@ -43,5 +43,4 @@ console.log("isRouterComp", isRouterComp, comp)
   z-index: 1;
   visibility: hidden;
 }
-
 </style>
