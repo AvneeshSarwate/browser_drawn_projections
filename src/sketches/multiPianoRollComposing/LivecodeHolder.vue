@@ -194,7 +194,11 @@ onUnmounted(() => {
   shaderGraphEndNode?.disposeAll()
   clearListeners()
   timeLoops.forEach(tl => tl.cancel())
-  for (let i = 0; i < 4; i++) document.getElementById(`phold${i}`)!!.innerHTML = ''
+  for (let i = 0; i < 4; i++) {
+    if (document.getElementById(`phold${i}`)) {
+      document.getElementById(`phold${i}`)!!.innerHTML = ''
+    }
+  }
 
   pianoRollNames.forEach((name, i) => {
     const pianoRoll = pianoRolls.get(name)

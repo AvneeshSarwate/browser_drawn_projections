@@ -167,7 +167,9 @@ onUnmounted(() => {
   shaderGraphEndNode?.disposeAll()
   clearListeners()
   timeLoops.forEach(tl => tl.cancel())
-  document.getElementById('pianoRollHolder')!!.innerHTML = ''
+  if(document.getElementById('pianoRollHolder')) {
+    document.getElementById('pianoRollHolder')!!.innerHTML = ''
+  }
 })
 
 </script>
