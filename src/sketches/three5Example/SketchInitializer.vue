@@ -47,7 +47,7 @@ onMounted(() => {
 onUnmounted(() => {
   if (appState.p5Instance) {
     neutralizeSketch(appState.p5Instance)
-    document.getElementsByClassName('frameRateStats')[0].remove() 
+    document.getElementsByClassName('frameRateStats')[0]?.remove() 
   }
 })
 
