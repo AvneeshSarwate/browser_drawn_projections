@@ -2,6 +2,10 @@
 <script setup lang="ts">
 import { sketchNames } from '@/router';
 
+const specialSketchNames = ["clickAVMelodyLauncher", "tonePianoSequencer", "three5Example"]
+
+const nonSpecialSketches = sketchNames.filter(name => !specialSketchNames.includes(name))
+
 </script>
 
 <template>
@@ -32,7 +36,28 @@ import { sketchNames } from '@/router';
       <div class="section-title">Sketches</div>
       <div>
         Here are some sketches for the WIP library. They may be incomplete or buggy, but interesting nonetheless. They will improve over time.
-        For now, they are best viewed on a desktop/laptop in the Chrome browser.
+        For now, they are best viewed on a desktop/laptop in Chrome or a Chromium-based browser.
+      </div>
+      <div class="sub-section-title">Sketches of note</div>
+      <div>
+        <router-link :to="`/clickAVMelodyLauncher`">An interactive melody player</router-link>: A simple example 
+        that unifies musical sequencing and timing of visual events with the same codebase. One of the core problems
+        we are trying to address with our tool is the synchronization of musical and visual events with simple, intuitive tools. <a href="https://github.com/AvneeshSarwate/browser_drawn_projections/blob/main/src/sketches/clickAVMelodyLauncher/LivecodeHolder.vue">Source</a>
+      </div>
+      <div>
+        <router-link :to="`/tonePianoSequencer`">An experimental sequencer</router-link>: Another example that coordinates musical sequencing,
+        UI interaction, and animation all with the same codebase. <a href="https://github.com/AvneeshSarwate/browser_drawn_projections/blob/main/src/sketches/tonePianoSequencer/LivecodeHolder.vue">Source</a>
+      </div>
+      <div>
+        <router-link :to="`/three5Example`">p5.js + three.js</router-link>: Another goal of ours is to simplify the workflow for creating GPU driven
+        animations that don't fall into the traditional 3D realm. This example shows our initial attempts at building a p5.js style API
+        on top of three.js to enable a "power 2D" workflow  - eg, creating an API for simple 2D geometry drawing that also allows for easily integrating
+        custom shaders and materials. The source can be found <a href="https://github.com/AvneeshSarwate/browser_drawn_projections/blob/main/src/rendering/three5.ts">here</a> and usage 
+        can be seen in the <a href="https://github.com/AvneeshSarwate/browser_drawn_projections/blob/main/src/sketches/three5Example/LivecodeHolder.vue">index.ts</a> file.
+      </div>
+      <div class="sub-section-title">Other sketches</div>
+      <div>
+        These sketches are proofs of concept of various engineering and API design challenges.
       </div>
       <div id="sketchList">
         <router-link v-for="sketchName in sketchNames" :key="sketchName" :to="`/${sketchName}`">
@@ -59,6 +84,13 @@ import { sketchNames } from '@/router';
   color: #222;
   font-weight: bold;
   margin-bottom: 10px;
+}
+
+.sub-section-title {
+  color: #5f5f5f;
+  font-weight: bold;
+  margin-bottom: 10px;
+  margin-top: 20px;
 }
 
 .intro {
