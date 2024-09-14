@@ -138,6 +138,29 @@ export function getFreehandShapes(editor: Editor) {
   return shapes
 }
 
+export function getEllipseShapes(editor: Editor) {
+  const shapes: Map<string, {x: number, y: number, w: number, h: number, rotation: number, xScale: number, yScale: number, cameraX: number, cameraY: number}> = new Map()
+
+  const renderingShapes = editor.getRenderingShapes()
+  
+  for (const { shape, opacity, util } of renderingShapes) {
+    if (editor.isShapeOfType<TLGeoShape>(shape, 'geo')) {
+      if (shape.props.geo === 'ellipse') {
+
+        const camera = editor.getCamera()
+
+        shapes.set(shape.id, {
+          x: shape.x, y: shape.y, w: shape.props.w, h: shape.props.h,
+          rotation: shape.rotation, xScale: camera.z, yScale: camera.z,
+          cameraX: camera.x, cameraY: camera.y
+        })
+      }
+    }
+  }
+
+  return shapes
+}
+
 export function p5FreehandTldrawRender(editor: Editor, p5: p5) {
   p5.push()
   

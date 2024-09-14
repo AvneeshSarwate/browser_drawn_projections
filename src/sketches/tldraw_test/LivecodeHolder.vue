@@ -6,7 +6,7 @@ import { CanvasPaint, FeedbackNode, Passthru, type ShaderEffect } from '@/render
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
-import { getFreehandShapes, p5FreehandTldrawRender } from './tldrawWrapperPlain';
+import { getEllipseShapes, getFreehandShapes, p5FreehandTldrawRender } from './tldrawWrapperPlain';
 import { HorizontalBlur, LayerBlend, Transform, VerticalBlur } from '@/rendering/customFX';
 import AutoUI from '@/components/AutoUI.vue';
 import type { Editor } from 'tldraw';
@@ -28,8 +28,8 @@ const clearDrawFuncs = () => {
 
 const drawParams = ref({
   showLines: true,
-  showCircles: true, 
-  showConnectors: true
+  showCircles: false, 
+  showConnectors: false
 })
 
 onMounted(() => {
@@ -64,8 +64,15 @@ onMounted(() => {
           const idOrder = ["shape:Rvhc4yQGjjpnYKY7CFDS-",  "shape:PFsSv12VXFBpTZBL9Q6q2",  "shape:WB4IVPgNV5Z5lDVMAX3Gw", "shape:FI4cdvy-4WCST1lBcXFpj"]
 
           const shapeMap = getFreehandShapes(appState.tldrawEditor)
+      
 
-          const shapes = idOrder.map(id => shapeMap.get(id)) as {x: number, y: number}[][]
+          const idsNotInOrder = Array.from(shapeMap.keys()).filter(id => !idOrder.includes(id))
+
+          const shapes = idOrder.map(id => shapeMap.get(id)!)
+
+          idsNotInOrder.forEach(id => {
+            shapes.push(shapeMap.get(id)!)
+          })
 
           const shapeCirclePts: {x: number, y: number}[] = []
           for (const shape of shapes) {
@@ -87,12 +94,30 @@ onMounted(() => {
               p5i.circle(shapePt.x, shapePt.y, 30)
             }
           }
+
           if(drawParams.value.showConnectors) {
             p5i.stroke(0, 255 * sinN(drawTicks / 400), 255 * cosN(drawTicks / 400))
             for (let i = 0; i < shapeCirclePts.length - 1; i++) {
               p5i.line(shapeCirclePts[i].x, shapeCirclePts[i].y, shapeCirclePts[i + 1].x, shapeCirclePts[i + 1].y)
             }
           }
+
+          const ellipseMap = getEllipseShapes(appState.tldrawEditor)
+          const editorCam = appState.tldrawEditor.getCamera()
+          for (const [id, ellipse] of ellipseMap) {
+            p5i.noFill()
+            p5i.stroke(255)
+            p5i.ellipseMode(p5i.CORNER)
+
+            p5i.push()
+            p5i.translate(ellipse.x, ellipse.y)
+            p5i.translate(editorCam.x, editorCam.y)
+            p5i.rotate(ellipse.rotation)
+            p5i.scale(ellipse.xScale, ellipse.yScale)
+            p5i.ellipse(0, 0, ellipse.w, ellipse.h)
+            p5i.pop()
+          }
+
           p5i.pop()
         }
       })

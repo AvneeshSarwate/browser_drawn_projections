@@ -34,7 +34,6 @@ import { type Editor, type TLEditorSnapshot } from 'tldraw';
 import { appStateName, type TldrawTestAppState } from './appState';
 import { snapshot1 } from './snapshot1';
 import { snapshot2 } from './snapshot2';
-import { snapshot3 } from './snapshot3';
 
 const reactRoot = ref<HTMLElement | null>(null);
 let root: Root | null = null;
