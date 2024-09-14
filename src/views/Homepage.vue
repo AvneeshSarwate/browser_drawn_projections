@@ -7,6 +7,7 @@ import { sketchNames } from '@/router';
 <template>
   <div class="homepage-wrapper">
     <div class="intro">
+      <div class="section-title">Hello</div>
       <div>
         We are <a href="http://www.avneeshsarwate.com/">Avneesh Sarwate</a> and <a href="https://www.acrosspolyethylene.com/">Sumanth Srinivasan</a>
       </div>
@@ -28,10 +29,10 @@ import { sketchNames } from '@/router';
 
     </div>
     <div class="sketchlist">
-      <!-- <div>Sketches:</div> -->
+      <div class="section-title">Sketches</div>
       <div>
-        Here is a set of demos for the WIP coding library. They may be incomplete or buggy, but hopefully interesting nonetheless. And they will improve over time.
-        For the time being, they are best viewed on a desktop/laptop in the Chrome browser.
+        Here are some sketches for the WIP library. They may be incomplete or buggy, but interesting nonetheless. They will improve over time.
+        For now, they are best viewed on a desktop/laptop in the Chrome browser.
       </div>
       <div id="sketchList">
         <router-link v-for="sketchName in sketchNames" :key="sketchName" :to="`/${sketchName}`">
@@ -47,16 +48,17 @@ import { sketchNames } from '@/router';
   display: flex;
   flex-direction: row;
   width: 100%;
-  padding: 0 10% 0 10%;
+  height: 100%;
+  padding: 5% 10% 0 10%;
   background-color: #fad6f8;
   color: #333;
   overflow: auto;
 }
 
-@media (max-width: 720px) {
-  .homepage-wrapper {
-    flex-direction: column;
-  }
+.section-title {
+  color: #222;
+  font-weight: bold;
+  margin-bottom: 10px;
 }
 
 .intro {
@@ -88,10 +90,25 @@ import { sketchNames } from '@/router';
 }
 
 #sketchList {
-  display: flex;
-  flex-direction: column;
+  /* display: flex; */
+  /* flex-direction: column; */
+  display: grid;
+  grid-template-columns: repeat(2, 1fr); /* Start with 1 column on mobile */
+  gap: 4px; /* Add spacing between the links */
+  list-style-type: none; /* Remove bullet points */
+  padding: 0;
   margin-left: 10px;
   margin-top: 10px;
+}
+
+@media (max-width: 960px) {
+  .homepage-wrapper {
+    flex-direction: column;
+  }
+
+  #sketchList {
+    grid-template-columns: repeat(1, 1fr);
+  }
 }
 
 </style>
