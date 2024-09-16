@@ -20,6 +20,10 @@ const clearDrawFuncs = () => {
 
 let three5i: Three5 | undefined = undefined
 
+const rand10pts = () => steps(0, 1, 10).map(n => new THREE.Vector2(n * 1280, Math.random() * 720))
+const circlePts = (n: number, x: number, y: number) => steps(0, 1, n).map(n => new THREE.Vector2(Math.cos(n * Math.PI * 2) * 100 + x, Math.sin(n * Math.PI * 2) * 100 + y))
+const randPts = rand10pts()
+const circle10Pts = circlePts(5, 650, 100)
 
 onMounted(() => {
   try {
@@ -53,6 +57,8 @@ onMounted(() => {
            
             three5i!!.circle(i/n * 1280, sinX[i], 40)
           }
+
+          three5i!!.polygon(circle10Pts)
         })
 
         for (let c = 0; c < 5; c++) {
@@ -60,7 +66,7 @@ onMounted(() => {
           appState.drawFunctions.push(() => {
             // return
             const sinX = steps(0, 1, n).map(wave)
-            const pts = steps(0, n, n).map(n => Math.round(n)).map(i => new THREE.Vector2(i/n * 1280, sinX[i] - c * 10 + 100))
+            const pts = steps(0, n, n).map(n => Math.round(n)).map(i => new THREE.Vector2(i/n * 1280, sinX[i] - c * 10 ))
 
             three5i!!.curve(pts)
           })

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import earcut from 'earcut';
 import { MeshLineGeometry, MeshLineMaterial } from 'meshline'
 
 import { planeVS } from './vertexShaders';
@@ -53,6 +54,8 @@ export class Three5 {
   //todo performance - probably want setters/getters to dispose old "reference style" materials when new ones are set
   private material: THREE.Material;
   private strokeMaterial: MeshLineMaterial;
+
+  private disposables: THREE.BufferGeometry[] = [];
 
   useStroke = false;
 
@@ -168,6 +171,10 @@ export class Three5 {
     setTimeout(() => {
       //@ts-expect-error
       meshes.forEach(child => (child as THREE.Mesh).material.dispose());
+
+      //todo check - is this redundant?
+      // this.disposables.forEach(geo => geo.dispose());
+      // this.disposables = [];
     }, 100)
     
     if(!this.useLinePool) geos.forEach(geo => geo.dispose());
@@ -176,6 +183,55 @@ export class Three5 {
     
     this.scene.clear(); //todo api - don't clear automatically on render
     this.lineGeoPool.reset();
+
+    
+  }
+
+  polygon(points: THREE.Vector2[]) {
+    if (points.length < 3) {
+      console.warn('A polygon must have at least 3 points');
+      return;
+    }
+
+    // Find bounding box
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const point of points) {
+      minX = Math.min(minX, point.x);
+      minY = Math.min(minY, point.y);
+      maxX = Math.max(maxX, point.x);
+      maxY = Math.max(maxY, point.y);
+    }
+
+    // Create vertices and UVs
+    const vertices: number[] = [];
+    const uvs: number[] = [];
+    for (const point of points) {
+      vertices.push(point.x, point.y, 0);
+      uvs.push(
+        (point.x - minX) / (maxX - minX),
+        (point.y - minY) / (maxY - minY)
+      );
+    }
+
+    // Triangulate
+    const flatVertices = points.flatMap(p => [p.x, p.y]);
+    const indices = earcut(flatVertices);
+
+    // Create geometry
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geometry.setIndex(indices);
+
+    // Create mesh and add to scene
+    const mesh = new THREE.Mesh(geometry, this.getMaterial());
+    this.scene.add(mesh);
+
+    // Add to disposables if not using object pooling
+    if (!this.useLinePool) {
+      //todo check - is this redundant?
+      this.disposables.push(geometry);
+    }
   }
 
   createGradientMaterial(color1: THREE.Color, color2: THREE.Color, angle: number, scale: number, offset: number) {
@@ -200,6 +256,9 @@ export class Three5 {
     geos.forEach(geo => geo.dispose());
     //@ts-expect-error
     meshes.forEach(child => (child as THREE.Mesh).material.dispose());
+
+    this.disposables.forEach(geo => geo.dispose());
+    this.disposables = [];
 
     this.scene.clear();
     this.output.dispose();
