@@ -47,10 +47,12 @@ const nonSpecialSketches = sketchNames.filter(name => !specialSketchNames.includ
           This sketch also demonstrates our TouchDesigner-inspired API for shader-based post-processing (<a href="https://github.com/AvneeshSarwate/browser_drawn_projections/blob/main/src/sketches/clickAVMelodyLauncher/LivecodeHolder.vue#L133-L145">usage</a>, 
           <a href="https://github.com/AvneeshSarwate/browser_drawn_projections/blob/main/src/rendering/customFX.ts#L76">implementation entry point</a>).
         </div>
+        <div style="height: 5px;">&nbsp;</div>
         <div class="tool-highlight-item">
           <router-link :to="`/tonePianoSequencer`" class="tool-highlight">An experimental sequencer</router-link> — Another example that coordinates musical sequencing,
           UI interaction, and animation all with the same codebase. <a href="https://github.com/AvneeshSarwate/browser_drawn_projections/blob/main/src/sketches/tonePianoSequencer/LivecodeHolder.vue">Source</a>
         </div>
+        <div style="height: 5px;">&nbsp;</div>
         <div class="tool-highlight-item">
           <router-link :to="`/three5Example`" class="tool-highlight">p5.js + three.js</router-link> — Another goal of ours is to simplify the workflow for creating GPU driven
           animations that don't fall into the traditional 3D realm. This example shows our initial attempts at building a p5.js style API
