@@ -28,7 +28,8 @@ export const sketchNames = [
   'voronoiTest',
   'oblique',
   'envelopeEditorTest',
-  'p5sketch_0'
+  'p5sketch_0',
+  'three5voronoi'
 ]
 
 const sketchRoutes = sketchNames.map(name => {

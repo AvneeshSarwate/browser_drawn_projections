@@ -187,7 +187,7 @@ export class Three5 {
     
   }
 
-  polygon(points: THREE.Vector2[]) {
+  polygon(points: { x: number, y: number }[]) {
     if (points.length < 3) {
       console.warn('A polygon must have at least 3 points');
       return;

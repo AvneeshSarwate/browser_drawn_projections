@@ -1833,6 +1833,35 @@ function getVoronoiPolygons(diagram: VDiagram, origSiteList?: VSite[]): { x: num
   })
 }
 
+//a list of points in a polygon in the order they appear in the polygon
+export function filterSimilarPoints(points: { x: number, y: number }[], threshold: number=0.002) {
+    const indexesTooCloseToPrevious = new Set<number>()
+    for (let i = 0; i < points.length-1; i++) {
+      const pt = points[i]
+      const nextPt = points[i+1]
+      if(Math.abs(pt.x - nextPt.x) < threshold && Math.abs(pt.y - nextPt.y) < threshold) {
+        indexesTooCloseToPrevious.add(i+1)
+      }
+    }
+  
+    const pt = points[0]
+    const nextPt = points[points.length-1]
+    if(Math.abs(pt.x - nextPt.x) < threshold && Math.abs(pt.y - nextPt.y) < threshold) {
+      indexesTooCloseToPrevious.add(points.length-1)
+    }
+  
+    const filteredPts = points.filter((pt, i) => !indexesTooCloseToPrevious.has(i))
+  
+    //check first and last point - if too close, remove last point - quick hack instead of making sure logic above catches this
+    const pt2 = filteredPts[0]
+    const nextPt2 = filteredPts[filteredPts.length-1]
+    if(Math.abs(pt2.x - nextPt2.x) < threshold && Math.abs(pt2.y - nextPt2.y) < threshold) {
+      filteredPts.pop()
+    }
+  
+    return filteredPts
+  }
+
 /******************************************************************************/
 
 export {
