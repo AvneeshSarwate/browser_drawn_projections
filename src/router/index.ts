@@ -29,7 +29,8 @@ export const sketchNames = [
   'oblique',
   'envelopeEditorTest',
   'p5sketch_0',
-  'three5voronoi'
+  'three5voronoi',
+  'synthPlayground'
 ]
 
 const sketchRoutes = sketchNames.map(name => {

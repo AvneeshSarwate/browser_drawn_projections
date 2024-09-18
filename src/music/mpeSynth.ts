@@ -47,7 +47,7 @@ export interface MPEVoiceGraph extends VoiceGraph {
   id: number
 }
 
-type NumberKeys<T> = {
+export type NumberKeys<T> = {
   [K in keyof T]: T[K] extends number ? K : never
 }[keyof T];
 
@@ -65,6 +65,7 @@ export class MPEPolySynth<T extends MPEVoiceGraph> {
   maxVoices: number
   voices: Map<number, T> //map of voices by creation time via Date.now()
   idGenerator = 1
+  params: Record<NumberKeys<T>, SynthParam>
 
   //todo api - add a "preallocateVoices" flag for MPEPolySynth if voice graphs are heavy
   constructor(vGraph: Constructor<T>, maxVoices: number = 32, isActualMpe: boolean = false) {
@@ -75,6 +76,8 @@ export class MPEPolySynth<T extends MPEVoiceGraph> {
     // @ts-expect-error
     const voiceMetadata = vGraph[Symbol.metadata]
     console.log("voiceMetadata", voiceMetadata)
+
+    this.params = voiceMetadata
     
     if(isActualMpe && maxVoices > 14) {
       throw new Error("MPEPolySynth: maxVoices must be less than or equal to 14 for actual MPE")
@@ -82,8 +85,14 @@ export class MPEPolySynth<T extends MPEVoiceGraph> {
   }
 
   setParam(param: NumberKeys<T>, value: number) {
+    const paramDef = this.params[param]
+    if(!paramDef) {
+      throw new Error(`MPEPolySynth: param ${String(param)} not found`)
+    }
+    const clampedValue = Math.min(Math.max(value, paramDef.low), paramDef.high)
+    paramDef.value = clampedValue
     this.voices.forEach(voice => {
-      voice[param] = value as any
+      voice[param] = clampedValue as any
     })
   }
   
@@ -107,6 +116,12 @@ export class MPEPolySynth<T extends MPEVoiceGraph> {
 
     if (this.voices.size < this.maxVoices) {
       voice = new this.vGraphCtor(id ?? this.idGenerator++)
+
+      //have new voices initialize to the values set by the synth
+      for(const param in this.params) {
+        voice[param as keyof T] = this.params[param as NumberKeys<T>].value as any ?? this.params[param as NumberKeys<T>].low
+      }
+
       voice.noteOn(note, velocity, pressure, slide)
       this.voices.set(Date.now(), voice)
     } else {
@@ -144,6 +159,10 @@ type SynthParamDef = {
   low: number
   high: number
 }
+
+
+//todo - need to allow  voice graphs to set default params and have them picked up automatically
+export type SynthParam = SynthParamDef & { value: number }
 
 
 //a decorator for parameters of a setter of mpeVoiceGraph that sets the high/low limits
