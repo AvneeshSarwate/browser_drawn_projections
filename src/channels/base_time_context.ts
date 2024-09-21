@@ -192,6 +192,23 @@ export abstract class TimeContext {
   public wait(beats: number) {
     return beats === 0 ? Promise.resolve() : this.waitSec(beats * 60 / this.bpm) //todo api - should this be in waitSec?
   }
+
+  //todo api - need to change launchLoop() calls to return a BrowserTimeContext, untill then, keep this implemented here to not break old sketches
+  public waitFrame(): Promise<void> {
+    if (this.isCanceled) {
+      throw new Error('context is canceled')
+    }
+    const ctx = this
+    return new Promise<void>((resolve, reject) => {
+      const listener = () => { reject(); console.log('abort') }
+      ctx.abortController.signal.addEventListener('abort', listener)
+      //resolve the promise on the call to requestanimationframe
+      requestAnimationFrame(() => {
+        ctx.abortController.signal.removeEventListener('abort', listener)
+        resolve()
+      })
+    })
+  }
 }
 
 // class ToneTimeContext extends TimeContext {

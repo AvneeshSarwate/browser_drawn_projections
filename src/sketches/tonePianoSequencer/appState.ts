@@ -1,4 +1,5 @@
 import p5 from 'p5'
+import * as THREE from 'three'
 import * as Tone from 'tone'
 import { Entity, EntityList } from '@/stores/undoCommands'
 

@@ -1,4 +1,5 @@
 import p5 from 'p5'
+import * as THREE from 'three'
 import type { AnimationSeq } from './planeAnimations'
 import { Entity, EntityList, UndoableList } from '@/stores/undoCommands'
 import { storedData1 } from './exportedShapes'

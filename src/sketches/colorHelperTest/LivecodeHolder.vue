@@ -7,7 +7,6 @@ import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, tar
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
 import { mixColor, palette, setUpColorDatGui, type colorChoices } from '@/rendering/palletteHelper';
-import { compute } from 'three/examples/jsm/nodes/Nodes.js';
 import type { GUI } from 'dat.gui';
 
 const appState = inject<TemplateAppState>(appStateName)!!
