@@ -4,9 +4,7 @@
     <canvas id="threeCanvas" width="1280" height="720" abitrary-prop="somethi"></canvas>
   </div>
   <div id="description">
-    <p>Press D to enter draw mode</p>
-    <p>Press S to add a circle</p>
-    <p>Press F to animate the circle arrangement</p>
+    <p>Press D to drop a voronoi point</p>
   </div>
   <div id="debugInfo"></div>
 </template>

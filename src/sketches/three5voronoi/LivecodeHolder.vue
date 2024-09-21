@@ -1,7 +1,7 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
 import { type TemplateAppState, PulseCircle, appStateName } from './appState';
-import { inject, onMounted, onUnmounted } from 'vue';
+import { inject, onMounted, onUnmounted, ref } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
@@ -9,6 +9,7 @@ import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN
 import { Three5 } from '@/rendering/three5';
 import * as THREE from 'three';
 import { Voronoi, getVoronoiPolygons } from '@/creativeAlgs/voronoi';
+import { directionSweep } from '@/creativeAlgs/shapeHelpers';
 
 const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
@@ -27,6 +28,8 @@ const clearDrawFuncs = () => {
 
 let three5outer: Three5 | undefined = undefined
 
+let polyFracVal = ref(0.5)
+let polyFractDir = ref('top')
 
 onMounted(() => {
   try {
@@ -64,6 +67,10 @@ onMounted(() => {
 
       const whiteMat = new THREE.MeshBasicMaterial({ color: 0xffffff })
       const redMat = new THREE.MeshBasicMaterial({ color: 0xff0000 })
+      let randColorMats = []
+      for(let i = 0; i < 100; i++) {
+        randColorMats.push(new THREE.MeshBasicMaterial({ color: Math.random() * 0xffffff }))
+      }
       
       appState.drawFunctions.push((p: p5) => {
         // console.log("drawing circles", appState.circles.list.length)
@@ -77,8 +84,12 @@ onMounted(() => {
           const center = siteCenter
           return polygon.map(pt => ({ x: pt.x + (center.x - pt.x) * lerpFactor, y: pt.y + (center.y - pt.y) * lerpFactor }))
         })
+
+        const topHalf = polygons.map(polygon => directionSweep(polygon, polyFracVal.value, polyFractDir.value as any).polygon)
+
         three5i.setMaterial(whiteMat)
-        centerLerpedPolygons.forEach(polygon => {
+        topHalf.forEach((polygon, i) => {
+          three5i.setMaterial(randColorMats[i])
           three5i.polygon(polygon)
         })
 
@@ -122,6 +133,16 @@ onUnmounted(() => {
 
 <template>
   <div></div>
+  <label>Poly Fract Dir</label>
+  <select v-model="polyFractDir">
+    <option value="top">Top</option>
+    <option value="bottom">Bottom</option>
+    <option value="left">Left</option>
+    <option value="right">Right</option>
+  </select>
+  <br />
+  <label>Poly Fract Val</label>
+  <input type="range" v-model="polyFracVal" min="0" max="1" step="0.01" />
 </template>
 
 <style scoped></style>
