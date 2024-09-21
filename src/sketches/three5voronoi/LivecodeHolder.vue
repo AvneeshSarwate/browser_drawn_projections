@@ -1,6 +1,6 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
-import { type TemplateAppState, PulseCircle, appStateName } from './appState';
+import { type TemplateAppState, PulseCircle, appStateName, resolution } from './appState';
 import { inject, onMounted, onUnmounted, ref } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
@@ -39,11 +39,11 @@ onMounted(() => {
     const threeCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
 
 
-    three5outer = new Three5(1280, 720)
+    three5outer = new Three5(resolution.width, resolution.height)
     const three5i = three5outer
     const voronoi = new Voronoi()
     const initialPts = [{ x: 300, y: 300 }, { x: 600, y: 600 }]
-    const p5bbox = { xl: 0, xr: 1280, yt: 0, yb: 720 }
+    const p5bbox = { xl: 0, xr: resolution.width, yt: 0, yb: resolution.height }
     let diagram = voronoi.compute(initialPts, p5bbox)
 
     let p5Mouse = { x: 0, y: 0 }
@@ -58,7 +58,8 @@ onMounted(() => {
 
       //sketchTodo - make all of these listen on threeCanvas
       singleKeydownEvent('d', (ev) => {
-        voronoiPoints.push(new THREE.Vector2(p5Mouse.x, 720 - p5Mouse.y))
+        voronoiPoints.push(new THREE.Vector2(p5Mouse.x, resolution.height - p5Mouse.y))
+        console.log("voronoiPoints", voronoiPoints)
       })
 
       singleKeydownEvent('s', (ev) => {
