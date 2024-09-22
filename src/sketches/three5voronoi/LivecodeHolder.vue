@@ -2,7 +2,7 @@
 <script setup lang="ts">
 import { type TemplateAppState, PulseCircle, appStateName, resolution } from './appState';
 import { inject, onMounted, onUnmounted, ref } from 'vue';
-import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
+import { CanvasPaint, FeedbackNode, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri, now } from '@/channels/channels';
@@ -10,6 +10,7 @@ import { Three5 } from '@/rendering/three5';
 import * as THREE from 'three';
 import { Voronoi, getVoronoiPolygons } from '@/creativeAlgs/voronoi';
 import { directionSweep } from '@/creativeAlgs/shapeHelpers';
+import { HorizontalBlur, LayerBlend, Transform, VerticalBlur } from '@/rendering/customFX';
 
 const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
@@ -100,8 +101,25 @@ onMounted(() => {
           three5i.circle(pt.x, pt.y, 10)
         })
 
-        three5i.render(appState.threeRenderer!!)
+        three5i.render(appState.threeRenderer!!, false)
       })
+
+      const three5passthru = new Passthru({ src: three5i.output })
+      const feedback = new FeedbackNode(three5passthru)
+      const vertBlur = new VerticalBlur({ src: feedback })
+      const horBlur = new HorizontalBlur({ src: vertBlur })
+      const transform = new Transform({ src: horBlur })
+      const layerOverlay = new LayerBlend({ src1: three5passthru, src2: transform })
+      feedback.setFeedbackSrc(layerOverlay)
+      const canvasPaint = new CanvasPaint({ src: layerOverlay })
+      shaderGraphEndNode = canvasPaint
+
+      transform.setUniforms({ scale: [0.995, 0.995] })
+      vertBlur.setUniforms({ pixels: 2 })
+      horBlur.setUniforms({ pixels: 2 })
+
+
+      appState.shaderDrawFunc = () => shaderGraphEndNode!!.renderAll(appState.threeRenderer!!)
 
       // const passthru = new Passthru({ src: p5Canvas })
       // const canvasPaint = new CanvasPaint({ src: passthru })

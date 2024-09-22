@@ -49,7 +49,8 @@ onMounted(() => {
   p5Instance.disableFriendlyErrors = true //explanation - for performance
   appState.p5Instance = p5Instance
 
-  appState.threeRenderer = new THREE.WebGLRenderer({canvas: document.getElementById('threeCanvas') as HTMLCanvasElement})
+  appState.threeRenderer = new THREE.WebGLRenderer({ canvas: document.getElementById('threeCanvas') as HTMLCanvasElement, alpha: true })
+  appState.threeRenderer.setClearColor(0x000000, 0)
 })
 
 onUnmounted(() => {

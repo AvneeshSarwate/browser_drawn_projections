@@ -7,7 +7,7 @@ const resRef = ref(resolution)
 </script>
 
 <template>
-  <div id="canvasContainer">
+  <div id="canvasContainer" :style="{width: resRef.width + 'px', height: resRef.height + 'px'}">
     <canvas id="p5Canvas" :width="resRef.width" :height="resRef.height" abitrary-prop="somethi"></canvas>
     <canvas id="threeCanvas" :width="resRef.width" :height="resRef.height" abitrary-prop="somethi"></canvas>
   </div>

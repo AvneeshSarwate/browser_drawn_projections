@@ -158,34 +158,6 @@ export class Three5 {
     this.scene.add(meshLine);
   }
 
-  render(renderer: THREE.WebGLRenderer) {
-    renderer.setRenderTarget(null);
-    renderer.render(this.scene, this.camera);
-
-    //todo performance - dispose geometries (base and stroke) for custom curves/shapes, but not for circles/rects/primitives
-
-    const meshes = this.scene.children.filter(child => child instanceof THREE.Mesh).map(child => child as THREE.Mesh);
-    const geos = meshes.map(mesh => mesh.geometry).filter(geo => this.cachedLineGeos.has(geo.uuid) === false);
-
-    
-    setTimeout(() => {
-      //@ts-expect-error
-      meshes.forEach(child => (child as THREE.Mesh).material.dispose());
-
-      //todo check - is this redundant?
-      // this.disposables.forEach(geo => geo.dispose());
-      // this.disposables = [];
-    }, 100)
-    
-    if(!this.useLinePool) geos.forEach(geo => geo.dispose());
-
-    //todo performance - need to properly dispose of stroke meshes
-    
-    this.scene.clear(); //todo api - don't clear automatically on render
-    this.lineGeoPool.reset();
-
-    
-  }
 
   polygon(points: { x: number, y: number }[]) {
     if (points.length < 3) {
@@ -247,6 +219,35 @@ export class Three5 {
       fragmentShader: gradientFS,
     });
     return material;
+  }
+
+  render(renderer: THREE.WebGLRenderer, drawToScreen: boolean = true) {
+    renderer.setRenderTarget(drawToScreen ? null : this.output);
+    renderer.render(this.scene, this.camera);
+
+    //todo performance - dispose geometries (base and stroke) for custom curves/shapes, but not for circles/rects/primitives
+
+    const meshes = this.scene.children.filter(child => child instanceof THREE.Mesh).map(child => child as THREE.Mesh);
+    const geos = meshes.map(mesh => mesh.geometry).filter(geo => this.cachedLineGeos.has(geo.uuid) === false);
+
+    
+    setTimeout(() => {
+      //@ts-expect-error
+      meshes.forEach(child => (child as THREE.Mesh).material.dispose());
+
+      //todo check - is this redundant?
+      // this.disposables.forEach(geo => geo.dispose());
+      // this.disposables = [];
+    }, 100)
+    
+    if(!this.useLinePool) geos.forEach(geo => geo.dispose());
+
+    //todo performance - need to properly dispose of stroke meshes
+    
+    this.scene.clear(); //todo api - don't clear automatically on render
+    this.lineGeoPool.reset();
+
+    
   }
 
   dispose() {
