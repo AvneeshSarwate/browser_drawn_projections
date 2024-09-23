@@ -30,6 +30,7 @@ export const sketchNames = [
   'envelopeEditorTest',
   'p5sketch_0',
   'three5voronoi',
+  'three5voronoiWebGPU',
   'synthPlayground'
 ]
 
