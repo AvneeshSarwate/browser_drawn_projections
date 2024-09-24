@@ -31,7 +31,6 @@ MIDIVal.onOutputDeviceDisconnected((accessObject) => {
   midiOutputs.delete(accessObject.name);
 })
 
-
 /**
  debugging
  - all notes off not interacting properly when stopping a midi clip in ableton
@@ -80,7 +79,6 @@ export function mapMidiInputToMpeSynth<T extends MPEVoiceGraph>(input: MIDIValIn
       voice.slide = event.data2 //todo api - is this correct?
     }
   })
-
 }
 
 

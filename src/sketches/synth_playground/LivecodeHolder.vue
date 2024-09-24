@@ -7,6 +7,7 @@ import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, tar
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
 import { FatOscillatorVoice, MPEPolySynth, type NumberKeys, type SynthParam } from '@/music/mpeSynth';
+import { MIDI_READY, mapMidiInputToMpeSynth, midiInputs } from '@/io/midi';
 
 const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
@@ -29,7 +30,7 @@ const onParamChange = (paramName: string, val: number) => {
   synthRef?.setParam(paramName as NumberKeys<FatOscillatorVoice>, val)
 }
 
-onMounted(() => {
+onMounted(async () => {
   try {
 
     const p5i = appState.p5Instance!!
@@ -38,13 +39,20 @@ onMounted(() => {
 
     synthRef = new MPEPolySynth(FatOscillatorVoice)
     const synth = synthRef!!
-
+    console.log("synth params", synth.params)
     synthParams.value = synth.params
 
     let p5Mouse = { x: 0, y: 0 }
     mousemoveEvent((ev) => {
       p5Mouse = targetToP5Coords(ev, p5i, threeCanvas)
     }, threeCanvas)
+
+    await MIDI_READY
+    const midiInput = midiInputs.get("IAC Driver Bus 1")
+    if (midiInput) {
+      //todo sketch - do we need to unhook the synth mapping on unmount?
+      mapMidiInputToMpeSynth(midiInput, synth)
+    }
 
     const code = () => { //todo template - is this code-array pattern really needed in the template?
       clearDrawFuncs() //todo template - move this to cleanup block?
@@ -83,7 +91,7 @@ onUnmounted(() => {
   <div>
     <div v-for="(param, name) in synthParams" :key="name">
       <label>{{ name }}</label>
-      <input type="number" v-model="param.value" :min="param.low" :max="param.high" @input="onParamChange(name, parseFloat(($event.target as HTMLInputElement).value))" />
+      <input type="range" v-model="param.value" :min="param.low" :max="param.high" @input="onParamChange(name, parseFloat(($event.target as HTMLInputElement).value))" />
     </div>
   </div>
 </template>

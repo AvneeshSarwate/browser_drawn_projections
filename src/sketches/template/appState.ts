@@ -135,6 +135,11 @@ export const appState: TemplateAppState = {
 
 export const appStateName = 'templateAppState'
 
+export const resolution = {
+  width: 1000,
+  height: 500
+}
+
 //todo api - add caching/rehydrating of appState from local storage
 
 export const globalStore = defineStore(appStateName, () => {

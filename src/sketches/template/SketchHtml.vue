@@ -1,7 +1,15 @@
+<script setup lang="ts">
+import { ref } from 'vue';
+import { resolution } from './appState'
+
+const resRef = ref(resolution)
+
+</script>
+
 <template>
-  <div id="canvasContainer">
-    <canvas id="p5Canvas" width="1280" height="720" abitrary-prop="somethi"></canvas>
-    <canvas id="threeCanvas" width="1280" height="720" abitrary-prop="somethi"></canvas>
+  <div id="canvasContainer" :style="{width: resRef.width + 'px', height: resRef.height + 'px'}">
+    <canvas id="p5Canvas" :width="resRef.width" :height="resRef.height" abitrary-prop="somethi"></canvas>
+    <canvas id="threeCanvas" :width="resRef.width" :height="resRef.height" abitrary-prop="somethi"></canvas>
   </div>
   <div id="description">
     <p>Press D to enter draw mode</p>

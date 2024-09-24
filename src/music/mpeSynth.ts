@@ -77,7 +77,7 @@ export class MPEPolySynth<T extends MPEVoiceGraph> {
     const voiceMetadata = vGraph[Symbol.metadata]
     console.log("voiceMetadata", voiceMetadata)
 
-    this.params = voiceMetadata
+    this.params = voiceMetadata.setterParams
     
     if(isActualMpe && maxVoices > 14) {
       throw new Error("MPEPolySynth: maxVoices must be less than or equal to 14 for actual MPE")

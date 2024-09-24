@@ -1,4 +1,4 @@
-import { type TemplateAppState } from './appState'
+import { type TemplateAppState, resolution } from './appState'
 import p5 from 'p5'
 
 export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => TemplateAppState): p5 {
@@ -6,7 +6,7 @@ export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => Templa
   const sketch = (p: p5) => {
 
     p.setup = () => {
-      p.createCanvas(1280, 720, canvas)
+      p.createCanvas(resolution.width, resolution.height, canvas)
       p.noSmooth()
       // p.noLoop()
     }

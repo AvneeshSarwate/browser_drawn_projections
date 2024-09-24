@@ -31,7 +31,7 @@ export const sketchNames = [
   'p5sketch_0',
   'three5voronoi',
   'three5voronoiWebGPU',
-  'synthPlayground'
+  'synth_playground'
 ]
 
 const sketchRoutes = sketchNames.map(name => {
