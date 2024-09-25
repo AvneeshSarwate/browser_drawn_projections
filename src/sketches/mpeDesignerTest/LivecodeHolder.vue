@@ -43,7 +43,7 @@ onMounted(async () => {
     const mpeSynth = getMPESynth()
     const midiIn = midiInputs.get("IAC Driver Bus 1")!!
 
-    mapMidiInputToMpeSynth(midiIn, mpeSynth)
+    mapMidiInputToMpeSynth(midiIn, mpeSynth, true)
 
 
     const code = () => { //todo template - is this code-array pattern really needed in the template?

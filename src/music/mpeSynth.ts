@@ -63,7 +63,7 @@ export type NumberKeys<T> = {
 export class MPEPolySynth<T extends MPEVoiceGraph> {
   vGraphCtor: Constructor<T>
   maxVoices: number
-  voices: Map<number, T> //map of voices by creation time via Date.now()
+  voices: Map<number, {isOn: boolean, voice: T}> //map of voices by creation time via Date.now()
   idGenerator = 1
   params: Record<NumberKeys<T>, SynthParam>
 
@@ -91,7 +91,7 @@ export class MPEPolySynth<T extends MPEVoiceGraph> {
     }
     const clampedValue = Math.min(Math.max(value, paramDef.low), paramDef.high)
     paramDef.value = clampedValue
-    this.voices.forEach(voice => {
+    this.voices.forEach(({voice}) => {
       voice[param] = clampedValue as any
     })
   }
@@ -104,7 +104,7 @@ export class MPEPolySynth<T extends MPEVoiceGraph> {
   // }
 
   allNotesOff() {
-    this.voices.forEach(voice => {
+    this.voices.forEach(({voice}) => {
       voice.forceFinish()
     })
   }
@@ -114,7 +114,13 @@ export class MPEPolySynth<T extends MPEVoiceGraph> {
   noteOn(note: number, velocity: number, pressure: number, slide: number, id?: number): T {
     let voice: T
 
-    if (this.voices.size < this.maxVoices) {
+    const offVoices = Array.from(this.voices.keys()).filter((k) => this.voices.get(k)?.isOn === false)
+    if(offVoices.length > 0) { //if there are any voices that are off, reuse them
+      voice = this.voices.get(offVoices[0])!.voice
+      this.voices.delete(offVoices[0])
+      voice.noteOn(note, velocity, pressure, slide)
+      this.voices.set(Date.now(), {isOn: true, voice})
+    } else if (this.voices.size < this.maxVoices) { //if there are no off voices, and there is room, create a new one
       voice = new this.vGraphCtor(id ?? this.idGenerator++)
 
       //have new voices initialize to the values set by the synth
@@ -123,32 +129,33 @@ export class MPEPolySynth<T extends MPEVoiceGraph> {
       }
 
       voice.noteOn(note, velocity, pressure, slide)
-      this.voices.set(Date.now(), voice)
-    } else {
+      this.voices.set(Date.now(), {isOn: true, voice})
+    } else { //if there are no off voices, and there is no room, replace the oldest voice
       const minKey = Array.from(this.voices.keys()).sort()[0]
-      voice = this.voices.get(minKey)!
+      const {isOn, voice: replaceVoice} = this.voices.get(minKey)!
 
-      voice.forceFinish()
+      replaceVoice.forceFinish()
       this.voices.delete(minKey)
 
-      voice.noteOn(note, velocity, pressure, slide)
-      this.voices.set(Date.now(), voice)
+      replaceVoice.noteOn(note, velocity, pressure, slide)
+      this.voices.set(Date.now(), {isOn: true, voice: replaceVoice})
+      voice = replaceVoice
     }
 
     return voice
   }
 
   noteOff(voice: VoiceGraph): void {
-    this.voices.forEach((v, k) => {
+    this.voices.forEach(({voice: v}, k) => {
       if (v === voice) {
-        v.voiceFinishedCB = () => this.voices.delete(k)
         v.noteOff()
+        this.voices.set(k, {isOn: false, voice: v})
       }
     })
   }
 
   public dispose(): void {
-    this.voices.forEach(voice => {
+    this.voices.forEach(({voice}) => {
       voice.dispose()
     })
     this.voices.clear()
@@ -202,6 +209,7 @@ export class FatOscillatorVoice implements MPEVoiceGraph {
   voiceName: string = "fatOsc"
 
   constructor(id: number) {
+    console.log("fatOscVoice constructor", id)
     this.id = id
     this.oscillator = new Tone.FatOscillator().start()
     this.filter = new Tone.Filter({ type: "lowpass" })
@@ -251,12 +259,21 @@ export class FatOscillatorVoice implements MPEVoiceGraph {
     return this._slide
   }
 
+  get filterFrequency(): number {
+    return this.filter.frequency.immediate()
+  }
+
+  @param(100, 3000)
+  set filterFrequency(value: number) {
+    this.filter.frequency.value = value
+  }
+
   get filterQ(): number {
     return this.filter.Q.value
   }
 
   // @testDecorator
-  @param(0, 10)
+  @param(0, 100)
   set filterQ(value: number) {
     this.filter.Q.value = value
   }
@@ -327,10 +344,17 @@ export class FatOscillatorVoice implements MPEVoiceGraph {
   voiceFinishedCB?: () => void
 
   dispose(): void {
+    this.oscillator.disconnect()
+    this.filter.disconnect()
+    this.distortion.disconnect()
+    this.envelope.disconnect()
+    this.outputGain.disconnect()
+
     this.oscillator.dispose()
     this.filter.dispose()
     this.distortion.dispose()
     this.envelope.dispose()
+    this.outputGain.dispose()
   }
 }
 

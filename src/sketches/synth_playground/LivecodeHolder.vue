@@ -54,6 +54,8 @@ onMounted(async () => {
       mapMidiInputToMpeSynth(midiInput, synth)
     }
 
+    //todo sketch - create presets that persist through hot reload (and also optionally to local storage)
+
     const code = () => { //todo template - is this code-array pattern really needed in the template?
       clearDrawFuncs() //todo template - move this to cleanup block?
       
@@ -92,6 +94,7 @@ onUnmounted(() => {
     <div v-for="(param, name) in synthParams" :key="name">
       <label>{{ name }}</label>
       <input type="range" v-model="param.value" :min="param.low" :max="param.high" @input="onParamChange(name, parseFloat(($event.target as HTMLInputElement).value))" />
+      <span>{{ param.value }}</span>
     </div>
   </div>
 </template>

@@ -1,5 +1,5 @@
 import type { MPEPolySynth, MPEVoiceGraph } from "@/music/mpeSynth";
-import { MIDIVal, MIDIValInput, MIDIValOutput } from "@midival/core";
+import { MIDIVal, MIDIValInput, MIDIValOutput, type NoteMessage } from "@midival/core";
 
 export const midiInputs: Map<string, MIDIValInput> = new Map();
 export const midiOutputs: Map<string, MIDIValOutput> = new Map()
@@ -39,42 +39,49 @@ MIDIVal.onOutputDeviceDisconnected((accessObject) => {
  */
 
 //todo api - handle hot reloading for mapMidiInputToMpeSynth
-export function mapMidiInputToMpeSynth<T extends MPEVoiceGraph>(input: MIDIValInput, synth: MPEPolySynth<T>) {
-  const midiPitchToVoiceId = new Map<number, T>();
-  
+export function mapMidiInputToMpeSynth<T extends MPEVoiceGraph>(input: MIDIValInput, synth: MPEPolySynth<T>, useMpe = false) {
+  const midiDataToVoiceId = new Map<number, T>();
+  const noteKey = (event: NoteMessage) => useMpe ? event.channel : event.data1
   input.onAllNotesOff((event) => {
-    midiPitchToVoiceId.clear()
+    midiDataToVoiceId.clear()
     synth.allNotesOff()
   })
 
   input.onAllNoteOn((event) => {
-    const voice = synth.noteOn(event.note, event.velocity, 0, 0, event.channel)
-    midiPitchToVoiceId.set(event.channel, voice)
+    const voice = synth.noteOn(event.note, event.velocity, 0, 0, noteKey(event))
+    midiDataToVoiceId.set(noteKey(event), voice)
     // console.log("all note on", event, 'chan', event.channel, "voice_id", voice.id)
   })
 
   input.onAllNoteOff((event) => {
-    const voice = midiPitchToVoiceId.get(event.channel)
-    // console.log("all note off", event, voice)
-    if(voice) synth.noteOff(voice)
+    const voice = midiDataToVoiceId.get(noteKey(event))
+    console.log("all note off", event.data1, voice)
+    if(voice) {
+      synth.noteOff(voice)
+      midiDataToVoiceId.delete(noteKey(event))
+      // console.log("num voices", midiPitchToVoiceId.size, synth.voices.size)
+    }
   })
   
   input.onChannelPressure((event) => {
-    const voice = midiPitchToVoiceId.get(event.channel)
+    //todo api - also have case for not using MPE
+    const voice = midiDataToVoiceId.get(event.channel)
     if (voice) {
       voice.pressure = event.data1 //todo api - is this correct?
     }
   })
 
   input.onPitchBend((event) => {
-    const voice = midiPitchToVoiceId.get(event.channel)
+    //todo api - also have case for not using MPE
+    const voice = midiDataToVoiceId.get(event.channel)
     if (voice) {
       voice.pitch = event.value //todo api - is this correct?
     }
   })
 
   input.onControlChange(74, (event) => {
-    const voice = midiPitchToVoiceId.get(event.channel)
+    //todo api - also have case for not using MPE
+    const voice = midiDataToVoiceId.get(event.channel)
     if (voice) {
       voice.slide = event.data2 //todo api - is this correct?
     }
