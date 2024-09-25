@@ -28,6 +28,7 @@ let synthRef: MPEPolySynth<FatOscillatorVoice> | undefined = undefined
 let synthParams: Ref<Record<string, SynthParam>> = ref({})
 const onParamChange = (paramName: string, val: number) => {
   synthRef?.setParam(paramName as NumberKeys<FatOscillatorVoice>, val)
+  appState.params[paramName] = val
 }
 
 onMounted(async () => {
@@ -41,6 +42,14 @@ onMounted(async () => {
     const synth = synthRef!!
     console.log("synth params", synth.params)
     synthParams.value = synth.params
+
+
+    //if synthParams and appState.params have the same keys, we can set the parameters on the actual synth
+    for(const key of Object.keys(appState.params)) {
+      if(synthParams.value[key]) {
+        synth.setParam(key as NumberKeys<FatOscillatorVoice>, appState.params[key])
+      }
+    }
 
     let p5Mouse = { x: 0, y: 0 }
     mousemoveEvent((ev) => {

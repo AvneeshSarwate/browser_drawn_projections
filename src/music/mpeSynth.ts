@@ -104,9 +104,13 @@ export class MPEPolySynth<T extends MPEVoiceGraph> {
   // }
 
   allNotesOff() {
-    this.voices.forEach(({voice}) => {
-      voice.forceFinish()
-    })
+    for(const key of this.voices.keys()) {
+      const voiceRecord = this.voices.get(key)
+      if(voiceRecord?.isOn) {
+        voiceRecord.voice.forceFinish()
+        this.voices.set(key, {isOn: false, voice: voiceRecord.voice})
+      }
+    }
   }
 
   //extra id parameter here to make it easy to coordinate an instance with actual external midi controllers, who will provide their own voice id
@@ -263,7 +267,7 @@ export class FatOscillatorVoice implements MPEVoiceGraph {
     return this.filter.frequency.immediate()
   }
 
-  @param(100, 3000)
+  @param(50, 3000)
   set filterFrequency(value: number) {
     this.filter.frequency.value = value
   }

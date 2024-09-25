@@ -104,7 +104,6 @@ export class PulseCircle extends Entity {
 }
 
 export type TemplateAppState = {
-  circles: EntityList<PulseCircle>
   p5Instance: p5 | undefined
   threeRenderer: THREE.WebGLRenderer | undefined
   codeStack: (() => void)[]
@@ -116,10 +115,12 @@ export type TemplateAppState = {
   stats?: { begin: () => void, end: () => void }
   paused: boolean
   drawing: boolean
+  params: {
+    [key: string]: number
+  }
 }
 
 export const appState: TemplateAppState = {
-  circles: new EntityList(PulseCircle),
   p5Instance: undefined,
   threeRenderer: undefined,
   codeStack: [],
@@ -131,6 +132,7 @@ export const appState: TemplateAppState = {
   stats: undefined,
   paused: false,
   drawing: false,
+  params: {}
 } 
 
 export const appStateName = 'synthPlaygroundAppState'
