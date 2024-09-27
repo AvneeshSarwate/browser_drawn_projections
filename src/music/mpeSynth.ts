@@ -113,6 +113,11 @@ export class MPEPolySynth<T extends MPEVoiceGraph> {
     }
   }
 
+  //when sequencing via ableton, 2 voices might be created in the same millisecond,
+  //leading them to not be properly stored in the voices map, that uses Date.now() as the key
+  //this tieBreaker is a simple way to ensure that each voice gets a unique key
+  tieBreaker = 0
+
   //extra id parameter here to make it easy to coordinate an instance with actual external midi controllers, who will provide their own voice id
   //todo testing - see how this external id plays with voice stealing and voice allocation
   noteOn(note: number, velocity: number, pressure: number, slide: number, id?: number): T {
@@ -123,7 +128,7 @@ export class MPEPolySynth<T extends MPEVoiceGraph> {
       voice = this.voices.get(offVoices[0])!.voice
       this.voices.delete(offVoices[0])
       voice.noteOn(note, velocity, pressure, slide)
-      this.voices.set(Date.now(), {isOn: true, voice})
+      this.voices.set(Date.now() + this.tieBreaker++, {isOn: true, voice})
     } else if (this.voices.size < this.maxVoices) { //if there are no off voices, and there is room, create a new one
       voice = new this.vGraphCtor(id ?? this.idGenerator++)
 
@@ -363,9 +368,9 @@ export class FatOscillatorVoice implements MPEVoiceGraph {
 }
 
 
-const fatOscVoice = new FatOscillatorVoice(1)
-fatOscVoice.filterQ = 20
-console.log("fastOsc Q", fatOscVoice.filterQ)
+// const fatOscVoice = new FatOscillatorVoice(1)
+// fatOscVoice.filterQ = 20
+// console.log("fastOsc Q", fatOscVoice.filterQ)
 
 //todo - both this and the replicated-channel version need to do midi_chan<=>on_note management
 

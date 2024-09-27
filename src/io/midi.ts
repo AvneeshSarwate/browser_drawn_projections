@@ -47,6 +47,12 @@ export function mapMidiInputToMpeSynth<T extends MPEVoiceGraph>(input: MIDIValIn
     synth.allNotesOff()
   })
 
+  //@ts-ignore
+  window.voiceMap = midiDataToVoiceId
+  //@ts-ignore
+  window.synth = synth
+
+  //todo - handle voice stealing when 2 voices of same pitch are triggered at once?
   input.onAllNoteOn((event) => {
     const voice = synth.noteOn(event.note, event.velocity, 0, 0, noteKey(event))
     midiDataToVoiceId.set(noteKey(event), voice)
@@ -55,7 +61,7 @@ export function mapMidiInputToMpeSynth<T extends MPEVoiceGraph>(input: MIDIValIn
 
   input.onAllNoteOff((event) => {
     const voice = midiDataToVoiceId.get(noteKey(event))
-    console.log("all note off", event.data1, voice)
+    console.log("all note off", Date.now(),event.data1, noteKey(event), !!voice, voice?.id)
     if(voice) {
       synth.noteOff(voice)
       midiDataToVoiceId.delete(noteKey(event))
