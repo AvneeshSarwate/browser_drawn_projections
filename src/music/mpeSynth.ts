@@ -121,7 +121,7 @@ export class MPEPolySynth<T extends MPEVoiceGraph> {
   //extra id parameter here to make it easy to coordinate an instance with actual external midi controllers, who will provide their own voice id
   //todo testing - see how this external id plays with voice stealing and voice allocation
   noteOn(note: number, velocity: number, pressure: number, slide: number, id?: number): T {
-    let voice: T
+    let voice: T //the voice returned at the end
 
     const offVoices = Array.from(this.voices.keys()).filter((k) => this.voices.get(k)?.isOn === false)
     if(offVoices.length > 0) { //if there are any voices that are off, reuse them
@@ -151,6 +151,11 @@ export class MPEPolySynth<T extends MPEVoiceGraph> {
       voice = replaceVoice
     }
 
+    //set the parameters of the voice to either default or overriden vals
+    for(const param in this.params) {
+      voice[param as keyof T] = this.params[param as NumberKeys<T>].value as any ?? this.params[param as NumberKeys<T>].defaultVal
+    }
+
     return voice
   }
 
@@ -174,21 +179,22 @@ export class MPEPolySynth<T extends MPEVoiceGraph> {
 type SynthParamDef = {
   low: number
   high: number
+  defaultVal: number
 }
 
 
 //todo - need to allow  voice graphs to set default params and have them picked up automatically
-export type SynthParam = SynthParamDef & { value: number }
+export type SynthParam = SynthParamDef & { value?: number }
 
 
 //a decorator for parameters of a setter of mpeVoiceGraph that sets the high/low limits
-function param(low: number, high: number) {
+function param(low: number, high: number, defaultVal: number) {
   return function(setter: (value: number) => void, context: ClassSetterDecoratorContext) {
 
     //add setter name, low, high to decorator metadata
     (context.metadata!.setterParams as Record<string, SynthParamDef>) ??= {}
     const setterParams = context.metadata.setterParams as Record<string, SynthParamDef>
-    setterParams[context.name as string] = {low, high}
+    setterParams[context.name as string] = {low, high, defaultVal}
 
     return function boundedSetter(this: any, value: number) {
       const clampedValue = Math.min(Math.max(value, low), high)
@@ -268,60 +274,9 @@ export class FatOscillatorVoice implements MPEVoiceGraph {
     return this._slide
   }
 
-  get filterFrequency(): number {
-    return this.filter.frequency.immediate()
-  }
-
-  @param(50, 3000)
-  set filterFrequency(value: number) {
-    this.filter.frequency.value = value
-  }
-
-  get filterQ(): number {
-    return this.filter.Q.value
-  }
-
-  // @testDecorator
-  @param(0, 100)
-  set filterQ(value: number) {
-    this.filter.Q.value = value
-  }
-
   set slide(value: number) {
     this._slide = value
     this.distortion.distortion = Math.pow(value/127, 2.5) // Example mapping
-  }
-
-  get attack(): number {
-    return Number(this.envelope.attack)
-  }
-
-  set attack(value: number) {
-    this.envelope.attack = value
-  }
-
-  get decay(): number {
-    return Number(this.envelope.decay)
-  }
-
-  set decay(value: number) {
-    this.envelope.decay = value
-  }
-
-  get sustain(): number {
-    return this.envelope.sustain
-  }
-
-  set sustain(value: number) {
-    this.envelope.sustain = value
-  }
-
-  get release(): number {
-    return Number(this.envelope.release)
-  }
-
-  set release(value: number) {
-    this.envelope.release = value
   }
 
   noteOn(note: number, velocity: number, pressure: number, slide: number): void {
@@ -364,6 +319,79 @@ export class FatOscillatorVoice implements MPEVoiceGraph {
     this.distortion.dispose()
     this.envelope.dispose()
     this.outputGain.dispose()
+  }
+
+  //========== params ==========
+
+  get filterFrequency(): number {
+    return this.filter.frequency.immediate()
+  }
+
+  @param(50, 3000, 400)
+  set filterFrequency(value: number) {
+    this.filter.frequency.value = value
+  }
+
+  get filterQ(): number {
+    return this.filter.Q.value
+  }
+
+  @param(0, 100, 10)
+  set filterQ(value: number) {
+    this.filter.Q.value = value
+  }
+
+  get count(): number {
+    return this.oscillator.count
+  }
+
+  @param(1, 20, 3)
+  set count(value: number) {
+    this.oscillator.count = value
+  }
+
+  get spread(): number {
+    return this.oscillator.spread
+  }
+
+  @param(0, 100, 3)
+  set spread(value: number) {
+    this.oscillator.spread = value
+  }
+
+  get attack(): number {
+    return Number(this.envelope.attack)
+  }
+  @param(0, 5, 0.1)
+  set attack(value: number) {
+    this.envelope.attack = value
+  }
+
+  get decay(): number {
+    return Number(this.envelope.decay)
+  }
+
+  @param(0, 5, 0.2)
+  set decay(value: number) {
+    this.envelope.decay = value
+  }
+
+  get sustain(): number {
+    return this.envelope.sustain
+  }
+
+  @param(0, 1, 0.9)
+  set sustain(value: number) {
+    this.envelope.sustain = value
+  }
+
+  get release(): number {
+    return Number(this.envelope.release)
+  }
+
+  @param(0, 5, 0.6)
+  set release(value: number) {
+    this.envelope.release = value
   }
 }
 

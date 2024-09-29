@@ -102,7 +102,7 @@ onUnmounted(() => {
   <div>
     <div v-for="(param, name) in synthParams" :key="name">
       <label>{{ name }}</label>
-      <input type="range" v-model="param.value" :min="param.low" :max="param.high" @input="onParamChange(name, parseFloat(($event.target as HTMLInputElement).value))" />
+      <input type="range" v-model="param.value" :min="param.low" :max="param.high" step="0.01" @input="onParamChange(name, parseFloat(($event.target as HTMLInputElement).value))" />
       <span>{{ param.value }}</span>
     </div>
   </div>
