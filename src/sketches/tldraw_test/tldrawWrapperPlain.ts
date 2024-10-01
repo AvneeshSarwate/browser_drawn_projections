@@ -6,10 +6,11 @@ import {
   type TLDrawShape,
   type TLGeoShape,
   getDefaultColorTheme,
-  DefaultCanvas
+  DefaultCanvas,
 } from 'tldraw'
 import 'tldraw/tldraw.css'
 import type p5 from 'p5';
+import { MultiSegmentLineIcon, MultiSegmentLineTool, MultiSegmentLineUtil, components, uiOverrides } from './multiSegmentLine/multiSegmentLineUtil';
 
 interface MyTldrawWrapperProps {
   onEditorReady: (editor: Editor) => void
@@ -35,8 +36,12 @@ export const MyTldrawWrapper: React.FC<MyTldrawWrapperProps> = ({
       persistenceKey: 'example',
       components: {
         Background: () => React.createElement(CustomRenderer, { onEditorReady }),
-        Canvas: DefaultCanvas
-      }
+        Canvas: DefaultCanvas,
+        Toolbar: components.Toolbar
+      },
+      shapeUtils: [MultiSegmentLineUtil],
+      tools: [MultiSegmentLineTool],
+      overrides: [uiOverrides],
     })
     // )
   )
