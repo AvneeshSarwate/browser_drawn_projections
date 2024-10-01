@@ -44,7 +44,7 @@ export class MultiSegmentLineUtil extends ShapeUtil<MultiSegmentLineShape> {
   // Render the shape as an SVG polyline
   component(shape: MultiSegmentLineShape) {
     const pointsString = shape.props.points.map((p) => `${p.x},${p.y}`).join(' ')
-    return React.createElement(
+    return React.createElement( //todo - some how add "tl-svg-container" on the svg div to get it to show up
       'svg',
       null,
       React.createElement('polyline', {
