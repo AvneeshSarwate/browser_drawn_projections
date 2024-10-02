@@ -4,6 +4,8 @@ import {
   StateNode,
   type TLBaseShape,
   type TLClickEventInfo,
+  type TLHandle,
+  type TLOnResizeHandler,
   type TLShapeId
 } from 'tldraw'
 import * as React from 'react'
@@ -46,6 +48,7 @@ export class MultiSegmentLineUtil extends ShapeUtil<MultiSegmentLineShape> {
     const pointsString = shape.props.points.map((p) => `${p.x},${p.y}`).join(' ')
     return React.createElement( //todo - some how add "tl-svg-container" on the svg div to get it to show up
       'svg',
+      {className: 'tl-svg-container'},
       null,
       React.createElement('polyline', {
         points: pointsString,
@@ -55,10 +58,18 @@ export class MultiSegmentLineUtil extends ShapeUtil<MultiSegmentLineShape> {
     )
   }
 
+  onHandleDragStart(shape: MultiSegmentLineShape, handle: TLHandle) {
+    console.log('onHandleDragStart', shape, handle)
+  }
   // Get the geometry for hit detection
   getGeometry(shape: MultiSegmentLineShape) {
     const points = shape.props.points.map((p) => new Vector2(p.x, p.y))
     return getPolylineBounds(points)
+  }
+
+  //also add resize rules - https://tldraw.dev/examples/shapes/tools/shape-with-geometry
+  override canResize = () => {
+    return true
   }
 
   // Render the outline of the shape when selected
