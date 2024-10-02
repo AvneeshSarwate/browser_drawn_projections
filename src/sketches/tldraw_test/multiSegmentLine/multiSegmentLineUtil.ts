@@ -5,7 +5,10 @@ import {
   type TLBaseShape,
   type TLClickEventInfo,
   type TLHandle,
+  type TLKeyboardEvent,
+  type TLKeyboardEventInfo,
   type TLOnResizeHandler,
+  type TLResizeInfo,
   type TLShapeId
 } from 'tldraw'
 import * as React from 'react'
@@ -53,8 +56,17 @@ export class MultiSegmentLineUtil extends ShapeUtil<MultiSegmentLineShape> {
       React.createElement('polyline', {
         points: pointsString,
         stroke: 'black',
+        strokeWidth: 3.5,
         fill: 'none'
-      })
+      }),
+      //use drag/double-click gestures directly on points to resize/delete points?
+      ...shape.props.points.map((p, i) => React.createElement('circle', {
+        cx: p.x,
+        cy: p.y,
+        r: 3,
+        fill: 'red',
+        id: `point-${i}`
+      }))
     )
   }
 
@@ -70,6 +82,10 @@ export class MultiSegmentLineUtil extends ShapeUtil<MultiSegmentLineShape> {
   //also add resize rules - https://tldraw.dev/examples/shapes/tools/shape-with-geometry
   override canResize = () => {
     return true
+  }
+
+  override onResize = (shape: MultiSegmentLineShape, info: TLResizeInfo<MultiSegmentLineShape>) => {
+    console.log('onResize', shape, info)
   }
 
   // Render the outline of the shape when selected
@@ -92,6 +108,17 @@ static id = 'multiSegmentLine';
   shapeId?: TLShapeId
   isDragging = false
   draggedPointIndex: number | null = null
+
+  override onEnter = () => {
+    //use whether a shape is selected to determine whether a click creates a new shape or adds a point to an existing shape
+    const { editor } = this
+    const selectedShapes = editor.getSelectedShapes()
+    console.log('onEnter', this, selectedShapes)
+  }
+
+  override onKeyDown = (info: TLKeyboardEventInfo) => {
+    console.log('onKeyDown', info)
+  }
 
   // Handle pointer down to either create a new point or start dragging an existing point
   override onPointerDown = (info: TLPointerEventInfo) => {
