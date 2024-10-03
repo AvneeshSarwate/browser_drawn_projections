@@ -123,9 +123,9 @@ static id = 'multiSegmentLine';
   // Handle pointer down to either create a new point or start dragging an existing point
   override onPointerDown = (info: TLPointerEventInfo) => {
     const { editor } = this
-    const point = { x: info.point.x, y: info.point.y }
-
-    console.log('multiSegmentLineTool onPointerDown', info)
+    const screenPoint = { x: info.point.x, y: info.point.y }
+    const pagePointObj = editor.screenToPage(screenPoint)
+    const pagePoint = { x: pagePointObj.x, y: pagePointObj.y }
 
     //todo wrap with editor.history.batch
     if (!this.shapeId) {
@@ -134,7 +134,7 @@ static id = 'multiSegmentLine';
       console.log('multiSegmentLineTool onPointerDown creating new shape', newShapeId)
       editor.createShape({
         type: 'multiSegmentLine',
-        props: { points: [point] },
+        props: { points: [pagePoint] },
         id: newShapeId
       })
       this.shapeId = newShapeId
@@ -143,7 +143,7 @@ static id = 'multiSegmentLine';
       if (shape) {
         // Add the new point to the current shape
         editor.updateShapes([
-          { id: shape.id, type: shape.type, props: { points: [...shape.props.points, point] } }
+          { id: shape.id, type: shape.type, props: { points: [...shape.props.points, pagePoint] } }
         ])
       }
     }
