@@ -100,6 +100,11 @@ export class MultiSegmentLineUtil extends ShapeUtil<MultiSegmentLineShape> {
   }
 }
 
+// add ways to customize shape/metadata
+//https://tldraw.dev/examples/shapes/tools/selection-ui
+//https://tldraw.dev/examples/shapes/tools/shape-with-tldraw-styles
+//https://tldraw.dev/examples/shapes/tools/shape-with-custom-styles
+
 import { type TLPointerEventInfo, Vec } from 'tldraw'
 import { Vector2 } from 'three'
 
@@ -114,6 +119,7 @@ static id = 'multiSegmentLine';
     const { editor } = this
     const selectedShapes = editor.getSelectedShapes()
     console.log('onEnter', this, selectedShapes)
+    this.shapeId = undefined
   }
 
   override onKeyDown = (info: TLKeyboardEventInfo) => {
@@ -130,7 +136,7 @@ static id = 'multiSegmentLine';
     //todo wrap with editor.history.batch
     if (!this.shapeId) {
       // Create a new shape if none is active
-      const newShapeId = createShapeId('multiSegmentLine')
+      const newShapeId = createShapeId(`multiSegmentLine-${Date.now()}`)
       console.log('multiSegmentLineTool onPointerDown creating new shape', newShapeId)
       editor.createShape({
         type: 'multiSegmentLine',
