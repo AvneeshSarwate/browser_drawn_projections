@@ -85,7 +85,19 @@ export class MultiSegmentLineUtil extends ShapeUtil<MultiSegmentLineShape> {
   }
 
   override onResize = (shape: MultiSegmentLineShape, info: TLResizeInfo<MultiSegmentLineShape>) => {
+    const next = structuredClone(info.initialShape)
+    const {minX, minY, maxX, maxY} = info.initialBounds
+    const {scaleX, scaleY, handle} = info
+
+    //todo - whether you use min/max xy depends on whether the handle is top/bottom or left/right
+
+    const scaledPoints = next.props.points.map((p) => ({
+      x: minX + (p.x-minX) * scaleX,
+      y: minY + (p.y-minY) * scaleY
+    }))
+    next.props.points = scaledPoints
     console.log('onResize', shape, info)
+    return next
   }
 
   // Render the outline of the shape when selected
