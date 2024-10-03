@@ -89,14 +89,15 @@ export class MultiSegmentLineUtil extends ShapeUtil<MultiSegmentLineShape> {
     const {minX, minY, maxX, maxY} = info.initialBounds
     const {scaleX, scaleY, handle} = info
 
-    //todo - whether you use min/max xy depends on whether the handle is top/bottom or left/right
+    const x = handle.includes('right') ? minX : maxX
+    const y = handle.includes('bottom') ? minY : maxY
 
     const scaledPoints = next.props.points.map((p) => ({
-      x: minX + (p.x-minX) * scaleX,
-      y: minY + (p.y-minY) * scaleY
+      x: x + (p.x-x) * scaleX,
+      y: y + (p.y-y) * scaleY
     }))
     next.props.points = scaledPoints
-    console.log('onResize', shape, info)
+    console.log('onResize', info.handle)
     return next
   }
 
