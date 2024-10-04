@@ -6,7 +6,7 @@ import { CanvasPaint, FeedbackNode, Passthru, type ShaderEffect } from '@/render
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
-import { getEllipseShapes, getFreehandShapes, p5FreehandTldrawRender } from './tldrawWrapperPlain';
+import { getEllipseShapes, getFreehandShapes, getMultiSegmentLineShapes, p5FreehandTldrawRender } from './tldrawWrapperPlain';
 import { HorizontalBlur, LayerBlend, Transform, VerticalBlur } from '@/rendering/customFX';
 import AutoUI from '@/components/AutoUI.vue';
 import type { Editor } from 'tldraw';
@@ -115,6 +115,20 @@ onMounted(() => {
             p5i.rotate(ellipse.rotation)
             p5i.scale(ellipse.xScale, ellipse.yScale)
             p5i.ellipse(0, 0, ellipse.w, ellipse.h)
+            p5i.pop()
+          }
+
+          const multiSegmentLineMap = getMultiSegmentLineShapes(appState.tldrawEditor)
+
+          for (const [id, shape] of multiSegmentLineMap) {
+            p5i.push()
+            p5i.noFill()
+            p5i.stroke(255)
+            p5i.beginShape()
+            for (const pt of shape) {
+              p5i.vertex(pt.x, pt.y)
+            }
+            p5i.endShape()
             p5i.pop()
           }
 

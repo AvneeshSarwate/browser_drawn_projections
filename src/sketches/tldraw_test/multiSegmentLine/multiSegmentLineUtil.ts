@@ -14,7 +14,7 @@ import {
 import * as React from 'react'
 
 // Define the shape type with props
-type MultiSegmentLineShape = TLBaseShape<
+export type MultiSegmentLineShape = TLBaseShape<
   'multiSegmentLine',
   {
     points: { x: number; y: number }[]

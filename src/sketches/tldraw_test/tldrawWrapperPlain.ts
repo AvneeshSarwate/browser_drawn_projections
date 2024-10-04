@@ -10,7 +10,7 @@ import {
 } from 'tldraw'
 import 'tldraw/tldraw.css'
 import type p5 from 'p5';
-import { MultiSegmentLineIcon, MultiSegmentLineTool, MultiSegmentLineUtil, components, uiOverrides } from './multiSegmentLine/multiSegmentLineUtil';
+import { MultiSegmentLineIcon, MultiSegmentLineTool, MultiSegmentLineUtil, components, uiOverrides, type MultiSegmentLineShape } from './multiSegmentLine/multiSegmentLineUtil';
 
 interface MyTldrawWrapperProps {
   onEditorReady: (editor: Editor) => void
@@ -100,7 +100,7 @@ function cameraTransform(editor: Editor): number[][] {
   return multiplyMatrices(scaleMatrix, translationMatrix)
 }
 
-function shapeTransform(shape: TLDrawShape): number[][] {
+function shapeTransform(shape: {x: number, y: number, rotation: number}): number[][] {
   const translationMatrix = [
     [1, 0, shape.x],
     [0, 1, shape.y],
@@ -134,6 +134,29 @@ export function getFreehandShapes(editor: Editor) {
           const transformedPt = applyMatrix(totalTransform, point)
           shapePts.push(transformedPt)
         }
+      }
+
+      shapes.set(shape.id, shapePts)
+    }
+  }
+
+  return shapes
+}
+
+export function getMultiSegmentLineShapes(editor: Editor) {
+  const shapes: Map<string, {x: number, y: number}[]> = new Map()
+  const renderingShapes = editor.getRenderingShapes()
+
+  for (const { shape, opacity, util } of renderingShapes) {
+    if (editor.isShapeOfType<MultiSegmentLineShape>(shape, 'multiSegmentLine')) {
+      const shapePts: {x: number, y: number}[] = []
+
+      const totalTransform = multiplyMatrices(cameraTransform(editor), shapeTransform(shape))
+
+      const points = shape.props.points
+      for (const point of points) {
+        const transformedPt = applyMatrix(totalTransform, point)
+        shapePts.push(transformedPt)
       }
 
       shapes.set(shape.id, shapePts)
