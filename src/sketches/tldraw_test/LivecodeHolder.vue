@@ -5,7 +5,7 @@ import { inject, onMounted, onUnmounted, ref } from 'vue';
 import { CanvasPaint, FeedbackNode, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
-import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
+import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri, now } from '@/channels/channels';
 import { getEllipseShapes, getFreehandShapes, getMultiSegmentLineShapes, p5FreehandTldrawRender } from './tldrawWrapperPlain';
 import { HorizontalBlur, LayerBlend, Transform, VerticalBlur } from '@/rendering/customFX';
 import AutoUI from '@/components/AutoUI.vue';
@@ -28,9 +28,11 @@ const clearDrawFuncs = () => {
 
 const drawParams = ref({
   showLines: true,
-  showCircles: false, 
-  showConnectors: false
+  showCircles: true, 
+  showConnectors: true
 })
+
+const rand = (n: number) => sinN(n*1323)
 
 onMounted(() => {
   try {
@@ -75,6 +77,7 @@ onMounted(() => {
           })
 
           const shapeCirclePts: {x: number, y: number}[] = []
+          let randSeed = 1
           for (const shape of shapes) {
             p5i.noFill()
             p5i.stroke(255)
@@ -86,8 +89,14 @@ onMounted(() => {
               p5i.endShape()
             }
 
-            const shapePt = shape[Math.floor((drawTicks / 4 % shape.length) )]
-            shapeCirclePts.push(shapePt)
+            randSeed = rand(randSeed)
+            const randSpeed = 1 + randSeed * 0.1
+            const shapePt = shape[Math.floor( (sinN(now() * randSpeed * 0.1) * shape.length)*0.999 )]
+            if(shapePt) {
+              shapeCirclePts.push(shapePt)
+            } else {
+              console.warn("no shape point")
+            }
 
             if (drawParams.value.showCircles) {
               p5i.fill(255, 0, 0)
@@ -129,7 +138,6 @@ onMounted(() => {
               p5i.vertex(pt.x, pt.y)
             }
             p5i.endShape()
-            p5i.pop()
           }
 
           p5i.pop()
