@@ -10,6 +10,8 @@
     },
     "resolveJsonModule": true,
     "jsx": "react-jsx",
+    "noImplicitReturns": false,
+    "strict": false
     // "lib": ["DOM"]
   }
 }

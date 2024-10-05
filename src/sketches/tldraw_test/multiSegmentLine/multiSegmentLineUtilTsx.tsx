@@ -1,13 +1,9 @@
 import {
   createShapeId,
-  DefaultStylePanel,
-  DefaultStylePanelContent,
   ShapeUtil,
   StateNode,
   StyleProp,
   T,
-  useEditor,
-  useRelevantStyles,
   type TLBaseShape,
   type TLClickEventInfo,
   type TLHandle,
@@ -19,59 +15,22 @@ import {
 } from 'tldraw'
 import * as React from 'react'
 
-const RCE = React.createElement
-
-const customColorStyle = StyleProp.defineEnum('example:rating', {
-  defaultValue: 'red',
-  values: ['red', 'blue', 'green']
+const colorStyle = StyleProp.defineEnum('example:rating', {
+	defaultValue: 'red',
+	values: ['red', 'blue', 'green'],
 })
 
 // [2]
-type CustomColorStyle = T.TypeOf<typeof customColorStyle>
+type ColorStyle = T.TypeOf<typeof colorStyle>
 
-export function CustomStylePanel() {
-  const editor = useEditor()
-  const styles = useRelevantStyles()
-  if (!styles) return null
 
-  const color = styles.get(customColorStyle)
-
-  console.log('CustomStylePanel', color, styles)
-  return RCE(
-    DefaultStylePanel,
-    null,
-    RCE(DefaultStylePanelContent, { styles: styles }),
-    color !== undefined
-      ? RCE(
-          'div',
-          null,
-          RCE(
-            'select',
-            {
-              style: { width: '100%', padding: 4 },
-              value: color.type === 'mixed' ? '' : color.value,
-              onChange: (e) => {
-                console.log('CustomStylePanel onChange', e.currentTarget.value)
-                const value = customColorStyle.validate(e.currentTarget.value)
-                editor.setStyleForSelectedShapes(customColorStyle, value)
-              }
-            },
-            color.type === 'mixed' ? RCE('option', { value: '' }, 'Mixed') : null,
-            RCE('option', { value: 'red' }, 'Red'),
-            RCE('option', { value: 'blue' }, 'Blue'),
-            RCE('option', { value: 'green' }, 'Green')
-          )
-        )
-      : null
-  )
-}
 
 // Define the shape type with props
 export type MultiSegmentLineShape = TLBaseShape<
   'multiSegmentLine',
   {
-    points: { x: number; y: number }[]
-    color: CustomColorStyle
+    points: { x: number; y: number }[],
+    color: ColorStyle
   }
 >
 
@@ -90,11 +49,6 @@ function getPolylineBounds(points: { x: number; y: number }[]): Polyline2d {
 export class MultiSegmentLineUtil extends ShapeUtil<MultiSegmentLineShape> {
   static type = 'multiSegmentLine'
 
-  static override props = {
-    points: T.arrayOf(T.object({ x: T.number, y: T.number })),
-    color: customColorStyle
-  }
-
   // Default shape properties
   getDefaultProps(): MultiSegmentLineShape['props'] {
     return {
@@ -108,30 +62,25 @@ export class MultiSegmentLineUtil extends ShapeUtil<MultiSegmentLineShape> {
 
   // Render the shape as an SVG polyline
   component(shape: MultiSegmentLineShape) {
-    const pointsString = shape.props.points.map((p) => `${p.x},${p.y}`).join(' ')
-    return RCE(
-      //todo - some how add "tl-svg-container" on the svg div to get it to show up
-      'svg',
-      { className: 'tl-svg-container' },
-      null,
-      RCE('polyline', {
-        points: pointsString,
-        stroke: 'black',
-        strokeWidth: 3.5,
-        fill: 'none'
-      }),
-      //use drag/double-click gestures directly on points to resize/delete points?
-      ...shape.props.points.map((p, i) =>
-        RCE('circle', {
-          cx: p.x,
-          cy: p.y,
-          r: 3,
-          fill: shape.props.color,
-          id: `point-${i}`
-        })
-      )
-    )
+    const pointsString = shape.props.points.map((p) => `${p.x},${p.y}`).join(' ');
+  
+    return (
+      <svg class="tl-svg-container">
+        <polyline points={pointsString} stroke="black" stroke-width={3.5} fill="none" />
+        {shape.props.points.map((p, i) => (
+          <circle
+            key={i}
+            cx={p.x}
+            cy={p.y}
+            r={3}
+            fill={shape.props.color}
+            id={`point-${i}`}
+          />
+        ))}
+      </svg>
+    );
   }
+  
 
   onHandleDragStart(shape: MultiSegmentLineShape, handle: TLHandle) {
     console.log('onHandleDragStart', shape, handle)
@@ -149,15 +98,15 @@ export class MultiSegmentLineUtil extends ShapeUtil<MultiSegmentLineShape> {
 
   override onResize = (shape: MultiSegmentLineShape, info: TLResizeInfo<MultiSegmentLineShape>) => {
     const next = structuredClone(info.initialShape)
-    const { minX, minY, maxX, maxY } = info.initialBounds
-    const { scaleX, scaleY, handle } = info
+    const {minX, minY, maxX, maxY} = info.initialBounds
+    const {scaleX, scaleY, handle} = info
 
     const x = handle.includes('right') ? minX : maxX
     const y = handle.includes('bottom') ? minY : maxY
 
     const scaledPoints = next.props.points.map((p) => ({
-      x: x + (p.x - x) * scaleX,
-      y: y + (p.y - y) * scaleY
+      x: x + (p.x-x) * scaleX,
+      y: y + (p.y-y) * scaleY
     }))
     next.props.points = scaledPoints
     console.log('onResize', info.handle)
@@ -166,15 +115,18 @@ export class MultiSegmentLineUtil extends ShapeUtil<MultiSegmentLineShape> {
 
   // Render the outline of the shape when selected
   indicator(shape: MultiSegmentLineShape) {
-    const pointsString = shape.props.points.map((p) => `${p.x},${p.y}`).join(' ')
-    return RCE('polyline', {
-      points: pointsString,
-      stroke: 'blue',
-      fill: 'none',
-      strokeDasharray: '4',
-      strokeWidth: 3.5
-    })
+    const pointsString = shape.props.points.map((p) => `${p.x},${p.y}`).join(' ');
+  
+    return (
+      <polyline
+        points={pointsString}
+        stroke="blue"
+        fill="none"
+        stroke-dasharray="4"
+      />
+    );
   }
+  
 }
 
 // add ways to customize shape/metadata
@@ -186,7 +138,7 @@ import { type TLPointerEventInfo, Vec } from 'tldraw'
 import { Vector2 } from 'three'
 
 export class MultiSegmentLineTool extends StateNode {
-  static id = 'multiSegmentLine'
+static id = 'multiSegmentLine';
   shapeId?: TLShapeId
   isDragging = false
   draggedPointIndex: number | null = null
@@ -267,18 +219,15 @@ export class MultiSegmentLineTool extends StateNode {
   }
 }
 
-// Custom icon using RCE
+// Custom icon using React.createElement
 export function MultiSegmentLineIcon() {
-  return RCE(
-    'svg',
-    { viewBox: '0 0 24 24', width: 24, height: 24, fill: 'none', stroke: 'currentColor' },
-    RCE('polyline', {
-      points: '4,6 12,12 20,18',
-      strokeWidth: 2,
-      strokeLinecap: 'round'
-    })
-  )
-}
+    return (
+      <svg viewBox="0 0 24 24" width={24} height={24} fill="none" stroke="currentColor">
+        <polyline points="4,6 12,12 20,18" stroke-width={2} stroke-linecap="round" />
+      </svg>
+    );
+  }
+  
 
 import {
   DefaultKeyboardShortcutsDialog,
@@ -311,33 +260,36 @@ export const uiOverrides: TLUiOverrides = {
 
 // Define the custom UI components (toolbar and keyboard shortcuts dialog)
 export const components: TLComponents = {
-  Toolbar: function (props) {
-    const tools = useTools()
-    const multiSegmentTool = tools['multiSegmentLine']
-    const isMultiSegmentLineSelected = multiSegmentTool
-      ? useIsToolSelected(multiSegmentTool)
-      : false
-    console.log('multiSegmentTool', multiSegmentTool, tools)
-    console.log('isMultiSegmentLineSelected', isMultiSegmentLineSelected)
-    return RCE(
-      DefaultToolbar,
-      props,
-      multiSegmentTool
-        ? RCE(TldrawUiMenuItem, {
-            ...multiSegmentTool,
-            isSelected: isMultiSegmentLineSelected
-          })
-        : null, // Only render if the tool exists
-      RCE(DefaultToolbarContent, null)
-    )
-  },
-  KeyboardShortcutsDialog: function (props) {
-    const tools = useTools()
-    return RCE(
-      DefaultKeyboardShortcutsDialog,
-      props,
-      RCE(TldrawUiMenuItem, tools['multiSegmentLine']),
-      RCE(DefaultKeyboardShortcutsDialogContent, null)
-    )
-  }
-}
+    Toolbar: function (props) {
+      const tools = useTools();
+      const multiSegmentTool = tools['multiSegmentLine'];
+      const isMultiSegmentLineSelected = multiSegmentTool
+        ? useIsToolSelected(multiSegmentTool)
+        : false;
+      
+      console.log('multiSegmentTool', multiSegmentTool, tools);
+      console.log('isMultiSegmentLineSelected', isMultiSegmentLineSelected);
+  
+      return (
+        <DefaultToolbar {...props}>
+          {multiSegmentTool ? (
+            <TldrawUiMenuItem
+              {...multiSegmentTool}
+              isSelected={isMultiSegmentLineSelected}
+            />
+          ) : null}
+          <DefaultToolbarContent />
+        </DefaultToolbar>
+      );
+    },
+    KeyboardShortcutsDialog: function (props) {
+      const tools = useTools();
+      return (
+        <DefaultKeyboardShortcutsDialog {...props}>
+          <TldrawUiMenuItem {...tools['multiSegmentLine']} />
+          <DefaultKeyboardShortcutsDialogContent />
+        </DefaultKeyboardShortcutsDialog>
+      );
+    },
+  };
+  

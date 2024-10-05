@@ -10,7 +10,7 @@ import {
 } from 'tldraw'
 import 'tldraw/tldraw.css'
 import type p5 from 'p5';
-import { MultiSegmentLineIcon, MultiSegmentLineTool, MultiSegmentLineUtil, components, uiOverrides, type MultiSegmentLineShape } from './multiSegmentLine/multiSegmentLineUtil';
+import { MultiSegmentLineIcon, MultiSegmentLineTool, MultiSegmentLineUtil, components, uiOverrides, type MultiSegmentLineShape, CustomStylePanel } from './multiSegmentLine/multiSegmentLineUtil';
 
 interface MyTldrawWrapperProps {
   onEditorReady: (editor: Editor) => void
@@ -32,19 +32,20 @@ export const MyTldrawWrapper: React.FC<MyTldrawWrapperProps> = ({
 
   return (
     // React.createElement('div', { className: 'tldraw__editor' },
-    React.createElement(Tldraw, {
-      persistenceKey: 'example',
-      components: {
-        Background: () => React.createElement(CustomRenderer, { onEditorReady }),
-        Canvas: DefaultCanvas,
-        Toolbar: components.Toolbar
-      },
-      shapeUtils: [MultiSegmentLineUtil],
-      tools: [MultiSegmentLineTool],
-      overrides: [uiOverrides],
-    })
-    // )
-  )
+      React.createElement(Tldraw, {
+        persistenceKey: 'example',
+        components: {
+          Background: () => React.createElement(CustomRenderer, { onEditorReady }),
+          Canvas: DefaultCanvas,
+          Toolbar: components.Toolbar,
+          StylePanel: CustomStylePanel
+        },
+        shapeUtils: [MultiSegmentLineUtil],
+        tools: [MultiSegmentLineTool],
+        overrides: [uiOverrides],
+      })
+    )
+  // )
 }
 
 export function RendererWrapper(props: MyTldrawWrapperProps) {
