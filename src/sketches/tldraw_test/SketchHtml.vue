@@ -88,12 +88,16 @@ onMounted(() => {
     // const tldrawInstance = <MyTldrawWrapper onEditorReady={handleEditorReady} />;
     root.render(MyTldrawWrapper({ onEditorReady: handleEditorReady }));
     reactRoot.value.onmouseup = () => {
-      console.log("mouse up")
+      // console.log("mouse up")
       appState.tldrawInteractionCount++
       selectedShapeIds.value = appState.tldrawEditor?.getSelectedShapeIds() ?? []
     }
     reactRoot.value.onmouseout = () => {
       appState.tldrawEditor?.blur()
+    }
+    reactRoot.value.onmousedown = () => {
+      appState.tldrawEditor.focus()
+      console.log('focus editor attempt', appState.tldrawEditor.getIsFocused())
     }
   }
 });

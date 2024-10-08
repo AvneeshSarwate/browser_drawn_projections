@@ -42,7 +42,7 @@ export const MyTldrawWrapper: React.FC<MyTldrawWrapperProps> = ({
         },
         shapeUtils: [MultiSegmentLineUtil],
         tools: [MultiSegmentLineTool],
-        overrides: [uiOverrides],
+        overrides: [uiOverrides]
       })
     )
   // )
@@ -53,7 +53,7 @@ export function RendererWrapper(props: MyTldrawWrapperProps) {
 }
 
 export function CustomRenderer(props: MyTldrawWrapperProps) {
-  console.log('CustomRenderer')
+  // console.log('CustomRenderer')
   const editor = useEditor()
   const rCanvas = useRef<HTMLCanvasElement>(null)
   props.onEditorReady(editor);

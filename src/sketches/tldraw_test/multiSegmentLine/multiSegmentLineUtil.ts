@@ -57,7 +57,7 @@ export function CustomStylePanel() {
   const spline = styles.get(splineStyle)
 
   //can use this id to add type label into style panel
-  console.log('CustomStylePanel', boolStyle, boolStyle.id, bool)
+  // console.log('CustomStylePanel', boolStyle, boolStyle.id, bool)
   
   return RCE(
     DefaultStylePanel,
@@ -73,7 +73,6 @@ export function CustomStylePanel() {
               style: { width: '100%', padding: 4 },
               value: color.type === 'mixed' ? '' : color.value,
               onChange: (e) => {
-                console.log('CustomStylePanel onChange', e.currentTarget.value)
                 const value = customColorStyle.validate(e.currentTarget.value)
                 editor.setStyleForSelectedShapes(customColorStyle, value)
               }
@@ -90,7 +89,6 @@ export function CustomStylePanel() {
           'div',
           null,
           RCE('input', { type: 'checkbox', checked: bool.type === 'mixed' ? false : bool.value, onChange: (e) => {
-            console.log('CustomStylePanel bool change', e.currentTarget.checked)
             editor.setStyleForSelectedShapes(boolStyle, e.currentTarget.checked)
           } })
         )
@@ -149,6 +147,8 @@ export class MultiSegmentLineUtil extends ShapeUtil<MultiSegmentLineShape> {
     spline: splineStyle
   }
 
+  override canEdit = () => true
+
   // Default shape properties
   getDefaultProps(): MultiSegmentLineShape['props'] {
     return {
@@ -162,8 +162,13 @@ export class MultiSegmentLineUtil extends ShapeUtil<MultiSegmentLineShape> {
     }
   }
 
+  
+
   // Render the shape as an SVG polyline
   component(shape: MultiSegmentLineShape) {
+    const isEditing = this.editor.getEditingShapeId() === shape.id
+    console.log('component', isEditing)
+
     const pointsString = shape.props.points.map((p) => `${p.x},${p.y}`).join(' ')
     const points = shape.props.points
     const curvePointsString = `M${points[0].x},${points[0].y}` + points.slice(1).map((p, i) => {
@@ -217,15 +222,23 @@ export class MultiSegmentLineUtil extends ShapeUtil<MultiSegmentLineShape> {
             cy: p.y,
             r: 8,
             fill: shape.props.color,
-            id: `point-${i}`
+            id: `point-${i}`,
+            pointerEvents: 'all'
           })
         )
       )
     }
   }
 
-  onHandleDragStart(shape: MultiSegmentLineShape, handle: TLHandle) {
-    console.log('onHandleDragStart', shape, handle)
+  
+
+
+  override onHandleDrag = (shape: MultiSegmentLineShape, info: {
+    handle: TLHandle;
+    initial?: MultiSegmentLineShape;
+    isPrecise: boolean;
+  }) => {
+    console.log('onHandleDrag', shape, info.handle);
   }
   // Get the geometry for hit detection
   getGeometry(shape: MultiSegmentLineShape) {
@@ -251,7 +264,6 @@ export class MultiSegmentLineUtil extends ShapeUtil<MultiSegmentLineShape> {
       y: y + (p.y - y) * scaleY
     }))
     next.props.points = scaledPoints
-    console.log('onResize', info.handle)
     return next
   }
 
@@ -345,6 +357,7 @@ export class MultiSegmentLineTool extends StateNode {
   shapeId?: TLShapeId
   isDragging = false
   draggedPointIndex: number | null = null
+  mousePos = {x: 0, y: 0}
 
   override onEnter = () => {
     //use whether a shape is selected to determine whether a click creates a new shape or adds a point to an existing shape
@@ -356,6 +369,36 @@ export class MultiSegmentLineTool extends StateNode {
 
   override onKeyDown = (info: TLKeyboardEventInfo) => {
     console.log('onKeyDown', info)
+    //if key is d start dragging
+    if (info.key === 'd') {
+      this.isDragging = true
+      //find the closest point to the cursor
+      const shape = this.editor.getShape<MultiSegmentLineShape>(this.shapeId!)!
+
+      //todo change this to closest point
+      const pointIndex = shape.props.points.findIndex((p) => Vec.Dist(p, this.mousePos!) < 10)
+      
+      if (pointIndex !== -1) {
+        this.draggedPointIndex = pointIndex
+      } else {
+        this.draggedPointIndex = null
+        console.log('no point found')
+      }
+    }
+  }
+
+  override onPointerMove = (info: TLPointerEventInfo) => {
+    // console.log('onPointerMove', this.isDragging, this.draggedPointIndex)
+
+    //convert to page coordinates
+    const pagePoint = this.editor.screenToPage(info.point)
+    this.mousePos = {x: pagePoint.x, y: pagePoint.y}
+    if (this.isDragging && this.draggedPointIndex !== null) {
+      const shape = this.editor.getShape<MultiSegmentLineShape>(this.shapeId!)!
+      const newPoints = [...shape.props.points]
+      newPoints[this.draggedPointIndex] = pagePoint
+      this.editor.updateShapes([{ ...shape, props: { points: newPoints } }])
+    }
   }
 
   // Handle pointer down to either create a new point or start dragging an existing point
@@ -364,6 +407,13 @@ export class MultiSegmentLineTool extends StateNode {
     const screenPoint = { x: info.point.x, y: info.point.y }
     const pagePointObj = editor.screenToPage(screenPoint)
     const pagePoint = { x: pagePointObj.x, y: pagePointObj.y }
+
+    const target = info.target
+    console.log('onPointerDown', info.target)
+
+    // editor.on('event', (e) => {
+    //   console.log("tldraw move", e)
+    // })
 
     //todo wrap with editor.history.batch
     if (!this.shapeId) {
@@ -387,16 +437,16 @@ export class MultiSegmentLineTool extends StateNode {
     }
   }
 
-  // Handle pointer move to drag points
-  onPointerMove = (info: TLPointerEventInfo) => {
-    //todo wrap with editor.history.batch
-    if (this.shapeId && this.isDragging && this.draggedPointIndex !== null) {
-      const shape = this.editor.getShape<MultiSegmentLineShape>(this.shapeId)!
-      const newPoints = [...shape.props.points]
-      newPoints[this.draggedPointIndex] = { x: info.point.x, y: info.point.y }
-      this.editor.updateShapes([{ ...shape, props: { points: newPoints } }])
-    }
-  }
+  // // Handle pointer move to drag points
+  // onPointerMove = (info: TLPointerEventInfo) => {
+  //   //todo wrap with editor.history.batch
+  //   if (this.shapeId && this.isDragging && this.draggedPointIndex !== null) {
+  //     const shape = this.editor.getShape<MultiSegmentLineShape>(this.shapeId)!
+  //     const newPoints = [...shape.props.points]
+  //     newPoints[this.draggedPointIndex] = { x: info.point.x, y: info.point.y }
+  //     this.editor.updateShapes([{ ...shape, props: { points: newPoints } }])
+  //   }
+  // }
 
   onPointerUp = () => {
     this.isDragging = false
@@ -472,8 +522,6 @@ export const components: TLComponents = {
     const isMultiSegmentLineSelected = multiSegmentTool
       ? useIsToolSelected(multiSegmentTool)
       : false
-    console.log('multiSegmentTool', multiSegmentTool, tools)
-    console.log('isMultiSegmentLineSelected', isMultiSegmentLineSelected)
     return RCE(
       DefaultToolbar,
       props,
