@@ -10,10 +10,12 @@ import {
   useRelevantStyles,
   type TLBaseShape,
   type TLClickEventInfo,
+  type TLEventInfo,
   type TLHandle,
   type TLKeyboardEvent,
   type TLKeyboardEventInfo,
   type TLOnResizeHandler,
+  type TLPinchEventInfo,
   type TLResizeInfo,
   type TLShapeId
 } from 'tldraw'
@@ -359,18 +361,27 @@ export class MultiSegmentLineTool extends StateNode {
   draggedPointIndex: number | null = null
   mousePos = {x: 0, y: 0}
 
+
+
   override onEnter = () => {
     //use whether a shape is selected to determine whether a click creates a new shape or adds a point to an existing shape
     const { editor } = this
     const selectedShapes = editor.getSelectedShapes()
-    console.log('onEnter', this, selectedShapes)
+    console.log('onEnter', this, selectedShapes, editor.getIsFocused())
+    editor.on('event', (e) => {
+      if(e.name === 'key_down' || e.type === 'keyboard') {
+        console.log('tldraw event', e)
+      } else {
+        console.log('tldraw event', "other")
+      }
+    })
     this.shapeId = undefined
   }
 
   override onKeyDown = (info: TLKeyboardEventInfo) => {
     console.log('onKeyDown', info)
     //if key is d start dragging
-    if (info.key === 'd') {
+    if (info.key === 'g') {
       this.isDragging = true
       //find the closest point to the cursor
       const shape = this.editor.getShape<MultiSegmentLineShape>(this.shapeId!)!
