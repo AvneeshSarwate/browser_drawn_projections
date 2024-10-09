@@ -133,6 +133,7 @@ export type MultiSegmentLineShape = TLBaseShape<
     color: CustomColorStyle;
     closed: BoolStyle;
     spline: SplineStyle;
+    isEditing: boolean;
   }
 >;
 
@@ -156,6 +157,7 @@ export class MultiSegmentLineUtil extends ShapeUtil<MultiSegmentLineShape> {
     color: customColorStyle,
     closed: boolStyle,
     spline: splineStyle,
+    isEditing: T.boolean,
   };
 
   override canEdit = () => true;
@@ -170,12 +172,14 @@ export class MultiSegmentLineUtil extends ShapeUtil<MultiSegmentLineShape> {
       color: "red",
       closed: false,
       spline: "linear",
+      isEditing: false,
     };
   }
 
   // Render the shape as an SVG polyline
   component(shape: MultiSegmentLineShape) {
-    const isEditing = this.editor.getEditingShapeId() === shape.id;
+    // const isEditing = this.editor.getEditingShapeId() === shape.id;
+    const isEditing = shape.props.isEditing;
     // console.log("component", isEditing);
 
     const pointsString = shape.props.points
@@ -214,7 +218,7 @@ export class MultiSegmentLineUtil extends ShapeUtil<MultiSegmentLineShape> {
             cx: p.x,
             cy: p.y,
             r: 8,
-            fill: shape.props.color,
+            fill: isEditing ? "red" : "black",
             id: `point-${i}`,
           })
         )
@@ -239,7 +243,7 @@ export class MultiSegmentLineUtil extends ShapeUtil<MultiSegmentLineShape> {
             cx: p.x,
             cy: p.y,
             r: 8,
-            fill: shape.props.color,
+            fill: isEditing ? "red" : "black",
             id: `point-${i}`,
             pointerEvents: "all",
           })
@@ -394,6 +398,14 @@ export class MultiSegmentLineTool extends StateNode {
     //   }
     // });
     this.shapeId = selectedShapes.length > 0 ? selectedShapes[0].id : undefined;
+    if(this.shapeId) {
+      const shape = editor.getShape<MultiSegmentLineShape>(this.shapeId)!;
+      editor.updateShapes([{
+      id: this.shapeId,
+      type: "multiSegmentLine",
+        props: {...shape.props, isEditing: true},
+      }])
+    }
   };
 
   override onKeyDown = (info: TLKeyboardEventInfo) => {
@@ -463,7 +475,7 @@ export class MultiSegmentLineTool extends StateNode {
       );
       editor.createShape({
         type: "multiSegmentLine",
-        props: { points: [pagePoint] },
+        props: { points: [pagePoint], isEditing: true },
         id: newShapeId,
       });
       this.shapeId = newShapeId;
@@ -515,7 +527,15 @@ export class MultiSegmentLineTool extends StateNode {
   //   }
   // }
 
-  onEscape() {
+  override onExit() {
+    if(this.shapeId) {
+      const shape = this.editor.getShape<MultiSegmentLineShape>(this.shapeId)!;
+      this.editor.updateShapes([{
+        id: this.shapeId,
+        type: "multiSegmentLine",
+        props: {...shape.props, isEditing: false},
+      }])
+    }
     this.shapeId = undefined;
     this.isDragging = false;
     this.draggedPointIndex = null;
