@@ -420,10 +420,11 @@ export class MultiSegmentLineTool extends StateNode {
     //if key is d start dragging
     if (info.key === "q") {
       this.isDragging = true;
+      this.editor.markHistoryStoppingPoint();
       const shape = this.editor.getShape<MultiSegmentLineShape>(this.shapeId!)!;
-
+      const transformedMousePos = {x: this.mousePos.x - shape.x, y: this.mousePos.y - shape.y}
       const pointIndex = shape.props.points.findIndex(
-        (p) => Vec.Dist(p, this.mousePos!) < 10
+        (p) => Vec.Dist(p, transformedMousePos) < 10
       );
 
       if (pointIndex !== -1) {
@@ -441,6 +442,7 @@ export class MultiSegmentLineTool extends StateNode {
       const pointIndex = shape.props.points.findIndex(p => Vec.Dist(p, transformedMousePos) < 10);
       if (pointIndex !== -1) {
         const newPoints = shape.props.points.filter((_, i) => i !== pointIndex);
+        this.editor.markHistoryStoppingPoint();
         this.editor.updateShapes([{
           id: this.shapeId,
           type: "multiSegmentLine",
@@ -465,6 +467,7 @@ export class MultiSegmentLineTool extends StateNode {
       if (pointIndex !== -1) {
         const newPoints = [...shape.props.points];
         newPoints.splice(pointIndex + 1, 0, transformedMousePos);
+        this.editor.markHistoryStoppingPoint();
         this.editor.updateShapes([{
           id: this.shapeId,
           type: "multiSegmentLine",
@@ -539,11 +542,12 @@ export class MultiSegmentLineTool extends StateNode {
         if (pointIndex !== -1) {
           this.draggedPointIndex = pointIndex;
           this.isDragging = true;
+          this.editor.markHistoryStoppingPoint();
           return;
         }
 
 
-
+        editor.markHistoryStoppingPoint();
         console.log("adding point to shape", shape, pagePoint);
         // Add the new point to the current shape
         editor.updateShapes([
@@ -564,12 +568,14 @@ export class MultiSegmentLineTool extends StateNode {
 
   override onExit() {
     if(this.shapeId) {
-      const shape = this.editor.getShape<MultiSegmentLineShape>(this.shapeId)!;
-      this.editor.updateShapes([{
-        id: this.shapeId,
-        type: "multiSegmentLine",
-        props: {...shape.props, isEditing: false},
-      }])
+      const shape = this.editor.getShape<MultiSegmentLineShape>(this.shapeId);
+      if(shape) {
+        this.editor.updateShapes([{
+          id: this.shapeId,
+          type: "multiSegmentLine",
+          props: {...shape.props, isEditing: false},
+        }])
+      }
     }
     this.shapeId = undefined;
     this.isDragging = false;
