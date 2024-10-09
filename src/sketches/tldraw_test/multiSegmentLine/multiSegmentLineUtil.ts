@@ -384,7 +384,7 @@ function pointToLineSegmentDistance(point: {x: number, y: number}, lineStart: {x
   const denominator = Math.sqrt((y2 - y1) ** 2 + (x2 - x1) ** 2);
   return numerator / denominator;
 }
-
+//todo - everywhere that uses transformedMousePos also needs to account for rotation
 export class MultiSegmentLineTool extends StateNode {
   static id = "multiSegmentLine";
   shapeId?: TLShapeId;
@@ -437,7 +437,8 @@ export class MultiSegmentLineTool extends StateNode {
     if(info.key === "w") {
       //if within 10px of a point, delete that point
       const shape = this.editor.getShape<MultiSegmentLineShape>(this.shapeId!)!;
-      const pointIndex = shape.props.points.findIndex(p => Vec.Dist(p, this.mousePos!) < 10);
+      const transformedMousePos = {x: this.mousePos.x - shape.x, y: this.mousePos.y - shape.y}
+      const pointIndex = shape.props.points.findIndex(p => Vec.Dist(p, transformedMousePos) < 10);
       if (pointIndex !== -1) {
         const newPoints = shape.props.points.filter((_, i) => i !== pointIndex);
         this.editor.updateShapes([{
@@ -449,20 +450,21 @@ export class MultiSegmentLineTool extends StateNode {
     }
 
     if(info.key === "y") {
-      //todo - this needs to account for translation of the shape (like adding points does)
 
       //if within 10 px of the line between two points, add a point there
       const shape = this.editor.getShape<MultiSegmentLineShape>(this.shapeId!)!;
       if(shape.props.points.length < 2) return;
+      const transformedMousePos = {x: this.mousePos.x - shape.x, y: this.mousePos.y - shape.y}
+
       const pointIndex = shape.props.points.findIndex((p, i) => {
         if(i === shape.props.points.length-1) return false
         const currentPoint = shape.props.points[i];
         const nextPoint = shape.props.points[i+1]
-        return pointToLineSegmentDistance(this.mousePos, currentPoint, nextPoint) < 10;
+        return pointToLineSegmentDistance(transformedMousePos, currentPoint, nextPoint) < 10;
       });
       if (pointIndex !== -1) {
         const newPoints = [...shape.props.points];
-        newPoints.splice(pointIndex + 1, 0, {x: this.mousePos.x, y: this.mousePos.y});
+        newPoints.splice(pointIndex + 1, 0, transformedMousePos);
         this.editor.updateShapes([{
           id: this.shapeId,
           type: "multiSegmentLine",
@@ -487,8 +489,10 @@ export class MultiSegmentLineTool extends StateNode {
     this.mousePos = { x: pagePoint.x, y: pagePoint.y };
     if (this.isDragging && this.draggedPointIndex !== null) {
       const shape = this.editor.getShape<MultiSegmentLineShape>(this.shapeId!)!;
+
       const newPoints = [...shape.props.points];
-      newPoints[this.draggedPointIndex] = {x: pagePoint.x, y: pagePoint.y};
+      const transformedMousePos = {x: pagePoint.x - shape.x, y: pagePoint.y - shape.y};
+      newPoints[this.draggedPointIndex] = transformedMousePos;
       this.editor.updateShapes([{ ...shape, props: { points: newPoints } }]);
     }
   };
@@ -530,7 +534,8 @@ export class MultiSegmentLineTool extends StateNode {
       
       if (shape) {
         //if within 10px of an existing point, have that be the selected point for dragging
-        const pointIndex = shape.props.points.findIndex(p => Vec.Dist(p, pagePoint) < 10);
+        const transformedMousePos = {x: pagePoint.x - shape.x, y: pagePoint.y - shape.y}
+        const pointIndex = shape.props.points.findIndex(p => Vec.Dist(p, transformedMousePos) < 10);
         if (pointIndex !== -1) {
           this.draggedPointIndex = pointIndex;
           this.isDragging = true;
@@ -540,13 +545,12 @@ export class MultiSegmentLineTool extends StateNode {
 
 
         console.log("adding point to shape", shape, pagePoint);
-        const shapePointInverseTranslate = {x: pagePoint.x - shape.x, y: pagePoint.y - shape.y}
         // Add the new point to the current shape
         editor.updateShapes([
           {
             id: shape.id,
             type: shape.type,
-            props: { points: [...shape.props.points, shapePointInverseTranslate] },
+            props: { points: [...shape.props.points, transformedMousePos] },
           },
         ]);
       }
