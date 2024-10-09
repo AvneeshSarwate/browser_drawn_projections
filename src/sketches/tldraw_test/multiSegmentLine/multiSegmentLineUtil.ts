@@ -202,7 +202,6 @@ export class MultiSegmentLineUtil extends ShapeUtil<MultiSegmentLineShape> {
 
     if (spline === "linear") {
       return RCE(
-        //todo - some how add "tl-svg-container" on the svg div to get it to show up
         "svg",
         { className: "tl-svg-container" },
         null,
@@ -378,6 +377,14 @@ function catmullRomToBezierClosed(points: { x: number; y: number }[]) {
   return d.join(" ");
 }
 
+function pointToLineSegmentDistance(point: {x: number, y: number}, lineStart: {x: number, y: number}, lineEnd: {x: number, y: number}) {
+  const x1 = lineStart.x, y1 = lineStart.y, x2 = lineEnd.x, y2 = lineEnd.y;
+  const px = point.x, py = point.y;
+  const numerator = Math.abs((y2 - y1) * px - (x2 - x1) * py + x2 * y1 - y2 * x1);
+  const denominator = Math.sqrt((y2 - y1) ** 2 + (x2 - x1) ** 2);
+  return numerator / denominator;
+}
+
 export class MultiSegmentLineTool extends StateNode {
   static id = "multiSegmentLine";
   shapeId?: TLShapeId;
@@ -413,10 +420,8 @@ export class MultiSegmentLineTool extends StateNode {
     //if key is d start dragging
     if (info.key === "q") {
       this.isDragging = true;
-      //find the closest point to the cursor
       const shape = this.editor.getShape<MultiSegmentLineShape>(this.shapeId!)!;
 
-      //todo change this to closest point
       const pointIndex = shape.props.points.findIndex(
         (p) => Vec.Dist(p, this.mousePos!) < 10
       );
@@ -426,6 +431,43 @@ export class MultiSegmentLineTool extends StateNode {
       } else {
         this.draggedPointIndex = null;
         console.log("no point found");
+      }
+    }
+
+    if(info.key === "w") {
+      //if within 10px of a point, delete that point
+      const shape = this.editor.getShape<MultiSegmentLineShape>(this.shapeId!)!;
+      const pointIndex = shape.props.points.findIndex(p => Vec.Dist(p, this.mousePos!) < 10);
+      if (pointIndex !== -1) {
+        const newPoints = shape.props.points.filter((_, i) => i !== pointIndex);
+        this.editor.updateShapes([{
+          id: this.shapeId,
+          type: "multiSegmentLine",
+          props: {...shape.props, points: newPoints},
+        }])
+      }
+    }
+
+    if(info.key === "y") {
+      //todo - this needs to account for translation of the shape (like adding points does)
+
+      //if within 10 px of the line between two points, add a point there
+      const shape = this.editor.getShape<MultiSegmentLineShape>(this.shapeId!)!;
+      if(shape.props.points.length < 2) return;
+      const pointIndex = shape.props.points.findIndex((p, i) => {
+        if(i === shape.props.points.length-1) return false
+        const currentPoint = shape.props.points[i];
+        const nextPoint = shape.props.points[i+1]
+        return pointToLineSegmentDistance(this.mousePos, currentPoint, nextPoint) < 10;
+      });
+      if (pointIndex !== -1) {
+        const newPoints = [...shape.props.points];
+        newPoints.splice(pointIndex + 1, 0, {x: this.mousePos.x, y: this.mousePos.y});
+        this.editor.updateShapes([{
+          id: this.shapeId,
+          type: "multiSegmentLine",
+          props: {...shape.props, points: newPoints},
+        }])
       }
     }
   };
@@ -515,17 +557,6 @@ export class MultiSegmentLineTool extends StateNode {
     this.isDragging = false;
     this.draggedPointIndex = null;
   }
-
-  // // Handle pointer move to drag points
-  // onPointerMove = (info: TLPointerEventInfo) => {
-  //   //todo wrap with editor.history.batch
-  //   if (this.shapeId && this.isDragging && this.draggedPointIndex !== null) {
-  //     const shape = this.editor.getShape<MultiSegmentLineShape>(this.shapeId)!
-  //     const newPoints = [...shape.props.points]
-  //     newPoints[this.draggedPointIndex] = { x: info.point.x, y: info.point.y }
-  //     this.editor.updateShapes([{ ...shape, props: { points: newPoints } }])
-  //   }
-  // }
 
   override onExit() {
     if(this.shapeId) {
