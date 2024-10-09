@@ -52,7 +52,11 @@ onMounted(() => {
       
       let drawTicks = 0
       appState.drawFuncMap.set('tldrawRender', () => {
-        if (appState.tldrawEditor) {
+        
+        //@ts-ignore
+        const tldrawEditor: Editor = window.tldrawEditor
+
+        if (tldrawEditor) {
           if(drawTicks++ % 10 === 0){
             // console.log("rendering tldraw")
 
@@ -65,7 +69,7 @@ onMounted(() => {
 
           const idOrder = ["shape:Rvhc4yQGjjpnYKY7CFDS-",  "shape:PFsSv12VXFBpTZBL9Q6q2",  "shape:WB4IVPgNV5Z5lDVMAX3Gw", "shape:FI4cdvy-4WCST1lBcXFpj"]
 
-          const shapeMap = getFreehandShapes(appState.tldrawEditor)
+          const shapeMap = getFreehandShapes(tldrawEditor)
       
 
           const idsNotInOrder = Array.from(shapeMap.keys()).filter(id => !idOrder.includes(id))
@@ -111,8 +115,8 @@ onMounted(() => {
             }
           }
 
-          const ellipseMap = getEllipseShapes(appState.tldrawEditor)
-          const editorCam = appState.tldrawEditor.getCamera()
+          const ellipseMap = getEllipseShapes(tldrawEditor)
+          const editorCam = tldrawEditor.getCamera()
           for (const [id, ellipse] of ellipseMap) {
             p5i.noFill()
             p5i.stroke(255)
@@ -127,7 +131,7 @@ onMounted(() => {
             p5i.pop()
           }
 
-          const multiSegmentLineMap = getMultiSegmentLineShapes(appState.tldrawEditor)
+          const multiSegmentLineMap = getMultiSegmentLineShapes(tldrawEditor)
 
           for (const [id, shape] of multiSegmentLineMap) {
             p5i.push()

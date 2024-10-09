@@ -26,7 +26,7 @@
 
 <script setup lang="ts">
 
-import { onMounted, onBeforeUnmount, ref, inject } from 'vue';
+import { onMounted, onBeforeUnmount, ref, inject, shallowRef } from 'vue';
 import { createRoot, type Root } from 'react-dom/client';
 // import { MyTldrawWrapper, TestComponent, SimpleComponent } from './tldrawWrapper';
 import { MyTldrawWrapper } from './tldrawWrapperPlain';
@@ -49,9 +49,13 @@ let snapshotLoaded = false
 //something like this - https://tldraw.dev/examples/editor-api/store-events
 //Could also use this - https://tldraw.dev/reference/editor/Editor#getSelectedShapeIds to grab the ids of the selected shapes
 const handleEditorReady = (editor: Editor) => {
+  // return //todo bug - wrapping the editor in ref or shallow ref causes issues with keyboard events
   if(!snapshotLoaded) {
     console.log('Editor is ready:', editor);
-    appState.tldrawEditor = editor
+    // appState.tldrawEditor = shallowRef({ed: editor})
+
+    //@ts-ignore
+    window.tldrawEditor = editor
 
     console.log('shape ids', editor.getCurrentPageShapeIds())
   
@@ -65,7 +69,7 @@ const handleEditorReady = (editor: Editor) => {
 };
 
 const downloadSnapshot = () => {
-  const snapshot = appState.tldrawEditor?.getSnapshot()
+  const snapshot = appState.tldrawEditor?.value?.ed.getSnapshot()
   const snapshotString = JSON.stringify(snapshot)
 
   //download the string as a file
@@ -90,10 +94,10 @@ onMounted(() => {
     reactRoot.value.onmouseup = () => {
       // console.log("mouse up")
       appState.tldrawInteractionCount++
-      selectedShapeIds.value = appState.tldrawEditor?.getSelectedShapeIds() ?? []
+      selectedShapeIds.value = appState.tldrawEditor?.value?.ed.getSelectedShapeIds() ?? []
     }
     reactRoot.value.onmouseout = () => {
-      appState.tldrawEditor?.blur()
+      appState.tldrawEditor?.value?.ed.blur()
     }
     reactRoot.value.onmousedown = () => {
       // reactRoot.value.focus()

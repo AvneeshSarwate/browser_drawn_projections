@@ -5,7 +5,7 @@ import { Entity, EntityList } from '@/stores/undoCommands'
 
 import { Ramp } from '@/channels/channels'
 import { defineStore, acceptHMRUpdate, type StoreDefinition } from 'pinia'
-import { ref } from 'vue'
+import { ref, type ShallowRef } from 'vue'
 import type { Editor } from 'tldraw'
 
 
@@ -23,7 +23,7 @@ export type TldrawTestAppState = {
   stats?: { begin: () => void, end: () => void }
   paused: boolean
   drawing: boolean,
-  tldrawEditor: Editor | undefined,
+  tldrawEditor: ShallowRef<{ed: Editor}> | undefined,
   tldrawInteractionCount: number
 }
 
