@@ -176,7 +176,7 @@ export class MultiSegmentLineUtil extends ShapeUtil<MultiSegmentLineShape> {
   // Render the shape as an SVG polyline
   component(shape: MultiSegmentLineShape) {
     const isEditing = this.editor.getEditingShapeId() === shape.id;
-    console.log("component", isEditing);
+    // console.log("component", isEditing);
 
     const pointsString = shape.props.points
       .map((p) => `${p.x},${p.y}`)
@@ -470,12 +470,14 @@ export class MultiSegmentLineTool extends StateNode {
     } else {
       const shape = editor.getShape<MultiSegmentLineShape>(this!.shapeId);
       if (shape) {
+        console.log("adding point to shape", shape, pagePoint);
+        const shapePointInverseTranslate = {x: pagePoint.x - shape.x, y: pagePoint.y - shape.y}
         // Add the new point to the current shape
         editor.updateShapes([
           {
             id: shape.id,
             type: shape.type,
-            props: { points: [...shape.props.points, pagePoint] },
+            props: { points: [...shape.props.points, shapePointInverseTranslate] },
           },
         ]);
       }

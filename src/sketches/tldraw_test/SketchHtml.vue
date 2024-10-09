@@ -105,7 +105,7 @@ onMounted(() => {
       // console.log('focus editor attempt', appState.tldrawEditor.getIsFocused(), reactRoot.value)
     }
     reactRoot.value.onkeydown = (e) => {
-      console.log('react base keydown', e.key)
+      // console.log('react base keydown', e.key)
     }
   }
 });
