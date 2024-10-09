@@ -87,6 +87,7 @@ export function CustomStylePanel() {
       ? RCE(
           "div",
           null,
+          RCE("label", null, "Closed"),
           RCE("input", {
             type: "checkbox",
             checked: bool.type === "mixed" ? false : bool.value,
@@ -268,6 +269,9 @@ export class MultiSegmentLineUtil extends ShapeUtil<MultiSegmentLineShape> {
     return true;
   };
 
+  //todo - properly handle resize when multiple shapes are selected 
+  //       (as simple as all points are moved by the delta of the center of the initial selection bounds vs new selection bounds? 
+  //       this might stop you from having to do stuff conditionally per handle)
   override onResize = (
     shape: MultiSegmentLineShape,
     info: TLResizeInfo<MultiSegmentLineShape>
@@ -380,16 +384,16 @@ export class MultiSegmentLineTool extends StateNode {
   override onEnter = () => {
     //use whether a shape is selected to determine whether a click creates a new shape or adds a point to an existing shape
     const { editor } = this;
-    const selectedShapes = editor.getSelectedShapes();
-    console.log("onEnter", this, selectedShapes, editor.getIsFocused());
-    editor.on("event", (e) => {
-      if (e.name === "key_down" || e.type === "keyboard") {
-        console.log("tldraw event", e);
-      } else {
-        console.log("tldraw event", "other");
-      }
-    });
-    this.shapeId = undefined;
+    const selectedShapes = editor.getSelectedShapes().filter(s => s.type === "multiSegmentLine");
+    console.log("onEnter shapes", this, selectedShapes);
+    // editor.on("event", (e) => {
+    //   if (e.name === "key_down" || e.type === "keyboard") {
+    //     console.log("tldraw event", e);
+    //   } else {
+    //     console.log("tldraw event", "other");
+    //   }
+    // });
+    this.shapeId = selectedShapes.length > 0 ? selectedShapes[0].id : undefined;
   };
 
   override onKeyDown = (info: TLKeyboardEventInfo) => {
@@ -414,6 +418,13 @@ export class MultiSegmentLineTool extends StateNode {
     }
   };
 
+  override onKeyUp = (info: TLKeyboardEventInfo) => {
+    if (info.key === "q") {
+      this.isDragging = false;
+      this.draggedPointIndex = null;
+    }
+  };
+
   override onPointerMove = (info: TLPointerEventInfo) => {
     // console.log('onPointerMove', this.isDragging, this.draggedPointIndex)
 
@@ -423,7 +434,7 @@ export class MultiSegmentLineTool extends StateNode {
     if (this.isDragging && this.draggedPointIndex !== null) {
       const shape = this.editor.getShape<MultiSegmentLineShape>(this.shapeId!)!;
       const newPoints = [...shape.props.points];
-      newPoints[this.draggedPointIndex] = pagePoint;
+      newPoints[this.draggedPointIndex] = {x: pagePoint.x, y: pagePoint.y};
       this.editor.updateShapes([{ ...shape, props: { points: newPoints } }]);
     }
   };
