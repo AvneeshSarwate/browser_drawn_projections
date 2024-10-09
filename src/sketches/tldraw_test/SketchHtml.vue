@@ -7,7 +7,7 @@
     <p>Shader post-processing with three.js on the bottom</p>
   </div>
   <h3>Tldraw instance</h3>
-  <div id="tldrawContainer" tabindex="0" ref="reactRoot"></div>
+  <div id="tldrawContainer" tabindex="-100" ref="reactRoot"></div>
   <div id="selectedShapeIds">
     Selected shape ids: {{ selectedShapeIds }}
   </div>
@@ -101,7 +101,7 @@ onMounted(() => {
       // console.log('focus editor attempt', appState.tldrawEditor.getIsFocused(), reactRoot.value)
     }
     reactRoot.value.onkeydown = (e) => {
-      console.log('react base keydown', e)
+      console.log('react base keydown', e.key)
     }
   }
 });

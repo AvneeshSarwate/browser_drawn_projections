@@ -361,7 +361,11 @@ export class MultiSegmentLineTool extends StateNode {
   draggedPointIndex: number | null = null
   mousePos = {x: 0, y: 0}
 
-
+  // override handleEvent = (e: TLEventInfo) => {
+  //   if(e.name != 'tick') {
+  //     console.log('handleEvent', e)
+  //   }
+  // }
 
   override onEnter = () => {
     //use whether a shape is selected to determine whether a click creates a new shape or adds a point to an existing shape
@@ -459,22 +463,7 @@ export class MultiSegmentLineTool extends StateNode {
   //   }
   // }
 
-  onPointerUp = () => {
-    this.isDragging = false
-    this.draggedPointIndex = null
-  }
 
-  onDoubleClick = (info: TLClickEventInfo) => {
-    const { editor } = this
-    const shape = editor.getShape<MultiSegmentLineShape>(this.shapeId!)!
-
-    // Find the index of the point being dragged
-    const pointIndex = shape.props.points.findIndex((p) => Vec.Dist(p, info.point) < 10)
-    if (pointIndex !== -1) {
-      this.isDragging = true
-      this.draggedPointIndex = pointIndex
-    }
-  }
 
   onEscape() {
     this.shapeId = undefined
