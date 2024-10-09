@@ -35,14 +35,16 @@ export const MyTldrawWrapper: React.FC<MyTldrawWrapperProps> = ({
       React.createElement(Tldraw, {
         persistenceKey: 'example',
         components: {
-          Background: () => React.createElement(CustomRenderer, { onEditorReady }),
-          Canvas: DefaultCanvas,
           Toolbar: components.Toolbar,
-          StylePanel: CustomStylePanel
+          StylePanel: CustomStylePanel,
         },
         shapeUtils: [MultiSegmentLineUtil],
         tools: [MultiSegmentLineTool],
-        overrides: [uiOverrides]
+        overrides: [uiOverrides],
+        onMount: (editor) => {
+          console.log('editor mounted', editor)
+          onEditorReady(editor)
+        }
       })
     )
   // )
