@@ -469,7 +469,22 @@ export class MultiSegmentLineTool extends StateNode {
       this.shapeId = newShapeId;
     } else {
       const shape = editor.getShape<MultiSegmentLineShape>(this!.shapeId);
+
+      
+
+
+      
       if (shape) {
+        //if within 10px of an existing point, have that be the selected point for dragging
+        const pointIndex = shape.props.points.findIndex(p => Vec.Dist(p, pagePoint) < 10);
+        if (pointIndex !== -1) {
+          this.draggedPointIndex = pointIndex;
+          this.isDragging = true;
+          return;
+        }
+
+
+
         console.log("adding point to shape", shape, pagePoint);
         const shapePointInverseTranslate = {x: pagePoint.x - shape.x, y: pagePoint.y - shape.y}
         // Add the new point to the current shape
@@ -483,6 +498,11 @@ export class MultiSegmentLineTool extends StateNode {
       }
     }
   };
+
+  onPointerUp = (info: TLPointerEventInfo) => {
+    this.isDragging = false;
+    this.draggedPointIndex = null;
+  }
 
   // // Handle pointer move to drag points
   // onPointerMove = (info: TLPointerEventInfo) => {
