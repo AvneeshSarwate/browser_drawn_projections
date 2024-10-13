@@ -44,10 +44,19 @@ onMounted(async () => {
     synthParams.value = synth.params
 
 
-    //if synthParams and appState.params have the same keys, we can set the parameters on the actual synth
+    //if appState.params has keys that are in synthParams, we can set the parameters on the actual synth
     for(const key of Object.keys(appState.params)) {
       if(synthParams.value[key]) {
         synth.setParam(key as NumberKeys<FatOscillatorVoice>, appState.params[key])
+        synthParams.value[key].value = appState.params[key]
+      }
+    }
+
+    //for keys in synthParams that aren't in appState.params, set the value to the default
+    for(const key of Object.keys(synthParams.value)) {
+      if(!appState.params[key]) {
+        synth.setParam(key as NumberKeys<FatOscillatorVoice>, synthParams.value[key].defaultVal)
+        synthParams.value[key].value = synthParams.value[key].defaultVal
       }
     }
 

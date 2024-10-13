@@ -73,7 +73,6 @@ export class MPEPolySynth<T extends MPEVoiceGraph> {
     this.maxVoices = maxVoices
     this.voices = new Map()
 
-    // @ts-expect-error
     const voiceMetadata = vGraph[Symbol.metadata]
     console.log("voiceMetadata", voiceMetadata)
 
@@ -134,7 +133,10 @@ export class MPEPolySynth<T extends MPEVoiceGraph> {
 
       //have new voices initialize to the values set by the synth
       for(const param in this.params) {
-        voice[param as keyof T] = this.params[param as NumberKeys<T>].value as any ?? this.params[param as NumberKeys<T>].low
+        voice[param as keyof T] = this.params[param as NumberKeys<T>].value as any ?? this.params[param as NumberKeys<T>].defaultVal
+        if((voice[param as keyof T] as number) < 0) {
+          console.warn(`MPEPolySynth: param ${param} value is less than 0, which is not allowed`)
+        }
       }
 
       voice.noteOn(note, velocity, pressure, slide)
@@ -213,8 +215,8 @@ function testDecorator(ths: any, context: any) {
 export class FatOscillatorVoice implements MPEVoiceGraph {
   private oscillator: Tone.FatOscillator
   private filter: Tone.Filter
-  private distortion: Tone.Distortion
-  private envelope: Tone.AmplitudeEnvelope
+  private distortionNode: Tone.Distortion
+  private ampEnv: Tone.AmplitudeEnvelope
   private outputGain: Tone.Gain
   private _pitch: number
   private _pressure: number
@@ -227,10 +229,12 @@ export class FatOscillatorVoice implements MPEVoiceGraph {
     console.log("fatOscVoice constructor", id)
     this.id = id
     this.oscillator = new Tone.FatOscillator().start()
+    // this.oscillator.volume.value = -20
+    // this.oscillator.type = "sine"
     this.filter = new Tone.Filter({ type: "lowpass" })
     this.filter.Q.value = 25
-    this.distortion = new Tone.Distortion()
-    this.envelope = new Tone.AmplitudeEnvelope({
+    this.distortionNode = new Tone.Distortion()
+    this.ampEnv = new Tone.AmplitudeEnvelope({
       attack: 0.01,
       decay: 0.2,
       sustain: 0.9,
@@ -245,7 +249,7 @@ export class FatOscillatorVoice implements MPEVoiceGraph {
     // Tone.connect(this.outputGain, rawGain)
     // rawGain can also be at the end of the chain() call
 
-    this.oscillator.chain(this.filter, this.distortion, this.envelope, this.outputGain, Tone.getDestination())
+    this.oscillator.chain(this.filter, this.distortionNode, this.ampEnv, this.outputGain, Tone.getDestination())
 
     this._pitch = 0
     this._pressure = 0
@@ -276,30 +280,30 @@ export class FatOscillatorVoice implements MPEVoiceGraph {
 
   set slide(value: number) {
     this._slide = value
-    this.distortion.distortion = Math.pow(value/127, 2.5) // Example mapping
+    this.distortionNode.distortion = Math.pow(value/127, 2.5) // Example mapping
   }
 
   noteOn(note: number, velocity: number, pressure: number, slide: number): void {
     this.pitch = note
     this._pressure = pressure
     this._slide = slide
-    this.envelope.triggerAttack(Tone.now(), velocity)
+    this.ampEnv.triggerAttack("+0", velocity)
   }
 
   noteOff(): void {
-    this.envelope.triggerRelease()
+    this.ampEnv.triggerRelease()
 
     // Call the callback after the release time
     setTimeout(() => {
       if (this.voiceFinishedCB) {
         this.voiceFinishedCB()
       }
-    }, Number(this.envelope.release) * 1000) // Convert seconds to milliseconds
+    }, Number(this.ampEnv.release) * 1000) // Convert seconds to milliseconds
   }
 
   forceFinish(): void {
     // Same as noteOff, but immediate
-    this.envelope.cancel()
+    this.ampEnv.cancel()
     if (this.voiceFinishedCB) {
       this.voiceFinishedCB()
     }
@@ -310,14 +314,14 @@ export class FatOscillatorVoice implements MPEVoiceGraph {
   dispose(): void {
     this.oscillator.disconnect()
     this.filter.disconnect()
-    this.distortion.disconnect()
-    this.envelope.disconnect()
+    this.distortionNode.disconnect()
+    this.ampEnv.disconnect()
     this.outputGain.disconnect()
 
     this.oscillator.dispose()
     this.filter.dispose()
-    this.distortion.dispose()
-    this.envelope.dispose()
+    this.distortionNode.dispose()
+    this.ampEnv.dispose()
     this.outputGain.dispose()
   }
 
@@ -360,38 +364,47 @@ export class FatOscillatorVoice implements MPEVoiceGraph {
   }
 
   get attack(): number {
-    return Number(this.envelope.attack)
+    return Number(this.ampEnv.attack)
   }
   @param(0, 5, 0.1)
   set attack(value: number) {
-    this.envelope.attack = value
+    this.ampEnv.attack = value
   }
 
   get decay(): number {
-    return Number(this.envelope.decay)
+    return Number(this.ampEnv.decay)
   }
 
   @param(0, 5, 0.2)
   set decay(value: number) {
-    this.envelope.decay = value
+    this.ampEnv.decay = value
   }
 
   get sustain(): number {
-    return this.envelope.sustain
+    return this.ampEnv.sustain
   }
 
   @param(0, 1, 0.9)
   set sustain(value: number) {
-    this.envelope.sustain = value
+    this.ampEnv.sustain = value
   }
 
   get release(): number {
-    return Number(this.envelope.release)
+    return Number(this.ampEnv.release)
   }
 
   @param(0, 5, 0.6)
   set release(value: number) {
-    this.envelope.release = value
+    this.ampEnv.release = value
+  }
+
+  get distortion(): number {
+    return this.distortionNode.distortion
+  }
+
+  @param(0, 1, 0.5)
+  set distortion(value: number) {
+    this.distortionNode.distortion = value
   }
 }
 
