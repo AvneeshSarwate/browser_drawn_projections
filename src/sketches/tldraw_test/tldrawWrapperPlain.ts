@@ -14,10 +14,12 @@ import { MultiSegmentLineIcon, MultiSegmentLineTool, MultiSegmentLineUtil, compo
 
 interface MyTldrawWrapperProps {
   onEditorReady: (editor: Editor) => void
+  persistenceKey?: string
 }
 
 export const MyTldrawWrapper: React.FC<MyTldrawWrapperProps> = ({
-  onEditorReady
+  onEditorReady,
+  persistenceKey
 }: MyTldrawWrapperProps): React.ReactNode => {
   // useLayoutEffect(() => {
   //   // Hide the regular shapes layer using CSS.
@@ -33,7 +35,7 @@ export const MyTldrawWrapper: React.FC<MyTldrawWrapperProps> = ({
   return (
     // React.createElement('div', { className: 'tldraw__editor' },
       React.createElement(Tldraw, {
-        persistenceKey: 'example',
+        persistenceKey: persistenceKey ?? 'example',
         components: {
           Toolbar: components.Toolbar,
           StylePanel: CustomStylePanel,
@@ -50,18 +52,18 @@ export const MyTldrawWrapper: React.FC<MyTldrawWrapperProps> = ({
   // )
 }
 
-export function RendererWrapper(props: MyTldrawWrapperProps) {
-  return React.createElement(CustomRenderer, props)
-}
+// export function RendererWrapper(props: MyTldrawWrapperProps) {
+//   return React.createElement(CustomRenderer, props)
+// }
 
-export function CustomRenderer(props: MyTldrawWrapperProps) {
-  // console.log('CustomRenderer')
-  const editor = useEditor()
-  const rCanvas = useRef<HTMLCanvasElement>(null)
-  props.onEditorReady(editor);
+// export function CustomRenderer(props: MyTldrawWrapperProps) {
+//   // console.log('CustomRenderer')
+//   const editor = useEditor()
+//   const rCanvas = useRef<HTMLCanvasElement>(null)
+//   props.onEditorReady(editor);
 
-  return React.createElement('canvas', { ref: rCanvas })
-}
+//   return React.createElement('canvas', { ref: rCanvas })
+// }
 
 
 function multiplyMatrices(a: number[][], b: number[][]): number[][] {
@@ -78,11 +80,21 @@ function multiplyMatrices(a: number[][], b: number[][]): number[][] {
   return result;
 }
 
-function applyMatrix(matrix: number[][], pt: {x: number, y: number}): {x: number, y: number} {
+export function applyMatrix(matrix: number[][], pt: {x: number, y: number}): {x: number, y: number} {
   return {
     x: matrix[0][0] * pt.x + matrix[0][1] * pt.y + matrix[0][2],
     y: matrix[1][0] * pt.x + matrix[1][1] * pt.y + matrix[1][2]
   }
+}
+
+export function invertMatrix3x3(matrix: number[][]): number[][] {
+  const det = matrix[0][0] * matrix[1][1] * matrix[2][2] + matrix[0][1] * matrix[1][2] * matrix[2][0] + matrix[0][2] * matrix[1][0] * matrix[2][1] - matrix[0][2] * matrix[1][1] * matrix[2][0] - matrix[0][1] * matrix[1][0] * matrix[2][2] - matrix[0][0] * matrix[1][2] * matrix[2][1];
+  return [[matrix[1][1] * matrix[2][2] - matrix[1][2] * matrix[2][1], matrix[0][2] * matrix[2][1] - matrix[0][1] * matrix[2][2], matrix[0][1] * matrix[1][2] - matrix[0][2] * matrix[1][1]], [matrix[1][2] * matrix[2][0] - matrix[1][0] * matrix[2][2], matrix[0][0] * matrix[2][2] - matrix[0][2] * matrix[2][0], matrix[0][2] * matrix[1][0] - matrix[0][0] * matrix[1][2]], [matrix[1][0] * matrix[2][1] - matrix[1][1] * matrix[2][0], matrix[0][1] * matrix[2][0] - matrix[0][0] * matrix[2][1], matrix[0][0] * matrix[1][1] - matrix[0][1] * matrix[1][0]]];
+}
+
+export function applyInverseMatrix(matrix: number[][], pt: {x: number, y: number}): {x: number, y: number} {
+  const inverseMatrix = invertMatrix3x3(matrix);
+  return applyMatrix(inverseMatrix, pt);
 }
 
 function cameraTransform(editor: Editor): number[][] {
@@ -103,7 +115,7 @@ function cameraTransform(editor: Editor): number[][] {
   return multiplyMatrices(scaleMatrix, translationMatrix)
 }
 
-function shapeTransform(shape: {x: number, y: number, rotation: number}): number[][] {
+export function shapeTransform(shape: {x: number, y: number, rotation: number}): number[][] {
   const translationMatrix = [
     [1, 0, shape.x],
     [0, 1, shape.y],

@@ -74,7 +74,7 @@ onMounted(() => {
 
           const idsNotInOrder = Array.from(shapeMap.keys()).filter(id => !idOrder.includes(id))
 
-          const shapes = idOrder.map(id => shapeMap.get(id)!)
+          const shapes = idOrder.map(id => shapeMap.get(id)!).filter(shape => shape)
 
           idsNotInOrder.forEach(id => {
             shapes.push(shapeMap.get(id)!)

@@ -61,13 +61,15 @@ export class Three5 {
 
   public output: THREE.WebGLRenderTarget;
 
+  private circleResolution = 128; //todo performance - have a few diff resolutions for performance?
+
   constructor(width: number, height: number) {
     this.width = width;
     this.height = height;
     this.scene = new THREE.Scene();
     this.camera = new THREE.OrthographicCamera(0, width, height, 0, -1, 1)
 
-    this.circleGeometry = new THREE.CircleGeometry(1, 128); //todo performance - have a few diff resolutions for performance?
+    this.circleGeometry = new THREE.CircleGeometry(1, this.circleResolution); //todo performance - have a few diff resolutions for performance?
     this.circleStrokeGeometry = new MeshLineGeometry();
     const circlePts = this.circleGeometry.attributes.position.array;
     const circlePointsJsArray = [];
@@ -122,6 +124,8 @@ export class Three5 {
       meshLine.scale.set(radius, radius, 1);
       this.scene.add(meshLine);
     }
+
+    return mesh;
   }
 
   rect(x: number, y: number, width: number, height: number) {
@@ -129,6 +133,8 @@ export class Three5 {
     mesh.position.set(x, y, 0);
     mesh.scale.set(width, height, 1);
     this.scene.add(mesh);
+
+    return mesh;
   }
 
   line(x1: number, y1: number, x2: number, y2: number) {
@@ -141,6 +147,8 @@ export class Three5 {
     mesh.rotation.set(0, 0, angle);
     mesh.scale.set(length, 1, 1);
     this.scene.add(mesh);
+
+    return mesh;
   }
 
   private useLinePool = false
@@ -156,6 +164,8 @@ export class Three5 {
     const meshLine = new THREE.Mesh(lineGeo, meshLineMat);
 
     this.scene.add(meshLine);
+
+    return meshLine;
   }
 
 
@@ -204,6 +214,8 @@ export class Three5 {
       //todo check - is this redundant?
       this.disposables.push(geometry);
     }
+
+    return mesh;
   }
 
   createGradientMaterial(color1: THREE.Color, color2: THREE.Color, angle: number, scale: number, offset: number) {

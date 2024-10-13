@@ -384,7 +384,21 @@ function pointToLineSegmentDistance(point: {x: number, y: number}, lineStart: {x
   const denominator = Math.sqrt((y2 - y1) ** 2 + (x2 - x1) ** 2);
   return numerator / denominator;
 }
-//todo - everywhere that uses transformedMousePos also needs to account for rotation
+
+
+function transformMousePointToShapeLocal(shape: MultiSegmentLineShape, mousePoint: {x: number, y: number}) {
+  const {x, y} = shape;
+  const rotation = shape.rotation;
+
+  const transformMatrix = shapeTransform({x, y, rotation});
+  const transformedMousePoint = applyInverseMatrix(transformMatrix, mousePoint);
+  console.log("transformedMousePoint", transformedMousePoint);
+  if(isNaN(transformedMousePoint.x) || isNaN(transformedMousePoint.y)) {
+    debugger;
+  } 
+  return transformedMousePoint;
+}
+
 export class MultiSegmentLineTool extends StateNode {
   static id = "multiSegmentLine";
   shapeId?: TLShapeId;
@@ -416,13 +430,13 @@ export class MultiSegmentLineTool extends StateNode {
   };
 
   override onKeyDown = (info: TLKeyboardEventInfo) => {
-    console.log("onKeyDown", info);
+    // console.log("onKeyDown", info);
     //if key is d start dragging
     if (info.key === "q") {
       this.isDragging = true;
       this.editor.markHistoryStoppingPoint();
       const shape = this.editor.getShape<MultiSegmentLineShape>(this.shapeId!)!;
-      const transformedMousePos = {x: this.mousePos.x - shape.x, y: this.mousePos.y - shape.y}
+      const transformedMousePos = transformMousePointToShapeLocal(shape, this.mousePos);
       const pointIndex = shape.props.points.findIndex(
         (p) => Vec.Dist(p, transformedMousePos) < 10
       );
@@ -438,7 +452,7 @@ export class MultiSegmentLineTool extends StateNode {
     if(info.key === "w") {
       //if within 10px of a point, delete that point
       const shape = this.editor.getShape<MultiSegmentLineShape>(this.shapeId!)!;
-      const transformedMousePos = {x: this.mousePos.x - shape.x, y: this.mousePos.y - shape.y}
+      const transformedMousePos = transformMousePointToShapeLocal(shape, this.mousePos);
       const pointIndex = shape.props.points.findIndex(p => Vec.Dist(p, transformedMousePos) < 10);
       if (pointIndex !== -1) {
         const newPoints = shape.props.points.filter((_, i) => i !== pointIndex);
@@ -456,7 +470,7 @@ export class MultiSegmentLineTool extends StateNode {
       //if within 10 px of the line between two points, add a point there
       const shape = this.editor.getShape<MultiSegmentLineShape>(this.shapeId!)!;
       if(shape.props.points.length < 2) return;
-      const transformedMousePos = {x: this.mousePos.x - shape.x, y: this.mousePos.y - shape.y}
+      const transformedMousePos = transformMousePointToShapeLocal(shape, this.mousePos);
 
       const pointIndex = shape.props.points.findIndex((p, i) => {
         if(i === shape.props.points.length-1) return false
@@ -494,7 +508,7 @@ export class MultiSegmentLineTool extends StateNode {
       const shape = this.editor.getShape<MultiSegmentLineShape>(this.shapeId!)!;
 
       const newPoints = [...shape.props.points];
-      const transformedMousePos = {x: pagePoint.x - shape.x, y: pagePoint.y - shape.y};
+      const transformedMousePos = transformMousePointToShapeLocal(shape, this.mousePos);
       newPoints[this.draggedPointIndex] = transformedMousePos;
       this.editor.updateShapes([{ ...shape, props: { points: newPoints } }]);
     }
@@ -537,7 +551,7 @@ export class MultiSegmentLineTool extends StateNode {
       
       if (shape) {
         //if within 10px of an existing point, have that be the selected point for dragging
-        const transformedMousePos = {x: pagePoint.x - shape.x, y: pagePoint.y - shape.y}
+        const transformedMousePos = transformMousePointToShapeLocal(shape, pagePoint);
         const pointIndex = shape.props.points.findIndex(p => Vec.Dist(p, transformedMousePos) < 10);
         if (pointIndex !== -1) {
           this.draggedPointIndex = pointIndex;
@@ -613,6 +627,7 @@ import {
   useIsToolSelected,
   useTools,
 } from "tldraw";
+import { applyInverseMatrix, shapeTransform } from "../tldrawWrapperPlain";
 
 // Define the UI overrides for tools
 export const uiOverrides: TLUiOverrides = {
@@ -661,3 +676,4 @@ export const components: TLComponents = {
     );
   },
 };
+
