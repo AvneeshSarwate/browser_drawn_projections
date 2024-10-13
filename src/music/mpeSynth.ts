@@ -249,7 +249,7 @@ export class FatOscillatorVoice implements MPEVoiceGraph {
     // Tone.connect(this.outputGain, rawGain)
     // rawGain can also be at the end of the chain() call
 
-    this.oscillator.chain(this.filter, this.distortionNode, this.ampEnv, this.outputGain, Tone.getDestination())
+    this.oscillator.chain(this.distortionNode, this.filter, this.ampEnv, this.outputGain, Tone.getDestination())
 
     this._pitch = 0
     this._pressure = 0
