@@ -9,7 +9,8 @@ import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN
 import { getEllipseShapes, getFreehandShapes, getMultiSegmentLineShapes, p5FreehandTldrawRender } from './tldrawWrapperPlain';
 import { HorizontalBlur, LayerBlend, Transform, VerticalBlur } from '@/rendering/customFX';
 import AutoUI from '@/components/AutoUI.vue';
-import type { Editor } from 'tldraw';
+import { lerp, type Editor } from 'tldraw';
+import earcut from 'earcut';
 
 const appState = inject<TldrawTestAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
@@ -32,7 +33,16 @@ const drawParams = ref({
   showConnectors: true
 })
 
-const rand = (n: number) => sinN(n*1323)
+const rand = (n: number) => sinN(n*123.23)
+
+const randColor = (seed: number) => {
+  return {
+    r: rand(seed) * 255,
+    g: rand(seed + 1) * 255,
+    b: rand(seed + 2) * 255,
+    a: 1
+  }
+}
 
 onMounted(() => {
   try {
@@ -67,80 +77,68 @@ onMounted(() => {
           p5i.push()
           p5i.strokeWeight(4)
 
-          const idOrder = ["shape:Rvhc4yQGjjpnYKY7CFDS-",  "shape:PFsSv12VXFBpTZBL9Q6q2",  "shape:WB4IVPgNV5Z5lDVMAX3Gw", "shape:FI4cdvy-4WCST1lBcXFpj"]
-
-          const shapeMap = getFreehandShapes(tldrawEditor)
-      
-
-          const idsNotInOrder = Array.from(shapeMap.keys()).filter(id => !idOrder.includes(id))
-
-          const shapes = idOrder.map(id => shapeMap.get(id)!).filter(shape => shape)
-
-          idsNotInOrder.forEach(id => {
-            shapes.push(shapeMap.get(id)!)
-          })
-
-          const shapeCirclePts: {x: number, y: number}[] = []
-          let randSeed = 1
-          for (const shape of shapes) {
-            p5i.noFill()
-            p5i.stroke(255)
-            p5i.beginShape()
-            if (drawParams.value.showLines) {
-              for (const pt of shape) {
-                p5i.curveVertex(pt.x, pt.y)
-              }
-              p5i.endShape()
-            }
-
-            randSeed = rand(randSeed)
-            const randSpeed = 1 + randSeed * 0.1
-            const shapePt = shape[Math.floor( (sinN(now() * randSpeed * 0.1) * shape.length)*0.999 )]
-            if(shapePt) {
-              shapeCirclePts.push(shapePt)
-            } else {
-              console.warn("no shape point")
-            }
-
-            if (drawParams.value.showCircles) {
-              p5i.fill(255, 0, 0)
-              p5i.circle(shapePt.x, shapePt.y, 30)
-            }
-          }
-
-          if(drawParams.value.showConnectors) {
-            p5i.stroke(0, 255 * sinN(drawTicks / 400), 255 * cosN(drawTicks / 400))
-            for (let i = 0; i < shapeCirclePts.length - 1; i++) {
-              p5i.line(shapeCirclePts[i].x, shapeCirclePts[i].y, shapeCirclePts[i + 1].x, shapeCirclePts[i + 1].y)
-            }
-          }
-
-          const ellipseMap = getEllipseShapes(tldrawEditor)
-          const editorCam = tldrawEditor.getCamera()
-          for (const [id, ellipse] of ellipseMap) {
-            p5i.noFill()
-            p5i.stroke(255)
-            p5i.ellipseMode(p5i.CORNER)
-
-            p5i.push()
-            p5i.translate(ellipse.x, ellipse.y)
-            p5i.translate(editorCam.x, editorCam.y)
-            p5i.rotate(ellipse.rotation)
-            p5i.scale(ellipse.xScale, ellipse.yScale)
-            p5i.ellipse(0, 0, ellipse.w, ellipse.h)
-            p5i.pop()
-          }
 
           const multiSegmentLineMap = getMultiSegmentLineShapes(tldrawEditor)
 
           for (const [id, shape] of multiSegmentLineMap) {
+            const modulatedPoints = shape.points.map((pt, i) => {
+              return {
+                x: pt.x + Math.sin(now()*(1+rand(i))) * 10,
+                y: pt.y + Math.cos(now()*(1+rand(i))) * 10
+              }
+            })
+
+            const lerpVal = sinN(now()*0.1)
+            const lerpedModulatedPoints = modulatedPoints.map((pt, i) => {
+              return {
+                x: lerp(pt.x, modulatedPoints[i].x, lerpVal),
+                y: lerp(pt.y, modulatedPoints[i].y, lerpVal)
+              }
+            })
+
+            const flatPoints = shape.points.flatMap(pt => [pt.x, pt.y])
+            const indices = earcut(flatPoints)
+            //draw triangles
+            for (let i = 0; i < indices.length; i += 3) {
+              const col = randColor(i)
+              p5i.push()
+              p5i.fill(col.r, col.g, col.b)
+              p5i.noStroke()
+              const a = indices[i]
+              const b = indices[i + 1]
+              const c = indices[i + 2]
+              p5i.triangle(lerpedModulatedPoints[a].x, lerpedModulatedPoints[a].y, lerpedModulatedPoints[b].x, lerpedModulatedPoints[b].y, lerpedModulatedPoints[c].x, lerpedModulatedPoints[c].y)
+              p5i.pop()
+            }
+
+
+
+
             p5i.push()
             p5i.noFill()
             p5i.stroke(255)
             p5i.beginShape()
-            for (const pt of shape) {
-              p5i.vertex(pt.x, pt.y)
+
+            if(shape.spline === 'spline'){
+              p5i.curveVertex(shape.points[0].x, shape.points[0].y)
+              for (const pt of shape.points) {
+                p5i.curveVertex(pt.x, pt.y)
+              }
+              if(shape.closed){
+                p5i.curveVertex(shape.points[0].x, shape.points[0].y)
+                p5i.curveVertex(shape.points[1].x, shape.points[1].y)
+              } else {
+                p5i.curveVertex(shape.points[shape.points.length - 1].x, shape.points[shape.points.length - 1].y)
+              }
+            } else {
+              for (const pt of shape.points) {
+                p5i.vertex(pt.x, pt.y)
+              }
+              if(shape.closed){
+                p5i.vertex(shape.points[0].x, shape.points[0].y)
+              }
             }
+            
             p5i.endShape()
           }
 
