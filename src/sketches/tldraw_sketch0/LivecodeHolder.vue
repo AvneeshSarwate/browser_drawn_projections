@@ -83,13 +83,13 @@ onMounted(() => {
           for (const [id, shape] of multiSegmentLineMap) {
             const modulatedPoints = shape.points.map((pt, i) => {
               return {
-                x: pt.x + Math.sin(now()*(1+rand(i))) * 10,
-                y: pt.y + Math.cos(now()*(1+rand(i))) * 10
+                x: pt.x + Math.sin(now()*(1+rand(i))) * 50,
+                y: pt.y + Math.cos(now()*(1+rand(i))) * 50
               }
             })
 
             const lerpVal = sinN(now()*0.1)
-            const lerpedModulatedPoints = modulatedPoints.map((pt, i) => {
+            const lerpedModulatedPoints = shape.points.map((pt, i) => {
               return {
                 x: lerp(pt.x, modulatedPoints[i].x, lerpVal),
                 y: lerp(pt.y, modulatedPoints[i].y, lerpVal)
