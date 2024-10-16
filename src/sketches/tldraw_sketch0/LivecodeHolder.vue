@@ -11,6 +11,7 @@ import { HorizontalBlur, LayerBlend, Transform, VerticalBlur } from '@/rendering
 import AutoUI from '@/components/AutoUI.vue';
 import { lerp, type Editor } from 'tldraw';
 import earcut from 'earcut';
+import type { MultiSegmentLineShape } from './multiSegmentLine/multiSegmentLineUtil';
 
 const appState = inject<TldrawTestAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
@@ -44,12 +45,137 @@ const randColor = (seed: number) => {
   }
 }
 
+const shapeRenderMap = new Map<string, { drawFunc: (p5: p5) => void, shaderGraphEndNode: ShaderEffect }>()
+
 onMounted(() => {
   try {
 
     const p5i = appState.p5Instance!!
     const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
     const threeCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
+
+
+    const onShapeCreated = (shape: MultiSegmentLineShape) => {
+
+      const p5Passthru = new Passthru({ src: p5Canvas })
+      const feedback = new FeedbackNode(p5Passthru)
+      const vertBlur = new VerticalBlur({ src: feedback })
+      const horBlur = new HorizontalBlur({ src: vertBlur })
+      const transform = new Transform({ src: horBlur })
+      const layerOverlay = new LayerBlend({ src1: p5Passthru, src2: transform })
+      feedback.setFeedbackSrc(layerOverlay)
+
+      const drawFunc = (p5i: p5) => {
+        p5i.clear(0,0,0,0)
+        
+        p5i.push()
+        p5i.strokeWeight(4)
+
+
+        const multiSegmentLineMap = getMultiSegmentLineShapes(tldrawEditor)
+
+        for (const [id, shape] of multiSegmentLineMap) {
+          const modulatedPoints = shape.points.map((pt, i) => {
+            return {
+              x: pt.x + Math.sin(now()*(1+rand(i))) * 50,
+              y: pt.y + Math.cos(now()*(1+rand(i))) * 50
+            }
+          })
+
+          const lerpVal = sinN(now()*0.1)
+          const lerpedModulatedPoints = shape.points.map((pt, i) => {
+            return {
+              x: lerp(pt.x, modulatedPoints[i].x, lerpVal),
+              y: lerp(pt.y, modulatedPoints[i].y, lerpVal)
+            }
+          })
+
+          const flatPoints = shape.points.flatMap(pt => [pt.x, pt.y])
+          const indices = earcut(flatPoints)
+          //draw triangles
+          for (let i = 0; i < indices.length; i += 3) {
+            const col = randColor(i)
+            p5i.push()
+            p5i.fill(col.r, col.g, col.b)
+            p5i.noStroke()
+            const a = indices[i]
+            const b = indices[i + 1]
+            const c = indices[i + 2]
+            p5i.triangle(lerpedModulatedPoints[a].x, lerpedModulatedPoints[a].y, lerpedModulatedPoints[b].x, lerpedModulatedPoints[b].y, lerpedModulatedPoints[c].x, lerpedModulatedPoints[c].y)
+            p5i.pop()
+          }
+
+
+
+
+          p5i.push()
+          p5i.noFill()
+          p5i.stroke(255)
+          p5i.beginShape()
+
+          if(shape.spline === 'spline'){
+            p5i.curveVertex(shape.points[0].x, shape.points[0].y)
+            for (const pt of shape.points) {
+              p5i.curveVertex(pt.x, pt.y)
+            }
+            if(shape.closed){
+              p5i.curveVertex(shape.points[0].x, shape.points[0].y)
+              p5i.curveVertex(shape.points[1].x, shape.points[1].y)
+            } else {
+              p5i.curveVertex(shape.points[shape.points.length - 1].x, shape.points[shape.points.length - 1].y)
+            }
+          } else {
+            for (const pt of shape.points) {
+              p5i.vertex(pt.x, pt.y)
+            }
+            if(shape.closed){
+              p5i.vertex(shape.points[0].x, shape.points[0].y)
+            }
+          }
+          
+          p5i.endShape()
+        }
+
+        p5i.pop()
+
+        layerOverlay.renderAll(appState.threeRenderer!!)
+      }
+      
+      shapeRenderMap.set(shape.id, { drawFunc, shaderGraphEndNode: layerOverlay })
+    }
+
+    //@ts-ignore
+    let tldrawEditor: Editor | undefined = undefined
+
+
+    //@ts-ignore
+    window.editorReadyCallback = (editor: Editor) => {
+      tldrawEditor = editor
+      tldrawEditor.store.listen(onHistory => {
+        console.log("store change",onHistory)
+
+        for (const shapeId in onHistory.changes.added) {
+          const shape = onHistory.changes.added[shapeId]
+          if(shape.type === 'multiSegmentLine'){
+            onShapeCreated(shape)
+          }
+        }
+        
+        for (const shapeId in onHistory.changes.removed) {
+          const shape = onHistory.changes.removed[shapeId]
+          if(shape.type === 'multiSegmentLine'){
+            const mapEntry = shapeRenderMap.get(shapeId)
+            if(mapEntry){
+              mapEntry.shaderGraphEndNode.disposeAll()
+              shapeRenderMap.delete(shapeId)
+            }
+          }
+        }
+
+      }, { scope: 'document', source: 'user' })
+    }
+
+    
 
 
     let p5Mouse = { x: 0, y: 0 }
@@ -59,12 +185,20 @@ onMounted(() => {
 
     const code = () => { //todo template - is this code-array pattern really needed in the template?
       clearDrawFuncs() //todo template - move this to cleanup block?
+
+
+      //todo sketch - create some kind of compositor shaderFX for shapeRenderMap 
+      //set that compositor as shaderGraphEndNode
+
+      appState.drawFuncMap.set('drawShapes', (p5i: p5) => {
+        for (const [id, shape] of shapeRenderMap) {
+          shape.drawFunc(p5i)
+        }
+      })
       
       let drawTicks = 0
       appState.drawFuncMap.set('tldrawRender', () => {
         
-        //@ts-ignore
-        const tldrawEditor: Editor = window.tldrawEditor
 
         if (tldrawEditor) {
           if(drawTicks++ % 10 === 0){
@@ -175,6 +309,10 @@ onUnmounted(() => {
   shaderGraphEndNode?.disposeAll()
   clearListeners()
   timeLoops.forEach(tl => tl.cancel())
+  for (const [id, shape] of shapeRenderMap) {
+    shape.shaderGraphEndNode.disposeAll()
+  }
+  shapeRenderMap.clear()
 })
 </script>
 

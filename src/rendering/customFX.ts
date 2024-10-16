@@ -263,3 +263,34 @@ export class FeedbackZoom extends CustomFeedbackShaderEffect {
     super.setUniforms(uniforms)
   }
 }
+
+
+const rgDisplaceFs = glsl`
+precision highp float;
+
+uniform sampler2D src;
+uniform sampler2D displacementMap; //a float32 texture with xy displacement in rg channels
+uniform float strength;
+
+varying vec2 vUV;
+
+void main() {
+  vec2 uv = vUV;
+  vec2 disp = texture2D(displacementMap, uv).xy * strength;
+  vec2 uv2 = uv + disp;
+  gl_FragColor = texture2D(src, uv2);
+}
+`
+
+export class RGDisplace extends CustomShaderEffect {
+  effectName = "RGDisplace"
+  constructor(inputs: {src: ShaderSource, displacementMap: ShaderSource}, width = 1280, height = 720) {
+    super(rgDisplaceFs, inputs, width, height)
+    this.setUniforms({strength: 0.1})
+  }
+  setUniforms(uniforms: {strength: Dynamic<number>}): void {
+    super.setUniforms(uniforms)
+  }
+}
+
+  

@@ -56,6 +56,9 @@ const handleEditorReady = (editor: Editor) => {
     //@ts-ignore
     window.tldrawEditor = editor
 
+    //@ts-ignore
+    window.editorReadyCallback?.(editor)
+
     console.log('shape ids', editor.getCurrentPageShapeIds())
   
     //@ts-ignore

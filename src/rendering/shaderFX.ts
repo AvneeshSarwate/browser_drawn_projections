@@ -57,14 +57,11 @@ export abstract class ShaderEffect {
 }
 
 export class FeedbackNode extends ShaderEffect {
-  width: number
-  height: number
   output: THREE.WebGLRenderTarget
   _passthru: Passthru
   feedbackSrc?: ShaderEffect
   firstRender = true
 
-  inputs: ShaderInputs
   constructor(startState: ShaderEffect) {
     super()
     this.inputs = {initialState: startState}
@@ -159,11 +156,8 @@ function getConcreteSource(input: ShaderSource): THREE.Texture {
 
 export class CustomShaderEffect extends ShaderEffect {
   output: THREE.WebGLRenderTarget
-  width: number
-  height: number
   scene: THREE.Scene
   camera: THREE.Camera
-  inputs: ShaderInputs
   material: THREE.ShaderMaterial
   constructor(fsString: string, inputs: ShaderInputs, width = 1280, height = 720, customOutput?: THREE.WebGLRenderTarget, filterType: ('nearest' | 'linear') = 'linear') {
     super()
