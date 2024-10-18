@@ -7,9 +7,9 @@ import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, tar
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri, now } from '@/channels/channels';
 import { getEllipseShapes, getFreehandShapes, getMultiSegmentLineShapes, p5FreehandTldrawRender } from './tldrawWrapperPlain';
-import { HorizontalBlur, LayerBlend, Transform, VerticalBlur } from '@/rendering/customFX';
+import { CompositeShaderEffect, HorizontalBlur, LayerBlend, Transform, VerticalBlur } from '@/rendering/customFX';
 import AutoUI from '@/components/AutoUI.vue';
-import { lerp, type Editor } from 'tldraw';
+import { lerp, type Editor, type TLPageId } from 'tldraw';
 import earcut from 'earcut';
 import type { MultiSegmentLineShape } from './multiSegmentLine/multiSegmentLineUtil';
 
@@ -55,9 +55,11 @@ onMounted(() => {
     const threeCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
 
 
-    const onShapeCreated = (shape: MultiSegmentLineShape) => {
+    const onShapeCreated = (shapee: MultiSegmentLineShape) => {
+      console.log("onShapeCreated", shapee)
+      const bgCanvas = new OffscreenCanvas(p5Canvas.width, p5Canvas.height)
 
-      const p5Passthru = new Passthru({ src: p5Canvas })
+      const p5Passthru = new Passthru({ src: bgCanvas })
       const feedback = new FeedbackNode(p5Passthru)
       const vertBlur = new VerticalBlur({ src: feedback })
       const horBlur = new HorizontalBlur({ src: vertBlur })
@@ -67,81 +69,94 @@ onMounted(() => {
 
       const drawFunc = (p5i: p5) => {
         p5i.clear(0,0,0,0)
-        
+
         p5i.push()
         p5i.strokeWeight(4)
 
 
         const multiSegmentLineMap = getMultiSegmentLineShapes(tldrawEditor)
+        const shape = multiSegmentLineMap.get(shapee.id)
 
-        for (const [id, shape] of multiSegmentLineMap) {
-          const modulatedPoints = shape.points.map((pt, i) => {
-            return {
-              x: pt.x + Math.sin(now()*(1+rand(i))) * 50,
-              y: pt.y + Math.cos(now()*(1+rand(i))) * 50
-            }
-          })
-
-          const lerpVal = sinN(now()*0.1)
-          const lerpedModulatedPoints = shape.points.map((pt, i) => {
-            return {
-              x: lerp(pt.x, modulatedPoints[i].x, lerpVal),
-              y: lerp(pt.y, modulatedPoints[i].y, lerpVal)
-            }
-          })
-
-          const flatPoints = shape.points.flatMap(pt => [pt.x, pt.y])
-          const indices = earcut(flatPoints)
-          //draw triangles
-          for (let i = 0; i < indices.length; i += 3) {
-            const col = randColor(i)
-            p5i.push()
-            p5i.fill(col.r, col.g, col.b)
-            p5i.noStroke()
-            const a = indices[i]
-            const b = indices[i + 1]
-            const c = indices[i + 2]
-            p5i.triangle(lerpedModulatedPoints[a].x, lerpedModulatedPoints[a].y, lerpedModulatedPoints[b].x, lerpedModulatedPoints[b].y, lerpedModulatedPoints[c].x, lerpedModulatedPoints[c].y)
-            p5i.pop()
+        const modulatedPoints = shape.points.map((pt, i) => {
+          return {
+            x: pt.x + Math.sin(now()*(1+rand(i))) * 50,
+            y: pt.y + Math.cos(now()*(1+rand(i))) * 50
           }
+        })
 
+        const lerpVal = sinN(now()*0.1)
+        const lerpedModulatedPoints = shape.points.map((pt, i) => {
+          return {
+            x: lerp(pt.x, modulatedPoints[i].x, lerpVal),
+            y: lerp(pt.y, modulatedPoints[i].y, lerpVal)
+          }
+        })
 
-
-
+        const flatPoints = shape.points.flatMap(pt => [pt.x, pt.y])
+        const indices = earcut(flatPoints)
+        //draw triangles
+        for (let i = 0; i < indices.length; i += 3) {
+          const col = randColor(i)
           p5i.push()
-          p5i.noFill()
-          p5i.stroke(255)
-          p5i.beginShape()
-
-          if(shape.spline === 'spline'){
-            p5i.curveVertex(shape.points[0].x, shape.points[0].y)
-            for (const pt of shape.points) {
-              p5i.curveVertex(pt.x, pt.y)
-            }
-            if(shape.closed){
-              p5i.curveVertex(shape.points[0].x, shape.points[0].y)
-              p5i.curveVertex(shape.points[1].x, shape.points[1].y)
-            } else {
-              p5i.curveVertex(shape.points[shape.points.length - 1].x, shape.points[shape.points.length - 1].y)
-            }
-          } else {
-            for (const pt of shape.points) {
-              p5i.vertex(pt.x, pt.y)
-            }
-            if(shape.closed){
-              p5i.vertex(shape.points[0].x, shape.points[0].y)
-            }
-          }
-          
-          p5i.endShape()
+          p5i.fill(col.r, col.g, col.b)
+          p5i.noStroke()
+          const a = indices[i]
+          const b = indices[i + 1]
+          const c = indices[i + 2]
+          p5i.triangle(lerpedModulatedPoints[a].x, lerpedModulatedPoints[a].y, lerpedModulatedPoints[b].x, lerpedModulatedPoints[b].y, lerpedModulatedPoints[c].x, lerpedModulatedPoints[c].y)
+          p5i.pop()
         }
 
+
+
+
+        p5i.push()
+        p5i.noFill()
+        p5i.stroke(255)
+        p5i.beginShape()
+
+        if(shape.spline === 'spline'){
+          p5i.curveVertex(shape.points[0].x, shape.points[0].y)
+          for (const pt of shape.points) {
+            p5i.curveVertex(pt.x, pt.y)
+          }
+          if(shape.closed){
+            p5i.curveVertex(shape.points[0].x, shape.points[0].y)
+            p5i.curveVertex(shape.points[1].x, shape.points[1].y)
+          } else {
+            p5i.curveVertex(shape.points[shape.points.length - 1].x, shape.points[shape.points.length - 1].y)
+          }
+        } else {
+          for (const pt of shape.points) {
+            p5i.vertex(pt.x, pt.y)
+          }
+          if(shape.closed){
+            p5i.vertex(shape.points[0].x, shape.points[0].y)
+          }
+        }
+        
+        p5i.endShape()
+
+
         p5i.pop()
+
+        bgCanvas.getContext('2d').drawImage(p5Canvas, 0, 0, p5Canvas.width, p5Canvas.height)
 
         layerOverlay.renderAll(appState.threeRenderer!!)
       }
       
-      shapeRenderMap.set(shape.id, { drawFunc, shaderGraphEndNode: layerOverlay })
+      shapeRenderMap.set(shapee.id, { drawFunc, shaderGraphEndNode: layerOverlay })
+    }
+
+    const compositeShaderEffect = new CompositeShaderEffect([
+      new Passthru({ src: p5Canvas }),
+    ], 10)
+
+    shaderGraphEndNode = compositeShaderEffect
+
+    const resetCompositeShaderEffect = () => {
+      const shapeEndNodes = Array.from(shapeRenderMap.values()).map(shape => shape.shaderGraphEndNode).map(node => node.output)
+      compositeShaderEffect.resetInputs(shapeEndNodes)
     }
 
     //@ts-ignore
@@ -151,6 +166,14 @@ onMounted(() => {
     //@ts-ignore
     window.editorReadyCallback = (editor: Editor) => {
       tldrawEditor = editor
+
+      editor.getPageShapeIds('page:page' as TLPageId).forEach(id => {
+        const shape = editor.getShape<MultiSegmentLineShape>(id)
+        if(shape.type === 'multiSegmentLine'){
+          onShapeCreated(shape)
+        }
+      })
+
       tldrawEditor.store.listen(onHistory => {
         console.log("store change",onHistory)
 
@@ -158,6 +181,7 @@ onMounted(() => {
           const shape = onHistory.changes.added[shapeId]
           if(shape.type === 'multiSegmentLine'){
             onShapeCreated(shape)
+            resetCompositeShaderEffect()
           }
         }
         
@@ -168,6 +192,7 @@ onMounted(() => {
             if(mapEntry){
               mapEntry.shaderGraphEndNode.disposeAll()
               shapeRenderMap.delete(shapeId)
+              resetCompositeShaderEffect()
             }
           }
         }
@@ -196,99 +221,7 @@ onMounted(() => {
         }
       })
       
-      let drawTicks = 0
-      appState.drawFuncMap.set('tldrawRender', () => {
-        
 
-        if (tldrawEditor) {
-          if(drawTicks++ % 10 === 0){
-            // console.log("rendering tldraw")
-
-            // console.log(appState.tldrawEditor.getInstanceState())
-          }
-          // p5FreehandTldrawRender(appState.tldrawEditor, p5i)
-
-          p5i.push()
-          p5i.strokeWeight(4)
-
-
-          const multiSegmentLineMap = getMultiSegmentLineShapes(tldrawEditor)
-
-          for (const [id, shape] of multiSegmentLineMap) {
-            const modulatedPoints = shape.points.map((pt, i) => {
-              return {
-                x: pt.x + Math.sin(now()*(1+rand(i))) * 50,
-                y: pt.y + Math.cos(now()*(1+rand(i))) * 50
-              }
-            })
-
-            const lerpVal = sinN(now()*0.1)
-            const lerpedModulatedPoints = shape.points.map((pt, i) => {
-              return {
-                x: lerp(pt.x, modulatedPoints[i].x, lerpVal),
-                y: lerp(pt.y, modulatedPoints[i].y, lerpVal)
-              }
-            })
-
-            const flatPoints = shape.points.flatMap(pt => [pt.x, pt.y])
-            const indices = earcut(flatPoints)
-            //draw triangles
-            for (let i = 0; i < indices.length; i += 3) {
-              const col = randColor(i)
-              p5i.push()
-              p5i.fill(col.r, col.g, col.b)
-              p5i.noStroke()
-              const a = indices[i]
-              const b = indices[i + 1]
-              const c = indices[i + 2]
-              p5i.triangle(lerpedModulatedPoints[a].x, lerpedModulatedPoints[a].y, lerpedModulatedPoints[b].x, lerpedModulatedPoints[b].y, lerpedModulatedPoints[c].x, lerpedModulatedPoints[c].y)
-              p5i.pop()
-            }
-
-
-
-
-            p5i.push()
-            p5i.noFill()
-            p5i.stroke(255)
-            p5i.beginShape()
-
-            if(shape.spline === 'spline'){
-              p5i.curveVertex(shape.points[0].x, shape.points[0].y)
-              for (const pt of shape.points) {
-                p5i.curveVertex(pt.x, pt.y)
-              }
-              if(shape.closed){
-                p5i.curveVertex(shape.points[0].x, shape.points[0].y)
-                p5i.curveVertex(shape.points[1].x, shape.points[1].y)
-              } else {
-                p5i.curveVertex(shape.points[shape.points.length - 1].x, shape.points[shape.points.length - 1].y)
-              }
-            } else {
-              for (const pt of shape.points) {
-                p5i.vertex(pt.x, pt.y)
-              }
-              if(shape.closed){
-                p5i.vertex(shape.points[0].x, shape.points[0].y)
-              }
-            }
-            
-            p5i.endShape()
-          }
-
-          p5i.pop()
-        }
-      })
-
-      const p5Passthru = new Passthru({ src: p5Canvas })
-      const feedback = new FeedbackNode(p5Passthru)
-      const vertBlur = new VerticalBlur({ src: feedback })
-      const horBlur = new HorizontalBlur({ src: vertBlur })
-      const transform = new Transform({ src: horBlur })
-      const layerOverlay = new LayerBlend({ src1: p5Passthru, src2: transform })
-      feedback.setFeedbackSrc(layerOverlay)
-      const canvasPaint = new CanvasPaint({ src: layerOverlay })
-      shaderGraphEndNode = canvasPaint
       appState.shaderDrawFunc = () => shaderGraphEndNode!!.renderAll(appState.threeRenderer!!)
       
       singleKeydownEvent('p', (ev) => { appState.paused = !appState.paused })

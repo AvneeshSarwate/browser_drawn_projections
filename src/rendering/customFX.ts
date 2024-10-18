@@ -1,3 +1,5 @@
+import * as THREE from 'three'
+
 import { CustomShaderEffect, ShaderEffect, errorImageTexture, type Dynamic, type ShaderSource, CustomFeedbackShaderEffect } from "./shaderFX"
 
 //used with the "glsl-literal" vscode plugin to get syntax highlighting for embedded glsl
@@ -293,4 +295,65 @@ export class RGDisplace extends CustomShaderEffect {
   }
 }
 
-  
+
+function generateCompositeShaderSource(numInputs: number): string {
+  let inputsDeclaration = '';
+  let inputSampling = '';
+
+  for (let i = 0; i < numInputs; i++) {
+    inputsDeclaration += `uniform sampler2D input${i};\n`;
+    inputSampling += `colors[${i}] = texture2D(input${i}, uv);\n`;
+
+  }
+
+  return `
+precision highp float;
+
+const int NUM_INPUTS = ${numInputs};
+
+${inputsDeclaration}
+
+varying vec2 vUV;
+
+void main() {
+  vec2 uv = vUV;
+  vec4 colors[NUM_INPUTS];
+
+  ${inputSampling}
+  vec4 color = vec4(0.0);
+  for (int i = 0; i < NUM_INPUTS; i++) {
+    color = color.a > colors[i].a ? color : colors[i];
+  }
+
+  gl_FragColor = color;
+}
+`;
+}
+
+export class CompositeShaderEffect extends CustomShaderEffect {
+  effectName = "CompositeShaderEffect";
+  numInputs: number;
+  constructor(inputs: ShaderSource[], numInputs: number, width = 1280, height = 720) {
+    const shaderSource = generateCompositeShaderSource(numInputs);
+    const inputObject: { [key: string]: ShaderSource } = {};
+    inputs.forEach((input, index) => {
+      inputObject[`input${index}`] = input;
+    });
+    super(shaderSource, inputObject, width, height);
+    this.numInputs = Math.max(numInputs, inputs.length);
+  }
+
+  //todo api - figure out how to genericize the types of inputs for this kind of thing to also take Shader FX and html5 canvases?
+  resetInputs(inputs: (THREE.Texture | THREE.WebGLRenderTarget)[]): void {
+    if (inputs.length > this.numInputs) {
+      throw new Error(`Number of inputs (${inputs.length}) is greater than the number of inputs in the shader (${this.numInputs})`);
+    }
+    const inputObject: { [key: string]: THREE.Texture | THREE.WebGLRenderTarget } = {};
+    inputs.forEach((input, index) => {
+      inputObject[`input${index}`] = input;
+    });
+    this.setUniforms(inputObject);
+  }
+}
+
+

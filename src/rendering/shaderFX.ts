@@ -4,7 +4,7 @@ import { planeVS } from './vertexShaders'
 export const errorImageTexture = new THREE.TextureLoader().load('src/assets/error.jpg')
 
 
-export type ShaderSource = THREE.Texture | THREE.WebGLRenderTarget | HTMLCanvasElement | ShaderEffect;
+export type ShaderSource = THREE.Texture | THREE.WebGLRenderTarget | HTMLCanvasElement | ShaderEffect | OffscreenCanvas;
 export type ShaderInputs = {
   [key: string]: ShaderSource
 };
@@ -15,7 +15,7 @@ type ThreeColor = THREE.Color;
 type ThreeVectorArray = ThreeVector[];
 
 export type Dynamic<T> = T | (() => T)
-export type ShaderUniform = number | number[] | ThreeVector | ThreeMatrix | ThreeColor | ThreeVectorArray | THREE.Texture
+export type ShaderUniform = number | number[] | ThreeVector | ThreeMatrix | ThreeColor | ThreeVectorArray | THREE.Texture | THREE.WebGLRenderTarget
 export type ShaderUniforms = {
   [key: string]: Dynamic<ShaderUniform>
 }
