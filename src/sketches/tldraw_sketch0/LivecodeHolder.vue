@@ -59,6 +59,9 @@ onMounted(() => {
       console.log("onShapeCreated", shapee.id)
       const bgCanvas = new OffscreenCanvas(p5Canvas.width, p5Canvas.height)
 
+      //@ts-ignore
+      bgCanvas.name = shapee.id
+
       const p5Passthru = new Passthru({ src: bgCanvas })
       p5Passthru.debugId = `p5Passthru-${shapee.id}`
       const feedback = new FeedbackNode(p5Passthru)
@@ -161,8 +164,8 @@ onMounted(() => {
 
     const initalPassthru = new Passthru({ src: p5Canvas })
     const compositeShaderEffect = new CompositeShaderEffect([
-      initalPassthru,
-    ], 10)
+      initalPassthru, 
+    ], 1)
     initalPassthru.debugId = "initialPassthru"
 
     const canvasPaint = new CanvasPaint({ src: compositeShaderEffect })

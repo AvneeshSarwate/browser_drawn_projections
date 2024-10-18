@@ -318,14 +318,20 @@ varying vec2 vUV;
 void main() {
   vec2 uv = vUV;
   vec4 colors[NUM_INPUTS];
-
-  ${inputSampling}
-  vec4 color = vec4(0.0);
   for (int i = 0; i < NUM_INPUTS; i++) {
-    color = color.a > colors[i].a ? color : colors[i];
+    colors[i] = vec4(0.0);  // Initialize each element to (0.0, 0.0, 0.0, 0.0)
   }
 
-  gl_FragColor = texture2D(input3, uv).aaaa;
+
+  vec4 color = vec4(0.0);
+  ${inputSampling}
+  for (int i = 0; i < NUM_INPUTS; i++) {
+    color = colors[i].a > color.a ? colors[i] : color;
+    // color += colors[i];
+  }
+
+
+  // gl_FragColor = texture2D(input4, uv).aaaa;
   gl_FragColor = color;
 }
 `;
@@ -352,7 +358,11 @@ export class CompositeShaderEffect extends CustomShaderEffect {
   //todo api - figure out how to genericize the types of inputs for this kind of thing to also take Shader FX and html5 canvases?
   resetInputs(inputs: ShaderEffect[]): void {
     if (inputs.length > this.numInputs) {
-      throw new Error(`Number of inputs (${inputs.length}) is greater than the number of inputs in the shader (${this.numInputs})`);
+      // throw new Error(`Number of inputs (${inputs.length}) is greater than the number of inputs in the shader (${this.numInputs})`);
+      //need to rebuild shader when number of inputs changes because having/using unused texture inputs is undefined behavior
+      //and completely messes up the shader
+      this.setShader(generateCompositeShaderSource(inputs.length))
+      this.numInputs = inputs.length
     }
     const inputObject: { [key: string]: ShaderEffect } = {};
     inputs.forEach((input, index) => {
