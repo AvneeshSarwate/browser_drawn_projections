@@ -4,7 +4,7 @@ import { type TldrawTestAppState, appStateName } from './appState';
 import { inject, onMounted, onUnmounted, ref } from 'vue';
 import { CanvasPaint, FeedbackNode, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
-import type p5 from 'p5';
+import p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri, now } from '@/channels/channels';
 import { getEllipseShapes, getFreehandShapes, getMultiSegmentLineShapes, p5FreehandTldrawRender } from './tldrawWrapperPlain';
 import { CompositeShaderEffect, HorizontalBlur, LayerBlend, Transform, VerticalBlur } from '@/rendering/customFX';
@@ -56,19 +56,27 @@ onMounted(() => {
 
 
     const onShapeCreated = (shapee: MultiSegmentLineShape) => {
-      console.log("onShapeCreated", shapee)
+      console.log("onShapeCreated", shapee.id)
       const bgCanvas = new OffscreenCanvas(p5Canvas.width, p5Canvas.height)
 
       const p5Passthru = new Passthru({ src: bgCanvas })
+      p5Passthru.debugId = `p5Passthru-${shapee.id}`
       const feedback = new FeedbackNode(p5Passthru)
+      feedback.debugId = `feedback-${shapee.id}`
       const vertBlur = new VerticalBlur({ src: feedback })
+      vertBlur.debugId = `vertBlur-${shapee.id}`
       const horBlur = new HorizontalBlur({ src: vertBlur })
+      horBlur.debugId = `horBlur-${shapee.id}`
       const transform = new Transform({ src: horBlur })
+      transform.debugId = `transform-${shapee.id}`
       const layerOverlay = new LayerBlend({ src1: p5Passthru, src2: transform })
+      layerOverlay.debugId = `layerOverlay-${shapee.id}`
       feedback.setFeedbackSrc(layerOverlay)
 
+      
+
       const drawFunc = (p5i: p5) => {
-        p5i.clear(0,0,0,0)
+        p5i.clear()
 
         p5i.push()
         p5i.strokeWeight(4)
@@ -107,9 +115,6 @@ onMounted(() => {
           p5i.pop()
         }
 
-
-
-
         p5i.push()
         p5i.noFill()
         p5i.stroke(255)
@@ -140,22 +145,32 @@ onMounted(() => {
 
         p5i.pop()
 
-        bgCanvas.getContext('2d').drawImage(p5Canvas, 0, 0, p5Canvas.width, p5Canvas.height)
+        const bgCtx = bgCanvas.getContext('2d')
+        bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height)
+        bgCtx.drawImage(p5Canvas, 0, 0, bgCanvas.width, bgCanvas.height)
+        const debugCanvas = document.getElementById('debugCanvas') as HTMLCanvasElement
+        const debugCtx = debugCanvas.getContext('2d')
+        debugCtx.clearRect(0, 0, debugCanvas.width, debugCanvas.height)
+        debugCtx.drawImage(bgCanvas, 0, 0, debugCanvas.width, debugCanvas.height)
 
-        layerOverlay.renderAll(appState.threeRenderer!!)
+        // layerOverlay.renderAll(appState.threeRenderer!!)
       }
       
       shapeRenderMap.set(shapee.id, { drawFunc, shaderGraphEndNode: layerOverlay })
     }
 
+    const initalPassthru = new Passthru({ src: p5Canvas })
     const compositeShaderEffect = new CompositeShaderEffect([
-      new Passthru({ src: p5Canvas }),
+      initalPassthru,
     ], 10)
+    initalPassthru.debugId = "initialPassthru"
 
-    shaderGraphEndNode = compositeShaderEffect
+    const canvasPaint = new CanvasPaint({ src: compositeShaderEffect })
+    
+    shaderGraphEndNode = canvasPaint
 
     const resetCompositeShaderEffect = () => {
-      const shapeEndNodes = Array.from(shapeRenderMap.values()).map(shape => shape.shaderGraphEndNode).map(node => node.output)
+      const shapeEndNodes = Array.from(shapeRenderMap.values()).map(shape => shape.shaderGraphEndNode)
       compositeShaderEffect.resetInputs(shapeEndNodes)
     }
 
@@ -173,6 +188,8 @@ onMounted(() => {
           onShapeCreated(shape)
         }
       })
+
+      resetCompositeShaderEffect()
 
       tldrawEditor.store.listen(onHistory => {
         console.log("store change",onHistory)

@@ -30,6 +30,7 @@ export abstract class ShaderEffect {
   abstract setUniforms(uniforms: ShaderUniforms): void
   abstract updateUniforms(): void
   abstract output: THREE.WebGLRenderTarget
+  public debugId: string = "unset"
   effectName: string = "unset"
   width: number = 1280
   height: number = 720
@@ -200,7 +201,7 @@ export class CustomShaderEffect extends ShaderEffect {
   updateSources(): void {
     for (const key in this.inputs) {
       const input = this.inputs[key]
-      if (input instanceof HTMLCanvasElement) {
+      if (input instanceof HTMLCanvasElement || input instanceof OffscreenCanvas) {
         this.material.uniforms[key].value.needsUpdate = true
       }
     }

@@ -20,6 +20,7 @@
     <p><h3>Shader post-processing with three.js</h3></p>
     <br>
     <canvas id="threeCanvas" width="1280" height="720" abitrary-prop="somethi"></canvas>
+    <canvas id="debugCanvas" width="1280" height="720" abitrary-prop="somethi"></canvas>
   </div>
   <div id="debugInfo"></div>
 </template>
