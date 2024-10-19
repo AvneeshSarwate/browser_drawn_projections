@@ -6,7 +6,7 @@ import { CanvasPaint, FeedbackNode, Passthru, type ShaderEffect } from '@/render
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri, now } from '@/channels/channels';
-import { getEllipseShapes, getFreehandShapes, getMultiSegmentLineShapes, p5FreehandTldrawRender } from './tldrawWrapperPlain';
+import { getEllipseShapes, getFreehandShapes, getMultiSegmentLineShapes, getTransformedShapePoints, p5FreehandTldrawRender } from './tldrawWrapperPlain';
 import { CompositeShaderEffect, HorizontalBlur, LayerBlend, Transform, VerticalBlur } from '@/rendering/customFX';
 import AutoUI from '@/components/AutoUI.vue';
 import { lerp, type Editor, type TLPageId } from 'tldraw';
@@ -53,7 +53,7 @@ onMounted(() => {
     const p5i = appState.p5Instance!!
     const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
     const threeCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
-
+    let tldrawCamera = {x: 0, y: 0, z: 1}
 
     const onShapeCreated = (shapee: MultiSegmentLineShape) => {
       console.log("onShapeCreated", shapee.id)
@@ -76,7 +76,9 @@ onMounted(() => {
       layerOverlay.debugId = `layerOverlay-${shapee.id}`
       feedback.setFeedbackSrc(layerOverlay)
 
-      
+      const bgCtx = bgCanvas.getContext('2d')
+      // const debugCanvas = document.getElementById('debugCanvas') as HTMLCanvasElement
+      // const debugCtx = debugCanvas.getContext('2d')
 
       const drawFunc = (p5i: p5) => {
         p5i.clear()
@@ -87,6 +89,10 @@ onMounted(() => {
 
         const multiSegmentLineMap = getMultiSegmentLineShapes(tldrawEditor)
         const shape = multiSegmentLineMap.get(shapee.id)
+        if(!shape){
+          console.warn("shape not found", shapee.id)
+          return
+        }
 
         const modulatedPoints = shape.points.map((pt, i) => {
           return {
@@ -148,13 +154,12 @@ onMounted(() => {
 
         p5i.pop()
 
-        const bgCtx = bgCanvas.getContext('2d')
+        
         bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height)
         bgCtx.drawImage(p5Canvas, 0, 0, bgCanvas.width, bgCanvas.height)
-        const debugCanvas = document.getElementById('debugCanvas') as HTMLCanvasElement
-        const debugCtx = debugCanvas.getContext('2d')
-        debugCtx.clearRect(0, 0, debugCanvas.width, debugCanvas.height)
-        debugCtx.drawImage(bgCanvas, 0, 0, debugCanvas.width, debugCanvas.height)
+        
+        // debugCtx.clearRect(0, 0, debugCanvas.width, debugCanvas.height)
+        // debugCtx.drawImage(bgCanvas, 0, 0, debugCanvas.width, debugCanvas.height)
 
         // layerOverlay.renderAll(appState.threeRenderer!!)
       }
@@ -207,6 +212,7 @@ onMounted(() => {
         
         for (const shapeId in onHistory.changes.removed) {
           const shape = onHistory.changes.removed[shapeId]
+          console.log("shape removed", shapeId)
           if(shape.type === 'multiSegmentLine'){
             const mapEntry = shapeRenderMap.get(shapeId)
             if(mapEntry){
@@ -218,6 +224,18 @@ onMounted(() => {
         }
 
       }, { scope: 'document', source: 'user' })
+
+      tldrawEditor.store.listen(onHistory => {
+        // console.log("session store change",onHistory)
+        for(const itemId in onHistory.changes.updated){
+          const item = onHistory.changes.updated[itemId]
+          // console.log("item updated", itemId, item.type)
+          if(itemId.split(':')[0] === 'camera'){
+            console.log("camera updated", item)
+            tldrawCamera = editor.getCamera()
+          }
+        }
+      }, { scope: 'session', source: 'user' })
     }
 
     
@@ -255,7 +273,14 @@ onMounted(() => {
 
 })
 
-
+/**
+ * music viz mapping
+ *  - loop where height controls pitch of note, width relative to bounding box
+ *    controls velocity, and other aspects of the shape control timbre
+ *  - deviation from circle area controls low pass filter (more circle, more low pass)
+ *  - note on events trigger small animations on the shape track 
+ *  - other visuals options can be directly mapped to music synthesis parameters
+ */
 
 onUnmounted(() => {
   console.log("disposing livecoded resources")

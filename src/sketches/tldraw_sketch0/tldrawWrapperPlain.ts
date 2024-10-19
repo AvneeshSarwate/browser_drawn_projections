@@ -100,6 +100,10 @@ export function applyInverseMatrix(matrix: number[][], pt: {x: number, y: number
 function cameraTransform(editor: Editor): number[][] {
   const camera = editor.getCamera()
 
+  return rawCameraTransform(camera)
+}
+
+function rawCameraTransform(camera: {x: number, y: number, z: number}): number[][] {
   const scaleMatrix = [
     [camera.z, 0, 0],
     [0, camera.z, 0],
@@ -157,6 +161,21 @@ export function getFreehandShapes(editor: Editor) {
 
   return shapes
 }
+
+export function getTransformedShapePoints(shape: MultiSegmentLineShape, camera: {x: number, y: number, z: number}) {
+  const shapePts: {x: number, y: number}[] = []
+
+  const totalTransform = multiplyMatrices(rawCameraTransform(camera), shapeTransform(shape))
+
+  const points = shape.props.points
+  for (const point of points) {
+    const transformedPt = applyMatrix(totalTransform, point)
+    shapePts.push(transformedPt)
+  }
+
+  return shapePts
+}
+
 
 export function getMultiSegmentLineShapes(editor: Editor) {
   const shapes: Map<string, MultiSegmentLineShape['props']> = new Map()

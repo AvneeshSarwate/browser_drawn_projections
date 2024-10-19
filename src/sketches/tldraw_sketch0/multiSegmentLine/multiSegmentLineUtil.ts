@@ -186,17 +186,6 @@ export class MultiSegmentLineUtil extends ShapeUtil<MultiSegmentLineShape> {
       .map((p) => `${p.x},${p.y}`)
       .join(" ");
     const points = shape.props.points;
-    const curvePointsString =
-      `M${points[0].x},${points[0].y}` +
-      points
-        .slice(1)
-        .map((p, i) => {
-          const cpX = (points[i].x + p.x) / 2;
-          const cpY = (points[i].y + p.y) / 2;
-          return ` S${cpX},${cpY} ${p.x},${p.y}`;
-        })
-        .join("");
-
     const closed = shape.props.closed;
     const spline = shape.props.spline;
 

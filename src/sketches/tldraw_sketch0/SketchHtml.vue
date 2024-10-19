@@ -33,7 +33,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { MyTldrawWrapper } from './tldrawWrapperPlain';
 import { type Editor, type TLEditorSnapshot } from 'tldraw';
 import { appStateName, type TldrawTestAppState } from './appState';
-import { snapshot2 } from './snapshots';
+import { snapshot2duplicates } from './snapshots';
 
 const reactRoot = ref<HTMLElement | null>(null);
 let root: Root | null = null;
@@ -63,7 +63,7 @@ const handleEditorReady = (editor: Editor) => {
     console.log('shape ids', editor.getCurrentPageShapeIds())
   
     //@ts-ignore
-    editor.loadSnapshot(snapshot2 as Partial<TLEditorSnapshot>)
+    editor.loadSnapshot(snapshot2duplicates as Partial<TLEditorSnapshot>)
     
     // editor.getSnapshot()
     snapshotLoaded = true
