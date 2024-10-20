@@ -153,6 +153,7 @@ onMounted(() => {
 
 
         p5i.pop()
+        p5i.pop()
 
         
         bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height)
