@@ -235,6 +235,20 @@ onMounted(() => {
             console.log("camera updated", item)
             tldrawCamera = editor.getCamera()
           }
+          // if(itemId != "pointer:pointer"){
+          //   console.log("session store change", itemId, item)
+          // }
+          if(item[0]?.selectedShapeIds){
+            console.log("selected shape ids", item[0].selectedShapeIds)
+          }
+          if(item[0]?.hoveredShapeId){
+            console.log("hovered shape id", item[0].hoveredShapeId)
+          }
+          //for arbitrary shape related metadata, define a default value/shape property,
+          //and then when you open the metadata editor, initialize with the default value.
+          //The editor component can be the vue AutoUI component, and can save the value
+          //back to tldraw. Might need to add a "save" button and an indicator that data
+          //has been changed.
         }
       }, { scope: 'session', source: 'user' })
     }
