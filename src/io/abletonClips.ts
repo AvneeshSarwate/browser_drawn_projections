@@ -168,3 +168,47 @@ export async function INITIALIZE_ABLETON_CLIPS(fileName: string) {
 
 
 
+/*
+different types of transformations (for now, of monophonic material)
+- vertical stretch/squash (keeps same melodic contour)
+    optionally stays in scale
+    can optionally be centered on a note
+- inversion
+    optionally stays in scale
+    can optionally be centered on a note
+- retrograde
+- be able to apply these transforms to a time slice of a clip
+- lerp between two different melodic contours?
+    create a multi-segment line from where the notes are,
+    fill in the blank subdivisions with interpolated notes,
+    then lerp, then drop the interpolated notes to retain original rhythm
+
+*/
+
+
+/*
+add a quick way to take some clip manipulations and render them out 
+to a midi file (so you can import them back to ableton). this also
+requires changing/adding some data to the AbletonClip class, or adding
+some "renderer" class that can be written to (which holds the data) before
+being written to a midi file.
+
+If you add a targetClip.writeNotes(startOffset, sourceClip) method, 
+that could be enough? Would need to handle note overlaps (do the same way 
+ableton does? or add other options?)
+)
+*/
+
+/*
+- already have a helper for abstract chords/scales
+- and already have a helper for rendered notes
+- need a helper for abstract rhythms
+- between chords/scales + rhythms, can generate rendered melodies
+- also might need a helper for synth param ramps/expressions
+- also might need a melodic countour helper
+
+with these building blocks, can start composing generative music
+with "mid level" abstractions that are more concrete than rules
+but less explicit than explicit melodic/harmonic fragments
+
+*/
