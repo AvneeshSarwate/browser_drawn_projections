@@ -26,18 +26,25 @@ const clearDrawFuncs = () => {
 const m2f = (m: number) => Tone.Frequency(m, 'midi').toFrequency()
 
 const midiNote = ref(60)
-const osc0Fine = ref(0)
-const osc0Coarse = ref(1)
-const osc0Gain = ref(0.5)
-const osc1Fine = ref(0)
-const osc1Coarse = ref(1)
-const osc1Gain = ref(0.5)
-const osc2Fine = ref(0)
-const osc2Coarse = ref(1)
-const osc2Gain = ref(0.5)
-const osc3Fine = ref(0)
-const osc3Coarse = ref(1)
-const osc3Gain = ref(0.5)
+
+//coarse corse is [0.5, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+//fine is [0, 1]
+//gain is [-100, 0]
+const oscSliders = ref({
+  osc0: { fine: 0, coarse: 1, gain: 0 },
+  osc1: { fine: 0, coarse: 1, gain: 0 },
+  osc2: { fine: 0, coarse: 1, gain: 0 },
+  osc3: { fine: 0, coarse: 1, gain: 0 },
+})
+
+// document.addEventListener('mousedown', async (ev) => {
+//   await Tone.start()
+// })
+
+let changeOscSlider: (ev: Event) => void = () => {}
+let changeMidiNote: (ev: Event) => void = () => {}
+let turnOnNote: () => void = () => {}
+let turnOffNote: () => void = () => {}
 
 onMounted(() => {
   try {
@@ -54,15 +61,13 @@ onMounted(() => {
     const code = async () => { //todo template - is this code-array pattern really needed in the template?
       clearDrawFuncs() //todo template - move this to cleanup block?
 
-      await Tone.start()
-
-
       const rootFreqSig = new Tone.Signal(m2f(midiNote.value))
 
       const osc0 = new Tone.Oscillator('sine')
-      const o0CoarseSig = new Tone.Signal(osc0Coarse.value)
-      const o0FineSig = new Tone.Signal(osc0Fine.value)
-      const o0GainSig = new Tone.Signal(osc0Gain.value)
+      const o0CoarseSig = new Tone.Signal(oscSliders.value.osc0.coarse)
+      const o0FineSig = new Tone.Signal(oscSliders.value.osc0.fine)
+      const o0GainSig = new Tone.Signal(oscSliders.value.osc0.gain)
+      const o0Params = {coarse: o0CoarseSig, fine: o0FineSig, gain: o0GainSig}
 
       const o0CoarseMult = new Tone.Multiply()
       o0CoarseSig.connect(o0CoarseMult)
@@ -88,10 +93,10 @@ onMounted(() => {
 
 
       const osc1 = new Tone.Oscillator('sine')
-      const o1CoarseSig = new Tone.Signal(osc1Coarse.value)
-      const o1FineSig = new Tone.Signal(osc1Fine.value)
-      const o1GainSig = new Tone.Signal(osc1Gain.value)
-
+      const o1CoarseSig = new Tone.Signal(oscSliders.value.osc1.coarse)
+      const o1FineSig = new Tone.Signal(oscSliders.value.osc1.fine)
+      const o1GainSig = new Tone.Signal(oscSliders.value.osc1.gain)
+      const o1Params = {coarse: o1CoarseSig, fine: o1FineSig, gain: o1GainSig}
       const o1CoarseMult = new Tone.Multiply()
       o1CoarseSig.connect(o1CoarseMult)
       rootFreqSig.connect(o1CoarseMult)
@@ -120,23 +125,103 @@ onMounted(() => {
 
 
       const osc2 = new Tone.Oscillator('sine')
-      const o2CoarseSig = new Tone.Signal(osc2Coarse.value)
-      const o2FineSig = new Tone.Signal(osc2Fine.value)
-      const o2GainSig = new Tone.Signal(osc2Gain.value)
+      const o2CoarseSig = new Tone.Signal(oscSliders.value.osc2.coarse)
+      const o2FineSig = new Tone.Signal(oscSliders.value.osc2.fine)
+      const o2GainSig = new Tone.Signal(oscSliders.value.osc2.gain)
+      const o2Params = {coarse: o2CoarseSig, fine: o2FineSig, gain: o2GainSig}
+      const o2CoarseMult = new Tone.Multiply()
+      o2CoarseSig.connect(o2CoarseMult)
+      rootFreqSig.connect(o2CoarseMult)
 
+      const o2FineMult = new Tone.Multiply()
+      o2FineSig.connect(o2FineMult)
+      rootFreqSig.connect(o2FineMult)
+
+      const o2modMult = new Tone.Add()
+      o2CoarseMult.connect(o2modMult)
+      o2FineMult.connect(o2modMult)
+
+      const o2modFreq = new Tone.Add()
+      o2modMult.connect(o2modFreq)
+      rootFreqSig.connect(o2modFreq)
+
+      const o2lastStage = new Tone.Add()
+      osc1.connect(o2lastStage)
+      o2modFreq.connect(o2lastStage)
+
+      o2lastStage.connect(osc2.frequency)
+      o2GainSig.connect(osc2.volume)
 
 
 
 
 
       const osc3 = new Tone.Oscillator('sine')
-      const o3CoarseSig = new Tone.Signal(osc3Coarse.value)
-      const o3FineSig = new Tone.Signal(osc3Fine.value)
-      const o3GainSig = new Tone.Signal(osc3Gain.value)
+      const o3CoarseSig = new Tone.Signal(oscSliders.value.osc3.coarse)
+      const o3FineSig = new Tone.Signal(oscSliders.value.osc3.fine)
+      const o3GainSig = new Tone.Signal(oscSliders.value.osc3.gain)
+      const o3Params = {coarse: o3CoarseSig, fine: o3FineSig, gain: o3GainSig}
 
+      const o3CoarseMult = new Tone.Multiply()
+      o3CoarseSig.connect(o3CoarseMult)
+      rootFreqSig.connect(o3CoarseMult)
+
+      const o3FineMult = new Tone.Multiply()
+      o3FineSig.connect(o3FineMult)
+      rootFreqSig.connect(o3FineMult)
+
+      const o3modMult = new Tone.Add()
+      o3CoarseMult.connect(o3modMult)
+      o3FineMult.connect(o3modMult)
+
+      const o3modFreq = new Tone.Add()
+      o3modMult.connect(o3modFreq)
+      rootFreqSig.connect(o3modFreq)
+
+      const o3lastStage = new Tone.Add()
+      osc2.connect(o3lastStage)
+      o3modFreq.connect(o3lastStage)
+
+      o3lastStage.connect(osc3.frequency)
+      o3GainSig.connect(osc3.volume)
+
+      const adsr = new Tone.AmplitudeEnvelope()
+      osc3.connect(adsr)
+      adsr.toDestination()
+
+      turnOnNote = () => {
+        adsr.triggerAttack()
+      }
+
+      turnOffNote = () => {
+        adsr.triggerRelease()
+      }
+
+      changeMidiNote = (ev: Event) => {
+        const target = ev.target as HTMLInputElement
+        midiNote.value = parseFloat(target.value)
+        rootFreqSig.setValueAtTime(m2f(midiNote.value), Tone.now())
+      }
+
+      const sliderParams = {
+        osc0: o0Params,
+        osc1: o1Params,
+        osc2: o2Params,
+        osc3: o3Params,
+      }
+
+      changeOscSlider = (ev: Event) => {
+        const target = ev.target as HTMLInputElement
+        const [osc, param] = target.name.split('-')
+        sliderParams[osc][param].setValueAtTime(parseFloat(target.value), Tone.now())
+      }
+
+      osc0.start()
+      osc1.start()
+      osc2.start()
+      osc3.start()
 
       
-
 
 
 
@@ -170,7 +255,30 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div></div>
+  <label>midi note</label>
+  <input type="range" v-model="midiNote" min="0" max="127" step="1" @onchange="changeMidiNote($event)" />
+  <span style="padding-right: 10px; margin-left: 3px">{{ midiNote }}</span>
+  <button @click="turnOnNote">on</button>
+  <button @click="turnOffNote">off</button>
+  <li v-for="k in Object.keys(oscSliders)" :key="k" :style="{marginLeft: '10px'}">
+    <div>
+      <span style="border: 1px solid black; padding: 2px;">
+        <label>{{ k + " fine" }}</label>
+        <input type="range" @name="k+'-fine'" v-model="oscSliders[k].fine" min="0" max="1" step="0.01" @onchange="changeOscSlider($event)" />
+        <span style="padding-right: 10px; margin-left: 3px">{{ oscSliders[k].fine }}</span>
+      </span>
+      <span style="border: 1px solid black; padding: 2px;">
+        <label>{{ k + " coarse" }}</label>
+        <input type="range" @name="k+'-coarse'" v-model="oscSliders[k].coarse" min="0.5" max="10" step="0.1" @onchange="changeOscSlider($event)" />
+        <span style="padding-right: 10px; margin-left: 3px">{{ oscSliders[k].coarse }}</span>
+      </span>
+      <span style="border: 1px solid black; padding: 2px;">
+        <label>{{ k + " gain" }}</label>
+        <input type="range" @name="k+'-gain'" v-model="oscSliders[k].gain" min="-100" max="0" step="1" @onchange="changeOscSlider($event)" />
+        <span style="padding-right: 10px; margin-left: 3px">{{ oscSliders[k].gain }}</span>
+      </span>
+    </div>
+  </li>
 </template>
 
 <style scoped></style>
