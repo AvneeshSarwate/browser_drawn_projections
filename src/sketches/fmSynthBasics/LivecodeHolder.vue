@@ -75,21 +75,21 @@ onMounted(() => {
 
       const o0CoarseMult = new Tone.Multiply()
       o0CoarseSig.connect(o0CoarseMult)
-      rootFreqSig.connect(o0CoarseMult)
+      rootFreqSig.connect(o0CoarseMult.factor)
 
       const o0FineMult = new Tone.Multiply()
       o0FineSig.connect(o0FineMult)
-      rootFreqSig.connect(o0FineMult)
+      rootFreqSig.connect(o0FineMult.factor)
 
-      const o0modMult = new Tone.Add()
-      o0CoarseMult.connect(o0modMult)
-      o0FineMult.connect(o0modMult)
+      const o0modAdd = new Tone.Add()
+      o0CoarseMult.connect(o0modAdd)
+      o0FineMult.connect(o0modAdd.addend)
 
-      const o0modFreq = new Tone.Add()
-      o0modMult.connect(o0modFreq)
-      rootFreqSig.connect(o0modFreq)
+      const o0rootfreqAdd = new Tone.Add()
+      o0modAdd.connect(o0rootfreqAdd)
+      rootFreqSig.connect(o0rootfreqAdd.addend)
 
-      o0modFreq.connect(osc0.frequency)
+      o0rootfreqAdd.connect(osc0.frequency)
       o0GainSig.connect(osc0.volume)
 
 
@@ -101,25 +101,26 @@ onMounted(() => {
       const o1FineSig = new Tone.Signal(oscSliders.value.osc1.fine)
       const o1GainSig = new Tone.Signal(oscSliders.value.osc1.gain)
       const o1Params = {coarse: o1CoarseSig, fine: o1FineSig, gain: o1GainSig}
+
       const o1CoarseMult = new Tone.Multiply()
       o1CoarseSig.connect(o1CoarseMult)
       rootFreqSig.connect(o1CoarseMult)
 
       const o1FineMult = new Tone.Multiply()
       o1FineSig.connect(o1FineMult)
-      rootFreqSig.connect(o1FineMult)
+      rootFreqSig.connect(o1FineMult.factor)
 
-      const o1modMult = new Tone.Add()
-      o1CoarseMult.connect(o1modMult)
-      o1FineMult.connect(o1modMult)
+      const o1modAdd = new Tone.Add()
+      o1CoarseMult.connect(o1modAdd)
+      o1FineMult.connect(o1modAdd.addend)
 
-      const o1modFreq = new Tone.Add()
-      o1modMult.connect(o1modFreq)
-      rootFreqSig.connect(o1modFreq)
+      const o1rootfreqAdd = new Tone.Add()
+      o1modAdd.connect(o1rootfreqAdd)
+      rootFreqSig.connect(o1rootfreqAdd.addend)
 
       const o1lastStage = new Tone.Add()
       osc0.connect(o1lastStage)
-      o1modFreq.connect(o1lastStage)
+      o1rootfreqAdd.connect(o1lastStage.addend)
 
       o1lastStage.connect(osc1.frequency)
       o1GainSig.connect(osc1.volume)
@@ -133,25 +134,26 @@ onMounted(() => {
       const o2FineSig = new Tone.Signal(oscSliders.value.osc2.fine)
       const o2GainSig = new Tone.Signal(oscSliders.value.osc2.gain)
       const o2Params = {coarse: o2CoarseSig, fine: o2FineSig, gain: o2GainSig}
+
       const o2CoarseMult = new Tone.Multiply()
       o2CoarseSig.connect(o2CoarseMult)
-      rootFreqSig.connect(o2CoarseMult)
+      rootFreqSig.connect(o2CoarseMult.factor)
 
       const o2FineMult = new Tone.Multiply()
       o2FineSig.connect(o2FineMult)
-      rootFreqSig.connect(o2FineMult)
+      rootFreqSig.connect(o2FineMult.factor)
 
-      const o2modMult = new Tone.Add()
-      o2CoarseMult.connect(o2modMult)
-      o2FineMult.connect(o2modMult)
+      const o2modAdd = new Tone.Add()
+      o2CoarseMult.connect(o2modAdd)
+      o2FineMult.connect(o2modAdd.addend)
 
-      const o2modFreq = new Tone.Add()
-      o2modMult.connect(o2modFreq)
-      rootFreqSig.connect(o2modFreq)
+      const o2rootfreqAdd = new Tone.Add()
+      o2modAdd.connect(o2rootfreqAdd)
+      rootFreqSig.connect(o2rootfreqAdd.addend)
 
       const o2lastStage = new Tone.Add()
       osc1.connect(o2lastStage)
-      o2modFreq.connect(o2lastStage)
+      o2rootfreqAdd.connect(o2lastStage.addend)
 
       o2lastStage.connect(osc2.frequency)
       o2GainSig.connect(osc2.volume)
@@ -168,23 +170,23 @@ onMounted(() => {
 
       const o3CoarseMult = new Tone.Multiply()
       o3CoarseSig.connect(o3CoarseMult)
-      rootFreqSig.connect(o3CoarseMult)
+      rootFreqSig.connect(o3CoarseMult.factor)
 
       const o3FineMult = new Tone.Multiply()
       o3FineSig.connect(o3FineMult)
-      rootFreqSig.connect(o3FineMult)
+      rootFreqSig.connect(o3FineMult.factor)
 
-      const o3modMult = new Tone.Add()
-      o3CoarseMult.connect(o3modMult)
-      o3FineMult.connect(o3modMult)
+      const o3modAdd = new Tone.Add()
+      o3CoarseMult.connect(o3modAdd)
+      o3FineMult.connect(o3modAdd.addend)
 
-      const o3modFreq = new Tone.Add()
-      o3modMult.connect(o3modFreq)
-      rootFreqSig.connect(o3modFreq)
+      const o3rootfreqAdd = new Tone.Add()
+      o3modAdd.connect(o3rootfreqAdd)
+      rootFreqSig.connect(o3rootfreqAdd.addend)
 
       const o3lastStage = new Tone.Add()
       osc2.connect(o3lastStage)
-      o3modFreq.connect(o3lastStage)
+      o3rootfreqAdd.connect(o3lastStage.addend)
 
       o3lastStage.connect(osc3.frequency)
       o3GainSig.connect(osc3.volume)
@@ -218,8 +220,19 @@ onMounted(() => {
       changeOscSlider = (ev: Event) => {
         const target = ev.target as HTMLInputElement
         const [osc, param] = target.name.split('-')
-        console.log("changeOscSlider", osc, param, sliderParams[osc][param],target.value)
-        sliderParams[osc][param].setValueAtTime(parseFloat(target.value), Tone.now())
+        const sig = sliderParams[osc][param] as Tone.Signal
+        sig.setValueAtTime(parseFloat(target.value), Tone.now())
+
+        const freq3 = osc3.frequency.value
+        const finemult3 = o3FineMult.getValueAtTime(Tone.now())
+        const coarse3 = o3CoarseMult.getValueAtTime(Tone.now())
+        const gain3 = o3GainSig.getValueAtTime(Tone.now())
+        console.log("changeOscSlider", osc, param, sliderParams[osc][param],target.value, sig.value)
+        console.log("freq3", freq3, "finemult3", finemult3, "coarse3", coarse3, "gain3", gain3)
+        const fineval3 = o3FineSig.getValueAtTime(Tone.now())
+        const coarseval3 = o3CoarseSig.getValueAtTime(Tone.now())
+        console.log("fineval3", fineval3, "coarseval3", coarseval3)
+        console.log('\n')
       }
 
       osc0.start()
