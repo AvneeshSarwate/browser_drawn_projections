@@ -37,13 +37,16 @@ const oscSliders = ref({
   osc3: { fine: 0, coarse: 1, gain: 0 },
 })
 
-const toneStartListener =  async (ev) => {
-  console.log("mousedown")
-  await Tone.start()
-  console.log("fm tone started")
-  document.removeEventListener('mousedown', toneStartListener)
-}
-document.addEventListener('mousedown', toneStartListener)
+const toneStartPromise = new Promise<void>(resolve => {
+  const toneStartListener =  async (ev) => {
+    console.log("mousedown")
+    await Tone.start()
+    console.log("fm tone started")
+    document.removeEventListener('mousedown', toneStartListener)
+    resolve()
+  }
+  document.addEventListener('mousedown', toneStartListener)
+})
 
 let changeOscSlider: (ev: Event) => void = (ev) => {console.log("changeOscSlider", ev)}
 let changeMidiNote: (ev: Event) => void = (ev) => {console.log("changeMidiNote", ev)}
@@ -64,7 +67,7 @@ onMounted(() => {
 
     const code = async () => { //todo template - is this code-array pattern really needed in the template?
       clearDrawFuncs() //todo template - move this to cleanup block?
-
+      await toneStartPromise
       const rootFreqSig = new Tone.Signal(m2f(midiNote.value))
 
       const osc0 = new Tone.Oscillator(m2f(midiNote.value), 'sine')
@@ -221,18 +224,11 @@ onMounted(() => {
         const target = ev.target as HTMLInputElement
         const [osc, param] = target.name.split('-')
         const sig = sliderParams[osc][param] as Tone.Signal
-        sig.setValueAtTime(parseFloat(target.value), Tone.now())
-
-        const freq3 = osc3.frequency.value
-        const finemult3 = o3FineMult.getValueAtTime(Tone.now())
-        const coarse3 = o3CoarseMult.getValueAtTime(Tone.now())
-        const gain3 = o3GainSig.getValueAtTime(Tone.now())
-        console.log("changeOscSlider", osc, param, sliderParams[osc][param],target.value, sig.value)
-        console.log("freq3", freq3, "finemult3", finemult3, "coarse3", coarse3, "gain3", gain3)
-        const fineval3 = o3FineSig.getValueAtTime(Tone.now())
-        const coarseval3 = o3CoarseSig.getValueAtTime(Tone.now())
-        console.log("fineval3", fineval3, "coarseval3", coarseval3)
-        console.log('\n')
+        const preChangeGain3 = o3GainSig.getValueAtTime(Tone.now()) 
+        console.log("prechangeGain3", preChangeGain3, osc3.volume.value)
+        sig.setValueAtTime(parseFloat(target.value) * -1, Tone.now())
+        const postChangeGain3 = o3GainSig.getValueAtTime(Tone.now())
+        console.log("postchangeGain3", postChangeGain3, osc3.volume.value)
       }
 
       osc0.start()
