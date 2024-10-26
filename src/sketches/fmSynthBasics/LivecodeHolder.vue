@@ -37,14 +37,18 @@ const oscSliders = ref({
   osc3: { fine: 0, coarse: 1, gain: 0 },
 })
 
-// document.addEventListener('mousedown', async (ev) => {
-//   await Tone.start()
-// })
+const toneStartListener =  async (ev) => {
+  console.log("mousedown")
+  await Tone.start()
+  console.log("fm tone started")
+  document.removeEventListener('mousedown', toneStartListener)
+}
+document.addEventListener('mousedown', toneStartListener)
 
-let changeOscSlider: (ev: Event) => void = () => {}
-let changeMidiNote: (ev: Event) => void = () => {}
-let turnOnNote: () => void = () => {}
-let turnOffNote: () => void = () => {}
+let changeOscSlider: (ev: Event) => void = (ev) => {console.log("changeOscSlider", ev)}
+let changeMidiNote: (ev: Event) => void = (ev) => {console.log("changeMidiNote", ev)}
+let turnOnNote: () => void = () => {console.log("turnOnNote")}
+let turnOffNote: () => void = () => {console.log("turnOffNote")}
 
 onMounted(() => {
   try {
@@ -63,7 +67,7 @@ onMounted(() => {
 
       const rootFreqSig = new Tone.Signal(m2f(midiNote.value))
 
-      const osc0 = new Tone.Oscillator('sine')
+      const osc0 = new Tone.Oscillator(m2f(midiNote.value), 'sine')
       const o0CoarseSig = new Tone.Signal(oscSliders.value.osc0.coarse)
       const o0FineSig = new Tone.Signal(oscSliders.value.osc0.fine)
       const o0GainSig = new Tone.Signal(oscSliders.value.osc0.gain)
@@ -92,7 +96,7 @@ onMounted(() => {
 
 
 
-      const osc1 = new Tone.Oscillator('sine')
+      const osc1 = new Tone.Oscillator(m2f(midiNote.value), 'sine')
       const o1CoarseSig = new Tone.Signal(oscSliders.value.osc1.coarse)
       const o1FineSig = new Tone.Signal(oscSliders.value.osc1.fine)
       const o1GainSig = new Tone.Signal(oscSliders.value.osc1.gain)
@@ -124,7 +128,7 @@ onMounted(() => {
 
 
 
-      const osc2 = new Tone.Oscillator('sine')
+      const osc2 = new Tone.Oscillator(m2f(midiNote.value), 'sine')
       const o2CoarseSig = new Tone.Signal(oscSliders.value.osc2.coarse)
       const o2FineSig = new Tone.Signal(oscSliders.value.osc2.fine)
       const o2GainSig = new Tone.Signal(oscSliders.value.osc2.gain)
@@ -156,7 +160,7 @@ onMounted(() => {
 
 
 
-      const osc3 = new Tone.Oscillator('sine')
+      const osc3 = new Tone.Oscillator(m2f(midiNote.value), 'sine')
       const o3CoarseSig = new Tone.Signal(oscSliders.value.osc3.coarse)
       const o3FineSig = new Tone.Signal(oscSliders.value.osc3.fine)
       const o3GainSig = new Tone.Signal(oscSliders.value.osc3.gain)
@@ -198,6 +202,7 @@ onMounted(() => {
       }
 
       changeMidiNote = (ev: Event) => {
+        console.log("changeMidiNote", ev)
         const target = ev.target as HTMLInputElement
         midiNote.value = parseFloat(target.value)
         rootFreqSig.setValueAtTime(m2f(midiNote.value), Tone.now())
@@ -213,6 +218,7 @@ onMounted(() => {
       changeOscSlider = (ev: Event) => {
         const target = ev.target as HTMLInputElement
         const [osc, param] = target.name.split('-')
+        console.log("changeOscSlider", osc, param, sliderParams[osc][param],target.value)
         sliderParams[osc][param].setValueAtTime(parseFloat(target.value), Tone.now())
       }
 
@@ -256,7 +262,7 @@ onUnmounted(() => {
 
 <template>
   <label>midi note</label>
-  <input type="range" v-model="midiNote" min="0" max="127" step="1" @onchange="changeMidiNote($event)" />
+  <input type="range" v-model="midiNote" min="0" max="127" step="1" @input="changeMidiNote($event)" />
   <span style="padding-right: 10px; margin-left: 3px">{{ midiNote }}</span>
   <button @click="turnOnNote">on</button>
   <button @click="turnOffNote">off</button>
@@ -264,17 +270,17 @@ onUnmounted(() => {
     <div>
       <span style="border: 1px solid black; padding: 2px;">
         <label>{{ k + " fine" }}</label>
-        <input type="range" @name="k+'-fine'" v-model="oscSliders[k].fine" min="0" max="1" step="0.01" @onchange="changeOscSlider($event)" />
+        <input type="range" :name="k+'-fine'" v-model="oscSliders[k].fine" min="0" max="1" step="0.01" @input="changeOscSlider($event)" />
         <span style="padding-right: 10px; margin-left: 3px">{{ oscSliders[k].fine }}</span>
       </span>
       <span style="border: 1px solid black; padding: 2px;">
         <label>{{ k + " coarse" }}</label>
-        <input type="range" @name="k+'-coarse'" v-model="oscSliders[k].coarse" min="0.5" max="10" step="0.1" @onchange="changeOscSlider($event)" />
+        <input type="range" :name="k+'-coarse'" v-model="oscSliders[k].coarse" min="0.5" max="10" step="0.1" @input="changeOscSlider($event)" />
         <span style="padding-right: 10px; margin-left: 3px">{{ oscSliders[k].coarse }}</span>
       </span>
       <span style="border: 1px solid black; padding: 2px;">
         <label>{{ k + " gain" }}</label>
-        <input type="range" @name="k+'-gain'" v-model="oscSliders[k].gain" min="-100" max="0" step="1" @onchange="changeOscSlider($event)" />
+        <input type="range" :name="k+'-gain'" v-model="oscSliders[k].gain" min="-100" max="0" step="1" @input="changeOscSlider($event)" />
         <span style="padding-right: 10px; margin-left: 3px">{{ oscSliders[k].gain }}</span>
       </span>
     </div>
