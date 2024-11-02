@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Three.js Sketch Popup</title>
+    <style>
+        body { margin: 0; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    <button id="popupButton">Pop Out Sketch</button>
+    <div id="canvasContainer"></div> <!-- Container for the canvas on the main page -->
+
+    <script type="module">
+        import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.154.0/build/three.module.js';
+
+        let scene, camera, renderer;
+        let popupWindow = null;
+
+        function init() {
+            // Initialize the scene
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.getElementById('canvasContainer').appendChild(renderer.domElement); // Add to main page initially
+
+            // Example object
+            const geometry = new THREE.BoxGeometry();
+            const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+            const cube = new THREE.Mesh(geometry, material);
+            scene.add(cube);
+
+            camera.position.z = 5;
+
+            function animate() {
+                requestAnimationFrame(animate);
+                cube.rotation.x += 0.01;
+                cube.rotation.y += 0.01;
+                renderer.render(scene, camera);
+            }
+            animate();
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            init();
+
+            document.getElementById('popupButton').addEventListener('click', () => {
+                if (popupWindow && !popupWindow.closed) {
+                    return;
+                }
+
+                // Open a new window for the popup
+                popupWindow = window.open("", "popupWindow", "width=800,height=600");
+
+                // Move the existing canvas to the new window
+                popupWindow.document.body.appendChild(renderer.domElement);
+                renderer.setSize(popupWindow.innerWidth, popupWindow.innerHeight);
+
+                // Update camera aspect ratio on resize
+                popupWindow.addEventListener("resize", () => {
+                    camera.aspect = popupWindow.innerWidth / popupWindow.innerHeight;
+                    camera.updateProjectionMatrix();
+                    renderer.setSize(popupWindow.innerWidth, popupWindow.innerHeight);
+                });
+
+                // Listen for popup window close event
+                popupWindow.onbeforeunload = () => {
+                    // Move canvas back to the main page when popup closes
+                    document.getElementById('canvasContainer').appendChild(renderer.domElement);
+                    renderer.setSize(window.innerWidth, window.innerHeight); // Reset size for main window
+
+                    // Restore camera aspect ratio for the main window
+                    camera.aspect = window.innerWidth / window.innerHeight;
+                    camera.updateProjectionMatrix();
+                };
+            });
+        });
+    </script>
+</body>
+</html>
