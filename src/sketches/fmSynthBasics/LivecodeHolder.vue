@@ -71,6 +71,8 @@ onMounted(() => {
       const rootFreqSig = new Tone.Signal(m2f(midiNote.value))
 
       const osc0 = new Tone.Oscillator(m2f(midiNote.value), 'sine')
+      const osc0Gain = new Tone.Gain()
+      osc0.connect(osc0Gain)
       const o0CoarseSig = new Tone.Signal(oscSliders.value.osc0.coarse)
       const o0FineSig = new Tone.Signal(oscSliders.value.osc0.fine)
       const o0GainSig = new Tone.Signal(oscSliders.value.osc0.gain)
@@ -93,13 +95,15 @@ onMounted(() => {
       rootFreqSig.connect(o0rootfreqAdd.addend)
 
       o0rootfreqAdd.connect(osc0.frequency)
-      o0GainSig.connect(osc0.volume)
+      o0GainSig.connect(osc0Gain.gain)
 
 
 
 
 
       const osc1 = new Tone.Oscillator(m2f(midiNote.value), 'sine')
+      const osc1Gain = new Tone.Gain()
+      osc1.connect(osc1Gain)
       const o1CoarseSig = new Tone.Signal(oscSliders.value.osc1.coarse)
       const o1FineSig = new Tone.Signal(oscSliders.value.osc1.fine)
       const o1GainSig = new Tone.Signal(oscSliders.value.osc1.gain)
@@ -126,13 +130,15 @@ onMounted(() => {
       o1rootfreqAdd.connect(o1lastStage.addend)
 
       o1lastStage.connect(osc1.frequency)
-      o1GainSig.connect(osc1.volume)
+      o1GainSig.connect(osc1Gain.gain)
 
 
 
 
 
       const osc2 = new Tone.Oscillator(m2f(midiNote.value), 'sine')
+      const osc2Gain = new Tone.Gain()
+      osc2.connect(osc2Gain)
       const o2CoarseSig = new Tone.Signal(oscSliders.value.osc2.coarse)
       const o2FineSig = new Tone.Signal(oscSliders.value.osc2.fine)
       const o2GainSig = new Tone.Signal(oscSliders.value.osc2.gain)
@@ -159,13 +165,15 @@ onMounted(() => {
       o2rootfreqAdd.connect(o2lastStage.addend)
 
       o2lastStage.connect(osc2.frequency)
-      o2GainSig.connect(osc2.volume)
+      o2GainSig.connect(osc2Gain.gain)
 
 
 
 
 
       const osc3 = new Tone.Oscillator(m2f(midiNote.value), 'sine')
+      const osc3Gain = new Tone.Gain()
+      osc3.connect(osc3Gain)
       const o3CoarseSig = new Tone.Signal(oscSliders.value.osc3.coarse)
       const o3FineSig = new Tone.Signal(oscSliders.value.osc3.fine)
       const o3GainSig = new Tone.Signal(oscSliders.value.osc3.gain)
@@ -192,7 +200,7 @@ onMounted(() => {
       o3rootfreqAdd.connect(o3lastStage.addend)
 
       o3lastStage.connect(osc3.frequency)
-      o3GainSig.connect(osc3.volume)
+      o3GainSig.connect(osc3Gain.gain)
 
       const adsr = new Tone.AmplitudeEnvelope()
       osc3.connect(adsr)
@@ -224,11 +232,11 @@ onMounted(() => {
         const target = ev.target as HTMLInputElement
         const [osc, param] = target.name.split('-')
         const sig = sliderParams[osc][param] as Tone.Signal
-        const preChangeGain3 = o3GainSig.getValueAtTime(Tone.now()) 
-        console.log("prechangeGain3", preChangeGain3, osc3.volume.value)
-        sig.setValueAtTime(parseFloat(target.value) * -1, Tone.now())
-        const postChangeGain3 = o3GainSig.getValueAtTime(Tone.now())
-        console.log("postchangeGain3", postChangeGain3, osc3.volume.value)
+        const preChangeGain = osc3Gain.gain.getValueAtTime(Tone.now())
+        console.log("prechangeGain", preChangeGain, sig.value)
+        sig.setValueAtTime(parseFloat(target.value), Tone.now())
+        const postChangeGain = osc3Gain.gain.getValueAtTime(Tone.now())
+        console.log("postchangeGain", postChangeGain, sig.value)
       }
 
       osc0.start()
