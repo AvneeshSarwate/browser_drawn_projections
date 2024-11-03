@@ -12,15 +12,15 @@
     Selected shape ids: {{ selectedShapeIds }}
   </div>
   <button @click="downloadSnapshot">Download snapshot</button>
-  <div id="canvasContainer">
-    <p><h3>P5 sketch rendering freehand tldraw shapes</h3></p>
+  <div id="canvasContainer" :style="{width: resRef.width + 'px', height: resRef.height + 'px'}">
+    <h3>P5 sketch rendering freehand tldraw shapes</h3>
     <br>
-    <canvas id="p5Canvas" width="1280" height="720" abitrary-prop="somethi"></canvas>
+    <canvas id="p5Canvas" :width="resRef.width" :height="resRef.height" abitrary-prop="somethi"></canvas>
     <br>
-    <p><h3>Shader post-processing with three.js</h3></p>
+    <h3>Shader post-processing with three.js</h3>
     <br>
-    <canvas id="threeCanvas" width="1280" height="720" abitrary-prop="somethi"></canvas>
-    <canvas id="debugCanvas" width="1280" height="720" abitrary-prop="somethi"></canvas>
+    <canvas id="threeCanvas" :width="resRef.width" :height="resRef.height" abitrary-prop="somethi"></canvas>
+    <canvas id="debugCanvas" :width="resRef.width" :height="resRef.height" abitrary-prop="somethi"></canvas>
   </div>
   <div id="debugInfo"></div>
 </template>
@@ -32,7 +32,7 @@ import { createRoot, type Root } from 'react-dom/client';
 // import { MyTldrawWrapper, TestComponent, SimpleComponent } from './tldrawWrapper';
 import { MyTldrawWrapper } from './tldrawWrapperPlain';
 import { type Editor, type TLEditorSnapshot } from 'tldraw';
-import { appStateName, type TldrawTestAppState } from './appState';
+import { appStateName, type TldrawTestAppState, resolution } from './appState';
 import { snapshot2duplicates } from './snapshots';
 
 const reactRoot = ref<HTMLElement | null>(null);
@@ -41,6 +41,7 @@ let root: Root | null = null;
 const appState = inject<TldrawTestAppState>(appStateName)!!
 let snapshotLoaded = false
 
+const resRef = ref(resolution)
 
 
 //todo sketch - this can be handled with react hooks instead of a flag (see link below)

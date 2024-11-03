@@ -12,21 +12,45 @@ import AutoUI from '@/components/AutoUI.vue';
 import { clamp, lerp, type Editor, type TLPageId } from 'tldraw';
 import earcut from 'earcut';
 import type { MultiSegmentLineShape } from './multiSegmentLine/multiSegmentLineUtil';
-import type { AbletonClip } from '@/io/abletonClips';
+import { AbletonClip } from '@/io/abletonClips';
 import type { MIDIValOutput } from '@midival/core';
+import { MIDI_READY, midiOutputs } from '@/io/midi';
 
 const appState = inject<TldrawTestAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
 let timeLoops: CancelablePromisePoxy<any>[] = []
 
+const notes = [
+  { pitch: 60, velocity: 100, duration: 1, position: 0 },
+  { pitch: 62, velocity: 100, duration: 1, position: 1 },
+  { pitch: 64, velocity: 100, duration: 1, position: 2 },
+  { pitch: 65, velocity: 100, duration: 1, position: 3 },
+  { pitch: 67, velocity: 100, duration: 1, position: 4 },
+  { pitch: 69, velocity: 100, duration: 1, position: 5 },
+  { pitch: 71, velocity: 100, duration: 1, position: 6 },
+]
 
-const calculatePlayProbabilities = (shape1: MultiSegmentLineShape, shape2: MultiSegmentLineShape, shape3: MultiSegmentLineShape, windowDim: {width: number, height: number}) => {
-  const sumPt1 = shape1.props.points.reduce((acc, pt) => ({x: acc.x + pt.x, y: acc.y + pt.y}), {x: 0, y: 0})
-  const centerPt1 = {x: sumPt1.x / shape1.props.points.length, y: sumPt1.y / shape1.props.points.length}
-  const sumPt2 = shape2.props.points.reduce((acc, pt) => ({x: acc.x + pt.x, y: acc.y + pt.y}), {x: 0, y: 0})
-  const centerPt2 = {x: sumPt2.x / shape2.props.points.length, y: sumPt2.y / shape2.props.points.length}
-  const sumPt3 = shape3.props.points.reduce((acc, pt) => ({x: acc.x + pt.x, y: acc.y + pt.y}), {x: 0, y: 0})
-  const centerPt3 = {x: sumPt3.x / shape3.props.points.length, y: sumPt3.y / shape3.props.points.length}
+const notes1 = notes.slice(0, 4)
+const clip1 = new AbletonClip("clip1", 4, notes1)
+
+const notes2 = notes.slice(0, 5).map(n => ({...n, pitch: n.pitch + 12}))
+const clip2 = new AbletonClip("clip2", 5, notes2)
+
+const notes3 = notes.slice(0, 6).map(n => ({...n, pitch: n.pitch - 12}))
+const clip3 = new AbletonClip("clip3", 6, notes3)
+
+const getTestClips = () => [clip1, clip2, clip3]
+
+type PointHaver = {
+  points: {x: number, y: number}[]
+}
+const calculatePlayProbabilities = (shape1: PointHaver, shape2: PointHaver, shape3: PointHaver, windowDim: {width: number, height: number}) => {
+  const sumPt1 = shape1.points.reduce((acc, pt) => ({x: acc.x + pt.x, y: acc.y + pt.y}), {x: 0, y: 0})
+  const centerPt1 = {x: sumPt1.x / shape1.points.length, y: sumPt1.y / shape1.points.length}
+  const sumPt2 = shape2.points.reduce((acc, pt) => ({x: acc.x + pt.x, y: acc.y + pt.y}), {x: 0, y: 0})
+  const centerPt2 = {x: sumPt2.x / shape2.points.length, y: sumPt2.y / shape2.points.length}
+  const sumPt3 = shape3.points.reduce((acc, pt) => ({x: acc.x + pt.x, y: acc.y + pt.y}), {x: 0, y: 0})
+  const centerPt3 = {x: sumPt3.x / shape3.points.length, y: sumPt3.y / shape3.points.length}
 
   const dist12 = Math.sqrt((centerPt1.x - centerPt2.x)**2 + (centerPt1.y - centerPt2.y)**2)
   const dist13 = Math.sqrt((centerPt1.x - centerPt3.x)**2 + (centerPt1.y - centerPt3.y)**2)
@@ -38,9 +62,13 @@ const calculatePlayProbabilities = (shape1: MultiSegmentLineShape, shape2: Multi
   //normalize array to sum to 1
   const na = (arr: number[]) => arr.map(n => n / arr.reduce((acc, n) => acc + n, 0))
 
-  const v1Distribution = na([1, d2w(dist12), d2w(dist13)])
-  const v2Distribution = na([d2w(dist12), 1, d2w(dist23)])
-  const v3Distribution = na([d2w(dist13), d2w(dist23), 1])
+  // const v1Distribution = na([1, d2w(dist12), d2w(dist13)])
+  // const v2Distribution = na([d2w(dist12), 1, d2w(dist23)])
+  // const v3Distribution = na([d2w(dist13), d2w(dist23), 1])
+
+  const v1Distribution = na([1, 0, 0])
+  const v2Distribution = na([0, 1, 0])
+  const v3Distribution = na([0, 0, 1])
 
   return [v1Distribution, v2Distribution, v3Distribution]
 }
@@ -53,23 +81,23 @@ const sampleFromDist = (dist: number[]) => {
     if(rand < sum) return i
   }
 }
-
-const midiOutput: MIDIValOutput | undefined = undefined
+let midiOutput = midiOutputs.get("IAC Driver Bus 1")!!
 
 const playNote = (pitch: number, velocity: number, ctx: TimeContext, noteDur: number, channel: number, inst: MIDIValOutput) => {
-  // console.log("pitch play", pitch, velocity)
-  inst.sendNoteOn(pitch, velocity, channel)
+  console.log("pitch play", pitch, channel)
+  const chan = channel + 1
+  inst.sendNoteOn(pitch, velocity, chan)
   let noteIsOn = true
   ctx.branch(async ctx => {
     await ctx.wait((noteDur ?? 0.1) * 0.98)
-    inst.sendNoteOff(pitch, channel)
+    inst.sendNoteOff(pitch, chan)
     noteIsOn = false
   }).finally(() => {
-    inst.sendNoteOff(pitch, channel)
+    inst.sendNoteOff(pitch, chan)
   })
 }
 
-const playMelody = async (shapeGetter: () => MultiSegmentLineShape[], clipGetter: () => AbletonClip[], ctx: TimeContext, voiceIndex: number) => {
+const playMelody = async (shapeGetter: () => PointHaver[], clipGetter: () => AbletonClip[], ctx: TimeContext, voiceIndex: number) => {
   const shapes = shapeGetter()
   const shape = shapes[voiceIndex]
   const clip = clipGetter()[voiceIndex]
@@ -85,14 +113,40 @@ const playMelody = async (shapeGetter: () => MultiSegmentLineShape[], clipGetter
 }
 
 
-const playMelodies = async (ctx: TimeContext, shapeGetter: () => MultiSegmentLineShape[], clipGetter: () => AbletonClip[]) => {
+const playMelodies = async (ctx: TimeContext, shapeGetter: () => PointHaver[], clipGetter: () => AbletonClip[]) => {
   for(let i = 0; i < 3; i++) {
     ctx.branch(async ctx => {
-      playMelody(shapeGetter, clipGetter, ctx, i)
+      
+      // eslint-disable-next-line no-constant-condition
+      while(true){
+        await playMelody(shapeGetter, clipGetter, ctx, i) //todo sketch - test that this works 
+      }
     })
   }
 }
 
+type AnimationState = {
+  melodyPhase: number
+  baseShapeIndex: number
+  otherShapeIndex: number
+  interpolationPhase: number
+}
+
+type RemnantCircles = {
+  id: string
+  x: number
+  y: number
+  radius: number
+  color: number
+}
+const remnantCircles: RemnantCircles[] = []
+
+type RemantTriangles = {
+  id: string
+  points: {x: number, y: number}[]
+  color: number
+}
+const anim1Artifacts: RemantTriangles[] = []
 
 /**
  * shapeGetter() is simple function grabbing multiLine shapes from the editor
@@ -280,7 +334,7 @@ onMounted(() => {
 
 
     //@ts-ignore
-    window.editorReadyCallback = (editor: Editor) => {
+    window.editorReadyCallback = async (editor: Editor) => {
       tldrawEditor = editor
 
       editor.getPageShapeIds('page:page' as TLPageId).forEach(id => {
@@ -343,6 +397,19 @@ onMounted(() => {
           //has been changed.
         }
       }, { scope: 'session', source: 'user' })
+
+      const getShapes = () => {
+        return Array.from(getMultiSegmentLineShapes(editor).values())
+      }
+
+      await MIDI_READY
+      midiOutput = midiOutputs.get("IAC Driver Bus 1")!!
+
+      launchLoop(async ctx => {
+        ctx.bpm = 120
+        await ctx.waitSec(3)
+        await playMelodies(ctx, getShapes, getTestClips)
+      })
     }
 
     

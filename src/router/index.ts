@@ -33,7 +33,8 @@ export const sketchNames = [
   'three5voronoiWebGPU',
   'synth_playground',
   'tldraw_sketch0',
-  'fmSynthBasics'
+  'fmSynthBasics',
+  'nov21demo'
 ]
 
 const sketchRoutes = sketchNames.map(name => {
