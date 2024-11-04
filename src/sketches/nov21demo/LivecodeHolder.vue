@@ -15,6 +15,7 @@ import type { MultiSegmentLineShape } from './multiSegmentLine/multiSegmentLineU
 import { AbletonClip } from '@/io/abletonClips';
 import type { MIDIValOutput } from '@midival/core';
 import { MIDI_READY, midiOutputs } from '@/io/midi';
+import type { NumberNodeUniform } from 'three/src/renderers/common/nodes/NodeUniform.js';
 
 const appState = inject<TldrawTestAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
@@ -103,13 +104,29 @@ const playMelody = async (shapeGetter: () => PointHaver[], clipGetter: () => Abl
   const clip = clipGetter()[voiceIndex]
   const playDistribution = calculatePlayProbabilities(shapes[0], shapes[1], shapes[2], resolution)[voiceIndex]
 
+  //kick of a branch that runs for the clip duration and updates melody phase
+
   const noteBuffer = clip.noteBuffer()
   for(const note of noteBuffer) {
-    let voiceIndex = sampleFromDist(playDistribution)
+    let randVoice = sampleFromDist(playDistribution)
+
+    //if randVoice != voiceIndex kick off a branch/ramp for inteprolationPhase and otherShapeIndex (and reset otherShapeIndex at end)
+
+    //kick off a ramp for animation of individual note 
+    noteAnimation(note.note.duration, randVoice, shapeGetter)
+
     await ctx.wait(note.preDelta)
-    playNote(note.note.pitch, note.note.velocity, ctx, note.note.duration, voiceIndex, midiOutput!!)
+    playNote(note.note.pitch, note.note.velocity, ctx, note.note.duration, randVoice, midiOutput!!)
     await ctx.wait(note.postDelta ?? 0)
   }
+}
+
+const noteAnimation = (duration: number, voiceIndex: number, shapeGetter: () => PointHaver[]) => {
+  const animationState = animationStates[voiceIndex]
+
+  //if voiceIndex = 0 kick off branch for remantCirlce
+  //if voiceIndex = 1 kick off branch for horizontal playhead pulse
+  //if voiceIndex = 2 kick off branch for remnantTriangles
 }
 
 
@@ -131,6 +148,27 @@ type AnimationState = {
   otherShapeIndex: number
   interpolationPhase: number
 }
+
+const animationStates: AnimationState[] = []
+animationStates.push({
+  melodyPhase: 0,
+  baseShapeIndex: 0,
+  otherShapeIndex: -1,
+  interpolationPhase: 0
+})
+animationStates.push({
+  melodyPhase: 1,
+  baseShapeIndex: 0,
+  otherShapeIndex: -1,
+  interpolationPhase: 0
+})
+animationStates.push({
+  melodyPhase: 2,
+  baseShapeIndex: 0,
+  otherShapeIndex: -1,
+  interpolationPhase: 0
+})
+
 
 type RemnantCircles = {
   id: string
