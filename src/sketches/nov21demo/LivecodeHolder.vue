@@ -16,6 +16,7 @@ import { AbletonClip } from '@/io/abletonClips';
 import type { MIDIValOutput } from '@midival/core';
 import { MIDI_READY, midiOutputs } from '@/io/midi';
 import type { NumberNodeUniform } from 'three/src/renderers/common/nodes/NodeUniform.js';
+import { catmullRomSpline } from '@/rendering/catmullRom';
 
 const appState = inject<TldrawTestAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
@@ -103,17 +104,32 @@ const playMelody = async (shapeGetter: () => PointHaver[], clipGetter: () => Abl
   const shape = shapes[voiceIndex]
   const clip = clipGetter()[voiceIndex]
   const playDistribution = calculatePlayProbabilities(shapes[0], shapes[1], shapes[2], resolution)[voiceIndex]
+  const animationState = animationStates[voiceIndex]
 
   //kick of a branch that runs for the clip duration and updates melody phase
+  const melodyRamp = new Ramp(clip.duration * (60 / ctx.bpm))
+  melodyRamp.trigger()
+  ctx.branch(async _ctx => {
+    while(melodyRamp.val() <= 1){
+      animationState.melodyPhase = melodyRamp.val()
+      _ctx.waitFrame()
+    }
+  })
+
 
   const noteBuffer = clip.noteBuffer()
-  for(const note of noteBuffer) {
+  for(const [noteIndex, note] of noteBuffer.entries()) {
     let randVoice = sampleFromDist(playDistribution)
 
-    //if randVoice != voiceIndex kick off a branch/ramp for inteprolationPhase and otherShapeIndex (and reset otherShapeIndex at end)
-
-    //kick off a ramp for animation of individual note 
-    noteAnimation(note.note.duration, randVoice, shapeGetter)
+    const noteRamp = new Ramp(0.5)
+    noteRamp.trigger()
+    animationState.noteEnvelopes[noteIndex] = {
+      noteIndex,
+      ramp: noteRamp,
+      otherVoiceIndex: randVoice,
+      phasePos: animationState.melodyPhase,
+      startTime: now()
+    }
 
     await ctx.wait(note.preDelta)
     playNote(note.note.pitch, note.note.velocity, ctx, note.note.duration, randVoice, midiOutput!!)
@@ -121,12 +137,41 @@ const playMelody = async (shapeGetter: () => PointHaver[], clipGetter: () => Abl
   }
 }
 
-const noteAnimation = (duration: number, voiceIndex: number, shapeGetter: () => PointHaver[]) => {
+const remnantCircleDraw = (p5: p5, shapeGetter: () => PointHaver[], voiceIndex: number) => {
   const animationState = animationStates[voiceIndex]
+  const shape = shapeGetter()[voiceIndex]
 
-  //if voiceIndex = 0 kick off branch for remantCirlce
-  //if voiceIndex = 1 kick off branch for horizontal playhead pulse
-  //if voiceIndex = 2 kick off branch for remnantTriangles
+  const loopSplinePoints = shape.points.map(pt => catmullRomSpline(shape.points, pt.x))
+  loopSplinePoints.push(...loopSplinePoints.slice(0, 2))
+
+  const playHeadPos = catmullRomSpline(loopSplinePoints, animationState.melodyPhase)
+  p5.push()
+  p5.fill(255, 255, 255)
+  p5.noStroke()
+  p5.ellipse(playHeadPos.x, playHeadPos.y, 10, 10)
+  p5.pop()
+
+  for(const noteEnvelope of animationState.noteEnvelopes){
+    let notePos = catmullRomSpline(loopSplinePoints, noteEnvelope.phasePos)
+    if(noteEnvelope.otherVoiceIndex != voiceIndex) {
+      const otherShape = shapeGetter()[noteEnvelope.otherVoiceIndex]
+      const otherLoopSplinePoints = otherShape.points.map(pt => catmullRomSpline(otherShape.points, pt.x))
+      otherLoopSplinePoints.push(...otherLoopSplinePoints.slice(0, 2))
+      const otherNotePos = catmullRomSpline(otherLoopSplinePoints, noteEnvelope.phasePos)
+      const lerpVal = noteEnvelope.ramp.val()
+      notePos = {
+        x: lerp(notePos.x, otherNotePos.x, lerpVal),
+        y: lerp(notePos.y, otherNotePos.y, lerpVal)
+      }
+    }
+    
+    p5.push()
+    p5.fill(255, 255, 255, noteEnvelope.ramp.val() * 255)
+    p5.noStroke()
+    p5.ellipse(notePos.x, notePos.y, 10, 10)
+    p5.pop()
+  }
+
 }
 
 
@@ -145,28 +190,30 @@ const playMelodies = async (ctx: TimeContext, shapeGetter: () => PointHaver[], c
 type AnimationState = {
   melodyPhase: number
   baseShapeIndex: number
-  otherShapeIndex: number
-  interpolationPhase: number
+  noteEnvelopes: {
+    noteIndex: number
+    ramp: Ramp
+    otherVoiceIndex?: number
+    phasePos: number
+    startTime: number
+  }[]
 }
 
 const animationStates: AnimationState[] = []
 animationStates.push({
   melodyPhase: 0,
   baseShapeIndex: 0,
-  otherShapeIndex: -1,
-  interpolationPhase: 0
+  noteEnvelopes: []
 })
 animationStates.push({
   melodyPhase: 1,
   baseShapeIndex: 0,
-  otherShapeIndex: -1,
-  interpolationPhase: 0
+  noteEnvelopes: []
 })
 animationStates.push({
   melodyPhase: 2,
   baseShapeIndex: 0,
-  otherShapeIndex: -1,
-  interpolationPhase: 0
+  noteEnvelopes: []
 })
 
 

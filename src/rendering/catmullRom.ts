@@ -42,3 +42,88 @@ const posValues: number[] = [0.0, 0.25, 0.5, 0.75, 1.0];
 
 const splinePoints = posValues.map(pos => catmullRomSpline(points, pos));
 console.log(splinePoints);
+
+
+function catmullRomAtY(yTarget: number, controlPoints: Point[]): Point[] {
+    const solutions: Point[] = [];
+
+    // Helper function to calculate coefficients
+    const calculateCoefficients = (p0: number, p1: number, p2: number, p3: number): [number, number, number, number] => {
+        const a0 = 2 * p1;
+        const a1 = p2 - p0;
+        const a2 = 2 * p0 - 5 * p1 + 4 * p2 - p3;
+        const a3 = -p0 + 3 * p1 - 3 * p2 + p3;
+        return [a0, a1, a2, a3];
+    };
+
+    // Solve cubic equation using Newton's method
+    const solveCubic = (coeffs: [number, number, number, number], yTarget: number): number[] => {
+        const [b0, b1, b2, b3] = coeffs;
+
+        // Cubic equation: b3 * t^3 + b2 * t^2 + b1 * t + (b0 - yTarget) = 0
+        const cubic = (t: number): number => b0 + b1 * t + b2 * t ** 2 + b3 * t ** 3 - yTarget;
+
+        const cubicDerivative = (t: number): number => b1 + 2 * b2 * t + 3 * b3 * t ** 2;
+
+        const roots: number[] = [];
+        const maxIterations = 100;
+        const tolerance = 1e-6;
+
+        // Initial guesses for t
+        const initialGuesses = [0, 0.5, 1];
+        for (const guess of initialGuesses) {
+            let t = guess;
+            let iteration = 0;
+
+            while (iteration < maxIterations) {
+                const value = cubic(t);
+                const derivative = cubicDerivative(t);
+
+                if (Math.abs(value) < tolerance) break; // Root found
+                if (Math.abs(derivative) < tolerance) break; // Avoid divide-by-zero
+
+                t -= value / derivative;
+                iteration++;
+            }
+
+            if (t >= 0 && t <= 1 && !roots.some(root => Math.abs(root - t) < tolerance)) {
+                roots.push(t); // Add unique root within range
+            }
+        }
+
+        return roots;
+    };
+
+    // Iterate through each segment
+    for (let i = 0; i < controlPoints.length - 3; i++) {
+        const [P0, P1, P2, P3] = controlPoints.slice(i, i + 4);
+
+        // Calculate y coefficients
+        const yCoeffs = calculateCoefficients(P0.y, P1.y, P2.y, P3.y);
+        const validT = solveCubic(yCoeffs, yTarget);
+
+        // Compute x for each valid t
+        for (const t of validT) {
+            const xCoeffs = calculateCoefficients(P0.x, P1.x, P2.x, P3.x);
+            const [a0, a1, a2, a3] = xCoeffs;
+            const x = a0 + a1 * t + a2 * t ** 2 + a3 * t ** 3;
+
+            solutions.push({ x, y: yTarget });
+        }
+    }
+
+    return solutions;
+}
+
+// Example Usage
+const controlPoints: Point[] = [
+    { x: 0, y: 0 },
+    { x: 1, y: 2 },
+    { x: 3, y: 5 },
+    { x: 5, y: 2 },
+    { x: 6, y: 0 },
+];
+
+const yTarget = 2;
+const pointsAtY = catmullRomAtY(yTarget, controlPoints);
+console.log("Points on the spline at y =", yTarget, ":", pointsAtY);
