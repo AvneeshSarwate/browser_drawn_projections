@@ -129,9 +129,8 @@ const playMelody = async (shapeGetter: () => PointHaver[], clipGetter: () => Abl
       phasePos: animationState.melodyPhase,
       startTime: now()
     }
-    if(voiceIndex === 0) {
-      console.log("added ramp for", noteIndex, note.note.pitch)
-    }
+    if(voiceIndex === 0 && voiceIndex !== randVoice) console.log("note jump orig", voiceIndex, "other", randVoice)
+
     playNote(note.note.pitch, note.note.velocity, ctx, note.note.duration, randVoice, midiOutput!!)
     await ctx.wait(note.postDelta ?? 0)
   }
@@ -157,8 +156,9 @@ const remnantCircleDraw = (p5: p5, shapeGetter: () => PointHaver[], voiceIndex: 
     let notePos = catmullRomSpline(loopSplinePoints, noteEnvelope.phasePos)
     let col = {r: 255, g: 0, b: 0}
     if(noteEnvelope.otherVoiceIndex != voiceIndex) {
+      // console.log("draw note jump other", noteEnvelope.otherVoiceIndex)
       const otherShape = shapeGetter()[noteEnvelope.otherVoiceIndex]
-      const otherLoopSplinePoints = otherShape.points.map(pt => catmullRomSpline(otherShape.points, pt.x))
+      const otherLoopSplinePoints = otherShape.points.map(pt => pt)
       otherLoopSplinePoints.push(...otherLoopSplinePoints.slice(0, 2))
       const otherNotePos = catmullRomSpline(otherLoopSplinePoints, noteEnvelope.phasePos)
       const lerpVal = biasedTri(noteEnvelope.ramp.val(), 0.2)
