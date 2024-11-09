@@ -86,7 +86,7 @@ const sampleFromDist = (dist: number[]) => {
 let midiOutput = midiOutputs.get("IAC Driver Bus 1")!!
 
 const playNote = (pitch: number, velocity: number, ctx: TimeContext, noteDur: number, channel: number, inst: MIDIValOutput) => {
-  console.log("pitch play", pitch, channel)
+  // console.log("pitch play", pitch, channel)
   const chan = channel + 1
   inst.sendNoteOn(pitch, velocity, chan)
   let noteIsOn = true
@@ -101,7 +101,6 @@ const playNote = (pitch: number, velocity: number, ctx: TimeContext, noteDur: nu
 
 const playMelody = async (shapeGetter: () => PointHaver[], clipGetter: () => AbletonClip[], ctx: TimeContext, voiceIndex: number) => {
   const shapes = shapeGetter()
-  const shape = shapes[voiceIndex]
   const clip = clipGetter()[voiceIndex]
   const playDistribution = calculatePlayProbabilities(shapes[0], shapes[1], shapes[2], resolution)[voiceIndex]
   const animationState = animationStates[voiceIndex]
@@ -112,15 +111,15 @@ const playMelody = async (shapeGetter: () => PointHaver[], clipGetter: () => Abl
   ctx.branch(async _ctx => {
     while(melodyRamp.val() <= 1){
       animationState.melodyPhase = melodyRamp.val()
-      _ctx.waitFrame()
+      await _ctx.waitFrame()
     }
   })
-
 
   const noteBuffer = clip.noteBuffer()
   for(const [noteIndex, note] of noteBuffer.entries()) {
     let randVoice = sampleFromDist(playDistribution)
 
+    await ctx.wait(note.preDelta)
     const noteRamp = new Ramp(0.5)
     noteRamp.trigger()
     animationState.noteEnvelopes[noteIndex] = {
@@ -130,25 +129,28 @@ const playMelody = async (shapeGetter: () => PointHaver[], clipGetter: () => Abl
       phasePos: animationState.melodyPhase,
       startTime: now()
     }
-
-    await ctx.wait(note.preDelta)
+    if(voiceIndex === 0) {
+      console.log("added ramp for", noteIndex, note.note.pitch)
+    }
     playNote(note.note.pitch, note.note.velocity, ctx, note.note.duration, randVoice, midiOutput!!)
     await ctx.wait(note.postDelta ?? 0)
   }
 }
 
 const remnantCircleDraw = (p5: p5, shapeGetter: () => PointHaver[], voiceIndex: number) => {
+  if(voiceIndex >= 3) debugger
+  if(voiceIndex != 0) return
   const animationState = animationStates[voiceIndex]
   const shape = shapeGetter()[voiceIndex]
 
-  const loopSplinePoints = shape.points.map(pt => catmullRomSpline(shape.points, pt.x))
+  const loopSplinePoints = shape.points.map(pt => pt)
   loopSplinePoints.push(...loopSplinePoints.slice(0, 2))
 
   const playHeadPos = catmullRomSpline(loopSplinePoints, animationState.melodyPhase)
   p5.push()
-  p5.fill(255, 255, 255)
+  p5.fill(255, 0, 0)
   p5.noStroke()
-  p5.ellipse(playHeadPos.x, playHeadPos.y, 10, 10)
+  p5.ellipse(playHeadPos.x, playHeadPos.y, 30, 30)
   p5.pop()
 
   for(const noteEnvelope of animationState.noteEnvelopes){
@@ -166,13 +168,14 @@ const remnantCircleDraw = (p5: p5, shapeGetter: () => PointHaver[], voiceIndex: 
     }
     
     p5.push()
-    p5.fill(255, 255, 255, noteEnvelope.ramp.val() * 255)
+    p5.fill(255, 0, 0, (1-noteEnvelope.ramp.val()) * 255)
     p5.noStroke()
-    p5.ellipse(notePos.x, notePos.y, 10, 10)
+    p5.ellipse(notePos.x, notePos.y, 30, 30)
     p5.pop()
   }
-
 }
+
+
 
 
 const playMelodies = async (ctx: TimeContext, shapeGetter: () => PointHaver[], clipGetter: () => AbletonClip[]) => {
@@ -182,6 +185,7 @@ const playMelodies = async (ctx: TimeContext, shapeGetter: () => PointHaver[], c
       // eslint-disable-next-line no-constant-condition
       while(true){
         await playMelody(shapeGetter, clipGetter, ctx, i) //todo sketch - test that this works 
+        // console.log("melody finished", i)
       }
     })
   }
@@ -216,22 +220,6 @@ animationStates.push({
   noteEnvelopes: []
 })
 
-
-type RemnantCircles = {
-  id: string
-  x: number
-  y: number
-  radius: number
-  color: number
-}
-const remnantCircles: RemnantCircles[] = []
-
-type RemantTriangles = {
-  id: string
-  points: {x: number, y: number}[]
-  color: number
-}
-const anim1Artifacts: RemantTriangles[] = []
 
 /**
  * shapeGetter() is simple function grabbing multiLine shapes from the editor
@@ -285,9 +273,11 @@ onMounted(() => {
     const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
     const threeCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
     let tldrawCamera = {x: 0, y: 0, z: 1}
+    let numShapes = 0
 
     const onShapeCreated = (shapee: MultiSegmentLineShape) => {
-      console.log("onShapeCreated", shapee.id)
+      if(numShapes >= 3) return
+      console.log("onShapeCreated", shapee.id, numShapes)
       const bgCanvas = new OffscreenCanvas(p5Canvas.width, p5Canvas.height)
 
       //@ts-ignore
@@ -311,80 +301,14 @@ onMounted(() => {
       // const debugCanvas = document.getElementById('debugCanvas') as HTMLCanvasElement
       // const debugCtx = debugCanvas.getContext('2d')
 
+
+      const getShapes = () => {
+        return Array.from(getMultiSegmentLineShapes(tldrawEditor!!).values())
+      }
+      let voiceIndex = numShapes
       const drawFunc = (p5i: p5) => {
-        p5i.clear()
 
-        p5i.push()
-        p5i.strokeWeight(4)
-
-
-        const multiSegmentLineMap = getMultiSegmentLineShapes(tldrawEditor)
-        const shape = multiSegmentLineMap.get(shapee.id)
-        if(!shape){
-          console.warn("shape not found", shapee.id)
-          return
-        }
-
-        const modulatedPoints = shape.points.map((pt, i) => {
-          return {
-            x: pt.x + Math.sin(now()*(1+rand(i))) * 50,
-            y: pt.y + Math.cos(now()*(1+rand(i))) * 50
-          }
-        })
-
-        const lerpVal = sinN(now()*0.1)
-        const lerpedModulatedPoints = shape.points.map((pt, i) => {
-          return {
-            x: lerp(pt.x, modulatedPoints[i].x, lerpVal),
-            y: lerp(pt.y, modulatedPoints[i].y, lerpVal)
-          }
-        })
-
-        const flatPoints = shape.points.flatMap(pt => [pt.x, pt.y])
-        const indices = earcut(flatPoints)
-        //draw triangles
-        for (let i = 0; i < indices.length; i += 3) {
-          const col = randColor(i)
-          p5i.push()
-          p5i.fill(col.r, col.g, col.b)
-          p5i.noStroke()
-          const a = indices[i]
-          const b = indices[i + 1]
-          const c = indices[i + 2]
-          p5i.triangle(lerpedModulatedPoints[a].x, lerpedModulatedPoints[a].y, lerpedModulatedPoints[b].x, lerpedModulatedPoints[b].y, lerpedModulatedPoints[c].x, lerpedModulatedPoints[c].y)
-          p5i.pop()
-        }
-
-        p5i.push()
-        p5i.noFill()
-        p5i.stroke(255)
-        p5i.beginShape()
-
-        if(shape.spline === 'spline'){
-          p5i.curveVertex(shape.points[0].x, shape.points[0].y)
-          for (const pt of shape.points) {
-            p5i.curveVertex(pt.x, pt.y)
-          }
-          if(shape.closed){
-            p5i.curveVertex(shape.points[0].x, shape.points[0].y)
-            p5i.curveVertex(shape.points[1].x, shape.points[1].y)
-          } else {
-            p5i.curveVertex(shape.points[shape.points.length - 1].x, shape.points[shape.points.length - 1].y)
-          }
-        } else {
-          for (const pt of shape.points) {
-            p5i.vertex(pt.x, pt.y)
-          }
-          if(shape.closed){
-            p5i.vertex(shape.points[0].x, shape.points[0].y)
-          }
-        }
-        
-        p5i.endShape()
-
-
-        p5i.pop()
-        p5i.pop()
+        remnantCircleDraw(p5i, getShapes, voiceIndex)
 
         
         bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height)
@@ -426,6 +350,7 @@ onMounted(() => {
         const shape = editor.getShape<MultiSegmentLineShape>(id)
         if(shape.type === 'multiSegmentLine'){
           onShapeCreated(shape)
+          numShapes++
         }
       })
 
@@ -463,7 +388,7 @@ onMounted(() => {
           const item = onHistory.changes.updated[itemId]
           // console.log("item updated", itemId, item.type)
           if(itemId.split(':')[0] === 'camera'){
-            console.log("camera updated", item)
+            // console.log("camera updated", item)
             tldrawCamera = editor.getCamera()
           }
           // if(itemId != "pointer:pointer"){
@@ -491,7 +416,7 @@ onMounted(() => {
       midiOutput = midiOutputs.get("IAC Driver Bus 1")!!
 
       launchLoop(async ctx => {
-        ctx.bpm = 120
+        // ctx.bpm = 120
         await ctx.waitSec(3)
         await playMelodies(ctx, getShapes, getTestClips)
       })
