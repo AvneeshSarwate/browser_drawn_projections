@@ -5,7 +5,7 @@ import { inject, onMounted, onUnmounted, ref } from 'vue';
 import { CanvasPaint, FeedbackNode, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import p5 from 'p5';
-import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri, now } from '@/channels/channels';
+import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri, now, biasedTri } from '@/channels/channels';
 import { getEllipseShapes, getFreehandShapes, getMultiSegmentLineShapes, getTransformedShapePoints, p5FreehandTldrawRender } from './tldrawWrapperPlain';
 import { CompositeShaderEffect, HorizontalBlur, LayerBlend, Transform, VerticalBlur } from '@/rendering/customFX';
 import AutoUI from '@/components/AutoUI.vue';
@@ -64,13 +64,13 @@ const calculatePlayProbabilities = (shape1: PointHaver, shape2: PointHaver, shap
   //normalize array to sum to 1
   const na = (arr: number[]) => arr.map(n => n / arr.reduce((acc, n) => acc + n, 0))
 
-  // const v1Distribution = na([1, d2w(dist12), d2w(dist13)])
-  // const v2Distribution = na([d2w(dist12), 1, d2w(dist23)])
-  // const v3Distribution = na([d2w(dist13), d2w(dist23), 1])
+  const v1Distribution = na([1, d2w(dist12), d2w(dist13)])
+  const v2Distribution = na([d2w(dist12), 1, d2w(dist23)])
+  const v3Distribution = na([d2w(dist13), d2w(dist23), 1])
 
-  const v1Distribution = na([1, 0, 0])
-  const v2Distribution = na([0, 1, 0])
-  const v3Distribution = na([0, 0, 1])
+  // const v1Distribution = na([1, 0, 0])
+  // const v2Distribution = na([0, 1, 0])
+  // const v3Distribution = na([0, 0, 1])
 
   return [v1Distribution, v2Distribution, v3Distribution]
 }
@@ -155,20 +155,22 @@ const remnantCircleDraw = (p5: p5, shapeGetter: () => PointHaver[], voiceIndex: 
 
   for(const noteEnvelope of animationState.noteEnvelopes){
     let notePos = catmullRomSpline(loopSplinePoints, noteEnvelope.phasePos)
+    let col = {r: 255, g: 0, b: 0}
     if(noteEnvelope.otherVoiceIndex != voiceIndex) {
       const otherShape = shapeGetter()[noteEnvelope.otherVoiceIndex]
       const otherLoopSplinePoints = otherShape.points.map(pt => catmullRomSpline(otherShape.points, pt.x))
       otherLoopSplinePoints.push(...otherLoopSplinePoints.slice(0, 2))
       const otherNotePos = catmullRomSpline(otherLoopSplinePoints, noteEnvelope.phasePos)
-      const lerpVal = noteEnvelope.ramp.val()
+      const lerpVal = biasedTri(noteEnvelope.ramp.val(), 0.2)
       notePos = {
         x: lerp(notePos.x, otherNotePos.x, lerpVal),
         y: lerp(notePos.y, otherNotePos.y, lerpVal)
       }
+      col = {r: 0, g: 255, b: 0}
     }
     
     p5.push()
-    p5.fill(255, 0, 0, (1-noteEnvelope.ramp.val()) * 255)
+    p5.fill(col.r, col.g, col.b, (1-noteEnvelope.ramp.val()) * 255)
     p5.noStroke()
     p5.ellipse(notePos.x, notePos.y, 30, 30)
     p5.pop()
