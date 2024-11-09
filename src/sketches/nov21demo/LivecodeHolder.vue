@@ -129,7 +129,6 @@ const playMelody = async (shapeGetter: () => PointHaver[], clipGetter: () => Abl
       phasePos: animationState.melodyPhase,
       startTime: now()
     }
-    if(voiceIndex === 0 && voiceIndex !== randVoice) console.log("note jump orig", voiceIndex, "other", randVoice)
 
     playNote(note.note.pitch, note.note.velocity, ctx, note.note.duration, randVoice, midiOutput!!)
     await ctx.wait(note.postDelta ?? 0)
@@ -138,7 +137,7 @@ const playMelody = async (shapeGetter: () => PointHaver[], clipGetter: () => Abl
 
 const remnantCircleDraw = (p5: p5, shapeGetter: () => PointHaver[], voiceIndex: number) => {
   if(voiceIndex >= 3) debugger
-  if(voiceIndex != 0) return
+
   const animationState = animationStates[voiceIndex]
   const shape = shapeGetter()[voiceIndex]
 
@@ -166,11 +165,11 @@ const remnantCircleDraw = (p5: p5, shapeGetter: () => PointHaver[], voiceIndex: 
         x: lerp(notePos.x, otherNotePos.x, lerpVal),
         y: lerp(notePos.y, otherNotePos.y, lerpVal)
       }
-      col = {r: 0, g: 255, b: 0}
+      col = {r: 0, g: 255 * (1-noteEnvelope.ramp.val()), b: 0}
     }
     
     p5.push()
-    p5.fill(col.r, col.g, col.b, (1-noteEnvelope.ramp.val()) * 255)
+    p5.fill(col.r, col.g, col.b)
     p5.noStroke()
     p5.ellipse(notePos.x, notePos.y, 30, 30)
     p5.pop()
@@ -309,6 +308,7 @@ onMounted(() => {
       }
       let voiceIndex = numShapes
       const drawFunc = (p5i: p5) => {
+        p5i.clear()
 
         remnantCircleDraw(p5i, getShapes, voiceIndex)
 
@@ -418,7 +418,7 @@ onMounted(() => {
       midiOutput = midiOutputs.get("IAC Driver Bus 1")!!
 
       launchLoop(async ctx => {
-        // ctx.bpm = 120
+        ctx.bpm = 180
         await ctx.waitSec(3)
         await playMelodies(ctx, getShapes, getTestClips)
       })
