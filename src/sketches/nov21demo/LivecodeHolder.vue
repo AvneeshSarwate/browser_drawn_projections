@@ -273,6 +273,8 @@ onMounted(() => {
     const p5i = appState.p5Instance!!
     const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
     const threeCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
+    const debugCanvas = document.getElementById('debugCanvas') as HTMLCanvasElement
+    const debugCtx = debugCanvas.getContext('2d')
     let tldrawCamera = {x: 0, y: 0, z: 1}
     let numShapes = 0
 
@@ -280,6 +282,7 @@ onMounted(() => {
       if(numShapes >= 3) return
       console.log("onShapeCreated", shapee.id, numShapes)
       const bgCanvas = new OffscreenCanvas(p5Canvas.width, p5Canvas.height)
+      const bgCtx = bgCanvas.getContext('2d')
 
       //@ts-ignore
       bgCanvas.name = shapee.id
@@ -298,11 +301,6 @@ onMounted(() => {
       layerOverlay.debugId = `layerOverlay-${shapee.id}`
       feedback.setFeedbackSrc(layerOverlay)
 
-      const bgCtx = bgCanvas.getContext('2d')
-      // const debugCanvas = document.getElementById('debugCanvas') as HTMLCanvasElement
-      // const debugCtx = debugCanvas.getContext('2d')
-
-
       const getShapes = () => {
         return Array.from(getMultiSegmentLineShapes(tldrawEditor!!).values())
       }
@@ -317,7 +315,7 @@ onMounted(() => {
         bgCtx.drawImage(p5Canvas, 0, 0, bgCanvas.width, bgCanvas.height)
         
         // debugCtx.clearRect(0, 0, debugCanvas.width, debugCanvas.height)
-        // debugCtx.drawImage(bgCanvas, 0, 0, debugCanvas.width, debugCanvas.height)
+        debugCtx.drawImage(bgCanvas, 0, 0, debugCanvas.width, debugCanvas.height)
 
         // layerOverlay.renderAll(appState.threeRenderer!!)
       }
@@ -438,7 +436,9 @@ onMounted(() => {
 
       //todo sketch - create some kind of compositor shaderFX for shapeRenderMap 
       //set that compositor as shaderGraphEndNode
-
+      appState.drawFunctions.push((p5i: p5) => {
+        debugCtx.clearRect(0, 0, debugCanvas.width, debugCanvas.height)
+      })
       appState.drawFuncMap.set('drawShapes', (p5i: p5) => {
         for (const [id, shape] of shapeRenderMap) {
           shape.drawFunc(p5i)

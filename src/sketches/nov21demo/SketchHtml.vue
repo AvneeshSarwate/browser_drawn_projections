@@ -14,15 +14,16 @@
   </div>
   <button @click="downloadSnapshot">Download snapshot</button>
   <div id="canvasContainer">
-    <h3>P5 sketch rendering freehand tldraw shapes</h3>
-    <br>
+    <!-- <h3>P5 sketch rendering freehand tldraw shapes</h3> -->
+    <!-- <br> -->
     <canvas id="p5Canvas" :width="resRef.width" :height="resRef.height" abitrary-prop="somethi"></canvas>
-    <br>
-    <h3>Shader post-processing with three.js</h3>
-    <br>
+    <!-- <br> -->
+    
     <div id="threeCanvasMarker" ></div>
+    <h3>p5 js layer canvas</h3>
+    <canvas id="debugCanvas" :width="resRef.width" :height="resRef.height" abitrary-prop="somethi"></canvas>
+    <h3>three.js canvas</h3>
     <canvas id="threeCanvas" :width="resRef.width" :height="resRef.height" abitrary-prop="somethi"></canvas>
-    <!-- <canvas id="debugCanvas" :width="resRef.width" :height="resRef.height" abitrary-prop="somethi"></canvas> -->
   </div>
   <div id="debugInfo"></div>
 </template>
@@ -154,6 +155,7 @@ onBeforeUnmount(() => {
   left: 0;
   z-index: -1; */
   /* visibility: hidden; */
+  display: none;
 }
 
 h3 {
