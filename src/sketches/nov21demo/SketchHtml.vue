@@ -13,7 +13,7 @@
     Selected shape ids: {{ selectedShapeIds }}
   </div>
   <button @click="downloadSnapshot">Download snapshot</button>
-  <div id="canvasContainer" :style="{width: resRef.width + 'px', height: resRef.height + 'px'}">
+  <div id="canvasContainer">
     <h3>P5 sketch rendering freehand tldraw shapes</h3>
     <br>
     <canvas id="p5Canvas" :width="resRef.width" :height="resRef.height" abitrary-prop="somethi"></canvas>
@@ -22,7 +22,7 @@
     <br>
     <div id="threeCanvasMarker" ></div>
     <canvas id="threeCanvas" :width="resRef.width" :height="resRef.height" abitrary-prop="somethi"></canvas>
-    <canvas id="debugCanvas" :width="resRef.width" :height="resRef.height" abitrary-prop="somethi"></canvas>
+    <!-- <canvas id="debugCanvas" :width="resRef.width" :height="resRef.height" abitrary-prop="somethi"></canvas> -->
   </div>
   <div id="debugInfo"></div>
 </template>
@@ -51,6 +51,7 @@ const popupCanvas = () => {
   console.log("popup canvas")
   if(popupWindow && !popupWindow.closed) return
   popupWindow = window.open("", "popupWindow", `width=${resolution.width},height=${resolution.height}`)
+  popupWindow.document.body.style.backgroundColor = "black"
   popupWindow.document.body.appendChild(appState.threeRenderer.domElement)
 
   //todo sketch - not working
