@@ -71,6 +71,9 @@ export class MPEPolySynth<T extends MPEVoiceGraph> {
   constructor(vGraph: Constructor<T>, maxVoices: number = 32, isActualMpe: boolean = false) {
     this.vGraphCtor = vGraph
     this.maxVoices = maxVoices
+
+    // this.voices contains the maximum number of voices triggered so far. 
+    // if a passage had 4 voices at some point, this.voices will have 4 elements the whole time
     this.voices = new Map()
 
     const voiceMetadata = vGraph[Symbol.metadata]
@@ -84,6 +87,7 @@ export class MPEPolySynth<T extends MPEVoiceGraph> {
   }
 
   setParam(param: NumberKeys<T>, value: number) {
+    console.log('## param', param);
     const paramDef = this.params[param]
     if(!paramDef) {
       throw new Error(`MPEPolySynth: param ${String(param)} not found`)
@@ -158,6 +162,8 @@ export class MPEPolySynth<T extends MPEVoiceGraph> {
       voice[param as keyof T] = this.params[param as NumberKeys<T>].value as any ?? this.params[param as NumberKeys<T>].defaultVal
     }
 
+    // console.log('### active voices', new Map([...this.voices].filter(v => v[1].isOn)))
+    this.updateGain();
     return voice
   }
 
@@ -175,6 +181,17 @@ export class MPEPolySynth<T extends MPEVoiceGraph> {
       voice.dispose()
     })
     this.voices.clear()
+  }
+
+  private updateGain(): void {
+    const activeVoiceList = [...this.voices].filter(v => v[1].isOn);
+    const newGain = activeVoiceList.length ? 1 / (Math.sqrt(activeVoiceList.length)): 1;
+
+    this.voices.forEach(({voice: v}, k) => {
+      // console.log(v);
+      // @ts-expect-error bad typing
+      v.outputGain.gain.value = newGain
+    })
   }
 }
 
