@@ -6,6 +6,7 @@
     <p>P5 sketch rendering the custom shape with some extra fun in the middle</p>
     <p>Shader post-processing with three.js on the bottom</p>
   </div>
+  <button @click="popupCanvas">Popup canvas</button>
   <h3>Tldraw instance</h3>
   <div id="tldrawContainer" ref="reactRoot"></div>
   <div id="selectedShapeIds">
@@ -19,6 +20,7 @@
     <br>
     <h3>Shader post-processing with three.js</h3>
     <br>
+    <div id="threeCanvasMarker" ></div>
     <canvas id="threeCanvas" :width="resRef.width" :height="resRef.height" abitrary-prop="somethi"></canvas>
     <canvas id="debugCanvas" :width="resRef.width" :height="resRef.height" abitrary-prop="somethi"></canvas>
   </div>
@@ -43,7 +45,20 @@ let snapshotLoaded = false
 
 const resRef = ref(resolution)
 
+const threeCanvasMarker = ref<HTMLDivElement | null>(null)
+let popupWindow: Window | null = null
+const popupCanvas = () => {
+  console.log("popup canvas")
+  if(popupWindow && !popupWindow.closed) return
+  popupWindow = window.open("", "popupWindow", `width=${resolution.width},height=${resolution.height}`)
+  popupWindow.document.body.appendChild(appState.threeRenderer.domElement)
 
+  //todo sketch - not working
+  popupWindow.addEventListener("onbeforeunload", () => {
+    threeCanvasMarker.value?.appendChild(appState.threeRenderer.domElement)
+  })
+
+}
 //todo sketch - this can be handled with react hooks instead of a flag (see link below)
 //can also replace the CustomRenderer component with this
 //alternatively, could use the custom renderer component to display element names next to the elements
