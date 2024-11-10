@@ -7,7 +7,7 @@ import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, tar
 import p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri, now, biasedTri } from '@/channels/channels';
 import { getEllipseShapes, getFreehandShapes, getMultiSegmentLineShapes, getTransformedShapePoints, p5FreehandTldrawRender } from './tldrawWrapperPlain';
-import { CompositeShaderEffect, HorizontalBlur, LayerBlend, Transform, VerticalBlur } from '@/rendering/customFX';
+import { CompositeShaderEffect, HorizontalBlur, LayerBlend, MathOp, Transform, VerticalBlur } from '@/rendering/customFX';
 import AutoUI from '@/components/AutoUI.vue';
 import { clamp, lerp, type Editor, type TLPageId } from 'tldraw';
 import earcut from 'earcut';
@@ -165,11 +165,11 @@ const remnantCircleDraw = (p5: p5, shapeGetter: () => PointHaver[], voiceIndex: 
         x: lerp(notePos.x, otherNotePos.x, lerpVal),
         y: lerp(notePos.y, otherNotePos.y, lerpVal)
       }
-      col = {r: 0, g: 255 * (1-noteEnvelope.ramp.val()), b: 0}
+      col = {r: 0, g: 255, b: 0}
     }
     
     p5.push()
-    p5.fill(col.r, col.g, col.b)
+    p5.fill(col.r, col.g, col.b, 255 * (1-noteEnvelope.ramp.val()))
     p5.noStroke()
     p5.ellipse(notePos.x, notePos.y, 30, 30)
     p5.pop()
@@ -297,9 +297,13 @@ onMounted(() => {
       horBlur.debugId = `horBlur-${shapee.id}`
       const transform = new Transform({ src: horBlur })
       transform.debugId = `transform-${shapee.id}`
-      const layerOverlay = new LayerBlend({ src1: p5Passthru, src2: transform })
+      const mathOp = new MathOp({ src: transform })
+      mathOp.debugId = `mathOp-${shapee.id}`
+      const layerOverlay = new LayerBlend({ src1: p5Passthru, src2: mathOp })
       layerOverlay.debugId = `layerOverlay-${shapee.id}`
       feedback.setFeedbackSrc(layerOverlay)
+
+      mathOp.setUniforms({mult: 0.95})
 
       const getShapes = () => {
         return Array.from(getMultiSegmentLineShapes(tldrawEditor!!).values())

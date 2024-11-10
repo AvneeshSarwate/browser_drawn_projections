@@ -153,6 +153,33 @@ export class Transform extends CustomShaderEffect {
   }
 }
 
+const mathOpFs = glsl`
+precision highp float;
+
+uniform sampler2D src;
+uniform float preAdd;
+uniform float postAdd;
+uniform float mult;
+
+varying vec2 vUV;
+
+void main() {
+  vec4 color = texture2D(src, vUV);
+  color = color * (mult + preAdd) + postAdd;
+  gl_FragColor = color;
+}`
+
+export class MathOp extends CustomShaderEffect {
+  effectName = "MathOp"
+  constructor(inputs: {src: ShaderSource}, width = 1280, height = 720) {
+    super(mathOpFs, inputs, width, height)
+    this.setUniforms({preAdd: 0, postAdd: 0, mult: 1})
+  }
+  setUniforms(uniforms: {preAdd?: Dynamic<number>, postAdd?: Dynamic<number>, mult?: Dynamic<number>}): void {
+    super.setUniforms(uniforms)
+  }
+}
+
 
 
 //an effect that takes layer 1 and layer 2, and shows layer 2 where layer 1 is transparent
