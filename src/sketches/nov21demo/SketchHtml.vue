@@ -6,6 +6,7 @@
     <p>P5 sketch rendering the custom shape with some extra fun in the middle</p>
     <p>Shader post-processing with three.js on the bottom</p>
   </div>
+  <div id="topPageControls"></div>
   <button @click="popupCanvas">Popup canvas</button>
   <h3>Tldraw instance</h3>
   <div id="tldrawContainer" ref="reactRoot"></div>

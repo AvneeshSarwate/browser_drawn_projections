@@ -34,14 +34,23 @@ const notes = [
 
 const notes1 = notes.slice(0, 4)
 const clip1 = new AbletonClip("clip1", 4, notes1)
+const clipGetter1 = () => {
+  return clip1
+}
 
 const notes2 = notes.slice(0, 5).map(n => ({...n, pitch: n.pitch + 12}))
 const clip2 = new AbletonClip("clip2", 5, notes2)
+const clipGetter2 = () => {
+  return clip2
+}
 
 const notes3 = notes.slice(0, 6).map(n => ({...n, pitch: n.pitch - 12}))
 const clip3 = new AbletonClip("clip3", 6, notes3)
+const clipGetter3 = () => {
+  return clip3
+}
 
-const getTestClips = () => [clip1, clip2, clip3]
+const getTestClips = () => [clipGetter1, clipGetter2, clipGetter3]
 
 type PointHaver = {
   points: {x: number, y: number}[]
@@ -99,9 +108,9 @@ const playNote = (pitch: number, velocity: number, ctx: TimeContext, noteDur: nu
   })
 }
 
-const playMelody = async (shapeGetter: () => PointHaver[], clipGetter: () => AbletonClip[], ctx: TimeContext, voiceIndex: number) => {
+const playMelody = async (shapeGetter: () => PointHaver[], clipGetter: () => (() => AbletonClip)[], ctx: TimeContext, voiceIndex: number) => {
   const shapes = shapeGetter()
-  const clip = clipGetter()[voiceIndex]
+  const clip = clipGetter()[voiceIndex]()
   const playDistribution = calculatePlayProbabilities(shapes[0], shapes[1], shapes[2], resolution)[voiceIndex]
   const animationState = animationStates[voiceIndex]
 
@@ -130,7 +139,9 @@ const playMelody = async (shapeGetter: () => PointHaver[], clipGetter: () => Abl
       startTime: now()
     }
 
-    playNote(note.note.pitch, note.note.velocity, ctx, note.note.duration, randVoice, midiOutput!!)
+    if(musicParams.value[`playMelody${voiceIndex + 1}`]) {
+      playNote(note.note.pitch, note.note.velocity, ctx, note.note.duration, randVoice, midiOutput!!)
+    }
     await ctx.wait(note.postDelta ?? 0)
   }
 }
@@ -179,7 +190,7 @@ const remnantCircleDraw = (p5: p5, shapeGetter: () => PointHaver[], voiceIndex: 
 
 
 
-const playMelodies = async (ctx: TimeContext, shapeGetter: () => PointHaver[], clipGetter: () => AbletonClip[]) => {
+const playMelodies = async (ctx: TimeContext, shapeGetter: () => PointHaver[], clipGetter: () => (() => AbletonClip)[]) => {
   for(let i = 0; i < 3; i++) {
     ctx.branch(async ctx => {
       
@@ -248,10 +259,10 @@ const clearDrawFuncs = () => {
   appState.drawFuncMap = new Map()
 }
 
-const drawParams = ref({
-  showLines: true,
-  showCircles: true, 
-  showConnectors: true
+const musicParams = ref({
+  playMelody1: true,
+  playMelody2: false,
+  playMelody3: false,
 })
 
 const rand = (n: number) => sinN(n*123.23)
@@ -311,6 +322,7 @@ onMounted(() => {
       let voiceIndex = numShapes
       const drawFunc = (p5i: p5) => {
         p5i.clear()
+        if(!musicParams.value[`playMelody${voiceIndex + 1}`]) return
 
         remnantCircleDraw(p5i, getShapes, voiceIndex)
 
@@ -485,8 +497,9 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div></div>
-  <AutoUI :object-to-edit="drawParams"/>
+  <Teleport to="#topPageControls">
+    <AutoUI :object-to-edit="musicParams"/>
+  </Teleport>
 </template>
 
 <style scoped></style>
