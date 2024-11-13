@@ -25,16 +25,23 @@ const clip2 = () => new AbletonClip("clip2", 5, notes2())
 const clip3 = () => new AbletonClip("clip3", 6, notes3())
 
 
-const clipGetter1 = () => {
-  return clip1()
+const clipGetter1 = (noteLength: number, melodySpeed: number) => {
+  const clip = clip1()
+  clip.notes = clip.notes.map(n => ({...n, duration: n.duration * noteLength}))
+  const clipScaled = clip.scale(melodySpeed)
+  return clipScaled
 }
-const clipGetter2 = () => {
+const clipGetter2 = (noteLength: number, melodySpeed: number) => {
   const clip = clip2();
-  return clip;
+  clip.notes = clip.notes.map(n => ({...n, duration: n.duration * noteLength}))
+  const clipScaled = clip.scale(melodySpeed)
+  return clipScaled
 }
-const clipGetter3 = () => {
+const clipGetter3 = (noteLength: number, melodySpeed: number) => {
   const clip = clip3();
-  return clip;
+  clip.notes = clip.notes.map(n => ({...n, duration: n.duration * noteLength}))
+  const clipScaled = clip.scale(melodySpeed)
+  return clipScaled
 }
 
 export const getTestClips = () => [clipGetter1, clipGetter2, clipGetter3]

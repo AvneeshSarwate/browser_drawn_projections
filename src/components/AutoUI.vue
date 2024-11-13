@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { type TreeProp } from '@/stores/undoCommands'
 
 const props = defineProps<{ objectToEdit: TreeProp }>()
@@ -7,38 +7,42 @@ const props = defineProps<{ objectToEdit: TreeProp }>()
 //todo api - add arrays to the tree prop type
 //todo - add a panel for adjusting the display properties AutoUI view (make it like unity inspector)
 
+const objectToEdit = ref(props.objectToEdit)
+
 const renderInputs = computed(() => {
-  return Object.keys(props.objectToEdit).map(key => {
-    const value = props.objectToEdit[key]
+  return Object.keys(objectToEdit.value).map(key => {
+    const value = objectToEdit.value[key]
     if (typeof value === 'string' || typeof value === 'number') {
-      return { key, type: 'input' }
+      return { key, type: 'input', valType: typeof value }
     } else if (typeof value === 'boolean') {
-      return { key, type: 'boolean' }
+      return { key, type: 'boolean', valType: typeof value }
     } else if (typeof value === 'object' && value !== null) {
-      return { key, type: 'nested' }
+      return { key, type: 'nested', valType: typeof value }
     }
   })
 })
 
+const updateObject = (event: Event, valType: string) => {
+  const target = event.target as HTMLInputElement
+  objectToEdit.value[target.id] = valType === 'number' ? parseFloat(target.value) : target.value
+}
 </script>
   
 <template>
   <div v-for="(item, index) in renderInputs" :key="index">
     <div v-if="item?.type === 'input'">
       <label :for="item.key">{{ item.key }}</label> <!-- todo api - key should be full path-chain to prevent duplicates -->
-       <!-- eslint-disable-next-line vue/no-mutating-props -->
-      <input :id="item.key" v-model="props.objectToEdit[item.key]" />
+      <input :id="item.key" v-model="objectToEdit[item.key]" @change="(event: Event) => updateObject(event, item.valType)" />
     </div>
     <div v-else-if="item?.type === 'boolean'">
       <label :for="item.key">{{ item.key }}</label>
-      <!-- eslint-disable-next-line vue/no-mutating-props -->
-      <input :id="item.key" type="checkbox" v-model="props.objectToEdit[item.key]" />
+      <input :id="item.key" type="checkbox" v-model="objectToEdit[item.key]" />
     </div>
     <div v-else-if="item?.type === 'nested'">
       <details>
         <summary>{{ item.key }}</summary>
         <div class="autoUIInset">
-          <AutoUI :object-to-edit="(props.objectToEdit[item.key] as TreeProp)" />
+          <AutoUI :object-to-edit="(objectToEdit[item.key] as TreeProp)" />
         </div>
       </details>
     </div>

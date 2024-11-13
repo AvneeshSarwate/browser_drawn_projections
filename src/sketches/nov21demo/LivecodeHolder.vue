@@ -19,6 +19,7 @@ import type { NumberNodeUniform } from 'three/src/renderers/common/nodes/NodeUni
 import { catmullRomSpline } from '@/rendering/catmullRom';
 import { getTestClips } from './midiClipUtils';
 import { playNote } from './playback';
+import type { TreeProp } from '@/stores/undoCommands';
 
 const appState = inject<TldrawTestAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
@@ -66,9 +67,32 @@ const sampleFromDist = (dist: number[]) => {
 }
 let midiOutput = midiOutputs.get("IAC Driver Bus 1")!!
 
-const playMelody = async (ctx: TimeContext, shapeGetter: () => PointHaver[], clipGetter: () => (() => AbletonClip)[], voiceIndex: number) => {
+const voiceParams = ref({
+  voice1: {
+    play: true,
+    noteLength: 1,
+    melodySpeed: 1
+  },
+  voice2: {
+    play: false,
+    noteLength: 1,
+    melodySpeed: 1
+  },
+  voice3: {
+    play: false,
+    noteLength: 1,
+    melodySpeed: 1
+  }
+})
+//todo api - this is a hack till adding support for arrays in AutoUI
+const voiceKeys = Object.keys(voiceParams.value)
+
+type MelodyGenerator = (noteLength: number, melodySpeed: number) => AbletonClip
+
+const playMelody = async (ctx: TimeContext, shapeGetter: () => PointHaver[], clipGetter: () => MelodyGenerator[], voiceIndex: number) => {
   const shapes = shapeGetter()
-  const clip = clipGetter()[voiceIndex]()
+  const {noteLength, melodySpeed} = voiceParams.value[voiceKeys[voiceIndex]]
+  const clip = clipGetter()[voiceIndex](noteLength, melodySpeed)
   const playDistribution = calculatePlayProbabilities(shapes[0], shapes[1], shapes[2], resolution)[voiceIndex]
   const animationState = animationStates[voiceIndex]
 
@@ -97,7 +121,7 @@ const playMelody = async (ctx: TimeContext, shapeGetter: () => PointHaver[], cli
       startTime: now()
     }
 
-    if(musicParams.value[`playMelody${voiceIndex + 1}`]) {
+    if(voiceParams.value[voiceKeys[voiceIndex]].play) {
       playNote(ctx, note.note, randVoice, midiOutput!!)
     }
     await ctx.wait(note.postDelta ?? 0)
@@ -148,7 +172,7 @@ const remnantCircleDraw = (p5: p5, shapeGetter: () => PointHaver[], voiceIndex: 
 
 
 
-const playMelodies = async (ctx: TimeContext, shapeGetter: () => PointHaver[], clipGetter: () => (() => AbletonClip)[]) => {
+const playMelodies = async (ctx: TimeContext, shapeGetter: () => PointHaver[], clipGetter: () => MelodyGenerator[]) => {
   for(let i = 0; i < 3; i++) {
     ctx.branch(async ctx => {
       
@@ -285,7 +309,7 @@ onMounted(() => {
       let voiceIndex = numShapes
       const drawFunc = (p5i: p5) => {
         p5i.clear()
-        if(!musicParams.value[`playMelody${voiceIndex + 1}`]) return
+        if(!voiceParams.value[voiceKeys[voiceIndex]].play) return
 
         remnantCircleDraw(p5i, getShapes, voiceIndex)
 
@@ -458,7 +482,7 @@ onUnmounted(() => {
 
 <template>
   <Teleport to="#topPageControls">
-    <AutoUI :object-to-edit="musicParams"/>
+    <AutoUI :object-to-edit="voiceParams as TreeProp"/>
   </Teleport>
 </template>
 
