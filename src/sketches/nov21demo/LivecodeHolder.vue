@@ -12,45 +12,17 @@ import AutoUI from '@/components/AutoUI.vue';
 import { clamp, lerp, type Editor, type TLPageId } from 'tldraw';
 import earcut from 'earcut';
 import type { MultiSegmentLineShape } from './multiSegmentLine/multiSegmentLineUtil';
-import { AbletonClip } from '@/io/abletonClips';
+import { AbletonClip, type AbletonNote } from '@/io/abletonClips';
 import type { MIDIValOutput } from '@midival/core';
 import { MIDI_READY, midiOutputs } from '@/io/midi';
 import type { NumberNodeUniform } from 'three/src/renderers/common/nodes/NodeUniform.js';
 import { catmullRomSpline } from '@/rendering/catmullRom';
+import { getTestClips } from './midiClipUtils';
+import { playNote } from './playback';
 
 const appState = inject<TldrawTestAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
 let timeLoops: CancelablePromisePoxy<any>[] = []
-
-const notes = [
-  { pitch: 60, velocity: 100, duration: 1, position: 0 },
-  { pitch: 62, velocity: 100, duration: 1, position: 1 },
-  { pitch: 64, velocity: 100, duration: 1, position: 2 },
-  { pitch: 65, velocity: 100, duration: 1, position: 3 },
-  { pitch: 67, velocity: 100, duration: 1, position: 4 },
-  { pitch: 69, velocity: 100, duration: 1, position: 5 },
-  { pitch: 71, velocity: 100, duration: 1, position: 6 },
-]
-
-const notes1 = notes.slice(0, 4)
-const clip1 = new AbletonClip("clip1", 4, notes1)
-const clipGetter1 = () => {
-  return clip1
-}
-
-const notes2 = notes.slice(0, 5).map(n => ({...n, pitch: n.pitch + 12}))
-const clip2 = new AbletonClip("clip2", 5, notes2)
-const clipGetter2 = () => {
-  return clip2
-}
-
-const notes3 = notes.slice(0, 6).map(n => ({...n, pitch: n.pitch - 12}))
-const clip3 = new AbletonClip("clip3", 6, notes3)
-const clipGetter3 = () => {
-  return clip3
-}
-
-const getTestClips = () => [clipGetter1, clipGetter2, clipGetter3]
 
 type PointHaver = {
   points: {x: number, y: number}[]
@@ -94,21 +66,7 @@ const sampleFromDist = (dist: number[]) => {
 }
 let midiOutput = midiOutputs.get("IAC Driver Bus 1")!!
 
-const playNote = (pitch: number, velocity: number, ctx: TimeContext, noteDur: number, channel: number, inst: MIDIValOutput) => {
-  // console.log("pitch play", pitch, channel)
-  const chan = channel + 1
-  inst.sendNoteOn(pitch, velocity, chan)
-  let noteIsOn = true
-  ctx.branch(async ctx => {
-    await ctx.wait((noteDur ?? 0.1) * 0.98)
-    inst.sendNoteOff(pitch, chan)
-    noteIsOn = false
-  }).finally(() => {
-    inst.sendNoteOff(pitch, chan)
-  })
-}
-
-const playMelody = async (shapeGetter: () => PointHaver[], clipGetter: () => (() => AbletonClip)[], ctx: TimeContext, voiceIndex: number) => {
+const playMelody = async (ctx: TimeContext, shapeGetter: () => PointHaver[], clipGetter: () => (() => AbletonClip)[], voiceIndex: number) => {
   const shapes = shapeGetter()
   const clip = clipGetter()[voiceIndex]()
   const playDistribution = calculatePlayProbabilities(shapes[0], shapes[1], shapes[2], resolution)[voiceIndex]
@@ -140,7 +98,7 @@ const playMelody = async (shapeGetter: () => PointHaver[], clipGetter: () => (()
     }
 
     if(musicParams.value[`playMelody${voiceIndex + 1}`]) {
-      playNote(note.note.pitch, note.note.velocity, ctx, note.note.duration, randVoice, midiOutput!!)
+      playNote(ctx, note.note, randVoice, midiOutput!!)
     }
     await ctx.wait(note.postDelta ?? 0)
   }
@@ -196,7 +154,7 @@ const playMelodies = async (ctx: TimeContext, shapeGetter: () => PointHaver[], c
       
       // eslint-disable-next-line no-constant-condition
       while(true){
-        await playMelody(shapeGetter, clipGetter, ctx, i) //todo sketch - test that this works 
+        await playMelody(ctx, shapeGetter, clipGetter, i) //todo sketch - test that this works 
         // console.log("melody finished", i)
       }
     })
@@ -278,6 +236,27 @@ const randColor = (seed: number) => {
 
 const shapeRenderMap = new Map<string, { drawFunc: (p5: p5) => void, shaderGraphEndNode: ShaderEffect }>()
 
+const setupShaderFXGraph = (bgCanvas, shapee) => {
+  const p5Passthru = new Passthru({ src: bgCanvas })
+  p5Passthru.debugId = `p5Passthru-${shapee.id}`
+  const feedback = new FeedbackNode(p5Passthru)
+  feedback.debugId = `feedback-${shapee.id}`
+  const vertBlur = new VerticalBlur({ src: feedback })
+  vertBlur.debugId = `vertBlur-${shapee.id}`
+  const horBlur = new HorizontalBlur({ src: vertBlur })
+  horBlur.debugId = `horBlur-${shapee.id}`
+  const transform = new Transform({ src: horBlur })
+  transform.debugId = `transform-${shapee.id}`
+  const mathOp = new MathOp({ src: transform })
+  mathOp.debugId = `mathOp-${shapee.id}`
+  const layerOverlay = new LayerBlend({ src1: p5Passthru, src2: mathOp })
+  layerOverlay.debugId = `layerOverlay-${shapee.id}`
+  feedback.setFeedbackSrc(layerOverlay);
+  mathOp.setUniforms({mult: 0.95});
+
+  return layerOverlay
+}
+
 onMounted(() => {
   try {
 
@@ -298,23 +277,7 @@ onMounted(() => {
       //@ts-ignore
       bgCanvas.name = shapee.id
 
-      const p5Passthru = new Passthru({ src: bgCanvas })
-      p5Passthru.debugId = `p5Passthru-${shapee.id}`
-      const feedback = new FeedbackNode(p5Passthru)
-      feedback.debugId = `feedback-${shapee.id}`
-      const vertBlur = new VerticalBlur({ src: feedback })
-      vertBlur.debugId = `vertBlur-${shapee.id}`
-      const horBlur = new HorizontalBlur({ src: vertBlur })
-      horBlur.debugId = `horBlur-${shapee.id}`
-      const transform = new Transform({ src: horBlur })
-      transform.debugId = `transform-${shapee.id}`
-      const mathOp = new MathOp({ src: transform })
-      mathOp.debugId = `mathOp-${shapee.id}`
-      const layerOverlay = new LayerBlend({ src1: p5Passthru, src2: mathOp })
-      layerOverlay.debugId = `layerOverlay-${shapee.id}`
-      feedback.setFeedbackSrc(layerOverlay)
-
-      mathOp.setUniforms({mult: 0.95})
+      const layerOverlay = setupShaderFXGraph(bgCanvas, shapee);
 
       const getShapes = () => {
         return Array.from(getMultiSegmentLineShapes(tldrawEditor!!).values())
@@ -433,13 +396,10 @@ onMounted(() => {
 
       launchLoop(async ctx => {
         ctx.bpm = 180
-        await ctx.waitSec(3)
+        await ctx.waitSec(1)
         await playMelodies(ctx, getShapes, getTestClips)
       })
     }
-
-    
-
 
     let p5Mouse = { x: 0, y: 0 }
     mousemoveEvent((ev) => {
