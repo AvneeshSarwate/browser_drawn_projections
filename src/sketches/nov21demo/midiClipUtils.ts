@@ -20,9 +20,12 @@ const notes1 = () => getNotes().slice(0, 4)
 const notes2 = () => getNotes().slice(0, 5).map(n => ({...n, pitch: n.pitch + 12}))
 const notes3 = () => getNotes().slice(0, 6).map(n => ({...n, pitch: n.pitch - 12}))
 
-const clip1 = () => new AbletonClip("clip1", 4, notes1())
-const clip2 = () => new AbletonClip("clip2", 5, notes2())
-const clip3 = () => new AbletonClip("clip3", 6, notes3())
+const clip1 = () => {
+  console.log("clip1-b")
+  return new AbletonClip("clip1", 4, notes1()).scale(1)
+}
+const clip2 = () => new AbletonClip("clip2", 5, notes2()).scale(1)
+const clip3 = () => new AbletonClip("clip3", 6, notes3()).scale(1)
 
 
 const clipGetter1 = (noteLength: number, melodySpeed: number) => {

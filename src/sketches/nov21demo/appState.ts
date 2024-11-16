@@ -3,13 +3,44 @@ import * as THREE from 'three'
 import { Entity, EntityList } from '@/stores/undoCommands'
 
 
-import { Ramp } from '@/channels/channels'
+import type { CancelablePromisePoxy, Ramp } from '@/channels/channels'
 import { defineStore, acceptHMRUpdate, type StoreDefinition } from 'pinia'
 import { ref, type ShallowRef } from 'vue'
 import type { Editor } from 'tldraw'
+import type { AbletonClip } from '@/io/abletonClips'
+import { getTestClips } from './midiClipUtils'
 
 
 
+
+export type AnimationState = {
+  melodyPhase: number
+  baseShapeIndex: number
+  noteEnvelopes: {
+    noteIndex: number
+    ramp: Ramp
+    otherVoiceIndex?: number
+    phasePos: number
+    startTime: number
+  }[]
+}
+
+const animationStates: AnimationState[] = []
+animationStates.push({
+  melodyPhase: 0,
+  baseShapeIndex: 0,
+  noteEnvelopes: []
+})
+animationStates.push({
+  melodyPhase: 1,
+  baseShapeIndex: 0,
+  noteEnvelopes: []
+})
+animationStates.push({
+  melodyPhase: 2,
+  baseShapeIndex: 0,
+  noteEnvelopes: []
+})
 
 export type TldrawTestAppState = {
   p5Instance: p5 | undefined
@@ -25,6 +56,10 @@ export type TldrawTestAppState = {
   drawing: boolean,
   tldrawEditor: ShallowRef<{ed: Editor}> | undefined,
   tldrawInteractionCount: number
+  animationStates: AnimationState[]
+  loopRoot: CancelablePromisePoxy<any> | undefined
+  getClips: () => ((noteLength: number, melodySpeed: number) => AbletonClip)[]
+  loadCount: number
 }
 
 export const appState: TldrawTestAppState = {
@@ -40,7 +75,11 @@ export const appState: TldrawTestAppState = {
   paused: false,
   drawing: false,
   tldrawEditor: undefined,
-  tldrawInteractionCount: 0
+  tldrawInteractionCount: 0,
+  animationStates: animationStates,
+  loopRoot: undefined,
+  getClips: getTestClips,
+  loadCount: -1
 } 
 
 export const appStateName = 'nov21DemoAppState'

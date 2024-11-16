@@ -1,6 +1,6 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
-import { type TldrawTestAppState, appStateName, resolution } from './appState';
+import { type TldrawTestAppState, appStateName, resolution, type AnimationState } from './appState';
 import { inject, onMounted, onUnmounted, ref } from 'vue';
 import { CanvasPaint, FeedbackNode, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
@@ -22,6 +22,7 @@ import { playNote } from './playback';
 import type { TreeProp } from '@/stores/undoCommands';
 
 const appState = inject<TldrawTestAppState>(appStateName)!!
+appState.getClips = getTestClips
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
 let timeLoops: CancelablePromisePoxy<any>[] = []
 
@@ -89,12 +90,12 @@ const voiceKeys = Object.keys(voiceParams.value)
 
 type MelodyGenerator = (noteLength: number, melodySpeed: number) => AbletonClip
 
-const playMelody = async (ctx: TimeContext, shapeGetter: () => PointHaver[], clipGetter: () => MelodyGenerator[], voiceIndex: number) => {
+const playMelody = async (ctx: TimeContext, shapeGetter: () => PointHaver[], clipGetter: () => MelodyGenerator[], animationStateGetter: () => AnimationState[], voiceIndex: number) => {
   const shapes = shapeGetter()
   const {noteLength, melodySpeed} = voiceParams.value[voiceKeys[voiceIndex]]
   const clip = clipGetter()[voiceIndex](noteLength, melodySpeed)
   const playDistribution = calculatePlayProbabilities(shapes[0], shapes[1], shapes[2], resolution)[voiceIndex]
-  const animationState = animationStates[voiceIndex]
+  const animationState = animationStateGetter()[voiceIndex]
 
   //kick of a branch that runs for the clip duration and updates melody phase
   const melodyRamp = new Ramp(clip.duration * (60 / ctx.bpm))
@@ -128,10 +129,11 @@ const playMelody = async (ctx: TimeContext, shapeGetter: () => PointHaver[], cli
   }
 }
 
-const remnantCircleDraw = (p5: p5, shapeGetter: () => PointHaver[], voiceIndex: number) => {
+const remnantCircleDraw = (p5: p5, shapeGetter: () => PointHaver[], animationStateGetter: () => AnimationState[], voiceIndex: number) => {
+  // eslint-disable-next-line no-debugger
   if(voiceIndex >= 3) debugger
 
-  const animationState = animationStates[voiceIndex]
+  const animationState = animationStateGetter()[voiceIndex]
   const shape = shapeGetter()[voiceIndex]
 
   const loopSplinePoints = shape.points.map(pt => pt)
@@ -139,7 +141,7 @@ const remnantCircleDraw = (p5: p5, shapeGetter: () => PointHaver[], voiceIndex: 
 
   const playHeadPos = catmullRomSpline(loopSplinePoints, animationState.melodyPhase)
   p5.push()
-  p5.fill(255, 0, 0)
+  p5.fill(255, 255, 0)
   p5.noStroke()
   p5.ellipse(playHeadPos.x, playHeadPos.y, 30, 30)
   p5.pop()
@@ -172,47 +174,20 @@ const remnantCircleDraw = (p5: p5, shapeGetter: () => PointHaver[], voiceIndex: 
 
 
 
-const playMelodies = async (ctx: TimeContext, shapeGetter: () => PointHaver[], clipGetter: () => MelodyGenerator[]) => {
+const playMelodies = async (ctx: TimeContext, shapeGetter: () => PointHaver[], clipGetter: () => MelodyGenerator[], animationStateGetter: () => AnimationState[]) => {
   for(let i = 0; i < 3; i++) {
     ctx.branch(async ctx => {
       
       // eslint-disable-next-line no-constant-condition
       while(true){
-        await playMelody(ctx, shapeGetter, clipGetter, i) //todo sketch - test that this works 
+        await playMelody(ctx, shapeGetter, clipGetter, animationStateGetter, i) //todo sketch - test that this works 
         // console.log("melody finished", i)
       }
     })
   }
 }
 
-type AnimationState = {
-  melodyPhase: number
-  baseShapeIndex: number
-  noteEnvelopes: {
-    noteIndex: number
-    ramp: Ramp
-    otherVoiceIndex?: number
-    phasePos: number
-    startTime: number
-  }[]
-}
 
-const animationStates: AnimationState[] = []
-animationStates.push({
-  melodyPhase: 0,
-  baseShapeIndex: 0,
-  noteEnvelopes: []
-})
-animationStates.push({
-  melodyPhase: 1,
-  baseShapeIndex: 0,
-  noteEnvelopes: []
-})
-animationStates.push({
-  melodyPhase: 2,
-  baseShapeIndex: 0,
-  noteEnvelopes: []
-})
 
 
 /**
@@ -281,7 +256,15 @@ const setupShaderFXGraph = (bgCanvas, shapee) => {
   return layerOverlay
 }
 
+
+console.log("loadCount", appState.loadCount)
 onMounted(() => {
+  appState.loadCount++
+  console.log("onMounted", appState.loadCount)
+  // if (!firstLoad) {
+  //   console.log("first load already done")
+  //   return
+  // }
   try {
 
     const p5i = appState.p5Instance!!
@@ -311,7 +294,7 @@ onMounted(() => {
         p5i.clear()
         if(!voiceParams.value[voiceKeys[voiceIndex]].play) return
 
-        remnantCircleDraw(p5i, getShapes, voiceIndex)
+        remnantCircleDraw(p5i, getShapes, () => appState.animationStates, voiceIndex)
 
         
         bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height)
@@ -344,38 +327,51 @@ onMounted(() => {
     //@ts-ignore
     let tldrawEditor: Editor | undefined = undefined
 
-
-    //@ts-ignore
-    window.editorReadyCallback = async (editor: Editor) => {
-      tldrawEditor = editor
-
+    const initliazeShapeShaderPasses = (editor: Editor) => {
       editor.getPageShapeIds('page:page' as TLPageId).forEach(id => {
         const shape = editor.getShape<MultiSegmentLineShape>(id)
-        if(shape.type === 'multiSegmentLine'){
+        if (shape.type === 'multiSegmentLine') {
           onShapeCreated(shape)
           numShapes++
         }
       })
 
       resetCompositeShaderEffect()
+    }
+
+    if (appState.loadCount > 0) {
+      //@ts-ignore
+      initliazeShapeShaderPasses(window.tldrawEditor)
+      //@ts-ignore
+      tldrawEditor = window.tldrawEditor
+    }
+
+    //todo - need to think of a more structured way to handle creating/cleaing up
+    //listners on external stores/objects
+
+    //@ts-ignore
+    window.editorReadyCallback = async (editor: Editor) => {
+      tldrawEditor = editor
+
+      initliazeShapeShaderPasses(editor)      
 
       tldrawEditor.store.listen(onHistory => {
-        console.log("store change",onHistory)
+        // console.log("store change", onHistory)
 
         for (const shapeId in onHistory.changes.added) {
           const shape = onHistory.changes.added[shapeId]
-          if(shape.type === 'multiSegmentLine'){
+          if (shape.type === 'multiSegmentLine') {
             onShapeCreated(shape)
             resetCompositeShaderEffect()
           }
         }
-        
+
         for (const shapeId in onHistory.changes.removed) {
           const shape = onHistory.changes.removed[shapeId]
           console.log("shape removed", shapeId)
-          if(shape.type === 'multiSegmentLine'){
+          if (shape.type === 'multiSegmentLine') {
             const mapEntry = shapeRenderMap.get(shapeId)
-            if(mapEntry){
+            if (mapEntry) {
               mapEntry.shaderGraphEndNode.disposeAll()
               shapeRenderMap.delete(shapeId)
               resetCompositeShaderEffect()
@@ -387,20 +383,20 @@ onMounted(() => {
 
       tldrawEditor.store.listen(onHistory => {
         // console.log("session store change",onHistory)
-        for(const itemId in onHistory.changes.updated){
+        for (const itemId in onHistory.changes.updated) {
           const item = onHistory.changes.updated[itemId]
           // console.log("item updated", itemId, item.type)
-          if(itemId.split(':')[0] === 'camera'){
+          if (itemId.split(':')[0] === 'camera') {
             // console.log("camera updated", item)
             tldrawCamera = editor.getCamera()
           }
           // if(itemId != "pointer:pointer"){
           //   console.log("session store change", itemId, item)
           // }
-          if(item[0]?.selectedShapeIds){
+          if (item[0]?.selectedShapeIds) {
             console.log("selected shape ids", item[0].selectedShapeIds)
           }
-          if(item[0]?.hoveredShapeId){
+          if (item[0]?.hoveredShapeId) {
             console.log("hovered shape id", item[0].hoveredShapeId)
           }
           //for arbitrary shape related metadata, define a default value/shape property,
@@ -417,12 +413,15 @@ onMounted(() => {
 
       await MIDI_READY
       midiOutput = midiOutputs.get("IAC Driver Bus 1")!!
-
-      launchLoop(async ctx => {
-        ctx.bpm = 180
-        await ctx.waitSec(1)
-        await playMelodies(ctx, getShapes, getTestClips)
-      })
+      console.log('pre launch loop', appState.loadCount, appState.loopRoot)
+      if (!appState.loopRoot) {
+        appState.loopRoot = launchLoop(async ctx => {
+          ctx.bpm = 180
+          await ctx.waitSec(1)
+          await playMelodies(ctx, getShapes, appState.getClips, () => appState.animationStates)
+        })
+        console.log('post launch loop', appState.loadCount, appState.loopRoot)
+      }
     }
 
     let p5Mouse = { x: 0, y: 0 }
@@ -431,7 +430,6 @@ onMounted(() => {
     }, threeCanvas)
 
     const code = () => { //todo template - is this code-array pattern really needed in the template?
-      clearDrawFuncs() //todo template - move this to cleanup block?
 
 
       //todo sketch - create some kind of compositor shaderFX for shapeRenderMap 
@@ -469,10 +467,12 @@ onMounted(() => {
  */
 
 onUnmounted(() => {
+  console.log("onUnmounted", appState.loadCount)
   console.log("disposing livecoded resources")
+  clearDrawFuncs()
   shaderGraphEndNode?.disposeAll()
   clearListeners()
-  timeLoops.forEach(tl => tl.cancel())
+  // timeLoops.forEach(tl => tl.cancel())
   for (const [id, shape] of shapeRenderMap) {
     shape.shaderGraphEndNode.disposeAll()
   }
