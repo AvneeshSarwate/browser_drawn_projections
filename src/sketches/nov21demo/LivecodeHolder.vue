@@ -17,11 +17,12 @@ import type { MIDIValOutput } from '@midival/core';
 import { MIDI_READY, midiOutputs } from '@/io/midi';
 import type { NumberNodeUniform } from 'three/src/renderers/common/nodes/NodeUniform.js';
 import { catmullRomSpline } from '@/rendering/catmullRom';
-import { getTestClips } from './midiClipUtils';
+import { getTestClips, clipVersions } from './midiClipUtils';
 import { playNote } from './playback';
 import type { TreeProp } from '@/stores/undoCommands';
 
 const appState = inject<TldrawTestAppState>(appStateName)!!
+console.log("regrabbing clips", clipVersions)
 appState.getClips = getTestClips
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
 let timeLoops: CancelablePromisePoxy<any>[] = []
@@ -68,6 +69,7 @@ const sampleFromDist = (dist: number[]) => {
 }
 let midiOutput = midiOutputs.get("IAC Driver Bus 1")!!
 
+//todo - move these into app state to work across hot reload
 const voiceParams = ref({
   voice1: {
     play: true,
@@ -90,10 +92,10 @@ const voiceKeys = Object.keys(voiceParams.value)
 
 type MelodyGenerator = (noteLength: number, melodySpeed: number) => AbletonClip
 
-const playMelody = async (ctx: TimeContext, shapeGetter: () => PointHaver[], clipGetter: () => MelodyGenerator[], animationStateGetter: () => AnimationState[], voiceIndex: number) => {
+const playMelody = async (ctx: TimeContext, shapeGetter: () => PointHaver[], animationStateGetter: () => AnimationState[], voiceIndex: number) => {
   const shapes = shapeGetter()
   const {noteLength, melodySpeed} = voiceParams.value[voiceKeys[voiceIndex]]
-  const clip = clipGetter()[voiceIndex](noteLength, melodySpeed)
+  const clip = appState.getClips()[voiceIndex](noteLength, melodySpeed)
   const playDistribution = calculatePlayProbabilities(shapes[0], shapes[1], shapes[2], resolution)[voiceIndex]
   const animationState = animationStateGetter()[voiceIndex]
 
@@ -174,13 +176,13 @@ const remnantCircleDraw = (p5: p5, shapeGetter: () => PointHaver[], animationSta
 
 
 
-const playMelodies = async (ctx: TimeContext, shapeGetter: () => PointHaver[], clipGetter: () => MelodyGenerator[], animationStateGetter: () => AnimationState[]) => {
+const playMelodies = async (ctx: TimeContext, shapeGetter: () => PointHaver[], animationStateGetter: () => AnimationState[]) => {
   for(let i = 0; i < 3; i++) {
     ctx.branch(async ctx => {
       
       // eslint-disable-next-line no-constant-condition
       while(true){
-        await playMelody(ctx, shapeGetter, clipGetter, animationStateGetter, i) //todo sketch - test that this works 
+        await playMelody(ctx, shapeGetter, animationStateGetter, i) //todo sketch - test that this works 
         // console.log("melody finished", i)
       }
     })
@@ -418,7 +420,7 @@ onMounted(() => {
         appState.loopRoot = launchLoop(async ctx => {
           ctx.bpm = 180
           await ctx.waitSec(1)
-          await playMelodies(ctx, getShapes, appState.getClips, () => appState.animationStates)
+          await playMelodies(ctx, getShapes, () => appState.animationStates)
         })
         console.log('post launch loop', appState.loadCount, appState.loopRoot)
       }
