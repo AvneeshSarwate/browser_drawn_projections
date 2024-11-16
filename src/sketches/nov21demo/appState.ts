@@ -42,6 +42,24 @@ animationStates.push({
   noteEnvelopes: []
 })
 
+const voiceParams = {
+  voice1: {
+    play: true,
+    noteLength: 1,
+    melodySpeed: 1
+  },
+  voice2: {
+    play: false,
+    noteLength: 1,
+    melodySpeed: 1
+  },
+  voice3: {
+    play: false,
+    noteLength: 1,
+    melodySpeed: 1
+  }
+}
+
 export type TldrawTestAppState = {
   p5Instance: p5 | undefined
   threeRenderer: THREE.WebGLRenderer | undefined
@@ -60,6 +78,7 @@ export type TldrawTestAppState = {
   loopRoot: CancelablePromisePoxy<any> | undefined
   getClips: () => ((noteLength: number, melodySpeed: number) => AbletonClip)[]
   loadCount: number
+  voiceParams: typeof voiceParams
 }
 
 export const appState: TldrawTestAppState = {
@@ -79,7 +98,8 @@ export const appState: TldrawTestAppState = {
   animationStates: animationStates,
   loopRoot: undefined,
   getClips: getTestClips,
-  loadCount: -1
+  loadCount: -1,
+  voiceParams: voiceParams
 } 
 
 export const appStateName = 'nov21DemoAppState'

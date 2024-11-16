@@ -70,31 +70,15 @@ const sampleFromDist = (dist: number[]) => {
 let midiOutput = midiOutputs.get("IAC Driver Bus 1")!!
 
 //todo - move these into app state to work across hot reload
-const voiceParams = ref({
-  voice1: {
-    play: true,
-    noteLength: 1,
-    melodySpeed: 1
-  },
-  voice2: {
-    play: false,
-    noteLength: 1,
-    melodySpeed: 1
-  },
-  voice3: {
-    play: false,
-    noteLength: 1,
-    melodySpeed: 1
-  }
-})
+
 //todo api - this is a hack till adding support for arrays in AutoUI
-const voiceKeys = Object.keys(voiceParams.value)
+const voiceKeys = Object.keys(appState.voiceParams)
 
 type MelodyGenerator = (noteLength: number, melodySpeed: number) => AbletonClip
 
 const playMelody = async (ctx: TimeContext, shapeGetter: () => PointHaver[], animationStateGetter: () => AnimationState[], voiceIndex: number) => {
   const shapes = shapeGetter()
-  const {noteLength, melodySpeed} = voiceParams.value[voiceKeys[voiceIndex]]
+  const {noteLength, melodySpeed} = appState.voiceParams[voiceKeys[voiceIndex]]
   const clip = appState.getClips()[voiceIndex](noteLength, melodySpeed)
   const playDistribution = calculatePlayProbabilities(shapes[0], shapes[1], shapes[2], resolution)[voiceIndex]
   const animationState = animationStateGetter()[voiceIndex]
@@ -124,7 +108,7 @@ const playMelody = async (ctx: TimeContext, shapeGetter: () => PointHaver[], ani
       startTime: now()
     }
 
-    if(voiceParams.value[voiceKeys[voiceIndex]].play) {
+    if(appState.voiceParams[voiceKeys[voiceIndex]].play) {
       playNote(ctx, note.note, randVoice, midiOutput!!)
     }
     await ctx.wait(note.postDelta ?? 0)
@@ -294,7 +278,7 @@ onMounted(() => {
       let voiceIndex = numShapes
       const drawFunc = (p5i: p5) => {
         p5i.clear()
-        if(!voiceParams.value[voiceKeys[voiceIndex]].play) return
+        if(!appState.voiceParams[voiceKeys[voiceIndex]].play) return
 
         remnantCircleDraw(p5i, getShapes, () => appState.animationStates, voiceIndex)
 
@@ -484,7 +468,7 @@ onUnmounted(() => {
 
 <template>
   <Teleport to="#topPageControls">
-    <AutoUI :object-to-edit="voiceParams as TreeProp"/>
+    <AutoUI :object-to-edit="appState.voiceParams as TreeProp"/>
   </Teleport>
 </template>
 
