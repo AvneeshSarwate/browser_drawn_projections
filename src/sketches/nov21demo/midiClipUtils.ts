@@ -1,28 +1,36 @@
 import { AbletonClip } from "@/io/abletonClips"
+import { repeat } from "./pattern";
 
 export const randomChoice = (a, b) => Math.random() > 0.5 ? a : b;
 
-const notes = () => [
-    { pitch: 60, velocity: 100, duration: 1, position: 0 },
-    { pitch: 62, velocity: 100, duration: 1, position: 1 },
-    { pitch: 64, velocity: 100, duration: 1, position: 2 },
-    { pitch: 65, velocity: 100, duration: 1, position: 3 },
-    { pitch: 67, velocity: 100, duration: 1, position: 4 },
-    { pitch: randomChoice(69, 65), velocity: 100, duration: 1, position: 5 },
-    { pitch: 71, velocity: 100, duration: 1, position: 6 },
-  ]
+const motif1 = () => ([
+  { pitch: 80, velocity: 100, duration: 1, position: 0 },
+  { pitch: 81, velocity: 100, duration: 1, position: 1 },
+  { pitch: 84, velocity: 100, duration: 1, position: 2 },
+  { pitch: 83, velocity: 100, duration: 1, position: 3 },
+  { pitch: 81, velocity: 100, duration: 1, position: 4 },
+])
 
-const dotted = (notes, mod) => notes.map((n, i) => ({...n, duration: i % mod ? 0.2 : n.duration}))
+const motif2 = () => ([
+  { pitch: 33, velocity: 100, duration: 1, position: 0 },
+  { pitch: 30, velocity: 100, duration: 1, position: 1 },
+  { pitch: 29, velocity: 100, duration: 1, position: 2 },
+  { pitch: 28, velocity: 100, duration: 1, position: 3 },
+])
 
-const getNotes = () => dotted(notes(), 3);
-  
-const notes1 = () => getNotes().slice(0, 4)
-const notes2 = () => getNotes().slice(0, 5).map(n => ({...n, pitch: n.pitch + 12}))
-const notes3 = () => getNotes().slice(0, 6).map(n => ({...n, pitch: n.pitch - 12}))
+const motif3 = () => ([
+  { pitch: 33, velocity: 100, duration: Math.random()*0.5, position: 0 },
+  { pitch: randomChoice(36, 28), velocity: 100, duration: Math.random(), position: 2 }
+])
 
-const clip1 = () => new AbletonClip("clip1", 4, notes1()).scale(1)
-const clip2 = () => new AbletonClip("clip2", 5, notes2()).scale(1)
-const clip3 = () => new AbletonClip("clip3", 6, notes3()).scale(1)
+
+const notes1 = () => motif1();
+const notes2 = () => repeat(motif2(),8);
+const notes3 = () => motif3();
+
+const clip1 = () => new AbletonClip("clip1", 6, notes1()).scale(1)
+const clip2 = () => new AbletonClip("clip2", 32, notes2()).scale(1)
+const clip3 = () => new AbletonClip("clip3", 5, notes3()).scale(1)
 
 
 const clipGetter1 = (noteLength: number, melodySpeed: number) => {
