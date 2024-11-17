@@ -30,6 +30,7 @@ let timeLoops: CancelablePromisePoxy<any>[] = []
 
 //@ts-ignore
 let tldrawEditor: Editor | undefined = undefined
+console.log("tldrawEditor", tldrawEditor)
 let getCamera = () => tldrawEditor?.getCamera() ?? {x: 0, y: 0, z: 1}
 
 type PointHaver = {
@@ -74,7 +75,6 @@ const sampleFromDist = (dist: number[]) => {
 }
 let midiOutput = midiOutputs.get("IAC Driver Bus 1")!!
 
-//todo - move these into app state to work across hot reload
 
 //todo api - this is a hack till adding support for arrays in AutoUI
 const voiceKeys = Object.keys(appState.voiceParams)
@@ -182,7 +182,7 @@ const playMelodies = async (ctx: TimeContext, shapeGetter: () => PointHaver[], a
       
       // eslint-disable-next-line no-constant-condition
       while(true){
-        await playMelody(ctx, shapeGetter, animationStateGetter, i) //todo sketch - test that this works 
+        await playMelody(ctx, shapeGetter, animationStateGetter, i) 
         // console.log("melody finished", i)
       }
     })
@@ -358,6 +358,7 @@ onMounted(() => {
 
       //@ts-ignore
       bgCanvas.name = shapee.id
+
       const getShape = () => tldrawEditor!!.getShape<MultiSegmentLineShape>(shapee.id as TLShapeId)
       const layerOverlay = shaderGraphs[numShapes](bgCanvas, getShape);
 
@@ -412,15 +413,17 @@ onMounted(() => {
     }
 
     if (appState.loadCount > 0) {
+      //todo fix - this is not the most structured/robust way to grab reference to editor in hot-reload
 
       //@ts-ignore
       // eslint-disable-next-line no-debugger
       if (!window.tldrawEditor) debugger
+      //@ts-ignore
+      tldrawEditor = window.tldrawEditor
 
       //@ts-ignore
       initliazeShapeShaderPasses(window.tldrawEditor)
-      //@ts-ignore
-      tldrawEditor = window.tldrawEditor
+      
     }
 
     //todo - need to think of a more structured way to handle creating/cleaing up
@@ -508,9 +511,6 @@ onMounted(() => {
 
     const code = () => { //todo template - is this code-array pattern really needed in the template?
 
-
-      //todo sketch - create some kind of compositor shaderFX for shapeRenderMap 
-      //set that compositor as shaderGraphEndNode
       appState.drawFunctions.push((p5i: p5) => {
         debugCtx.clearRect(0, 0, debugCanvas.width, debugCanvas.height)
       })
