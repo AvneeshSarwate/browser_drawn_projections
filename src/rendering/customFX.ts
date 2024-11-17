@@ -402,7 +402,6 @@ export class CompositeShaderEffect extends CustomShaderEffect {
   }
 
   override render(renderer: THREE.WebGLRenderer): void {
-    const x = 5
     super.render(renderer)
   }
 }

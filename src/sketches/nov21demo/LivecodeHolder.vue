@@ -123,11 +123,22 @@ const remnantCircleDraw = (p5: p5, shapeGetter: () => PointHaver[], animationSta
   const shape = shapeGetter()[voiceIndex]
 
   const loopSplinePoints = shape.points.map(pt => pt)
-  loopSplinePoints.push(...loopSplinePoints.slice(0, 2))
+  loopSplinePoints.push(loopSplinePoints[0])
+  // loopSplinePoints.push(loopSplinePoints[1])
+
+  p5.push()
+  p5.beginShape()
+  p5.noFill()
+  p5.stroke(150, 150, 150)
+  loopSplinePoints.forEach(pt => {
+    p5.curveVertex(pt.x, pt.y)
+  })
+  p5.endShape(p5.CLOSE)
+  p5.pop()
 
   const playHeadPos = catmullRomSpline(loopSplinePoints, animationState.melodyPhase)
   p5.push()
-  p5.fill(255, 255, 0)
+  p5.fill(255, 0, 0)
   p5.noStroke()
   p5.ellipse(playHeadPos.x, playHeadPos.y, 30, 30)
   p5.pop()
