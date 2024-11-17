@@ -308,21 +308,21 @@ import { type TLPointerEventInfo, Vec } from "tldraw";
 function catmullRomToBezier(points: { x: number; y: number }[]) {
   if (!points || points.length < 2) return "";
 
-  let d = []; // Array to collect path segments
+  const d = []; // Array to collect path segments
   d.push(`M ${points[0].x} ${points[0].y}`);
 
   for (let i = 0; i < points.length - 1; i++) {
-    let p0 = i === 0 ? points[0] : points[i - 1];
-    let p1 = points[i];
-    let p2 = points[i + 1];
-    let p3 = i + 2 < points.length ? points[i + 2] : p2;
+    const p0 = i === 0 ? points[0] : points[i - 1];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = i + 2 < points.length ? points[i + 2] : p2;
 
     // Calculate control points
-    let cp1x = p1.x + (p2.x - p0.x) / 6;
-    let cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
 
-    let cp2x = p2.x - (p3.x - p1.x) / 6;
-    let cp2y = p2.y - (p3.y - p1.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
 
     // Append the cubic Bézier curve to the path
     d.push(`C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`);
@@ -334,7 +334,7 @@ function catmullRomToBezier(points: { x: number; y: number }[]) {
 function catmullRomToBezierClosed(points: { x: number; y: number }[]) {
   if (!points || points.length < 2) return "";
 
-  let d = []; // Array to collect path segments
+  const d = []; // Array to collect path segments
 
   const pts = points.slice(); // Make a copy of the points array
 
@@ -383,6 +383,7 @@ function transformMousePointToShapeLocal(shape: MultiSegmentLineShape, mousePoin
   const transformedMousePoint = applyInverseMatrix(transformMatrix, mousePoint);
   console.log("transformedMousePoint", transformedMousePoint);
   if(isNaN(transformedMousePoint.x) || isNaN(transformedMousePoint.y)) {
+    // eslint-disable-next-line no-debugger
     debugger;
   } 
   return transformedMousePoint;

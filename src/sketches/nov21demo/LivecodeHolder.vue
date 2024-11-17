@@ -7,9 +7,9 @@ import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, tar
 import p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri, now, biasedTri } from '@/channels/channels';
 import { getEllipseShapes, getFreehandShapes, getMultiSegmentLineShapes, getTransformedShapePoints, p5FreehandTldrawRender } from './tldrawWrapperPlain';
-import { CompositeShaderEffect, HorizontalBlur, LayerBlend, MathOp, Transform, VerticalBlur } from '@/rendering/customFX';
+import { CompositeShaderEffect, HorizontalBlur, LayerBlend, MathOp, RGDisplace, Transform, VerticalBlur } from '@/rendering/customFX';
 import AutoUI from '@/components/AutoUI.vue';
-import { clamp, lerp, type Editor, type TLPageId } from 'tldraw';
+import { clamp, lerp, type Editor, type TLPageId, type TLShapeId } from 'tldraw';
 import earcut from 'earcut';
 import type { MultiSegmentLineShape } from './multiSegmentLine/multiSegmentLineUtil';
 import { AbletonClip, type AbletonNote } from '@/io/abletonClips';
@@ -20,12 +20,17 @@ import { catmullRomSpline } from '@/rendering/catmullRom';
 import { getTestClips, clipVersions } from './midiClipUtils';
 import { playNote } from './playback';
 import type { TreeProp } from '@/stores/undoCommands';
+import { HorizontalAlternateDisplace, PointZoom } from './customFx';
 
 const appState = inject<TldrawTestAppState>(appStateName)!!
 console.log("regrabbing clips", clipVersions)
 appState.getClips = getTestClips
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
 let timeLoops: CancelablePromisePoxy<any>[] = []
+
+//@ts-ignore
+let tldrawEditor: Editor | undefined = undefined
+let getCamera = () => tldrawEditor?.getCamera() ?? {x: 0, y: 0, z: 1}
 
 type PointHaver = {
   points: {x: number, y: number}[]
@@ -232,7 +237,8 @@ const randColor = (seed: number) => {
 
 const shapeRenderMap = new Map<string, { drawFunc: (p5: p5) => void, shaderGraphEndNode: ShaderEffect }>()
 
-const setupShaderFXGraph = (bgCanvas, shapee) => {
+const shaderGraph0 = (bgCanvas: OffscreenCanvas, getShape: () => MultiSegmentLineShape) => {
+  const shapee = getShape()
   const p5Passthru = new Passthru({ src: bgCanvas })
   p5Passthru.debugId = `p5Passthru-${shapee.id}`
   const feedback = new FeedbackNode(p5Passthru)
@@ -253,6 +259,79 @@ const setupShaderFXGraph = (bgCanvas, shapee) => {
   return layerOverlay
 }
 
+const shaderGraph1 = (bgCanvas: OffscreenCanvas, getShape: () => MultiSegmentLineShape) => {
+  const shapee = getShape()
+  const p5Passthru = new Passthru({ src: bgCanvas })
+  p5Passthru.debugId = `p5Passthru-${shapee.id}`
+  const feedback = new FeedbackNode(p5Passthru)
+  feedback.debugId = `feedback-${shapee.id}`
+  const horDisplaceSrc = new HorizontalAlternateDisplace()
+  horDisplaceSrc.debugId = `horDisplaceSrc-${shapee.id}`
+  const displace = new RGDisplace({ src: feedback, displacementMap: horDisplaceSrc })
+  displace.debugId = `displace-${shapee.id}`
+  const mathOp = new MathOp({ src: displace })
+  mathOp.debugId = `mathOp-${shapee.id}`
+  const layerOverlay = new LayerBlend({ src1: p5Passthru, src2: mathOp })
+  layerOverlay.debugId = `layerOverlay-${shapee.id}`
+  feedback.setFeedbackSrc(layerOverlay);
+  mathOp.setUniforms({ mult: 0.95 });
+  displace.setUniforms({ strength: 0.01 })
+
+  return layerOverlay
+}
+
+const shaderGraph2 = (bgCanvas: OffscreenCanvas, getShape: () => MultiSegmentLineShape) => {
+  const shapee = getShape()
+
+  //todo fix - still something off about the positioning, but a bit closer to correct now
+  const shapeCenterX = () => {
+    const shape = getShape()
+    const points = getTransformedShapePoints(shape, getCamera())
+    const shapeXSum = points.reduce((sum, pt) => sum + pt.x, 0)
+    return shapeXSum / points.length / resolution.width
+  }
+  const shapeCenterY = () => {
+    const shape = getShape()
+    const points = getTransformedShapePoints(shape, getCamera())
+    const shapeYSum = points.reduce((sum, pt) => sum + pt.y, 0)
+    return shapeYSum / points.length / resolution.height
+  }
+
+  const p5Passthru = new Passthru({ src: bgCanvas })
+  p5Passthru.debugId = `p5Passthru-${shapee.id}`
+  const feedback = new FeedbackNode(p5Passthru)
+  feedback.debugId = `feedback-${shapee.id}`
+
+  
+  const vertBlur = new VerticalBlur({ src: feedback })
+  vertBlur.debugId = `vertBlur-${shapee.id}`
+  const horBlur = new HorizontalBlur({ src: vertBlur })
+  horBlur.debugId = `horBlur-${shapee.id}`
+  const pointZoom = new PointZoom({ src: horBlur })
+  pointZoom.debugId = `pointZoom-${shapee.id}`
+
+
+  const mathOp = new MathOp({ src: pointZoom })
+  mathOp.debugId = `mathOp-${shapee.id}`
+  const layerOverlay = new LayerBlend({ src1: p5Passthru, src2: mathOp })
+  layerOverlay.debugId = `layerOverlay-${shapee.id}`
+
+
+  feedback.setFeedbackSrc(layerOverlay);
+  pointZoom.setUniforms({centerX: shapeCenterX, centerY: shapeCenterY, strength: -0.02})
+  mathOp.setUniforms({mult: 0.95});
+
+  return layerOverlay
+}
+
+const shaderGraphs = [
+  shaderGraph0,
+  shaderGraph1,
+  shaderGraph2,
+]
+
+let tldrawCamera = {x: 0, y: 0, z: 1}
+
 
 console.log("loadCount", appState.loadCount)
 onMounted(() => {
@@ -269,7 +348,6 @@ onMounted(() => {
     const threeCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
     const debugCanvas = document.getElementById('debugCanvas') as HTMLCanvasElement
     const debugCtx = debugCanvas.getContext('2d')
-    let tldrawCamera = {x: 0, y: 0, z: 1}
     let numShapes = 0
 
     const onShapeCreated = (shapee: MultiSegmentLineShape) => {
@@ -280,8 +358,8 @@ onMounted(() => {
 
       //@ts-ignore
       bgCanvas.name = shapee.id
-
-      const layerOverlay = setupShaderFXGraph(bgCanvas, shapee);
+      const getShape = () => tldrawEditor!!.getShape<MultiSegmentLineShape>(shapee.id as TLShapeId)
+      const layerOverlay = shaderGraphs[numShapes](bgCanvas, getShape);
 
       const getShapes = () => {
         return Array.from(getMultiSegmentLineShapes(tldrawEditor!!).values())
@@ -321,9 +399,6 @@ onMounted(() => {
       compositeShaderEffect.resetInputs(shapeEndNodes)
     }
 
-    //@ts-ignore
-    let tldrawEditor: Editor | undefined = undefined
-
     const initliazeShapeShaderPasses = (editor: Editor) => {
       editor.getPageShapeIds('page:page' as TLPageId).forEach(id => {
         const shape = editor.getShape<MultiSegmentLineShape>(id)
@@ -337,6 +412,11 @@ onMounted(() => {
     }
 
     if (appState.loadCount > 0) {
+
+      //@ts-ignore
+      // eslint-disable-next-line no-debugger
+      if (!window.tldrawEditor) debugger
+
       //@ts-ignore
       initliazeShapeShaderPasses(window.tldrawEditor)
       //@ts-ignore
@@ -483,4 +563,4 @@ onUnmounted(() => {
   </Teleport>
 </template>
 
-<style scoped></style>
+<style scoped></style>./customFx
