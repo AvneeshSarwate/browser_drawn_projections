@@ -21,6 +21,7 @@ import { getTestClips, clipVersions } from './midiClipUtils';
 import { playNote } from './playback';
 import type { TreeProp } from '@/stores/undoCommands';
 import { HorizontalAlternateDisplace, PointZoom } from './customFx';
+import { mixColorRGB } from '@/rendering/palletteHelper';
 
 const appState = inject<TldrawTestAppState>(appStateName)!!
 console.log("regrabbing clips", clipVersions)
@@ -120,6 +121,16 @@ const playMelody = async (ctx: TimeContext, shapeGetter: () => PointHaver[], ani
   }
 }
 
+const voicePlayheadColors = [
+  {primary: {r: 76, g: 134, b: 168}, secondary: {r: 0, g: 255, b: 0}},
+  {primary: {r: 165, g: 56, b: 96}, secondary: {r: 0, g: 0, b: 255}},
+  {primary: {r: 207, g: 153, b: 95}, secondary: {r: 255, g: 0, b: 0}},
+]
+
+const lerpColor = (col1: {r: number, g: number, b: number}, col2: {r: number, g: number, b: number}, t: number) => {
+  return {r: lerp(col1.r, col2.r, t), g: lerp(col1.g, col2.g, t), b: lerp(col1.b, col2.b, t)}
+}
+
 const remnantCircleDraw = (p5: p5, shapeGetter: () => PointHaver[], animationStateGetter: () => AnimationState[], voiceIndex: number) => {
   // eslint-disable-next-line no-debugger
   if(voiceIndex >= 3) debugger
@@ -131,10 +142,13 @@ const remnantCircleDraw = (p5: p5, shapeGetter: () => PointHaver[], animationSta
   loopSplinePoints.push(loopSplinePoints[0])
   // loopSplinePoints.push(loopSplinePoints[1])
 
+  const col = voicePlayheadColors[voiceIndex].primary
+
   p5.push()
   p5.beginShape()
   p5.noFill()
-  p5.stroke(150, 150, 150)
+  p5.strokeWeight(2)
+  p5.stroke(col.r, col.g, col.b, 150)
   loopSplinePoints.forEach(pt => {
     p5.curveVertex(pt.x, pt.y)
   })
@@ -143,14 +157,15 @@ const remnantCircleDraw = (p5: p5, shapeGetter: () => PointHaver[], animationSta
 
   const playHeadPos = catmullRomSpline(loopSplinePoints, animationState.melodyPhase)
   p5.push()
-  p5.fill(255, 0, 0)
+
+  p5.fill(col.r, col.g, col.b)
   p5.noStroke()
   p5.ellipse(playHeadPos.x, playHeadPos.y, 30, 30)
   p5.pop()
 
   for(const noteEnvelope of animationState.noteEnvelopes){
     let notePos = catmullRomSpline(loopSplinePoints, noteEnvelope.phasePos)
-    let col = {r: 255, g: 0, b: 0}
+    let col = voicePlayheadColors[voiceIndex].primary
     if(noteEnvelope.otherVoiceIndex != voiceIndex) {
       // console.log("draw note jump other", noteEnvelope.otherVoiceIndex)
       const otherShape = shapeGetter()[noteEnvelope.otherVoiceIndex]
@@ -162,7 +177,7 @@ const remnantCircleDraw = (p5: p5, shapeGetter: () => PointHaver[], animationSta
         x: lerp(notePos.x, otherNotePos.x, lerpVal),
         y: lerp(notePos.y, otherNotePos.y, lerpVal)
       }
-      col = {r: 0, g: 255, b: 0}
+      col = mixColorRGB(voicePlayheadColors[voiceIndex].primary, voicePlayheadColors[noteEnvelope.otherVoiceIndex].primary, lerpVal)
     }
     
     p5.push()
@@ -171,6 +186,23 @@ const remnantCircleDraw = (p5: p5, shapeGetter: () => PointHaver[], animationSta
     p5.ellipse(notePos.x, notePos.y, 30, 30)
     p5.pop()
   }
+
+  // const shapeCenterX = () => {
+  //   const { points } = shapeGetter()[voiceIndex]
+  //   const shapeXSum = points.reduce((sum, pt) => sum + pt.x, 0)
+  //   return shapeXSum / points.length / resolution.width
+  // }
+  // const shapeCenterY = () => {
+  //   const { points } = shapeGetter()[voiceIndex]
+  //   const shapeYSum = points.reduce((sum, pt) => sum + pt.y, 0)
+  //   return shapeYSum / points.length / resolution.height
+  // }
+
+  // p5.push()
+  // p5.fill(col.r, col.g, col.b)
+  // p5.noStroke()
+  // p5.ellipse(shapeCenterX() * resolution.width, shapeCenterY() * resolution.height, 30, 30)
+  // p5.pop()
 }
 
 
@@ -254,7 +286,7 @@ const shaderGraph0 = (bgCanvas: OffscreenCanvas, getShape: () => MultiSegmentLin
   const layerOverlay = new LayerBlend({ src1: p5Passthru, src2: mathOp })
   layerOverlay.debugId = `layerOverlay-${shapee.id}`
   feedback.setFeedbackSrc(layerOverlay);
-  mathOp.setUniforms({mult: 0.95});
+  mathOp.setUniforms({mult: 0.99});
 
   return layerOverlay
 }
@@ -274,8 +306,8 @@ const shaderGraph1 = (bgCanvas: OffscreenCanvas, getShape: () => MultiSegmentLin
   const layerOverlay = new LayerBlend({ src1: p5Passthru, src2: mathOp })
   layerOverlay.debugId = `layerOverlay-${shapee.id}`
   feedback.setFeedbackSrc(layerOverlay);
-  mathOp.setUniforms({ mult: 0.95 });
-  displace.setUniforms({ strength: 0.01 })
+  mathOp.setUniforms({ mult: 0.99 });
+  displace.setUniforms({ strength: 0.001 })
 
   return layerOverlay
 }
@@ -294,7 +326,7 @@ const shaderGraph2 = (bgCanvas: OffscreenCanvas, getShape: () => MultiSegmentLin
     const shape = getShape()
     const points = getTransformedShapePoints(shape, getCamera())
     const shapeYSum = points.reduce((sum, pt) => sum + pt.y, 0)
-    return shapeYSum / points.length / resolution.height
+    return 1 - shapeYSum / points.length / resolution.height
   }
 
   const p5Passthru = new Passthru({ src: bgCanvas })
@@ -318,8 +350,8 @@ const shaderGraph2 = (bgCanvas: OffscreenCanvas, getShape: () => MultiSegmentLin
 
 
   feedback.setFeedbackSrc(layerOverlay);
-  pointZoom.setUniforms({centerX: shapeCenterX, centerY: shapeCenterY, strength: -0.02})
-  mathOp.setUniforms({mult: 0.95});
+  pointZoom.setUniforms({centerX: shapeCenterX, centerY: shapeCenterY, strength: -0.01})
+  mathOp.setUniforms({mult: 0.995});
 
   return layerOverlay
 }

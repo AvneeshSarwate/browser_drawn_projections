@@ -86,6 +86,13 @@ export function mixColor(col1: tinycolor.ColorFormats.HSVA, col2: tinycolor.Colo
   return tinycolor(mixed)
 }
 
+export function mixColorRGB(col1: {r: number, g: number, b: number}, col2: {r: number, g: number, b: number}, ratio: number) {
+  const col1Str = `rgb(${col1.r}, ${col1.g}, ${col1.b})`
+  const col2Str = `rgb(${col2.r}, ${col2.g}, ${col2.b})`
+  const mixed = spectral.mix(col1Str, col2Str, ratio, spectral.RGBA)
+  return tinycolor(mixed).toRgb()
+}
+
 export function palette(col1: tinycolor.ColorFormats.HSVA, col2: tinycolor.ColorFormats.HSVA, count: number) {
   const col1Rgb = tinycolor(col1).toRgb()
   const col2Rgb = tinycolor(col2).toRgb()

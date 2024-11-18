@@ -48,12 +48,12 @@ const voiceParams = {
     melodySpeed: 1
   },
   voice2: {
-    play: false,
+    play: true,
     noteLength: 1,
     melodySpeed: 1
   },
   voice3: {
-    play: false,
+    play: true,
     noteLength: 1,
     melodySpeed: 1
   }
