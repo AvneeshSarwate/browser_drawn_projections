@@ -1,7 +1,18 @@
 import { AbletonClip } from "@/io/abletonClips"
 import { repeat } from "./pattern";
+import { Scale } from "@/music/scale";
 
 export const randomChoice = (a, b) => Math.random() > 0.5 ? a : b;
+
+export const randomChoiceBy = (a: any, b: any, p: number) => Math.random() > p ? a : b;
+
+const slapback = (pattern, length) => ([
+  length * 1,
+  repeat(pattern, 2)
+  // .map(n => ({...n, duration: n.duration * 0.5})),
+]);
+
+const scale = new Scale([0,2,3,5,7,8,9,11], 81);
 
 const motif1 = () => ([
   { pitch: 80, velocity: 100, duration: 1, position: 0 },
@@ -9,7 +20,12 @@ const motif1 = () => ([
   { pitch: 84, velocity: 100, duration: 1, position: 2 },
   { pitch: 83, velocity: 100, duration: 1, position: 3 },
   { pitch: 81, velocity: 100, duration: 1, position: 4 },
-])
+]);
+
+const altMotif1 = () => 
+  scale
+  .getMultiple(Array.from({ length: 5 }, () => Math.floor(Math.random() * 8)))
+  .map((p, i) => ({ pitch: randomChoice(p, p - 12), duration: 1, position: i, velocity: 100 }));
 
 const motif2 = () => ([
   { pitch: 33, velocity: 100, duration: 1, position: 0 },
@@ -24,11 +40,18 @@ const motif3 = () => ([
 ])
 
 
-const notes1 = () => motif1();
+const notes1 = (): Array<any> => {
+  return randomChoice(
+      [6, randomChoiceBy(motif1(), altMotif1(), 0.25)],
+      slapback(randomChoiceBy(motif1(), altMotif1(), 0.25), 6) as [number, any]
+  );
+}
+
 const notes2 = () => repeat(motif2(),8);
 const notes3 = () => motif3();
 
-const clip1 = () => new AbletonClip("clip1", 6, notes1()).scale(1)
+const clip1 = () => new AbletonClip("clip1", ...notes1() as [number, any]).scale(1)
+// const clip1 = () => new AbletonClip("clip1", 6, randomChoiceBy(motif1(), altMotif1(), 0.25));
 const clip2 = () => new AbletonClip("clip2", 32, notes2()).scale(1)
 const clip3 = () => new AbletonClip("clip3", 5, notes3()).scale(1)
 
@@ -36,7 +59,9 @@ const clip3 = () => new AbletonClip("clip3", 5, notes3()).scale(1)
 const clipGetter1 = (noteLength: number, melodySpeed: number) => {
   const clip = clip1()
   clip.notes = clip.notes.map(n => ({...n, duration: n.duration * noteLength}))
-  const clipScaled = clip.scale(melodySpeed)
+  const clipScaled = clip.scale(clip.notes.length < 8 ? melodySpeed: melodySpeed * 0.5)
+  console.log('### SCALE', scale.getMultiple(Array.from({ length: 5 }, () => Math.floor(Math.random() * 8))));
+  console.log()
   return clipScaled
 }
 const clipGetter2 = (noteLength: number, melodySpeed: number) => {
