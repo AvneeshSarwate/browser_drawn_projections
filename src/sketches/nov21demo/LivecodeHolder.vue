@@ -7,7 +7,7 @@ import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, tar
 import p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri, now, biasedTri } from '@/channels/channels';
 import { getEllipseShapes, getFreehandShapes, getMultiSegmentLineShapes, getTransformedShapePoints, p5FreehandTldrawRender } from './tldrawWrapperPlain';
-import { CompositeShaderEffect, HorizontalBlur, LayerBlend, MathOp, RGDisplace, Transform, VerticalBlur } from '@/rendering/customFX';
+import { AntiAlias, CompositeShaderEffect, HorizontalBlur, LayerBlend, MathOp, RGDisplace, Transform, VerticalBlur } from '@/rendering/customFX';
 import AutoUI from '@/components/AutoUI.vue';
 import { clamp, lerp, type Editor, type TLPageId, type TLShapeId } from 'tldraw';
 import earcut from 'earcut';
@@ -122,9 +122,9 @@ const playMelody = async (ctx: TimeContext, shapeGetter: () => PointHaver[], ani
 }
 
 const voicePlayheadColors = [
-  {primary: {r: 76, g: 134, b: 168}, secondary: {r: 0, g: 255, b: 0}},
-  {primary: {r: 165, g: 56, b: 96}, secondary: {r: 0, g: 0, b: 255}},
-  {primary: {r: 207, g: 153, b: 95}, secondary: {r: 255, g: 0, b: 0}},
+  {primary: {r: 76, g: 134, b: 168}, secondary: {r: 76, g: 164, b: 168}},
+  {primary: {r: 165, g: 56, b: 96}, secondary: {r: 255, g: 77, b: 131}},
+  {primary: {r: 207, g: 153, b: 95}, secondary: {r: 255, g: 208, b: 117}},
 ]
 
 const lerpColor = (col1: {r: number, g: number, b: number}, col2: {r: number, g: number, b: number}, t: number) => {
@@ -141,8 +141,8 @@ const remnantCircleDraw = (p5: p5, shapeGetter: () => PointHaver[], animationSta
   const loopSplinePoints = shape.points.map(pt => pt)
   loopSplinePoints.push(loopSplinePoints[0])
   // loopSplinePoints.push(loopSplinePoints[1])
-
-  const col = voicePlayheadColors[voiceIndex].primary
+  const lfoVal = sinN(now() * 0.5)
+  const col = mixColorRGB(voicePlayheadColors[voiceIndex].primary, voicePlayheadColors[voiceIndex].secondary, lfoVal)
 
   p5.push()
   p5.beginShape()
@@ -177,7 +177,7 @@ const remnantCircleDraw = (p5: p5, shapeGetter: () => PointHaver[], animationSta
         x: lerp(notePos.x, otherNotePos.x, lerpVal),
         y: lerp(notePos.y, otherNotePos.y, lerpVal)
       }
-      col = mixColorRGB(voicePlayheadColors[voiceIndex].primary, voicePlayheadColors[noteEnvelope.otherVoiceIndex].primary, lerpVal)
+      col = mixColorRGB(col, voicePlayheadColors[noteEnvelope.otherVoiceIndex].primary, lerpVal)
     }
     
     p5.push()
@@ -273,7 +273,9 @@ const shaderGraph0 = (bgCanvas: OffscreenCanvas, getShape: () => MultiSegmentLin
   const shapee = getShape()
   const p5Passthru = new Passthru({ src: bgCanvas })
   p5Passthru.debugId = `p5Passthru-${shapee.id}`
-  const feedback = new FeedbackNode(p5Passthru)
+  const antiAlias = new AntiAlias({ src: p5Passthru })
+  antiAlias.debugId = `antiAlias-${shapee.id}`
+  const feedback = new FeedbackNode(antiAlias)
   feedback.debugId = `feedback-${shapee.id}`
   const vertBlur = new VerticalBlur({ src: feedback })
   vertBlur.debugId = `vertBlur-${shapee.id}`
@@ -295,7 +297,9 @@ const shaderGraph1 = (bgCanvas: OffscreenCanvas, getShape: () => MultiSegmentLin
   const shapee = getShape()
   const p5Passthru = new Passthru({ src: bgCanvas })
   p5Passthru.debugId = `p5Passthru-${shapee.id}`
-  const feedback = new FeedbackNode(p5Passthru)
+  const antiAlias = new AntiAlias({ src: p5Passthru })
+  antiAlias.debugId = `antiAlias-${shapee.id}`
+  const feedback = new FeedbackNode(antiAlias)
   feedback.debugId = `feedback-${shapee.id}`
   const horDisplaceSrc = new HorizontalAlternateDisplace()
   horDisplaceSrc.debugId = `horDisplaceSrc-${shapee.id}`
@@ -331,7 +335,9 @@ const shaderGraph2 = (bgCanvas: OffscreenCanvas, getShape: () => MultiSegmentLin
 
   const p5Passthru = new Passthru({ src: bgCanvas })
   p5Passthru.debugId = `p5Passthru-${shapee.id}`
-  const feedback = new FeedbackNode(p5Passthru)
+  const antiAlias = new AntiAlias({ src: p5Passthru })
+  antiAlias.debugId = `antiAlias-${shapee.id}`
+  const feedback = new FeedbackNode(antiAlias)
   feedback.debugId = `feedback-${shapee.id}`
 
   

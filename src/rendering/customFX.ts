@@ -351,11 +351,15 @@ void main() {
 
 
   vec4 color = vec4(0.0);
+  float alphaSum = 0.0;
+  vec3 colorSum = vec3(0.0);
   ${inputSampling}
   for (int i = 0; i < NUM_INPUTS; i++) {
     color = colors[i].a > color.a ? colors[i] : color;
-    // color += colors[i];
+    alphaSum += colors[i].a;
+    colorSum += colors[i].rgb * colors[i].a;
   }
+  color = vec4(colorSum / alphaSum, 1);
 
 
   // gl_FragColor = texture2D(input4, uv).aaaa;
@@ -407,3 +411,43 @@ export class CompositeShaderEffect extends CustomShaderEffect {
 }
 
 
+
+const antiAliasFs = glsl`
+precision highp float;
+
+uniform sampler2D src;
+uniform float resolutionX;
+uniform float resolutionY;
+varying vec2 vUV;
+
+void main() {
+  vec2 texelSize = vec2(1.0 / resolutionX, 1.0 / resolutionY);
+
+  vec3 centerColor = texture2D(src, vUV).rgb;
+
+  // Sample surrounding texels
+  vec3 colorTop = texture2D(src, vUV + vec2(0.0, texelSize.y)).rgb;
+  vec3 colorBottom = texture2D(src, vUV - vec2(0.0, texelSize.y)).rgb;
+  vec3 colorLeft = texture2D(src, vUV - vec2(texelSize.x, 0.0)).rgb;
+  vec3 colorRight = texture2D(src, vUV + vec2(texelSize.x, 0.0)).rgb;
+
+  // Compute edge detection (luminance difference)
+  float edgeHorizontal = abs(dot(colorLeft, vec3(0.299, 0.587, 0.114)) - dot(colorRight, vec3(0.299, 0.587, 0.114)));
+  float edgeVertical = abs(dot(colorTop, vec3(0.299, 0.587, 0.114)) - dot(colorBottom, vec3(0.299, 0.587, 0.114)));
+
+  float edgeFactor = smoothstep(0.0, 0.3, max(edgeHorizontal, edgeVertical));
+
+  // Blend original color with the average to smooth edges
+  vec3 blendedColor = (colorTop + colorBottom + colorLeft + colorRight + centerColor) / 5.0;
+
+  gl_FragColor = vec4(mix(centerColor, blendedColor, edgeFactor), 1.0);
+}
+`
+
+export class AntiAlias extends CustomShaderEffect {
+  effectName = "AntiAlias"
+  constructor(inputs: {src: ShaderSource}, width = 1280, height = 720) {
+    super(antiAliasFs, inputs, width, height)
+    this.setUniforms({resolutionX: width, resolutionY: height})
+  }
+}
