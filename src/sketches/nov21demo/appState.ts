@@ -59,6 +59,12 @@ const voiceParams = {
   }
 }
 
+const voicePlayheadColors = [
+  {primary: {r: 76, g: 134, b: 168}, secondary: {r: 76, g: 164, b: 168}},
+  {primary: {r: 165, g: 56, b: 96}, secondary: {r: 255, g: 77, b: 131}},
+  {primary: {r: 207, g: 153, b: 95}, secondary: {r: 255, g: 208, b: 117}},
+]
+
 export type TldrawTestAppState = {
   p5Instance: p5 | undefined
   threeRenderer: THREE.WebGLRenderer | undefined
@@ -78,6 +84,7 @@ export type TldrawTestAppState = {
   getClips: () => ((noteLength: number, melodySpeed: number) => AbletonClip)[]
   loadCount: number
   voiceParams: typeof voiceParams
+  voicePlayheadColors: typeof voicePlayheadColors
 }
 
 export const appState: TldrawTestAppState = {
@@ -98,7 +105,8 @@ export const appState: TldrawTestAppState = {
   loopRoot: undefined,
   getClips: getTestClips,
   loadCount: -1,
-  voiceParams: voiceParams
+  voiceParams: voiceParams,
+  voicePlayheadColors: voicePlayheadColors
 } 
 
 export const appStateName = 'nov21DemoAppState'

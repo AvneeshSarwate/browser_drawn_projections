@@ -121,11 +121,19 @@ const playMelody = async (ctx: TimeContext, shapeGetter: () => PointHaver[], ani
   }
 }
 
-const voicePlayheadColors = [
+// livecoding
+
+appState.voicePlayheadColors = [
   {primary: {r: 76, g: 134, b: 168}, secondary: {r: 76, g: 164, b: 168}},
   {primary: {r: 165, g: 56, b: 96}, secondary: {r: 255, g: 77, b: 131}},
   {primary: {r: 207, g: 153, b: 95}, secondary: {r: 255, g: 208, b: 117}},
 ]
+
+// appState.voicePlayheadColors = [
+//   {primary: {r: 134, g: 76, b: 168}, secondary: {r: 76, g: 164, b: 168}},
+//   {primary: {r: 56, g: 165, b: 96}, secondary: {r: 255, g: 77, b: 131}},
+//   {primary: {r: 153, g: 207, b: 95}, secondary: {r: 255, g: 208, b: 117}},
+// ]
 
 const lerpColor = (col1: {r: number, g: number, b: number}, col2: {r: number, g: number, b: number}, t: number) => {
   return {r: lerp(col1.r, col2.r, t), g: lerp(col1.g, col2.g, t), b: lerp(col1.b, col2.b, t)}
@@ -133,7 +141,9 @@ const lerpColor = (col1: {r: number, g: number, b: number}, col2: {r: number, g:
 
 const remnantCircleDraw = (p5: p5, shapeGetter: () => PointHaver[], animationStateGetter: () => AnimationState[], voiceIndex: number) => {
   // eslint-disable-next-line no-debugger
-  if(voiceIndex >= 3) debugger
+  if (voiceIndex >= 3) debugger
+
+  const palette = appState.voicePlayheadColors
 
   const animationState = animationStateGetter()[voiceIndex]
   const shape = shapeGetter()[voiceIndex]
@@ -142,7 +152,7 @@ const remnantCircleDraw = (p5: p5, shapeGetter: () => PointHaver[], animationSta
   loopSplinePoints.push(loopSplinePoints[0])
   // loopSplinePoints.push(loopSplinePoints[1])
   const lfoVal = sinN(now() * 0.5)
-  const col = mixColorRGB(voicePlayheadColors[voiceIndex].primary, voicePlayheadColors[voiceIndex].secondary, lfoVal)
+  const col = mixColorRGB(palette[voiceIndex].primary, palette[voiceIndex].secondary, lfoVal)
 
   p5.push()
   p5.beginShape()
@@ -165,7 +175,7 @@ const remnantCircleDraw = (p5: p5, shapeGetter: () => PointHaver[], animationSta
 
   for(const noteEnvelope of animationState.noteEnvelopes){
     let notePos = catmullRomSpline(loopSplinePoints, noteEnvelope.phasePos)
-    let col = voicePlayheadColors[voiceIndex].primary
+    let col = palette[voiceIndex].primary
     if(noteEnvelope.otherVoiceIndex != voiceIndex) {
       // console.log("draw note jump other", noteEnvelope.otherVoiceIndex)
       const otherShape = shapeGetter()[noteEnvelope.otherVoiceIndex]
@@ -177,7 +187,7 @@ const remnantCircleDraw = (p5: p5, shapeGetter: () => PointHaver[], animationSta
         x: lerp(notePos.x, otherNotePos.x, lerpVal),
         y: lerp(notePos.y, otherNotePos.y, lerpVal)
       }
-      col = mixColorRGB(col, voicePlayheadColors[noteEnvelope.otherVoiceIndex].primary, lerpVal)
+      col = mixColorRGB(col, palette[noteEnvelope.otherVoiceIndex].primary, lerpVal)
     }
     
     p5.push()
@@ -542,10 +552,11 @@ onMounted(() => {
       }
     }
 
-    let p5Mouse = { x: 0, y: 0 }
-    mousemoveEvent((ev) => {
-      p5Mouse = targetToP5Coords(ev, p5i, threeCanvas)
-    }, threeCanvas)
+    //todo - this breaks with hotreload and pop-out canvas
+    // let p5Mouse = { x: 0, y: 0 }
+    // mousemoveEvent((ev) => {
+    //   p5Mouse = targetToP5Coords(ev, p5i, threeCanvas)
+    // }, threeCanvas)
 
     const code = () => { //todo template - is this code-array pattern really needed in the template?
 
