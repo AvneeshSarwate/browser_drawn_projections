@@ -160,7 +160,7 @@ const remnantCircleDraw = (p5: p5, shapeGetter: () => PointHaver[], animationSta
 
   p5.fill(col.r, col.g, col.b)
   p5.noStroke()
-  p5.ellipse(playHeadPos.x, playHeadPos.y, 30, 30)
+  p5.ellipse(playHeadPos.x, playHeadPos.y, 20, 20)
   p5.pop()
 
   for(const noteEnvelope of animationState.noteEnvelopes){
@@ -183,7 +183,7 @@ const remnantCircleDraw = (p5: p5, shapeGetter: () => PointHaver[], animationSta
     p5.push()
     p5.fill(col.r, col.g, col.b, 255 * (1-noteEnvelope.ramp.val()))
     p5.noStroke()
-    p5.ellipse(notePos.x, notePos.y, 30, 30)
+    p5.ellipse(notePos.x, notePos.y, 35, 35)
     p5.pop()
   }
 

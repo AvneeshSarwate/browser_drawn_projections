@@ -43,17 +43,17 @@ animationStates.push({
 
 const voiceParams = {
   voice1: {
-    play: true,
+    play: false,
     noteLength: 1,
     melodySpeed: 1
   },
   voice2: {
-    play: true,
+    play: false,
     noteLength: 1,
     melodySpeed: 1
   },
   voice3: {
-    play: true,
+    play: false,
     noteLength: 1,
     melodySpeed: 1
   }
