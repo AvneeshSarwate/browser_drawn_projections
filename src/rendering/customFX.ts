@@ -496,7 +496,7 @@ export class Bloom extends CustomShaderEffect {
   effectName = "Bloom"
   constructor(inputs: {src: ShaderSource}, width = 1280, height = 720) {
     super(bloomFs, inputs, width, height)
-    this.setUniforms({intensity: 0.1})
+    this.setUniforms({intensity: 0.5})
   }
   setUniforms(uniforms: { intensity: Dynamic<number> }): void {
     const fullUniforms = {

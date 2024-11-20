@@ -60,18 +60,20 @@ const voiceParams = {
 }
 
 const voicePlayheadColors = [
-  { primary: { r: 76, g: 134, b: 168 }, secondary: { r: 76, g: 164, b: 168 }, tertiary: { r: 76, g: 164, b: 168 } },
-  { primary: { r: 165, g: 56, b: 96 }, secondary: { r: 255, g: 77, b: 131 }, tertiary: { r: 255, g: 77, b: 131 } },
-  { primary: { r: 207, g: 153, b: 95 }, secondary: { r: 255, g: 208, b: 117 }, tertiary: { r: 255, g: 208, b: 117 } },
+  { primary: { r: 76, g: 134, b: 168 }, secondary: { r: 76, g: 164, b: 168 }, tertiary: { r: 76, g: 134, b: 168 } },
+  { primary: { r: 165, g: 56, b: 96 }, secondary: { r: 255, g: 77, b: 131 }, tertiary: {r: 56, g: 165, b: 96}},
+  { primary: { r: 207, g: 153, b: 95 }, secondary: { r: 255, g: 208, b: 117 }, tertiary: { r: 95, g: 153, b: 207 } },
 ]
 
 
 const midiParams = {
-  shapeScale: 0.5, 
-  shapeRotateSpeed: 0.02, 
-  shapeCenterLerp: 0.5,
+  shapeScale: 1, 
+  shapeRotateSpeed: 0, 
+  shapeCenterLerp: 0,
   colorOscSpeed: 0.02,
-  paletteLerp: 0
+  paletteLerp: 0,
+  bloomIntensity: 0.5,
+  fadeawayDuration: 0
 }
 
 export type TldrawTestAppState = {

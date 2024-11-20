@@ -7,14 +7,14 @@ import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, tar
 import p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri, now, biasedTri } from '@/channels/channels';
 import { getEllipseShapes, getFreehandShapes, getMultiSegmentLineShapes, getTransformedShapePoints, p5FreehandTldrawRender } from './tldrawWrapperPlain';
-import { AntiAlias, CompositeShaderEffect, HorizontalBlur, LayerBlend, MathOp, RGDisplace, Transform, VerticalBlur } from '@/rendering/customFX';
+import { AntiAlias, Bloom, CompositeShaderEffect, HorizontalBlur, LayerBlend, MathOp, RGDisplace, Transform, VerticalBlur } from '@/rendering/customFX';
 import AutoUI from '@/components/AutoUI.vue';
 import { clamp, lerp, type Editor, type TLPageId, type TLShapeId } from 'tldraw';
 import earcut from 'earcut';
 import type { MultiSegmentLineShape } from './multiSegmentLine/multiSegmentLineUtil';
 import { AbletonClip, type AbletonNote } from '@/io/abletonClips';
 import type { MIDIValOutput } from '@midival/core';
-import { MIDI_READY, midiOutputs } from '@/io/midi';
+import { MIDI_READY, midiInputs, midiOutputs } from '@/io/midi';
 import type { NumberNodeUniform } from 'three/src/renderers/common/nodes/NodeUniform.js';
 import { catmullRomSpline } from '@/rendering/catmullRom';
 import { getTestClips, clipVersions } from './midiClipUtils';
@@ -166,9 +166,9 @@ const playMelody = async (ctx: TimeContext, shapeGetter: () => PointHaver[], ani
 // livecoding
 
 appState.voicePlayheadColors = [
-  { primary: { r: 76, g: 134, b: 168 }, secondary: { r: 76, g: 164, b: 168 }, tertiary: { r: 76, g: 164, b: 168 } },
-  { primary: { r: 165, g: 56, b: 96 }, secondary: { r: 255, g: 77, b: 131 }, tertiary: { r: 255, g: 77, b: 131 } },
-  { primary: { r: 207, g: 153, b: 95 }, secondary: { r: 255, g: 208, b: 117 }, tertiary: { r: 255, g: 208, b: 117 } },
+  { primary: { r: 76, g: 134, b: 168 }, secondary: { r: 76, g: 164, b: 168 }, tertiary: { r: 76, g: 134, b: 168 } },
+  { primary: { r: 165, g: 56, b: 96 }, secondary: { r: 255, g: 77, b: 131 }, tertiary: {r: 56, g: 165, b: 96}},
+  { primary: { r: 207, g: 153, b: 95 }, secondary: { r: 255, g: 208, b: 117 }, tertiary: { r: 95, g: 153, b: 207 } },
 ]
 
 // appState.voicePlayheadColors = [
@@ -193,9 +193,8 @@ const remnantCircleDraw = (p5: p5, shapeGetter: () => PointHaver[], animationSta
   const loopSplinePoints = shape.points.map(pt => pt)
   loopSplinePoints.push(loopSplinePoints[0])
   // loopSplinePoints.push(loopSplinePoints[1])
-  const lfoVal = sinN(now() * 0.5)
   const col2 = mixColorRGB(palette[voiceIndex].secondary, palette[voiceIndex].tertiary, appState.midiParams.paletteLerp)
-  const col = mixColorRGB(palette[voiceIndex].primary, col2, appState.colorOscPhase)
+  const col = mixColorRGB(palette[voiceIndex].primary, col2, sinN(appState.colorOscPhase))
 
   p5.push()
   p5.beginShape()
@@ -341,7 +340,7 @@ const shaderGraph0 = (bgCanvas: OffscreenCanvas, getShape: () => MultiSegmentLin
   const layerOverlay = new LayerBlend({ src1: p5Passthru, src2: mathOp })
   layerOverlay.debugId = `layerOverlay-${shapee.id}`
   feedback.setFeedbackSrc(layerOverlay);
-  mathOp.setUniforms({mult: 0.99});
+  mathOp.setUniforms({mult: () => 0.99 + appState.midiParams.fadeawayDuration*0.02});
 
   return layerOverlay
 }
@@ -363,7 +362,7 @@ const shaderGraph1 = (bgCanvas: OffscreenCanvas, getShape: () => MultiSegmentLin
   const layerOverlay = new LayerBlend({ src1: p5Passthru, src2: mathOp })
   layerOverlay.debugId = `layerOverlay-${shapee.id}`
   feedback.setFeedbackSrc(layerOverlay);
-  mathOp.setUniforms({ mult: 0.99 });
+  mathOp.setUniforms({ mult: () => 0.99 + appState.midiParams.fadeawayDuration*0.01});
   displace.setUniforms({ strength: 0.001 })
 
   return layerOverlay
@@ -409,7 +408,7 @@ const shaderGraph2 = (bgCanvas: OffscreenCanvas, getShape: () => MultiSegmentLin
 
   feedback.setFeedbackSrc(layerOverlay);
   pointZoom.setUniforms({centerX: shapeCenterX, centerY: shapeCenterY, strength: -0.01})
-  mathOp.setUniforms({mult: 0.995});
+  mathOp.setUniforms({mult: () => 0.995 + appState.midiParams.fadeawayDuration*0.005});
 
   return layerOverlay
 }
@@ -473,12 +472,15 @@ onMounted(() => {
     }
 
     const initalPassthru = new Passthru({ src: p5Canvas })
+    initalPassthru.debugId = "initialPassthru"
     const compositeShaderEffect = new CompositeShaderEffect([
       initalPassthru, 
     ], 1)
-    initalPassthru.debugId = "initialPassthru"
+    const bloom = new Bloom({ src: compositeShaderEffect })
+    bloom.setUniforms({intensity: () => appState.midiParams.bloomIntensity})
+    bloom.debugId = "bloom"
 
-    const canvasPaint = new CanvasPaint({ src: compositeShaderEffect })
+    const canvasPaint = new CanvasPaint({ src: bloom })
     
     shaderGraphEndNode = canvasPaint
 
@@ -594,6 +596,32 @@ onMounted(() => {
         })
         console.log('post launch loop', appState.loadCount, appState.loopRoot)
       }
+
+
+      const midiInput = midiInputs.get("LPD8 mk2")!!
+      const midiNorm = (val: number) => val / 127
+      midiInput.onControlChange(70, (msg) => {
+        appState.midiParams.shapeScale = (midiNorm(msg.data2)**2) * 3 + 0.1
+      })
+      midiInput.onControlChange(71, (msg) => {
+        appState.midiParams.shapeRotateSpeed = (midiNorm(msg.data2)**2) * 0.3
+      })
+      midiInput.onControlChange(72, (msg) => {
+        appState.midiParams.shapeCenterLerp = midiNorm(msg.data2)
+      })
+      midiInput.onControlChange(74, (msg) => {
+        appState.midiParams.paletteLerp = midiNorm(msg.data2)
+      })
+      midiInput.onControlChange(75, (msg) => {
+        appState.midiParams.colorOscSpeed = (midiNorm(msg.data2)**2) * 0.3
+      })
+      midiInput.onControlChange(76, (msg) => {
+        appState.midiParams.bloomIntensity = 0.5 + (midiNorm(msg.data2)**1.5) * 10
+      })
+      midiInput.onControlChange(77, (msg) => {
+        appState.midiParams.fadeawayDuration = (midiNorm(msg.data2)**2)
+      })
+
     }
 
     //todo - this breaks with hotreload and pop-out canvas
