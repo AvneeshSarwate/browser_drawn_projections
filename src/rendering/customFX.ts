@@ -451,3 +451,59 @@ export class AntiAlias extends CustomShaderEffect {
     this.setUniforms({resolutionX: width, resolutionY: height})
   }
 }
+
+const bloomFs = glsl`
+precision highp float;
+
+uniform sampler2D src;       // Input texture
+uniform float intensity;     // Bloom intensity
+uniform float width;         // Texture width
+uniform float height;        // Texture height
+varying vec2 vUV;
+
+
+
+void main() {
+  // Gaussian blur weights - 0.227027, 0.1945946, 0.1216216, 0.054054, 0.016216
+  float weights[5];
+  weights[0] = 0.227027;
+  weights[1] = 0.1945946;
+  weights[2] = 0.1216216;
+  weights[3] = 0.054054;
+  weights[4] = 0.016216;
+  vec4 color = texture2D(src, vUV) * weights[0]; // Base weight
+
+  // Perform horizontal and vertical blur
+  for (int i = 1; i < 5; i++) {
+    float offsetX = float(i) / width;
+    float offsetY = float(i) / height;
+
+    // Horizontal blur
+    color += texture2D(src, vUV + vec2(offsetX, 0.0)) * weights[i];
+    color += texture2D(src, vUV - vec2(offsetX, 0.0)) * weights[i];
+
+    // Vertical blur
+    color += texture2D(src, vUV + vec2(0.0, offsetY)) * weights[i];
+    color += texture2D(src, vUV - vec2(0.0, offsetY)) * weights[i];
+  }
+
+  // Add bloom by mixing the blurred image with the original
+  gl_FragColor = mix(texture2D(src, vUV), color, intensity);
+}
+`
+
+export class Bloom extends CustomShaderEffect {
+  effectName = "Bloom"
+  constructor(inputs: {src: ShaderSource}, width = 1280, height = 720) {
+    super(bloomFs, inputs, width, height)
+    this.setUniforms({intensity: 0.1})
+  }
+  setUniforms(uniforms: { intensity: Dynamic<number> }): void {
+    const fullUniforms = {
+      ...uniforms,
+      width: this.width,
+      height: this.height
+    }
+    super.setUniforms(fullUniforms)
+  }
+}

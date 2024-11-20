@@ -43,7 +43,7 @@ animationStates.push({
 
 const voiceParams = {
   voice1: {
-    play: false,
+    play: true,
     noteLength: 1,
     melodySpeed: 1
   },
@@ -60,10 +60,19 @@ const voiceParams = {
 }
 
 const voicePlayheadColors = [
-  {primary: {r: 76, g: 134, b: 168}, secondary: {r: 76, g: 164, b: 168}},
-  {primary: {r: 165, g: 56, b: 96}, secondary: {r: 255, g: 77, b: 131}},
-  {primary: {r: 207, g: 153, b: 95}, secondary: {r: 255, g: 208, b: 117}},
+  { primary: { r: 76, g: 134, b: 168 }, secondary: { r: 76, g: 164, b: 168 }, tertiary: { r: 76, g: 164, b: 168 } },
+  { primary: { r: 165, g: 56, b: 96 }, secondary: { r: 255, g: 77, b: 131 }, tertiary: { r: 255, g: 77, b: 131 } },
+  { primary: { r: 207, g: 153, b: 95 }, secondary: { r: 255, g: 208, b: 117 }, tertiary: { r: 255, g: 208, b: 117 } },
 ]
+
+
+const midiParams = {
+  shapeScale: 0.5, 
+  shapeRotateSpeed: 0.02, 
+  shapeCenterLerp: 0.5,
+  colorOscSpeed: 0.02,
+  paletteLerp: 0
+}
 
 export type TldrawTestAppState = {
   p5Instance: p5 | undefined
@@ -85,6 +94,9 @@ export type TldrawTestAppState = {
   loadCount: number
   voiceParams: typeof voiceParams
   voicePlayheadColors: typeof voicePlayheadColors
+  midiParams: typeof midiParams
+  rotateAngle: number
+  colorOscPhase: number
 }
 
 export const appState: TldrawTestAppState = {
@@ -106,7 +118,10 @@ export const appState: TldrawTestAppState = {
   getClips: getTestClips,
   loadCount: -1,
   voiceParams: voiceParams,
-  voicePlayheadColors: voicePlayheadColors
+  voicePlayheadColors: voicePlayheadColors,
+  midiParams: midiParams,
+  rotateAngle: 0,
+  colorOscPhase: 0
 } 
 
 export const appStateName = 'nov21DemoAppState'

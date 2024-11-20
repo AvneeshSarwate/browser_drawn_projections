@@ -32,18 +32,60 @@ let timeLoops: CancelablePromisePoxy<any>[] = []
 //@ts-ignore
 let tldrawEditor: Editor | undefined = undefined
 console.log("tldrawEditor", tldrawEditor)
-let getCamera = () => tldrawEditor?.getCamera() ?? {x: 0, y: 0, z: 1}
+let getCamera = () => tldrawEditor?.getCamera() ?? { x: 0, y: 0, z: 1 }
+
+const getCenterPt = (points: {x: number, y: number}[]) => {
+  const sumPt = points.reduce((acc, pt) => ({x: acc.x + pt.x, y: acc.y + pt.y}), {x: 0, y: 0})
+  return {x: sumPt.x / points.length, y: sumPt.y / points.length}
+}
+
+const rotateAroundCenter = (points: {x: number, y: number}[], center: {x: number, y: number}, angle: number) => {
+  const cosA = Math.cos(angle)
+  const sinA = Math.sin(angle)
+  return points.map(pt => ({
+    x: (pt.x - center.x) * cosA - (pt.y - center.y) * sinA + center.x,
+    y: (pt.x - center.x) * sinA + (pt.y - center.y) * cosA + center.y
+  }))
+}
+
+const scaleAroundCenter = (points: {x: number, y: number}[], center: {x: number, y: number}, scale: number) => {
+  return points.map(pt => ({
+    x: center.x + (pt.x - center.x) * scale,
+    y: center.y + (pt.y - center.y) * scale
+  }))
+}
+
+const lerpToCenter = (points: { x: number, y: number }[], shapeCenter: { x: number, y: number }, targetCenter: { x: number, y: number }, t: number) => {
+  const delta = {x: targetCenter.x - shapeCenter.x, y: targetCenter.y - shapeCenter.y}
+  return points.map(pt => ({
+    x: pt.x + delta.x * t,
+    y: pt.y + delta.y * t
+  }))
+}
+
+
+
+//todo fix - this needs to be made more robust wrt grabbing a reference to editor while hotreloading
+const getShapes = () => {
+  const shapes = Array.from(getMultiSegmentLineShapes(tldrawEditor!!).values())
+  const origCenters = shapes.map(shape => getCenterPt(shape.points))
+  const target = {x: resolution.width/2, y: resolution.height/2}
+  const targetCenteredShapes = shapes.map((shape, i) => lerpToCenter(shape.points, origCenters[i], target, appState.midiParams.shapeCenterLerp))
+  const newCenters = targetCenteredShapes.map(shape => getCenterPt(shape))
+  const scaledShapes = targetCenteredShapes.map((shape, i) => scaleAroundCenter(shape, newCenters[i], appState.midiParams.shapeScale))
+  const scaledCenters = scaledShapes.map(shape => getCenterPt(shape))
+  const rotatedShapes = scaledShapes.map((shape, i) => rotateAroundCenter(shape, scaledCenters[i], appState.rotateAngle))
+  return rotatedShapes.map(shape => ({points: shape}))
+}
+
 
 type PointHaver = {
   points: {x: number, y: number}[]
 }
 const calculatePlayProbabilities = (shape1: PointHaver, shape2: PointHaver, shape3: PointHaver, windowDim: {width: number, height: number}) => {
-  const sumPt1 = shape1.points.reduce((acc, pt) => ({x: acc.x + pt.x, y: acc.y + pt.y}), {x: 0, y: 0})
-  const centerPt1 = {x: sumPt1.x / shape1.points.length, y: sumPt1.y / shape1.points.length}
-  const sumPt2 = shape2.points.reduce((acc, pt) => ({x: acc.x + pt.x, y: acc.y + pt.y}), {x: 0, y: 0})
-  const centerPt2 = {x: sumPt2.x / shape2.points.length, y: sumPt2.y / shape2.points.length}
-  const sumPt3 = shape3.points.reduce((acc, pt) => ({x: acc.x + pt.x, y: acc.y + pt.y}), {x: 0, y: 0})
-  const centerPt3 = {x: sumPt3.x / shape3.points.length, y: sumPt3.y / shape3.points.length}
+  const centerPt1 = getCenterPt(shape1.points)
+  const centerPt2 = getCenterPt(shape2.points)
+  const centerPt3 = getCenterPt(shape3.points)
 
   const dist12 = Math.sqrt((centerPt1.x - centerPt2.x)**2 + (centerPt1.y - centerPt2.y)**2)
   const dist13 = Math.sqrt((centerPt1.x - centerPt3.x)**2 + (centerPt1.y - centerPt3.y)**2)
@@ -124,15 +166,15 @@ const playMelody = async (ctx: TimeContext, shapeGetter: () => PointHaver[], ani
 // livecoding
 
 appState.voicePlayheadColors = [
-  {primary: {r: 76, g: 134, b: 168}, secondary: {r: 76, g: 164, b: 168}},
-  {primary: {r: 165, g: 56, b: 96}, secondary: {r: 255, g: 77, b: 131}},
-  {primary: {r: 207, g: 153, b: 95}, secondary: {r: 255, g: 208, b: 117}},
+  { primary: { r: 76, g: 134, b: 168 }, secondary: { r: 76, g: 164, b: 168 }, tertiary: { r: 76, g: 164, b: 168 } },
+  { primary: { r: 165, g: 56, b: 96 }, secondary: { r: 255, g: 77, b: 131 }, tertiary: { r: 255, g: 77, b: 131 } },
+  { primary: { r: 207, g: 153, b: 95 }, secondary: { r: 255, g: 208, b: 117 }, tertiary: { r: 255, g: 208, b: 117 } },
 ]
 
 // appState.voicePlayheadColors = [
-//   {primary: {r: 134, g: 76, b: 168}, secondary: {r: 76, g: 164, b: 168}},
-//   {primary: {r: 56, g: 165, b: 96}, secondary: {r: 255, g: 77, b: 131}},
-//   {primary: {r: 153, g: 207, b: 95}, secondary: {r: 255, g: 208, b: 117}},
+//   {primary: {r: 134, g: 76, b: 168}, secondary: {r: 76, g: 164, b: 168}, tertiary: { r: 76, g: 164, b: 168 }},
+//   {primary: {r: 56, g: 165, b: 96}, secondary: {r: 255, g: 77, b: 131}, tertiary: { r: 255, g: 77, b: 131 }},
+//   {primary: {r: 153, g: 207, b: 95}, secondary: {r: 255, g: 208, b: 117}, tertiary: { r: 255, g: 208, b: 117 }},
 // ]
 
 const lerpColor = (col1: {r: number, g: number, b: number}, col2: {r: number, g: number, b: number}, t: number) => {
@@ -152,7 +194,8 @@ const remnantCircleDraw = (p5: p5, shapeGetter: () => PointHaver[], animationSta
   loopSplinePoints.push(loopSplinePoints[0])
   // loopSplinePoints.push(loopSplinePoints[1])
   const lfoVal = sinN(now() * 0.5)
-  const col = mixColorRGB(palette[voiceIndex].primary, palette[voiceIndex].secondary, lfoVal)
+  const col2 = mixColorRGB(palette[voiceIndex].secondary, palette[voiceIndex].tertiary, appState.midiParams.paletteLerp)
+  const col = mixColorRGB(palette[voiceIndex].primary, col2, appState.colorOscPhase)
 
   p5.push()
   p5.beginShape()
@@ -329,7 +372,6 @@ const shaderGraph1 = (bgCanvas: OffscreenCanvas, getShape: () => MultiSegmentLin
 const shaderGraph2 = (bgCanvas: OffscreenCanvas, getShape: () => MultiSegmentLineShape) => {
   const shapee = getShape()
 
-  //todo fix - still something off about the positioning, but a bit closer to correct now
   const shapeCenterX = () => {
     const shape = getShape()
     const points = getTransformedShapePoints(shape, getCamera())
@@ -410,9 +452,6 @@ onMounted(() => {
       const getShape = () => tldrawEditor!!.getShape<MultiSegmentLineShape>(shapee.id as TLShapeId)
       const layerOverlay = shaderGraphs[numShapes](bgCanvas, getShape);
 
-      const getShapes = () => {
-        return Array.from(getMultiSegmentLineShapes(tldrawEditor!!).values())
-      }
       let voiceIndex = numShapes
       const drawFunc = (p5i: p5) => {
         p5i.clear()
@@ -535,10 +574,6 @@ onMounted(() => {
         }
       }, { scope: 'session', source: 'user' })
 
-      const getShapes = () => {
-        return Array.from(getMultiSegmentLineShapes(editor).values())
-      }
-
       await MIDI_READY
       midiOutput = midiOutputs.get("IAC Driver Bus 1")!!
       console.log('pre launch loop', appState.loadCount, appState.loopRoot)
@@ -546,6 +581,15 @@ onMounted(() => {
         appState.loopRoot = launchLoop(async ctx => {
           ctx.bpm = 180
           await ctx.waitSec(1)
+          ctx.branch(async () => {
+            
+            // eslint-disable-next-line no-constant-condition
+            while (true) {
+              await ctx.waitFrame()
+              appState.rotateAngle += appState.midiParams.shapeRotateSpeed
+              appState.colorOscPhase += appState.midiParams.colorOscSpeed
+            }
+          })
           await playMelodies(ctx, getShapes, () => appState.animationStates)
         })
         console.log('post launch loop', appState.loadCount, appState.loopRoot)
