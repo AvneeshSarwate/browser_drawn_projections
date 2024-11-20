@@ -22,7 +22,7 @@ const renderInputs = computed(() => {
   })
 })
 
-//todo - for text fields, use key listener so that value is comitted on enter
+//todo - for text fields, use on-change but also add a red border if the field isn't committed
 
 const updateObject = (event: Event, valType: string) => {
   const target = event.target as HTMLInputElement
