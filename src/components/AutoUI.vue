@@ -22,6 +22,8 @@ const renderInputs = computed(() => {
   })
 })
 
+//todo - for text fields, use key listener so that value is comitted on enter
+
 const updateObject = (event: Event, valType: string) => {
   const target = event.target as HTMLInputElement
   objectToEdit.value[target.id] = valType === 'number' ? parseFloat(target.value) : target.value
@@ -32,7 +34,7 @@ const updateObject = (event: Event, valType: string) => {
   <div v-for="(item, index) in renderInputs" :key="index">
     <div v-if="item?.type === 'input'">
       <label :for="item.key">{{ item.key }}</label> <!-- todo api - key should be full path-chain to prevent duplicates -->
-      <input :id="item.key" v-model="objectToEdit[item.key]" @change="(event: Event) => updateObject(event, item.valType)" />
+      <input :id="item.key" :value="objectToEdit[item.key]" @blur="(event: Event) => updateObject(event, item.valType)" />
     </div>
     <div v-else-if="item?.type === 'boolean'">
       <label :for="item.key">{{ item.key }}</label>
