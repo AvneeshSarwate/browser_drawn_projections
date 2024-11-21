@@ -14,6 +14,8 @@ const slapback = (pattern, length) => ([
 
 const scale = new Scale([0,2,3,5,7,8,9,11], 81);
 
+// livecoding
+
 const motif1 = () => ([
   { pitch: 80, velocity: 100, duration: 1, position: 0 },
   { pitch: 81, velocity: 100, duration: 1, position: 1 },
@@ -21,6 +23,13 @@ const motif1 = () => ([
   { pitch: 83, velocity: 100, duration: 1, position: 3 },
   { pitch: 81, velocity: 100, duration: 1, position: 4 },
 ]);
+
+// const motif1 = () => ([
+//   { pitch: 80 - 24, velocity: 100, duration: 1, position: 0 },
+//   { pitch: 81 - 24, velocity: 100, duration: 1, position: 1 },
+//   { pitch: 83 - 24, velocity: 100, duration: 1, position: 2 },
+//   { pitch: 84 - 24, velocity: 100, duration: 1, position: 3 },
+// ]);
 
 const altMotif1 = () => 
   scale
