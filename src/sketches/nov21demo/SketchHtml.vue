@@ -54,6 +54,8 @@ const popupCanvas = () => {
   if(popupWindow && !popupWindow.closed) return
   popupWindow = window.open("", "popupWindow", `width=${resolution.width},height=${resolution.height}`)
   popupWindow.document.body.style.backgroundColor = "black"
+  appState.threeRenderer.domElement.style.width = '100%'
+  appState.threeRenderer.domElement.style.height = '100%'
   popupWindow.document.body.appendChild(appState.threeRenderer.domElement)
 
   //todo sketch - not working
