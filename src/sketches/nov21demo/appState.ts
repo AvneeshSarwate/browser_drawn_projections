@@ -73,7 +73,8 @@ const midiParams = {
   colorOscSpeed: 0.02,
   paletteLerp: 0,
   bloomIntensity: 0.5,
-  fadeawayDuration: 0
+  fadeawayDuration: 0,
+  finalFade: 0
 }
 
 export type TldrawTestAppState = {
@@ -123,7 +124,7 @@ export const appState: TldrawTestAppState = {
   voicePlayheadColors: voicePlayheadColors,
   midiParams: midiParams,
   rotateAngle: 0,
-  colorOscPhase: 0
+  colorOscPhase: 0,
 } 
 
 export const appStateName = 'nov21DemoAppState'

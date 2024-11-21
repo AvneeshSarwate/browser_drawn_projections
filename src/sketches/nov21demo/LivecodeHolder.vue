@@ -480,7 +480,11 @@ onMounted(() => {
     bloom.setUniforms({intensity: () => appState.midiParams.bloomIntensity})
     bloom.debugId = "bloom"
 
-    const canvasPaint = new CanvasPaint({ src: bloom })
+    const finalFade = new MathOp({ src: bloom })
+    finalFade.setUniforms({mult: () => appState.midiParams.finalFade})
+    finalFade.debugId = "finalFade"
+
+    const canvasPaint = new CanvasPaint({ src: finalFade })
     
     shaderGraphEndNode = canvasPaint
 
@@ -608,6 +612,9 @@ onMounted(() => {
       })
       midiInput.onControlChange(72, (msg) => {
         appState.midiParams.shapeCenterLerp = midiNorm(msg.data2)
+      })
+      midiInput.onControlChange(73, (msg) => {
+        appState.midiParams.finalFade = midiNorm(msg.data2)
       })
       midiInput.onControlChange(74, (msg) => {
         appState.midiParams.paletteLerp = midiNorm(msg.data2)
