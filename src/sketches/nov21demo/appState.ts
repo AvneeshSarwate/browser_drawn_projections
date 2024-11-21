@@ -74,7 +74,7 @@ const midiParams = {
   paletteLerp: 0,
   bloomIntensity: 0.5,
   fadeawayDuration: 0,
-  finalFade: 0
+  finalFade: 1
 }
 
 export type TldrawTestAppState = {

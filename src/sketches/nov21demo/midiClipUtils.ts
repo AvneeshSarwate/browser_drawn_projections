@@ -35,8 +35,8 @@ const motif2 = () => ([
 ])
 
 const motif3 = () => ([
-  { pitch: 33, velocity: 100, duration: Math.random()*0.5, position: 0 },
-  { pitch: randomChoice(36, 28), velocity: 100, duration: Math.random(), position: 2 }
+  { pitch: 21, velocity: 100, duration: Math.random()*0.5, position: 0 },
+  { pitch: randomChoice(24, 16), velocity: 100, duration: Math.random(), position: 2 }
 ])
 
 
@@ -47,8 +47,9 @@ const notes1 = (): Array<any> => {
   );
 }
 
-const notes2 = () => repeat(motif2(),8);
-const notes3 = () => motif3();
+const notes2 = () => repeat(motif2(),8).map(n => ({...n, pitch: n.pitch + 12}));
+const notes3 = () => motif3().map(n => ({...n, pitch: n.pitch + 12}));
+
 
 const clip1 = () => new AbletonClip("clip1", ...notes1() as [number, any]).scale(1)
 // const clip1 = () => new AbletonClip("clip1", 6, randomChoiceBy(motif1(), altMotif1(), 0.25));

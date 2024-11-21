@@ -359,7 +359,7 @@ void main() {
     alphaSum += colors[i].a;
     colorSum += colors[i].rgb * colors[i].a;
   }
-  color = vec4(colorSum / alphaSum, 1);
+  // color = vec4(colorSum / alphaSum, 1);
 
 
   // gl_FragColor = texture2D(input4, uv).aaaa;
