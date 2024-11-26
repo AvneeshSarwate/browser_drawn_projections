@@ -22,6 +22,7 @@ export type TemplateAppState = {
   stats?: { begin: () => void, end: () => void }
   paused: boolean
   drawing: boolean
+  resolution: { width: number, height: number }
 }
 
 export const appState: TemplateAppState = {
@@ -37,6 +38,7 @@ export const appState: TemplateAppState = {
   stats: undefined,
   paused: false,
   drawing: false,
+  resolution: { width: 1000, height: 500 }
 } 
 
 export const appStateName = 'ishitaGesturesAppState'

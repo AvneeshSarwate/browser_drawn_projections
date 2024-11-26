@@ -1,8 +1,17 @@
 <script setup lang="ts">
-import { ref } from 'vue';
-import { resolution } from './appState'
+import { inject, ref } from 'vue';
+import { appStateName, type TemplateAppState } from './appState'
 
-const resRef = ref(resolution)
+
+const appState = inject<TemplateAppState>(appStateName)!!
+
+//get size of window
+const windowWidth = window.innerWidth
+const windowHeight = window.innerHeight
+
+appState.resolution = { width: windowWidth, height: windowHeight }
+
+const resRef = ref({ width: windowWidth, height: windowHeight })
 
 </script>
 

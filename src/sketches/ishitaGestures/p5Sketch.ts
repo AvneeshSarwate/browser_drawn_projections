@@ -6,7 +6,7 @@ export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => Templa
   const sketch = (p: p5) => {
 
     p.setup = () => {
-      p.createCanvas(resolution.width, resolution.height, canvas)
+      p.createCanvas(appState().resolution.width, appState().resolution.height, canvas)
       p.noSmooth()
       // p.noLoop()
     }
