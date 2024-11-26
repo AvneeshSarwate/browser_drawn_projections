@@ -42,6 +42,26 @@ export function mouseupEvent(listener: (ev: MouseEvent) => void, target: HTMLEle
   target.addEventListener("mouseup", listener)
 }
 
+export function touchstartEvent(listener: (ev: TouchEvent) => void, target: HTMLElement = document.body) {
+  eventListeners.push({ type: "touchstart", cb: listener, target })
+  target.addEventListener("touchstart", listener)
+}
+
+export function touchendEvent(listener: (ev: TouchEvent) => void, target: HTMLElement = document.body) {
+  eventListeners.push({ type: "touchend", cb: listener, target })
+  target.addEventListener("touchend", listener)
+}
+
+export function touchmoveEvent(listener: (ev: TouchEvent) => void, target: HTMLElement = document.body) {
+  eventListeners.push({ type: "touchmove", cb: listener, target })
+  target.addEventListener("touchmove", listener)
+}
+
+export function touchcancelEvent(listener: (ev: TouchEvent) => void, target: HTMLElement = document.body) {
+  eventListeners.push({ type: "touchcancel", cb: listener, target })
+  target.addEventListener("touchcancel", listener)
+}
+
 //todo api - need a way to normalize coordinates between input coords and targets
 
 export function targetNormalizedCoords(ev: MouseEvent, target: HTMLElement = document.body) {
