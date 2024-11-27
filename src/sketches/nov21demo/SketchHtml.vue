@@ -56,13 +56,25 @@ const popupCanvas = () => {
   popupWindow.document.body.style.backgroundColor = "black"
   appState.threeRenderer.domElement.style.width = '100%'
   appState.threeRenderer.domElement.style.height = '100%'
+
+
+  const fullscreenButton = popupWindow.document.createElement('button');
+  fullscreenButton.innerText = 'Fullscreen';
+  fullscreenButton.onclick = () => {
+    const canvas = popupWindow.document.getElementById('threeCanvas');
+    if (canvas) {
+      canvas.requestFullscreen();
+      fullscreenButton.style.display = 'none'
+    }
+  };
+  popupWindow.document.body.appendChild(fullscreenButton);
+
   popupWindow.document.body.appendChild(appState.threeRenderer.domElement)
 
   //todo sketch - not working
   popupWindow.addEventListener("onbeforeunload", () => {
     threeCanvasMarker.value?.appendChild(appState.threeRenderer.domElement)
   })
-
 }
 //todo sketch - this can be handled with react hooks instead of a flag (see link below)
 //can also replace the CustomRenderer component with this

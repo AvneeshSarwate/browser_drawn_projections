@@ -604,28 +604,28 @@ onMounted(() => {
 
       const midiInput = midiInputs.get("LPD8 mk2")!!
       const midiNorm = (val: number) => val / 127
-      midiInput.onControlChange(70, (msg) => {
+      midiInput?.onControlChange(70, (msg) => {
         appState.midiParams.shapeScale = (midiNorm(msg.data2)**2) * 3 + 0.1
       })
-      midiInput.onControlChange(71, (msg) => {
+      midiInput?.onControlChange(71, (msg) => {
         appState.midiParams.shapeRotateSpeed = (midiNorm(msg.data2)**2) * 0.3
       })
-      midiInput.onControlChange(72, (msg) => {
+      midiInput?.onControlChange(72, (msg) => {
         appState.midiParams.shapeCenterLerp = midiNorm(msg.data2)
       })
-      midiInput.onControlChange(73, (msg) => {
+      midiInput?.onControlChange(73, (msg) => {
         appState.midiParams.finalFade = midiNorm(msg.data2)
       })
-      midiInput.onControlChange(74, (msg) => {
+      midiInput?.onControlChange(74, (msg) => {
         appState.midiParams.paletteLerp = midiNorm(msg.data2)
       })
-      midiInput.onControlChange(75, (msg) => {
+      midiInput?.onControlChange(75, (msg) => {
         appState.midiParams.colorOscSpeed = (midiNorm(msg.data2)**2) * 0.3
       })
-      midiInput.onControlChange(76, (msg) => {
+      midiInput?.onControlChange(76, (msg) => {
         appState.midiParams.bloomIntensity = 0.5 + (midiNorm(msg.data2)**1.5) * 10
       })
-      midiInput.onControlChange(77, (msg) => {
+      midiInput?.onControlChange(77, (msg) => {
         appState.midiParams.fadeawayDuration = (midiNorm(msg.data2)**2)
       })
 
