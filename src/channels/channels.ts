@@ -39,7 +39,6 @@ export function launch<T>(block: (ctx: TimeContext) => Promise<T>): CancelablePr
   return createAndLaunchContext(block, dateNow(), BrowserTimeContext, false)
 }
 
-
 export const testCancel = async () => {
 
   launch(async (ctx) => {

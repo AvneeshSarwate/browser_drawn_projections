@@ -35,7 +35,8 @@ export const sketchNames = [
   'tldraw_sketch0',
   'fmSynthBasics',
   'nov21demo',
-  'ishitaGestures'
+  'ishitaGestures',
+  'scTimeTest'
 ]
 
 const sketchRoutes = sketchNames.map(name => {

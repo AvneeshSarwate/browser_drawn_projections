@@ -21,9 +21,11 @@ OSCFunc({|msg, time, addr, recvPort|
 	var coroHashCode = msg[3];
 	var buffer = 0.01*~defaultClock.tempo;
 	var schedTime = 0;
+	msg.postln;
+	[coroHashCode, ~coroStartTimes[coroHashCode].isNil].postln;
 
-
-	if(~coroStartTimes[coroHashCode].not, {
+	if(~coroStartTimes[coroHashCode].isNil, {
+		["new coro", coroHashCode].postln;
 		~coroStartTimes[coroHashCode] = ~defaultClock.beats;
 	});
 

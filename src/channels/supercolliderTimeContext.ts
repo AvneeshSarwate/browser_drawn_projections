@@ -1,4 +1,4 @@
-import { dateNow, TimeContext } from "./base_time_context"
+import { CancelablePromisePoxy, createAndLaunchContext, dateNow, TimeContext } from "./base_time_context"
 
 
 const scWebsocket = new WebSocket('ws://localhost:57130')
@@ -44,7 +44,11 @@ export class SuperColliderTimeContext extends TimeContext{
     await scBeatSyncWait(this.rootContext!.id)
   }
 
-  public async waitSec(sec: number) {
+  public override async wait(beats: number) {
+    await this.waitSec(beats)
+  }
+
+  public async waitSec(beats: number) {
     // console.log('wait', sec, this.id, this.time.toFixed(3))
     if (this.isCanceled) {
       console.log(this.debugName, 'context is canceled')
@@ -56,7 +60,7 @@ export class SuperColliderTimeContext extends TimeContext{
       ctx.abortController.signal.addEventListener('abort', listener)
 
       //todo - in progress
-      const targetTime = Math.max(this.rootContext!.mostRecentDescendentTime, this.time) + sec
+      const targetTime = Math.max(this.rootContext!.mostRecentDescendentTime, this.time) + beats
       
       const postWait = () => {
         try {
@@ -81,4 +85,8 @@ export class SuperColliderTimeContext extends TimeContext{
       postWait()
     })
   }
+}
+
+export function launchSC<T>(block: (ctx: SuperColliderTimeContext) => Promise<T>): CancelablePromisePoxy<T> {
+  return createAndLaunchContext(block, dateNow(), SuperColliderTimeContext, false)
 }

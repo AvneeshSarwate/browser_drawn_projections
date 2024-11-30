@@ -8,5 +8,6 @@
         // "/Users/avneeshsarwate/browser_drawn_projections/src/io/osc.js",
         // "/Users/avneeshsarwate/browser_drawn_projections/src/io/osc.d.ts",
         "/Users/avneeshsarwate/browser_drawn_projections/deno_notebook_stuff/",
-    ]
+    ],
+    "editor.tabSize": 2
 }
