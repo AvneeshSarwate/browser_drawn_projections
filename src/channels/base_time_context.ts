@@ -8,8 +8,8 @@ function dateDelay(callback: () => void, nowTime: number, delayTime: number): vo
     }, delayTime * 1000)
   }
 const startTime = performance.now() / 1000
-const dateNow = () => performance.now() / 1000 - startTime
-const beatNow = (bpm: number) => dateNow() * bpm / 60
+export const dateNow = () => performance.now() / 1000 - startTime
+export const beatNow = (bpm: number) => dateNow() * bpm / 60
 
 const now = dateNow
 const delayFunc = dateDelay

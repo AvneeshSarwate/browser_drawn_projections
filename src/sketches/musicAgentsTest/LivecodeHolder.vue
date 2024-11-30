@@ -5,7 +5,8 @@ import { inject, onMounted, onUnmounted, ref } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
-import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri, type LoopHandle } from '@/channels/channels';
+import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
+import { type LoopHandle } from '@/channels/base_time_context'
 import { Scale } from '@/music/scale'
 import { MIDI_READY, midiOutputs } from '@/io/midi';
 import seedrandom from 'seedrandom'

@@ -1,0 +1,70 @@
+import { dateNow, TimeContext } from "./base_time_context"
+
+
+const scWebsocket = new WebSocket('ws://localhost:57130')
+const scWaitCallbacks = new Map<string, () => void>()
+
+
+scWebsocket.onmessage = (event) => {
+  const data = JSON.parse(event.data)
+  const callback = scWaitCallbacks.get(data.id)
+  if(callback) callback()
+  scWaitCallbacks.delete(data.id)
+}
+
+
+const scBeatWait = (beats: number, contextRootId: number) => new Promise<void>((resolve, reject) => {
+  const id = crypto.randomUUID();
+  scWaitCallbacks.set(id, resolve)
+  scWebsocket.send(JSON.stringify({type: 'wait', delayId: id, time: beats, coroKey: contextRootId}))
+})
+
+
+//for SCTimeContext, there is no notion of seconds, only beats (because sc clock uses scheduleAbs to a callback for a target time)
+
+/* sc side stuff
+node server will fwd osc messages to - https://github.com/AvneeshSarwate/kotlin-live-lib-3/blob/fbd96799eabe897caeea502317245d41ca5d91fb/timing_test.scd#L42
+Instead of using the /coroStart endpoint, it will just log the first delay offset time of a context tree
+in the same function
+*/
+
+
+export class SuperColliderTimeContext extends TimeContext{
+  public async waitSec(sec: number) {
+    // console.log('wait', sec, this.id, this.time.toFixed(3))
+    if (this.isCanceled) {
+      console.log(this.debugName, 'context is canceled')
+      return
+    }
+    const ctx = this
+    return new Promise<void>(async (resolve, reject) => {
+      const listener = () => { reject(); console.log('abort') }
+      ctx.abortController.signal.addEventListener('abort', listener)
+
+      //todo - in progress
+      const targetTime = Math.max(this.rootContext!.mostRecentDescendentTime, this.time) + sec
+      
+      const postWait = () => {
+        try {
+
+          ctx.time = targetTime
+
+          ctx.abortController.signal.removeEventListener('abort', listener)
+          resolve()
+
+          // todo - in progress
+          if (this.isCanceled) resolve()
+          else reject()
+          // console.log("setTimeout", this.debugName, this.isCanceled)
+          if (this.isCanceled) return 
+          
+          this.rootContext!.mostRecentDescendentTime = targetTime
+        } catch(e) {
+          console.log('wait error', e)
+        }
+      }
+      await scBeatWait(targetTime, this.rootContext!.id)
+      postWait()
+    })
+  }
+}
