@@ -1,4 +1,4 @@
-import { CancelablePromisePoxy, createAndLaunchContext, dateNow, TimeContext } from "./base_time_context"
+import { CancelablePromisePoxy, createAndLaunchContext, dateNow, TimeContext, type LoopHandle } from "./base_time_context"
 
 
 const scWebsocket = new WebSocket('ws://localhost:57130')
@@ -85,8 +85,20 @@ export class SuperColliderTimeContext extends TimeContext{
       postWait()
     })
   }
+
+  public branch<T>(block: (ctx: TimeContext) => Promise<T>, debugName: string = ""): LoopHandle {
+    const promise = createAndLaunchContext(block, this.rootContext!.mostRecentDescendentTime, Object.getPrototypeOf(this).constructor, false, this, debugName)
+    return {
+      finally: (finalFunc: () => void) => {
+        promise.finally(finalFunc)
+      },
+      cancel: () => {
+        promise.cancel()
+      }
+    }
+  }
 }
 
 export function launchSC<T>(block: (ctx: SuperColliderTimeContext) => Promise<T>): CancelablePromisePoxy<T> {
-  return createAndLaunchContext(block, dateNow(), SuperColliderTimeContext, false)
+  return createAndLaunchContext(block, 0, SuperColliderTimeContext, false)
 }

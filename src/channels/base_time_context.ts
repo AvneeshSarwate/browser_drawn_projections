@@ -141,6 +141,7 @@ export abstract class TimeContext {
    * the call to branchRet() is what gets you the extra layer to only apply the time update if the branch is awaited
    */
   public branch<T>(block: (ctx: TimeContext) => Promise<T>, debugName: string = ""): LoopHandle {
+    //todo bug - instead of now(), should use this.rootContext!.mostRecentDescendentTime?
     const promise = createAndLaunchContext(block, now(), Object.getPrototypeOf(this).constructor, false, this, debugName)
     //todo api - this allows you to manage a branch without accidentally awaiting on it in a way that
     //would screw up parent context time. but in general, awaiting on anything other than

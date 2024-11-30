@@ -144,16 +144,39 @@ onMounted(async () => {
       const midiOut = midiOutputs.get("IAC Driver Bus 1")!!
 
       launchSC(async (ctx) => {
-        while(true) {
-          await ctx.wait(1)
-          console.log("wait 1")
-          ctx.branchWait(async (ctx) => {
-            midiOut.sendNoteOn(60, 127)
-            await ctx.wait(0.2)
-            midiOut.sendNoteOff(60)
-          })
-          
-        }
+
+        const start = Date.now()
+        await ctx.initialBeatSync()
+        console.log("initialBeatSync done", ((Date.now() - start)/1000).toFixed(3), ctx.time.toFixed(3))
+        // ctx.time = 0
+
+        ctx.branch(async (ctx) => {
+          console.log("branch 1 time", ctx.time.toFixed(3))
+          while(true) {
+            await ctx.wait(1)
+            // console.log("wait 1")
+            ctx.branchWait(async (ctx) => {
+              const note = 60 + Math.floor(Math.random() * 12)
+              midiOut.sendNoteOn(note, 80)
+              await ctx.wait(0.2)
+              midiOut.sendNoteOff(note)
+            })
+          }
+        })
+
+        ctx.branch(async (ctx) => {
+          console.log("branch 2 time", ctx.time.toFixed(3))
+          while(true) {
+            await ctx.wait(1)
+            ctx.branchWait(async (ctx) => {
+              const note = 48 + Math.floor(Math.random() * 12)
+              midiOut.sendNoteOn(note, 80)
+              await ctx.wait(0.2)
+              midiOut.sendNoteOff(note)
+            })
+          }
+        })
+
       })
     }
 

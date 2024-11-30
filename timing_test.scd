@@ -9,6 +9,7 @@
 ~oscToKotlin = NetAddr("localhost", 9002);
 ~oscToElsewhere = NetAddr("localhost", 10000);
 ~printDelays = false;
+~latencyShift = 0;
 
 ~defaultClock.tempo = 2;
 
@@ -20,17 +21,11 @@ OSCFunc({|msg, time, addr, recvPort|
 	var kTime = msg[2];
 	var coroHashCode = msg[3];
 	var buffer = 0.01*~defaultClock.tempo;
-	var schedTime = 0;
-	msg.postln;
-	[coroHashCode, ~coroStartTimes[coroHashCode].isNil].postln;
-
-	if(~coroStartTimes[coroHashCode].isNil, {
-		["new coro", coroHashCode].postln;
-		~coroStartTimes[coroHashCode] = ~defaultClock.beats;
-	});
+	// msg.postln;
+	// [coroHashCode, ~coroStartTimes[coroHashCode].isNil].postln;
 
 
-	schedTime = ~coroStartTimes[coroHashCode] + kTime + buffer;
+
 	// ["coroStart t_delay", ~coroStartTimes[coroHashCode], kTime, buffer, schedTime].postln;
 	if(kTime == \beat,
 		{~defaultClock.sched(~defaultClock.timeToNextBeat, {
@@ -38,9 +33,15 @@ OSCFunc({|msg, time, addr, recvPort|
 			"beat dleay".postln;
 			~oscToKotlin.sendMsg("/delay", delayId, ~defaultClock.beats);
 		})},
-		{~defaultClock.schedAbs(schedTime, {
-			~oscToKotlin.sendMsg("/delay", delayId, ~defaultClock.beats);
-		})}
+		{
+			var schedTime = ~coroStartTimes[coroHashCode] + kTime + buffer - ~latencyShift;
+
+			if(~printDelays, {[~coroStartTimes[coroHashCode], kTime].postln});
+
+			~defaultClock.schedAbs(schedTime, {
+				~oscToKotlin.sendMsg("/delay", delayId, ~defaultClock.beats);
+			})
+		}
 	);
 }, "/t_delay");
 
@@ -48,7 +49,7 @@ OSCFunc({|msg, time, addr, recvPort|
 
 
 
-~defaultClock.tempo = 2.5
+~defaultClock.tempo = 2
 
 OSCFunc.trace
 
