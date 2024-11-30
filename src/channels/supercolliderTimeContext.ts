@@ -16,7 +16,13 @@ scWebsocket.onmessage = (event) => {
 const scBeatWait = (beats: number, contextRootId: number) => new Promise<void>((resolve, reject) => {
   const id = crypto.randomUUID();
   scWaitCallbacks.set(id, resolve)
-  scWebsocket.send(JSON.stringify({type: 'wait', delayId: id, time: beats, coroKey: contextRootId}))
+  scWebsocket.send(JSON.stringify({type: 'wait', delayId: id, time: beats, rootId: contextRootId}))
+})
+
+const scBeatSyncWait = (contextRootId: number) => new Promise<void>((resolve, reject) => {
+  const id = crypto.randomUUID();
+  scWaitCallbacks.set(id, resolve)
+  scWebsocket.send(JSON.stringify({type: 'wait', delayId: id, time: "beat", rootId: contextRootId}))
 })
 
 
@@ -30,6 +36,14 @@ in the same function
 
 
 export class SuperColliderTimeContext extends TimeContext{
+
+  //todo api: should there be some enforcment that this only get's called once per root?
+  //alternatively, could add an option to intialize a context so that its first wait adds on
+  //a beat sync?
+  public async initialBeatSync() {
+    await scBeatSyncWait(this.rootContext!.id)
+  }
+
   public async waitSec(sec: number) {
     // console.log('wait', sec, this.id, this.time.toFixed(3))
     if (this.isCanceled) {
