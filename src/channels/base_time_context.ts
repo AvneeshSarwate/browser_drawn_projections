@@ -1,6 +1,8 @@
 
 // deno-lint-ignore-file no-explicit-any no-unused-vars no-this-alias require-await
 
+const LOG_DELAYS = false
+
 //todo cleanup - copy paste between this and channels.ts
 function dateDelay(callback: () => void, nowTime: number, delayTime: number): void {
     setTimeout(() => {
@@ -249,7 +251,7 @@ export class DateTimeContext extends TimeContext{
       const waitTime = targetTime - nowTime //todo bug - in usage in musicAgentTest sketch, time is not properly set and this becomes negative, causing problems
       if (waitTime < 0) {
         const x = 5
-        console.log("sketchLog", "negative wait time", this.debugName, nowTime.toFixed(3), targetTime.toFixed(3), waitTime.toFixed(3))
+        if(LOG_DELAYS) console.log("sketchLog", "negative wait time", this.debugName, nowTime.toFixed(3), targetTime.toFixed(3), waitTime.toFixed(3))
       }
       const waitStart = dateNow()
       setTimeout(() => {
@@ -272,7 +274,7 @@ export class DateTimeContext extends TimeContext{
 
           const waitDuration = dateNow() - waitStart
           // console.log('wait duration', (waitDuration / 1000).toFixed(3), 'wait time', waitTime.toFixed(3))
-          if(waitDuration - waitTime > 0.010) console.log('wait duration deviation greater than 10 ms')
+          if(LOG_DELAYS && waitDuration - waitTime > 0.010) console.log('wait duration deviation greater than 10 ms')
         } catch(e) {
           console.log('wait error', e)
         }

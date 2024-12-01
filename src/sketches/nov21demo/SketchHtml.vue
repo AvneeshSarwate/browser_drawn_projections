@@ -100,8 +100,11 @@ const handleEditorReady = (editor: Editor) => {
 
     console.log('shape ids', editor.getCurrentPageShapeIds())
   
+    //todo - should snapshot be loaded before or after editorReadyCallback?
     //@ts-ignore
     editor.loadSnapshot(shapes as Partial<TLEditorSnapshot>)
+
+    editor.selectNone()
     
     // editor.getSnapshot()
     snapshotLoaded = true
@@ -130,6 +133,8 @@ const defaultShapeMetadata = {
   prop1: "hello",
   prop2: 123,
 }
+//todo - is there a better way to keep the default shape metadata immutable?
+const defaultShapeMetadataImmutable = structuredClone(defaultShapeMetadata)
 const selectedShapeMetadata = reactive(defaultShapeMetadata)
 
 
@@ -137,7 +142,7 @@ const selectedShapeMetadata = reactive(defaultShapeMetadata)
 const updateSelectedShapeMetadata = (metadata: TreeRoot) => {
 
   const metaCopy = structuredClone(toRaw(metadata))
-  console.log("storage update", metadata, metadata.value, metaCopy)
+  // console.log("storage update", metadata, metadata.value, metaCopy)
 
   const shapeId = selectedShapeIds.value[0] as TLShapeId
 
@@ -151,7 +156,7 @@ const updateSelectedShapeMetadata = (metadata: TreeRoot) => {
     }])
   }
 
-  console.log('storage post set shape', editor.getShape(shapeId).meta)
+  // console.log('storage post set shape', editor.getShape(shapeId).meta)
 }
 
 onMounted(() => {
@@ -172,18 +177,11 @@ onMounted(() => {
         const shape = editor.getShape(selectedShapeIds.value[0] as TLShapeId)
         const origShapeMeta = shape.meta 
         const shapeMetadata = origShapeMeta ?? {}
-        const shapeMetadataClone = structuredClone({...defaultShapeMetadata, ...shapeMetadata})
+        const shapeMetadataClone = structuredClone({...defaultShapeMetadataImmutable, ...shapeMetadata})
         console.log('storage shapeMetadataClone', selectedShapeIds.value[0], origShapeMeta, defaultShapeMetadata, shapeMetadataClone)
         // selectedShapeMetadata.value = shapeMetadataClone
         Object.assign(selectedShapeMetadata, shapeMetadataClone)
         console.log('storage post selected shape metadata', selectedShapeMetadata)
-
-        /* todo meta auto ui
-        - initial shape being selected is still wrong
-        - when selecting a shape with no metadata after setting the metadata of another shape,
-          the new shape shows old shape's metadata instead of the default metadata
-          
-        */
       }
     }
     reactRoot.value.onmouseout = () => {
