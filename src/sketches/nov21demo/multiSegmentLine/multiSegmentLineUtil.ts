@@ -412,8 +412,8 @@ export class MultiSegmentLineTool extends StateNode {
     if(this.shapeId) {
       const shape = editor.getShape<MultiSegmentLineShape>(this.shapeId)!;
       editor.updateShapes([{
-      id: this.shapeId,
-      type: "multiSegmentLine",
+        id: this.shapeId,
+        type: "multiSegmentLine",
         props: {...shape.props, isEditing: true},
       }])
     }

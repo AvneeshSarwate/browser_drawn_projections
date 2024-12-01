@@ -1,8 +1,13 @@
 <script lang="ts" setup>
-import { computed, ref } from 'vue'
+import { computed, ref, toRaw } from 'vue'
 import { type TreeProp } from '@/stores/undoCommands'
 
-const props = defineProps<{ objectToEdit: TreeProp }>()
+type AutoUIProps = {
+  objectToEdit: TreeProp,
+  postEditCallback?: (objectToEdit: TreeProp) => void
+}
+
+const props = defineProps<AutoUIProps>()
 
 //todo api - add arrays to the tree prop type
 //todo - add a panel for adjusting the display properties AutoUI view (make it like unity inspector)
@@ -27,6 +32,7 @@ const renderInputs = computed(() => {
 const updateObject = (event: Event, valType: string) => {
   const target = event.target as HTMLInputElement
   objectToEdit.value[target.id] = valType === 'number' ? parseFloat(target.value) : target.value
+  props.postEditCallback?.(objectToEdit.value)
 }
 </script>
   

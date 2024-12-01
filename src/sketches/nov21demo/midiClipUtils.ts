@@ -70,8 +70,8 @@ const clipGetter1 = (noteLength: number, melodySpeed: number) => {
   const clip = clip1()
   clip.notes = clip.notes.map(n => ({...n, duration: n.duration * noteLength}))
   const clipScaled = clip.scale(clip.notes.length < 8 ? melodySpeed: melodySpeed * 0.5)
-  console.log('### SCALE', scale.getMultiple(Array.from({ length: 5 }, () => Math.floor(Math.random() * 8))));
-  console.log()
+  // console.log('### SCALE', scale.getMultiple(Array.from({ length: 5 }, () => Math.floor(Math.random() * 8))));
+  // console.log()
   return clipScaled
 }
 const clipGetter2 = (noteLength: number, melodySpeed: number) => {

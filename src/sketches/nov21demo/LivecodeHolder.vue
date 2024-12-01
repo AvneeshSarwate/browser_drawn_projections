@@ -567,10 +567,10 @@ onMounted(() => {
           //   console.log("session store change", itemId, item)
           // }
           if (item[0]?.selectedShapeIds) {
-            console.log("selected shape ids", item[0].selectedShapeIds)
+            // console.log("selected shape ids", item[0].selectedShapeIds)
           }
           if (item[0]?.hoveredShapeId) {
-            console.log("hovered shape id", item[0].hoveredShapeId)
+            // console.log("hovered shape id", item[0].hoveredShapeId)
           }
           //for arbitrary shape related metadata, define a default value/shape property,
           //and then when you open the metadata editor, initialize with the default value.

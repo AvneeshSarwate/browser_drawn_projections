@@ -13,6 +13,9 @@
   <div id="selectedShapeIds">
     Selected shape ids: {{ selectedShapeIds }}
   </div>
+  <div id="selectedShapeMetadata">
+    <AutoUI :object-to-edit="selectedShapeMetadata" :post-edit-callback="updateSelectedShapeMetadata" />
+  </div>
   <button @click="downloadSnapshot">Download snapshot</button>
   <div id="canvasContainer">
     <!-- <h3>P5 sketch rendering freehand tldraw shapes</h3> -->
@@ -31,13 +34,15 @@
 
 <script setup lang="ts">
 
-import { onMounted, onBeforeUnmount, ref, inject, shallowRef } from 'vue';
+import { onMounted, onBeforeUnmount, ref, inject, shallowRef, toRaw, reactive } from 'vue';
 import { createRoot, type Root } from 'react-dom/client';
 // import { MyTldrawWrapper, TestComponent, SimpleComponent } from './tldrawWrapper';
 import { MyTldrawWrapper } from './tldrawWrapperPlain';
-import { type Editor, type TLEditorSnapshot } from 'tldraw';
+import { type Editor, type TLEditorSnapshot, type TLShape, type TLShapeId } from 'tldraw';
 import { appStateName, type TldrawTestAppState, resolution } from './appState';
 import { shapes } from './threeShapes';
+import type { TreeRoot } from '@/stores/undoCommands';
+import AutoUI from '@/components/AutoUI.vue';
 
 const reactRoot = ref<HTMLElement | null>(null);
 let root: Root | null = null;
@@ -121,6 +126,33 @@ const downloadSnapshot = () => {
 }
 
 const selectedShapeIds = ref<string[]>([])
+const defaultShapeMetadata = {
+  prop1: "hello",
+  prop2: 123,
+}
+const selectedShapeMetadata = reactive(defaultShapeMetadata)
+
+
+
+const updateSelectedShapeMetadata = (metadata: TreeRoot) => {
+
+  const metaCopy = structuredClone(toRaw(metadata))
+  console.log("storage update", metadata, metadata.value, metaCopy)
+
+  const shapeId = selectedShapeIds.value[0] as TLShapeId
+
+  //@ts-ignore
+  const editor: Editor = window.tldrawEditor
+  if(editor && selectedShapeIds.value.length > 0) {
+    editor.updateShapes([{
+      id: shapeId,
+      meta: metaCopy,
+      type: "multiSegmentLine",
+    }])
+  }
+
+  console.log('storage post set shape', editor.getShape(shapeId).meta)
+}
 
 onMounted(() => {
   console.log('reactRoot.value', reactRoot.value);
@@ -134,6 +166,25 @@ onMounted(() => {
 
       //@ts-ignore
       selectedShapeIds.value = window.tldrawEditor?.getSelectedShapeIds() ?? []
+      if(selectedShapeIds.value.length > 0) {
+        //@ts-ignore
+        const editor: Editor = window.tldrawEditor
+        const shape = editor.getShape(selectedShapeIds.value[0] as TLShapeId)
+        const origShapeMeta = shape.meta 
+        const shapeMetadata = origShapeMeta ?? {}
+        const shapeMetadataClone = structuredClone({...defaultShapeMetadata, ...shapeMetadata})
+        console.log('storage shapeMetadataClone', selectedShapeIds.value[0], origShapeMeta, defaultShapeMetadata, shapeMetadataClone)
+        // selectedShapeMetadata.value = shapeMetadataClone
+        Object.assign(selectedShapeMetadata, shapeMetadataClone)
+        console.log('storage post selected shape metadata', selectedShapeMetadata)
+
+        /* todo meta auto ui
+        - initial shape being selected is still wrong
+        - when selecting a shape with no metadata after setting the metadata of another shape,
+          the new shape shows old shape's metadata instead of the default metadata
+          
+        */
+      }
     }
     reactRoot.value.onmouseout = () => {
       appState.tldrawEditor?.value?.ed.blur()

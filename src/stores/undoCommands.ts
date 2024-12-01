@@ -351,6 +351,9 @@ export type TreeProp = {
   [key: string]: string | number | boolean | TreeProp;
 };
 
+export type TreeRoot = {
+  [key: string]: TreeProp
+}
 
 
 /**
