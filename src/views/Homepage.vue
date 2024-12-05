@@ -19,14 +19,22 @@ const nonSpecialSketches = sketchNames.filter(name => !specialSketchNames.includ
       <br>
 
       <div>
-        We are building tools for creating art in the browser. The source code and early experiments are
+        We are building tools for creating art in the browser (mostly in the form of Typescript libraries). Our core goal is to ease the technical difficulties in bridging the gap between music, generative graphics, and real-time interaction. The source code and early experiments are
         <a href="https://github.com/avneeshsarwate/browser_drawn_projections">here</a>
       </div>
 
       <br>
 
       <div>
-        If you want to read about the motivation and design of the library, you can read about it <a href="https://docs.google.com/presentation/d/1SzhiWNNl4-cxMOKpqOuUeGhP_3eecu0_Rg3aw3Hg2Kg">here</a>
+        This talk/demo describes and shows some of what is possible with our tools <a href="https://youtu.be/h1oposhEc2o">(Video).</a>
+        <br>
+        The event was organized between <a href="https://www.newinc.org/">New Inc</a> and <a href="https://www.cprnyc.org/">The Center for Performance Research</a>, and hosted by CPR at their venue.
+      </div>
+
+      <br>
+
+      <div>
+        If you want to read about the deeper motivations and design philosophy behind the tools we are making, you can read about it <a href="https://docs.google.com/presentation/d/1SzhiWNNl4-cxMOKpqOuUeGhP_3eecu0_Rg3aw3Hg2Kg">here</a>. 
       </div>
       
       <br>
