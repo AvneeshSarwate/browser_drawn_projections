@@ -5,8 +5,8 @@ import { inject, onMounted, onUnmounted } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
-import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
-import { faustAudioContext, FaustTestVoice, MPEPolySynth } from '@/music/mpeSynth';
+import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri, naiveSleep } from '@/channels/channels';
+import { FAUST_AUDIO_CONTEXT_READY, faustAudioContext, FaustTestVoice, MPEPolySynth } from '@/music/mpeSynth';
 import { Scale } from '@/music/scale';
 
 const appState = inject<TemplateAppState>(appStateName)!!
@@ -43,7 +43,7 @@ const scale = new Scale()
 
 let audioStarted = false
 
-onMounted(() => {
+onMounted(async () => {
   try {
 
     const p5i = appState.p5Instance!!
@@ -52,24 +52,22 @@ onMounted(() => {
 
     const initialCiclePos = appState.circles.list.map(c => ({ x: c.x, y: c.y }))
 
+    await FAUST_AUDIO_CONTEXT_READY
 
-    const synth = new MPEPolySynth(FaustTestVoice)
+    const synth = new MPEPolySynth(FaustTestVoice, 16, false, true)
+    await naiveSleep(100) //need this sleep to allow all of the faust voice preallocation async functions to complete
+    //todo api - need a promise on the MPEPolySynth to know when the voices are ready
 
-    document.body.addEventListener('click', () => {
-      if (audioStarted) return
-      faustAudioContext.resume()
-      const playNoteLoop = launchLoop(async (ctx) => {
-        while (true) {
-          const randDegree = Math.floor(Math.random() * 8)
-          const note0 = scale.getByIndex(randDegree)
-          const note1 = scale.getByIndex(randDegree + 2)
-          playNote(note0, 100, 0.5, synth, ctx)
-          playNote(note1, 100, 0.5, synth, ctx)
-          console.log("played notes", note0, note1)
-          await ctx.waitSec(1)
-        }
-      })
-      audioStarted = true
+    const playNoteLoop = launchLoop(async (ctx) => {
+      while (true) {
+        const randDegree = Math.floor(Math.random() * 8)
+        const note0 = scale.getByIndex(randDegree)
+        const note1 = scale.getByIndex(randDegree + 2)
+        playNote(note0, 100, 0.5, synth, ctx)
+        playNote(note1, 100, 0.5, synth, ctx)
+        console.log("played notes", note0, note1)
+        await ctx.waitSec(1)
+      }
     })
 
 

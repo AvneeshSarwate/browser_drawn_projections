@@ -14,6 +14,8 @@ export type { DateTimeContext, TimeContext }
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t
 
 
+export const naiveSleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms))
+
 export class BrowserTimeContext extends DateTimeContext {
   public waitFrame(): Promise<void> {
     if (this.isCanceled) {

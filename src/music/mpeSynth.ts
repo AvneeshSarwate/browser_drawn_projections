@@ -69,7 +69,7 @@ export class MPEPolySynth<T extends MPEVoiceGraph> {
   params: Record<NumberKeys<T>, SynthParam>
 
   //todo api - add a "preallocateVoices" flag for MPEPolySynth if voice graphs are heavy
-  constructor(vGraph: Constructor<T>, maxVoices: number = 32, isActualMpe: boolean = false) {
+  constructor(vGraph: Constructor<T>, maxVoices: number = 32, isActualMpe: boolean = false, preallocateVoices: boolean = false) {
     this.vGraphCtor = vGraph
     this.maxVoices = maxVoices
     this.voices = new Map()
@@ -81,6 +81,13 @@ export class MPEPolySynth<T extends MPEVoiceGraph> {
     
     if(isActualMpe && maxVoices > 14) {
       throw new Error("MPEPolySynth: maxVoices must be less than or equal to 14 for actual MPE")
+    }
+
+    if(preallocateVoices) {
+      for(let i = 0; i < maxVoices; i++) {
+        const voice = new this.vGraphCtor(i)
+        this.voices.set(i, {isOn: false, voice})
+      }
     }
   }
 
@@ -701,6 +708,16 @@ process = os.sawtooth(freq) * amp * env : filter;
 await generator.compile(compiler, name, code, argv.join(" "));
 export const faustAudioContext = new AudioContext();
 
+//a promise that resolves after a click on the document body and resumes the audio context
+export const FAUST_AUDIO_CONTEXT_READY = new Promise<void>(resolve => {
+  const resume = () => {
+    faustAudioContext.resume()
+    resolve()
+    document.body.removeEventListener('click', resume)
+  }
+  document.body.addEventListener('click', resume)
+})
+
 export class FaustTestVoice implements MPEVoiceGraph {
   id: number
   node: Partial<FaustMonoAudioWorkletNode> =  {setParamValue: (param: string, value: number) => {}, getParamValue: (param: string) => 0}
@@ -726,7 +743,7 @@ export class FaustTestVoice implements MPEVoiceGraph {
   }
 
   noteOff(): void {
-    this.node.setParamValue("/oscillator/Gate", 1)
+    this.node.setParamValue("/oscillator/Gate", 0)
 
     // // Call the callback after the release time
     // setTimeout(() => {
@@ -736,11 +753,11 @@ export class FaustTestVoice implements MPEVoiceGraph {
     // }, Number(this.ampEnv.release) * 1000) 
   }
 
-  //todo - do you need voiceFinishedCB? might be too niche for template script
-  //seems useful to have "release" value be generally accessible for post-note logic, but maybe also too niche for template script
+  //do you need voiceFinishedCB? might be too niche for template script
+  //todo need to have "release" value available at API level for proper voice lifecycle management (eg, don't want to accidentally reuse a voice that is still in release)
 
   forceFinish(): void {
-    //todo - does forceFinish need to be on the base class? seems only useful as far as voiceFinishedCB
+    //todo - need to implement forceFinish properly for voice stealing - might need a per voice global gain object to manage voice stealing?
 
 
     // if (this.voiceFinishedCB) {
