@@ -41,8 +41,6 @@ const playNote = (note: number, velocity: number, beats: number, synth: MPEPolyS
 
 const scale = new Scale()
 
-let audioStarted = false
-
 onMounted(async () => {
   try {
 
@@ -55,9 +53,9 @@ onMounted(async () => {
     await FAUST_AUDIO_CONTEXT_READY
 
     const synth = new MPEPolySynth(FaustTestVoice, 16, false, true)
-    await naiveSleep(100) //need this sleep to allow all of the faust voice preallocation async functions to complete
+    // await naiveSleep(100) //need this sleep to allow all of the faust voice preallocation async functions to complete
     //todo api - need a promise on the MPEPolySynth to know when the voices are ready
-
+    await synth.synthReady()
     const playNoteLoop = launchLoop(async (ctx) => {
       while (true) {
         const randDegree = Math.floor(Math.random() * 8)
