@@ -36,7 +36,8 @@ export const sketchNames = [
   'fmSynthBasics',
   'nov21demo',
   'ishitaGestures',
-  'scTimeTest'
+  'scTimeTest',
+  'faustSynthTest'
 ]
 
 const sketchRoutes = sketchNames.map(name => {
