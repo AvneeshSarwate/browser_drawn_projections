@@ -59,6 +59,7 @@ onMounted(async () => {
     //todo api - need a promise on the MPEPolySynth to know when the voices are ready
     await synth.synthReady()
     const playNoteLoop = launchLoop(async (ctx) => {
+      ctx.bpm = 120
       ctx.branch(async (ctx) => {
         while (true) {
           synth.setParam('Filter', 300 + sinN(ctx.time*0.2) * 1000)
@@ -70,9 +71,12 @@ onMounted(async () => {
         const note0 = scale.getByIndex(randDegree)
         const note1 = scale.getByIndex(randDegree + 2)
         playNote(note0, 100, 0.5, synth, ctx)
-        playNote(note1, 100, 0.5, synth, ctx)
+        ctx.branch(async (ctx) => {
+          await ctx.wait(0.01 + sinN(ctx.time*0.2) * 0.5)
+          playNote(note1, 100, 0.5, synth, ctx)
+        })
         console.log("played notes", note0, note1)
-        await ctx.waitSec(1)
+        await ctx.wait(1)
       }
     })
 

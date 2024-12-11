@@ -135,6 +135,7 @@ export class MPEPolySynth<T extends MPEVoiceGraph> {
 
   //extra id parameter here to make it easy to coordinate an instance with actual external midi controllers, who will provide their own voice id
   //todo testing - see how this external id plays with voice stealing and voice allocation
+  //todo api - add a dict param that allows for setting params by name
   noteOn(note: number, velocity: number, pressure: number, slide: number, id?: number): T {
     let voice: T //the voice returned at the end
 
