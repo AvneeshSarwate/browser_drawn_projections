@@ -6,8 +6,10 @@ import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri, naiveSleep } from '@/channels/channels';
-import { FAUST_AUDIO_CONTEXT_READY, faustAudioContext, FaustTestVoice, MPEPolySynth } from '@/music/mpeSynth';
+import { FAUST_AUDIO_CONTEXT_READY, FaustTestVoice, MPEPolySynth } from '@/music/mpeSynth';
+import { FaustTestVoice as FaustOscillatorVoice } from '@/music/FaustSynthTemplate';
 import { Scale } from '@/music/scale';
+import { dateNow } from '@/channels/base_time_context';
 
 const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
@@ -31,7 +33,7 @@ function circleArr(n: number, rad: number, p: p5) {
   return xyZip(0, cos1, sin1, n).map(({ x, y }) => ({x: x*rad + center.x, y: y*rad + center.y}))
 }
 
-const playNote = (note: number, velocity: number, beats: number, synth: MPEPolySynth<FaustTestVoice>, ctx: TimeContext) => {
+const playNote = (note: number, velocity: number, beats: number, synth: MPEPolySynth<FaustOscillatorVoice>, ctx: TimeContext) => {
   ctx.branch(async (ctx) => {
     const voice = synth.noteOn(note, velocity, 0, 0)
     await ctx.wait(beats)
@@ -52,11 +54,17 @@ onMounted(async () => {
 
     await FAUST_AUDIO_CONTEXT_READY
 
-    const synth = new MPEPolySynth(FaustTestVoice, 16, false, true)
+    const synth = new MPEPolySynth(FaustOscillatorVoice, 16, false, true)
     // await naiveSleep(100) //need this sleep to allow all of the faust voice preallocation async functions to complete
     //todo api - need a promise on the MPEPolySynth to know when the voices are ready
     await synth.synthReady()
     const playNoteLoop = launchLoop(async (ctx) => {
+      ctx.branch(async (ctx) => {
+        while (true) {
+          synth.setParam('Filter', 300 + sinN(ctx.time*0.2) * 1000)
+          await ctx.waitSec(0.01)
+        }
+      })
       while (true) {
         const randDegree = Math.floor(Math.random() * 8)
         const note0 = scale.getByIndex(randDegree)

@@ -126,12 +126,12 @@ export class FaustTestVoice implements MPEVoiceGraph {
   }
 
   get Filter(): number {
-    return this.node.getParamValue("/FaustSynthVoice/Filter");
+    return this.node.getParamValue("/oscillator/Filter");
   }
 
   @param(20, 10000, 3000)
   set Filter(value: number) {
-    this.node.setParamValue("/FaustSynthVoice/Filter", value);
+    this.node.setParamValue("/oscillator/Filter", value);
   }
 
 }
