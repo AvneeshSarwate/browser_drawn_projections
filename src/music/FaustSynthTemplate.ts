@@ -1,9 +1,11 @@
+
 import { FaustMonoDspGenerator, FaustMonoAudioWorkletNode } from "@grame/faustwasm";
 import { argv, compiler, f2m, faustAudioContext, param, type MPEVoiceGraph, m2f } from "./mpeSynth";
 
 const generator = new FaustMonoDspGenerator();
 const name = "oscillator"
 const code = `
+
 import("stdfaust.lib");
 
 //basic parameters all voices need to have
@@ -19,6 +21,7 @@ filterFreq = hslider("Filter", 3000, 20, 10000, 0.1);
 env = gate : en.adsr(0.01, 0.1, 0.8, release);
 filter = fi.lowpass(2, filterFreq);
 process = os.sawtooth(freq) * vAmp * polyGain * env : filter;
+
 `;
 await generator.compile(compiler, name, code, argv.join(" "));
 
@@ -122,12 +125,14 @@ export class FaustTestVoice implements MPEVoiceGraph {
     this._pressure = value
   }
 
-  get filterFreq(): number {
-    return this.node.getParamValue("/oscillator/Filter")
+  get Filter(): number {
+    return this.node.getParamValue("/FaustSynthVoice/Filter");
   }
 
-  @param(20, 2000, 440)
-  set filterFreq(value: number) {
-    this.node.setParamValue("/oscillator/Filter", value)
+  @param(20, 10000, 3000)
+  set Filter(value: number) {
+    this.node.setParamValue("/FaustSynthVoice/Filter", value);
   }
+
 }
+
