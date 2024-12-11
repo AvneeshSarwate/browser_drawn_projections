@@ -36,6 +36,8 @@ interface VoiceGraph {
   forceFinish(): void
   dispose(): void
   ready(): Promise<void>
+  release: number
+  polyGain: number
   //todo api - add a gain param for polyphonic volume management
 }
 
@@ -178,6 +180,7 @@ export class MPEPolySynth<T extends MPEVoiceGraph> {
   noteOff(voice: VoiceGraph): void {
     this.voices.forEach(({voice: v}, k) => {
       if (v === voice) {
+        //todo - wrap with setTimeout based on voice release time?
         v.noteOff()
         this.voices.set(k, {isOn: false, voice: v})
       }
@@ -204,7 +207,7 @@ export type SynthParam = SynthParamDef & { value?: number }
 
 
 //a decorator for parameters of a setter of mpeVoiceGraph that sets the high/low limits
-function param(low: number, high: number, defaultVal: number) {
+export function param(low: number, high: number, defaultVal: number) {
   return function(setter: (value: number) => void, context: ClassSetterDecoratorContext) {
 
     //add setter name, low, high to decorator metadata
@@ -232,6 +235,7 @@ export class FatOscillatorVoice implements MPEVoiceGraph {
   private distortionNode: Tone.Distortion
   private ampEnv: Tone.AmplitudeEnvelope
   private outputGain: Tone.Gain
+  private _polyGain: Tone.Gain
   private _pitch: number
   private _pressure: number
   private _slide: number
@@ -255,6 +259,7 @@ export class FatOscillatorVoice implements MPEVoiceGraph {
       release: 0.05
     })
     this.outputGain = new Tone.Gain(0.1)
+    this._polyGain = new Tone.Gain(0.1)
 
     // todo api - have output of all voices be a raw webAudio gain node (RWGN), which all get merged into a RWGN in the mpeSynth
     // this allows MPEVoiceGraphs to be implemented with either Tone.js or raw webAudio
@@ -263,7 +268,7 @@ export class FatOscillatorVoice implements MPEVoiceGraph {
     // Tone.connect(this.outputGain, rawGain)
     // rawGain can also be at the end of the chain() call
 
-    this.oscillator.chain(this.distortionNode, this.filter, this.ampEnv, this.outputGain, Tone.getDestination())
+    this.oscillator.chain(this.distortionNode, this.filter, this.ampEnv, this.outputGain, this._polyGain, Tone.getDestination())
 
     this._pitch = 0
     this._pressure = 0
@@ -272,6 +277,14 @@ export class FatOscillatorVoice implements MPEVoiceGraph {
 
   ready(): Promise<void> {
     return new Promise<void>(resolve => { resolve() })
+  }
+
+  set polyGain(value: number) {
+    this._polyGain.gain.value = value
+  }
+
+  get polyGain(): number {
+    return this._polyGain.gain.value
   }
 
   get pitch(): number {
@@ -451,6 +464,9 @@ export class MidiMPEVoiceGraph implements MPEVoiceGraph {
     this.pitchBendRange = pitchBendRange
   }
 
+  release: number = 0.3 //want this to be the same has your external midi synth??
+  polyGain: number = 0.1 //unused in this context
+
   ready(): Promise<void> {
     return new Promise<void>(resolve => { resolve() })
   }
@@ -572,6 +588,7 @@ function refreshElemVoiceRegistry() {
 
 const midi2freq = (midi: number) => Tone.Midi(midi).toFrequency()
 
+//unused
 export class ElementaryBasicVoice implements MPEVoiceGraph {
 
   private pitchSetter: (value: number) => void
@@ -580,6 +597,8 @@ export class ElementaryBasicVoice implements MPEVoiceGraph {
   private elementaryId: string
   private _pitch: number = 0
   id: number
+
+  release: number = 0.3 //as hardcoded in the adsr in constructor
 
   constructor(id: number) {
     this.id = id
@@ -597,6 +616,8 @@ export class ElementaryBasicVoice implements MPEVoiceGraph {
     elemVoiceRegistry.set(this.elementaryId, outNode)
     refreshElemVoiceRegistry()
   }
+
+  polyGain = 1 //unused here, since we aren't really using this implemenation
 
   ready(): Promise<void> {
     return new Promise<void>(resolve => { resolve() })
@@ -707,24 +728,7 @@ const libFaust = new LibFaust(faustModule);
 window.libFaust = libFaust;
 console.log(libFaust.version());
 export const compiler = new FaustCompiler(libFaust);
-const argv = ["-I", "libraries/"];
-
-
-const generator = new FaustMonoDspGenerator();
-const name = "oscillator"
-const code = `
-import("stdfaust.lib");
-
-gate = button("Gate");
-freq = hslider("Frequency", 440, 20, 2000, 1);
-amp = hslider("Amplitude", 0.5, 0, 1, 0.01);
-
-env = gate : en.adsr(0.01, 0.1, 0.8, 0.3);
-filterFreq = hslider("Filter", 3000, 20, 10000, 0.1);
-filter = fi.lowpass(2, filterFreq);
-process = os.sawtooth(freq) * amp * env : filter;
-`;
-await generator.compile(compiler, name, code, argv.join(" "));
+export const argv = ["-I", "libraries/"];
 export const faustAudioContext = new AudioContext();
 
 //a promise that resolves after a click on the document body and resumes the audio context
@@ -736,6 +740,29 @@ export const FAUST_AUDIO_CONTEXT_READY = new Promise<void>(resolve => {
   }
   document.body.addEventListener('click', resume)
 })
+
+
+
+const generator = new FaustMonoDspGenerator();
+const name = "oscillator"
+const code = `
+import("stdfaust.lib");
+
+//basic parameters all voices need to have
+gate = button("Gate");
+freq = hslider("Frequency", 440, 20, 2000, 1);
+vAmp = hslider("VelocityAmp", 0.7, 0, 1, 0.01);
+release = hslider("Release", 0.3, 0, 1, 0.01);
+polyGain = hslider("PolyGain", 0.7, 0, 1, 0.01);
+
+//custom parameters for each voice
+filterFreq = hslider("Filter", 3000, 20, 10000, 0.1);
+
+env = gate : en.adsr(0.01, 0.1, 0.8, release);
+filter = fi.lowpass(2, filterFreq);
+process = os.sawtooth(freq) * vAmp * polyGain * env : filter;
+`;
+await generator.compile(compiler, name, code, argv.join(" "));
 
 export class FaustTestVoice implements MPEVoiceGraph {
   id: number
@@ -765,7 +792,24 @@ export class FaustTestVoice implements MPEVoiceGraph {
     this.pitch = note
     this._pressure = pressure
     this._slide = slide
+    this.node.setParamValue("oscillator/VelocityAmp", velocity)
     this.node.setParamValue("/oscillator/Gate", 1)
+  }
+
+  get polyGain(): number {
+    return this.node.getParamValue("/oscillator/PolyGain")
+  }
+
+  set polyGain(value: number) {
+    this.node.setParamValue("/oscillator/PolyGain", value)
+  }
+
+  get release(): number {
+    return this.node.getParamValue("/oscillator/Release")
+  }
+
+  set release(value: number) {
+    this.node.setParamValue("/oscillator/Release", value)
   }
 
   noteOff(): void {
@@ -831,5 +875,5 @@ export class FaustTestVoice implements MPEVoiceGraph {
 }
 
 // midi to frequency calculation
-const m2f = (m : number) => 440 * (2**((m-69)/12))
-const f2m = (f: number) => ( 12 * Math.log(f / 220.0) / Math.log(2.0) ) + 57.01
+export const m2f = (m : number) => 440 * (2**((m-69)/12))
+export const f2m = (f: number) => ( 12 * Math.log(f / 220.0) / Math.log(2.0) ) + 57.01
