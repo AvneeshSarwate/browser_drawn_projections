@@ -763,6 +763,8 @@ env = gate : en.adsr(0.01, 0.1, 0.8, release);
 filter = fi.lowpass(2, filterFreq);
 process = os.sawtooth(freq) * vAmp * polyGain * env : filter;
 `;
+
+//todo - wrap this in some callback or someting so it doesn't block the main thread?
 await generator.compile(compiler, name, code, argv.join(" "));
 
 export class FaustTestVoice implements MPEVoiceGraph {

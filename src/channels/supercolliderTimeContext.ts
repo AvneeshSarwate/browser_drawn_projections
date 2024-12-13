@@ -1,4 +1,4 @@
-import { CancelablePromisePoxy, createAndLaunchContext, dateNow, TimeContext, type LoopHandle } from "./base_time_context"
+import { CancelablePromisePoxy, createAndLaunchContext, TimeContext, type LoopHandle } from "./base_time_context"
 
 
 const scWebsocket = new WebSocket('ws://localhost:57130')
@@ -68,12 +68,10 @@ export class SuperColliderTimeContext extends TimeContext{
           ctx.time = targetTime
 
           ctx.abortController.signal.removeEventListener('abort', listener)
+          
           resolve()
-
-          // todo - in progress
           if (this.isCanceled) resolve()
           else reject()
-          // console.log("setTimeout", this.debugName, this.isCanceled)
           if (this.isCanceled) return 
           
           this.rootContext!.mostRecentDescendentTime = targetTime

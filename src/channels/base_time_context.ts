@@ -16,6 +16,66 @@ export const beatNow = (bpm: number) => dateNow() * bpm / 60
 const now = dateNow
 const delayFunc = dateDelay
 
+
+
+export class TempoClock {
+  private _bpm: number = 60
+  private startTime: number = 0
+  private callbackMap: Map<string, () => void> = new Map()
+  private callbackBeats: Map<string, number> = new Map()
+  private callbackTimeoutIds: Map<string, number> = new Map()
+
+  constructor(bpm: number, startTime: number | undefined = undefined) {
+    this._bpm = bpm
+    this.startTime = startTime ?? dateNow()
+  }
+
+  public get time(): number {
+    return dateNow() - this.startTime
+  }
+
+  public get beats(): number {
+    return this.time * this._bpm / 60
+  }
+
+  public get bpm(): number {
+    return this._bpm
+  }
+
+  public set bpm(bpm: number) {
+    this._bpm = bpm
+    this.callbackMap.forEach((callback, callbackId) => {
+      const beats = this.callbackBeats.get(callbackId)!
+      const time = beats * 60 / this._bpm
+      const deltaTime = time - this.time
+      const timeoutId = this.callbackTimeoutIds.get(callbackId)!
+      clearTimeout(timeoutId)
+      this.callbackTimeoutIds.delete(callbackId)
+      this.callbackTimeoutIds.set(callbackId, setTimeout(() => {
+        this.callbackMap.delete(callbackId)
+        this.callbackBeats.delete(callbackId)
+        this.callbackTimeoutIds.delete(callbackId)
+        callback()
+      }, deltaTime * 1000))
+    })
+  }
+
+  scheduleAbsBeats(beats: number, callback: () => void) {
+    const time = beats * 60 / this._bpm
+    const deltaTime = time - this.time
+    const callbackId = crypto.randomUUID()
+    this.callbackMap.set(callbackId, callback)
+    this.callbackBeats.set(callbackId, beats)
+    const timeoutId = setTimeout(() => {
+      this.callbackMap.delete(callbackId)
+      this.callbackBeats.delete(callbackId)
+      this.callbackTimeoutIds.delete(callbackId)
+      callback()
+    }, deltaTime * 1000)
+    this.callbackTimeoutIds.set(callbackId, timeoutId)
+  }
+}
+
 export class CancelablePromisePoxy<T> implements Promise<T> {
   public promise?: Promise<T>
   public abortController: AbortController
@@ -64,9 +124,10 @@ export function createAndLaunchContext<T, C extends TimeContext>(block: (ctx: C)
   newContext.debugName = debugName
   promiseProxy.timeContext = newContext
   if (parentContext) {
-    newContext.rootContext = parentContext.rootContext
-    newContext.bpm = parentContext.bpm
-    parentContext.childContexts.add(newContext)
+    // newContext.rootContext = parentContext.rootContext
+    // newContext.bpm = parentContext.bpm
+    // parentContext.childContexts.add(newContext)
+    parentContext.connectChildContext(newContext)
   } else {
     newContext.rootContext = newContext
   }
@@ -102,6 +163,9 @@ export type LoopHandle = {
 export abstract class TimeContext {
   public rootContext: TimeContext | undefined
   public mostRecentDescendentTime: number = 0
+  public get mostRecentDescendentBeats(): number {
+    return this.mostRecentDescendentTime * this.bpm / 60
+  }
   public debugName = ""
   public abortController: AbortController
   public time: number
@@ -117,7 +181,13 @@ export abstract class TimeContext {
     return this.progTime * this.bpm / 60
   }
   public id: number
-  public bpm: number = 60
+  private _bpm: number = 60;
+  public get bpm(): number {
+    return this._bpm;
+  }
+  public set bpm(value: number) {
+    this._bpm = value;
+  }
   public cancelPromise: CancelablePromisePoxy<any>
   public childContexts: Set<TimeContext> = new Set()
 
@@ -131,6 +201,12 @@ export abstract class TimeContext {
       console.log('sketchLog aborted timecontext', this.debugName)
     })
     this.cancelPromise = cancelPromise
+  }
+
+  public connectChildContext(childContext: TimeContext) {
+    childContext.rootContext = this.rootContext
+    childContext.bpm = this.bpm
+    this.childContexts.add(childContext)
   }
 
   /**
@@ -206,6 +282,7 @@ export abstract class TimeContext {
       const listener = () => { reject(); console.log('abort') }
       ctx.abortController.signal.addEventListener('abort', listener)
       //resolve the promise on the call to requestanimationframe
+
       requestAnimationFrame(() => {
         ctx.abortController.signal.removeEventListener('abort', listener)
         resolve()
@@ -258,16 +335,13 @@ export class DateTimeContext extends TimeContext{
         try {
           // ctx.time += sec
 
-          //todo - in progress
           ctx.time = targetTime
 
           ctx.abortController.signal.removeEventListener('abort', listener)
+          
           resolve()
-
-          // todo - in progress
           if (this.isCanceled) resolve()
           else reject()
-          // console.log("setTimeout", this.debugName, this.isCanceled)
           if (this.isCanceled) return 
           
           this.rootContext!.mostRecentDescendentTime = targetTime
@@ -280,5 +354,59 @@ export class DateTimeContext extends TimeContext{
         }
       }, waitTime * 1000)
     })
+  }
+}
+
+
+export class TempoClockTimeContext extends TimeContext {
+  public tempoClock: TempoClock
+  constructor(time: number, ab: AbortController, id: number, cancelPromise: CancelablePromisePoxy<any>) {
+    super(time, ab, id, cancelPromise)
+    this.tempoClock = new TempoClock(60, time)
+  }
+
+  override connectChildContext(childContext: TempoClockTimeContext): void {
+    super.connectChildContext(childContext)
+    childContext.tempoClock = new TempoClock(this.tempoClock.bpm, this.tempoClock.time)
+  }
+
+  public override async wait(beats: number): Promise<void> {
+    if (this.isCanceled) {
+      console.log(this.debugName, 'context is canceled')
+      return
+    }
+
+    const targetBeats = Math.max(this.rootContext!.mostRecentDescendentBeats, this.beats) + beats
+    const ctx = this
+
+    return new Promise((resolve, reject) => {
+      const listener = () => { reject(); console.log('abort') }
+      ctx.abortController.signal.addEventListener('abort', listener)
+
+      this.tempoClock.scheduleAbsBeats(targetBeats, () => {
+        try {
+          ctx.time = targetBeats * 60 / this.tempoClock.bpm
+          ctx.abortController.signal.removeEventListener('abort', listener)
+          
+          //todo - need to debug this pattern across all context implementations
+          //this implementation is probably the one that is correct
+          if (!this.isCanceled) resolve()
+          else reject()
+          if (this.isCanceled) return 
+          
+          this.rootContext!.mostRecentDescendentTime = ctx.time
+        } catch(e) {
+          reject(e)
+        }
+      })
+    })
+  }
+
+  public override set bpm(bpm: number) {
+    this.tempoClock.bpm = bpm
+  }
+
+  override waitSec(sec: number): Promise<void> {
+    return this.wait(sec * this.tempoClock.bpm / 60)
   }
 }
