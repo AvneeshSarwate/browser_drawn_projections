@@ -6,6 +6,7 @@ import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
+import { dLydianNoteStrings, subwayColors } from './constants';
 
 const appState = inject<ToneSeqAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
@@ -29,7 +30,16 @@ function circleArr(n: number, rad: number, p: p5) {
   return xyZip(0, cos1, sin1, n).map(({ x, y }) => ({x: x*rad + center.x, y: y*rad + center.y}))
 }
 
-const cMajNoteStrings = ['C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4', 'C5', 'D5', 'E5', 'F5', 'G5', 'A5', 'B5', 'C6']
+const noteSequence = dLydianNoteStrings;
+
+const hexToNormalizedRgb = (hex: string) => {
+  var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result ? {
+    r: parseInt(result[1], 16) / 255,
+    g: parseInt(result[2], 16) / 255,
+    b: parseInt(result[3], 16) / 255
+  } : undefined;
+}
 
 
 onMounted(() => {
@@ -41,8 +51,8 @@ onMounted(() => {
 
     const heightToNote = (height: number) => {
       const normHeight  = 1 - height / p5i.height
-      const noteIndex = Math.floor(normHeight * cMajNoteStrings.length)
-      return cMajNoteStrings[noteIndex % cMajNoteStrings.length]
+      const noteIndex = Math.floor(normHeight * noteSequence.length)
+      return noteSequence[noteIndex % noteSequence.length]
     }
 
     const initialCiclePos = appState.circles.list.map(c => ({ x: c.x, y: c.y }))
@@ -78,7 +88,7 @@ onMounted(() => {
 
       singleKeydownEvent('s', (ev) => {
         if (appState.drawing) {
-          const newCircle = new PulseCircle(p5Mouse.x, p5Mouse.y, 100)
+          const newCircle = new PulseCircle(p5Mouse.x, p5Mouse.y, 100, true, hexToNormalizedRgb(subwayColors[Math.floor(Math.random()*subwayColors.length)]))
           newCircle.debugDraw = false
           appState.circles.pushItem(newCircle)
           initialCiclePos.push({ x: newCircle.x, y: newCircle.y })
@@ -131,8 +141,8 @@ onMounted(() => {
 
           appState.drawFuncMap.set("playhead" + playheadId, (p: p5) => {
             p.push()
-            p.strokeWeight(10)
-            p.stroke(255, 0, 0)
+            p.strokeWeight(5)
+            p.stroke(255, 255, 0)
             p.line(lastX, 0, thisX, p5i.height)
             p.pop()
           })

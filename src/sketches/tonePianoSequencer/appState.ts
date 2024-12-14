@@ -55,13 +55,14 @@ export class PulseCircle extends Entity {
     this.id = parsed.id
   }
 
-  constructor(x: number, y: number, rad: number, createId = true) {
+  constructor(x: number, y: number, rad: number, createId = true, color?: {r: number; g: number; b: number;}) {
     super(createId)
     this.x = x
     this.y = y
     this.rad = rad
     const r = () => Math.random()
-    this.color = { r: r(), g: r(), b: r() }
+    console.log('### color!', color);
+    this.color = color ?? { r: r(), g: r(), b: r() }
     this.name = 'PulseCircle'
   }
 
