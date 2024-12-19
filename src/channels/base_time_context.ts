@@ -393,6 +393,14 @@ export class TempoClockTimeContext extends TimeContext {
           if (!this.isCanceled) resolve()
           else reject()
           if (this.isCanceled) return 
+
+          //todo - is there an edge case where after cancelling a child, 
+          //control returns to the parent but the parent's mostRecentDescendentTime is not updated?
+          //it would need to be the logical time of the child cancellation.
+          //but maybe it's ok, because the CANCALLER is also setting the parent's mostRecentDescendentTime?
+          //This is an issue if cancellation happens outside of the context of the parent,
+          //(e.g in response to user-input, or via a call to cancel() from outside the contex/tree of the parent).
+          //can this be fixed by always using the TempoClockTimeContext in some way instead of DateTimeContext?
           
           this.rootContext!.mostRecentDescendentTime = ctx.time
         } catch(e) {
