@@ -43,6 +43,7 @@ export class FaustOperatorVoicePrecompiled implements MPEVoiceGraph {
       this.node = await generator.createNode(faustAudioContext, `operator_voice_${id}`, faustFactory);
       this.node.connect(faustAudioContext.destination);
       this.node.start();
+      //todo - recompile so you don't need this line
       this.node.setParamValue("/oscillator/voice_4/yOp_4_Mod_Depth", 1);
       // console.log("node params", this.node.getParams())
       console.log("node created", id)

@@ -15,7 +15,7 @@ polyGain = hslider("PolyGain", 0.7, 0, 1, 0.01);
 harmonic_operator(modulator, ind, isEnd) = sumSignals
 with {
     vg(x) = vgroup("voice_%ind",x);
-    modDepthControl = vg(hslider("yOp_%ind Mod Depth", 0, 0, 1, 0.01));
+    modDepthControl = vg(hslider("yOp_%ind Mod Depth", ba.if(isEnd, 1, 0), 0, 1, 0.01));
     fine = vg(hslider("yFine", 0, 0, 1, 0.001));
     coarse = vg(hslider("yCoarse", 1, 1, 16, 1));
     fMult = fine + coarse;
