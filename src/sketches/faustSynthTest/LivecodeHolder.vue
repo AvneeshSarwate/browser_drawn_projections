@@ -11,8 +11,8 @@ import { FaustTestVoice as FaustOscillatorVoice } from '@/music/FaustSynthTempla
 import { Scale } from '@/music/scale';
 import { dateNow } from '@/channels/base_time_context';
 import { mapMidiInputToMpeSynth, MIDI_READY, midiInputs } from '@/io/midi';
-// import { FaustOperatorVoice } from '@/music/FaustOperatorPresetWrapper';
-import { FaustOperatorVoicePrecompiled } from '@/music/FaustOperatorPrecompiled/FaustOperatorPrecompiled';
+import { FaustOperatorVoice } from '@/music/FaustOperatorPresetWrapper';
+// import { FaustOperatorVoicePrecompiled } from '@/music/FaustOperatorPrecompiled/FaustOperatorPrecompiled';
 
 const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
@@ -84,8 +84,8 @@ onMounted(async () => {
     await FAUST_AUDIO_CONTEXT_READY
     console.log("faust audio context ready")
 
-    const synth = new MPEPolySynth(FaustOperatorVoicePrecompiled, 16, false, true)
-    //todo api - need a promise on the MPEPolySynth to know when the voices are ready
+    const synth = new MPEPolySynth(FaustOperatorVoice, 16, false, true)
+    // todo api - need a promise on the MPEPolySynth to know when the voices are ready
     await synth.synthReady()
 
 
@@ -100,17 +100,29 @@ onMounted(async () => {
     // mapMidiInputToMpeSynth(iac1, synth, false)
     // console.log("mapped midi input to synth")
 
-    // const playNoteLoop = startLoop(synth)
-    const voice = synth.noteOn(60, 100, 0, 0)
-    const params = voice.getAllParams()
-    console.log("params", params)
-    setTimeout(() => {
-      // voice.setBatchParams({
-      //   "/oscillator/Gate": 1,
-      // })
-      // const params2 = voice.getAllParams()["/oscillator/Gate"]
-      console.log("params2", params["/oscillator/Gate"])
-    }, 1000)
+    const playNoteLoop = startLoop(synth)
+
+
+
+    // const voice = synth.noteOn(60, 100, 0, 0)
+    // const params = voice.getAllParams()
+    // console.log("params", params)
+    // setTimeout(() => {
+    //   // voice.setBatchParams({
+    //   //   "/oscillator/Gate": 1,
+    //   // })
+    //   // const params2 = voice.getAllParams()["/oscillator/Gate"]
+    //   console.log("params2", params["/oscillator/Gate"])
+    // }, 1000)
+
+    // const voice = new FaustOperatorVoicePrecompiled(5)
+    // // const voice = new FaustOscillatorVoice(5)
+    // await voice.ready()
+    // voice.noteOn(60, 100, 0, 0)
+    // setTimeout(() => {
+    //   const params = voice.getAllParams()
+    //   console.log("params", params["/oscillator/Gate"])
+    // }, 1000)
 
 
     let p5Mouse = { x: 0, y: 0 }
