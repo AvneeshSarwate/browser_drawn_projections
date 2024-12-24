@@ -10,6 +10,8 @@ import { FAUST_AUDIO_CONTEXT_READY, FaustTestVoice, MPEPolySynth } from '@/music
 import { FaustTestVoice as FaustOscillatorVoice } from '@/music/FaustSynthTemplate';
 import { Scale } from '@/music/scale';
 import { dateNow } from '@/channels/base_time_context';
+import { FaustOperatorVoice } from '@/music/FaustOperatorPresetWrapper';
+import { mapMidiInputToMpeSynth, MIDI_READY, midiInputs } from '@/io/midi';
 
 const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
@@ -54,31 +56,38 @@ onMounted(async () => {
 
     await FAUST_AUDIO_CONTEXT_READY
 
-    const synth = new MPEPolySynth(FaustOscillatorVoice, 16, false, true)
-    // await naiveSleep(100) //need this sleep to allow all of the faust voice preallocation async functions to complete
-    //todo api - need a promise on the MPEPolySynth to know when the voices are ready
+    // const synth = new MPEPolySynth(FaustOscillatorVoice, 16, false, true)
+    // // await naiveSleep(100) //need this sleep to allow all of the faust voice preallocation async functions to complete
+    // //todo api - need a promise on the MPEPolySynth to know when the voices are ready
+    // await synth.synthReady()
+    // const playNoteLoop = launchLoop(async (ctx) => {
+    //   ctx.bpm = 120
+    //   ctx.branch(async (ctx) => {
+    //     while (true) {
+    //       synth.setParam('Filter', 300 + sinN(ctx.time*0.2) * 1000)
+    //       await ctx.waitSec(0.01)
+    //     }
+    //   })
+    //   while (true) {
+    //     const randDegree = Math.floor(Math.random() * 8)
+    //     const note0 = scale.getByIndex(randDegree)
+    //     const note1 = scale.getByIndex(randDegree + 2)
+    //     playNote(note0, 100, 0.5, synth, ctx)
+    //     ctx.branch(async (ctx) => {
+    //       await ctx.wait(0.01 + sinN(ctx.time*0.2) * 0.5)
+    //       playNote(note1, 100, 0.5, synth, ctx)
+    //     })
+    //     console.log("played notes", note0, note1)
+    //     await ctx.wait(1)
+    //   }
+    // })
+
+    const synth = new MPEPolySynth(FaustOperatorVoice, 16, false, true)
     await synth.synthReady()
-    const playNoteLoop = launchLoop(async (ctx) => {
-      ctx.bpm = 120
-      ctx.branch(async (ctx) => {
-        while (true) {
-          synth.setParam('Filter', 300 + sinN(ctx.time*0.2) * 1000)
-          await ctx.waitSec(0.01)
-        }
-      })
-      while (true) {
-        const randDegree = Math.floor(Math.random() * 8)
-        const note0 = scale.getByIndex(randDegree)
-        const note1 = scale.getByIndex(randDegree + 2)
-        playNote(note0, 100, 0.5, synth, ctx)
-        ctx.branch(async (ctx) => {
-          await ctx.wait(0.01 + sinN(ctx.time*0.2) * 0.5)
-          playNote(note1, 100, 0.5, synth, ctx)
-        })
-        console.log("played notes", note0, note1)
-        await ctx.wait(1)
-      }
-    })
+    await MIDI_READY
+    const iac1 = midiInputs.get('IAC Driver Bus 1')!!
+
+    mapMidiInputToMpeSynth(iac1, synth, false)
 
 
     let p5Mouse = { x: 0, y: 0 }

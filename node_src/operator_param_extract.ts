@@ -1,5 +1,6 @@
 import { XMLParser } from 'fast-xml-parser';
 import * as fs from 'fs';
+import * as zlib from 'zlib';
 
 // Constants
 const XML_HARMONICS_COUNT = 64;
@@ -195,11 +196,6 @@ function createFaustMapping(operators: ParsedOperator[]): FaustMapping {
         });
     });
 
-    // Add global parameters
-    mapping['/oscillator/AGate'] = 0;
-    mapping['/oscillator/AMidiNote'] = 60;
-    mapping['/oscillator/AOn_hold'] = 0;
-
     return mapping;
 }
 
@@ -207,7 +203,9 @@ function parseXMLFile(filePath: string, useFastTraverse = false): void {
     console.time('XML Processing');
     
     try {
-        const xmlData = fs.readFileSync(filePath, 'utf8');
+        // Read and decompress the gzipped XML file
+        const compressedData = fs.readFileSync(filePath);
+        const xmlData = zlib.gunzipSync(compressedData).toString('utf8');
         
         const parser = new XMLParser({
             ignoreAttributes: false,
