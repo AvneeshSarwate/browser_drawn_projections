@@ -11,8 +11,8 @@ import { FaustTestVoice as FaustOscillatorVoice } from '@/music/FaustSynthTempla
 import { Scale } from '@/music/scale';
 import { dateNow } from '@/channels/base_time_context';
 import { mapMidiInputToMpeSynth, MIDI_READY, midiInputs } from '@/io/midi';
-import { FaustOperatorVoice } from '@/music/FaustOperatorPresetWrapper';
-// import { FaustOperatorVoicePrecompiled } from '@/music/FaustOperatorPrecompiled/FaustOperatorPrecompiled';
+// import { FaustOperatorVoice } from '@/music/FaustOperatorPresetWrapper';
+import { FaustOperatorVoicePrecompiled } from '@/music/FaustOperatorPrecompiled/FaustOperatorPrecompiled';
 
 const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
@@ -84,7 +84,7 @@ onMounted(async () => {
     await FAUST_AUDIO_CONTEXT_READY
     console.log("faust audio context ready")
 
-    const synth = new MPEPolySynth(FaustOperatorVoice, 16, false, true)
+    const synth = new MPEPolySynth(FaustOperatorVoicePrecompiled, 16, false, true)
     // todo api - need a promise on the MPEPolySynth to know when the voices are ready
     await synth.synthReady()
 

@@ -146,13 +146,19 @@ export class MPEPolySynth<T extends MPEVoiceGraph> {
   //todo testing - see how this external id plays with voice stealing and voice allocation
   //todo api - add a dict param that allows for setting params by name
   noteOn(note: number, velocity: number, pressure: number, slide: number, id?: number): T {
+    let voice = this.getVoice(id)
+    voice.noteOn(note, velocity, pressure, slide)
+    return voice
+  }
+
+
+  getVoice(id?: number): T {
     let voice: T //the voice returned at the end
 
     const offVoices = Array.from(this.voices.keys()).filter((k) => this.voices.get(k)?.isOn === false)
     if(offVoices.length > 0) { //if there are any voices that are off, reuse them
       voice = this.voices.get(offVoices[0])!.voice
       this.voices.delete(offVoices[0])
-      voice.noteOn(note, velocity, pressure, slide)
       this.voices.set(Date.now() + this.tieBreaker++, {isOn: true, voice})
     } else if (this.voices.size < this.maxVoices) { //if there are no off voices, and there is room, create a new one
       voice = new this.vGraphCtor(id ?? this.idGenerator++)
@@ -165,8 +171,7 @@ export class MPEPolySynth<T extends MPEVoiceGraph> {
         }
       }
 
-      voice.noteOn(note, velocity, pressure, slide)
-      this.voices.set(Date.now(), {isOn: true, voice})
+      this.voices.set(Date.now() + this.tieBreaker++, {isOn: true, voice})
     } else { //if there are no off voices, and there is no room, replace the oldest voice
       const minKey = Array.from(this.voices.keys()).sort()[0]
       const {isOn, voice: replaceVoice} = this.voices.get(minKey)!
@@ -174,8 +179,7 @@ export class MPEPolySynth<T extends MPEVoiceGraph> {
       replaceVoice.forceFinish()
       this.voices.delete(minKey)
 
-      replaceVoice.noteOn(note, velocity, pressure, slide)
-      this.voices.set(Date.now(), {isOn: true, voice: replaceVoice})
+      this.voices.set(Date.now() + this.tieBreaker++, {isOn: true, voice: replaceVoice})
       voice = replaceVoice
     }
 
