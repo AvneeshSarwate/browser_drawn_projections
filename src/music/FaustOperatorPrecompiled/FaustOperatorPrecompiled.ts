@@ -1,67 +1,31 @@
 
-import { FaustMonoDspGenerator, FaustMonoAudioWorkletNode } from "@grame/faustwasm";
-import { argv, compiler, f2m, faustAudioContext, param, type MPEVoiceGraph, m2f } from "./mpeSynth";
-
+import { FaustMonoDspGenerator, FaustMonoAudioWorkletNode, type FaustDspMeta } from "@grame/faustwasm";
+import { argv, compiler, f2m, faustAudioContext, param, type MPEVoiceGraph, m2f } from "../mpeSynth";
+import { dspMeta } from "./dsp-meta";
 const generator = new FaustMonoDspGenerator();
-const name = "oscillator"
-const code = `
 
-import("stdfaust.lib");
+/**
+generated files are built by downloading from FaustIDE platform:web architecture:wasmjs.
+operator.wasm is the dsp-module.wasm file from the download just renamed to operator.wasm.
+operator.wasm is put in the public folder (as required by Vite) so it can be fetched via fetch().
+dsp-meta.ts is the dsp-meta.json file from the download renamed and incldued as source. 
+ */
 
-nHarmonics = 16;  // Change this number to experiment with different numbers of harmonics
-modIndex = hslider("ModIndex", 26, 1, 100, 1);
+let faustFactory: { module: WebAssembly.Module, json: string, soundfiles: {} } | null = null
 
+const compilePromise = (async () => {
+  // Load DSP metadata from JSON
+  // const dspMeta: FaustDspMeta = await (await fetch("./dsp-meta.json")).json();
 
-t = button("Gate") | checkbox("AOn_hold");
-// baseFreq = ba.midikey2hz(hslider("AMidiNote", 60, 1, 127, 1));
-baseFreq = hslider("Frequency", 220, 20, 2000, 0.01);
-vAmp = hslider("VelocityAmp", 0.7, 0, 1, 0.01);
-release = hslider("Release", 0.3, 0, 1, 0.01);
-polyGain = hslider("PolyGain", 0.7, 0, 1, 0.01);
+  // Compile the DSP module from WebAssembly binary data
+  const wasm = await fetch("./operator.wasm")
+  console.log("got wasm")
+  const dspModule = await WebAssembly.compileStreaming(wasm);
+  console.log("dspModule", dspModule)
+  faustFactory = { module: dspModule, json: JSON.stringify(dspMeta), soundfiles: {} }
+})()
 
-
-harmonic_operator(modulator, ind, isEnd) = sumSignals
-with {
-    vg(x) = vgroup("voice_%ind",x);
-    modDepthControl = vg(hslider("yOp_%ind Mod Depth", 0, 0, 1, 0.01));
-    fine = vg(hslider("yFine", 0, 0, 1, 0.001));
-    coarse = vg(hslider("yCoarse", 1, 1, 16, 1));
-    fMult = fine + coarse;
-    multFreq = baseFreq * fMult;
-    modDepth = ba.lin2LogGain(modDepthControl) * ba.if(isEnd, 1, (modIndex * multFreq)); //don't need to use modIndex for last operator in chain
-
-    hGroup(x) = vg(hgroup("zHarmonics_%ind",x));
-    harmonicLevels = par(i, nHarmonics, hGroup(vslider("h_%i", i==0, 0, 1, 0.01)));
-    totalWeight = harmonicLevels :> _;
-
-    harmonics = par(i, nHarmonics, os.osc((multFreq+modulator) * float(i + 1))); // Generate harmonic frequencies
-
-    weightedSignals = (harmonics, harmonicLevels) : ro.interleave(nHarmonics,2) : par(i,nHarmonics,*); // Make sure signals are properly paired before multiplication
-    a2 = vg(hslider("xAttack", 0.03, 0.001, 1, .001));
-    d2 = vg(hslider("xDecay", 0.03, 0.001, 1, .001));
-    s2 = vg(hslider("xSustain", 0.8, 0, 1, 0.001));
-    r2 = vg(hslider("xRelease", 0.03, 0.001, 1, .001));
-    env2 = en.adsr(a2, d2, s2, r2, t);
-    sumSignals = weightedSignals :> _ / ba.if(isEnd, totalWeight, 1) * modDepth * env2; //don't normalize harmonic sum except at last operator - todo - probs need to attentuate sum a bit (sqrt?), but not a ton
-};
-
-
-v1 = harmonic_operator(0, 1, 0);
-v2 = harmonic_operator(v1, 2, 0);
-v3 = harmonic_operator(v2, 3, 0);
-v4 = harmonic_operator(v3, 4, 1);
-
-
-outSignal = v4 * vAmp * polyGain;
-
-
-
-process = outSignal, outSignal;
-
-`;
-const compilePromise = generator.compile(compiler, name, code, argv.join(" "));
-
-export class FaustOperatorVoice implements MPEVoiceGraph {
+export class FaustOperatorVoicePrecompiled implements MPEVoiceGraph {
   id: number
 
   //defensive programming - user should call MPEPolySynth.synthReady() before starting to play notes
@@ -76,11 +40,11 @@ export class FaustOperatorVoice implements MPEVoiceGraph {
       console.log("starting nodeMakeNode", id)
       await compilePromise
       console.log("post compile", id)
-      this.node = await generator.createNode(faustAudioContext, `operator_voice_${id}`);
+      this.node = await generator.createNode(faustAudioContext, `operator_voice_${id}`, faustFactory);
       this.node.connect(faustAudioContext.destination);
       this.node.start();
       this.node.setParamValue("/oscillator/Voice_4/yOp_4_Mod_Depth", 1);
-      console.log("node params", this.node.getParams())
+      // console.log("node params", this.node.getParams())
       console.log("node created", id)
     } 
     this.constructorPromise = nodeMakeNode() //should ideally be pre-allocated in outer MPEPolySynth constructor
@@ -90,12 +54,15 @@ export class FaustOperatorVoice implements MPEVoiceGraph {
     return this.constructorPromise
   }
 
-  printParams(): void {
+  getAllParams() {
     const params = this.node.getParams()
+    const allParams = {}
     params.forEach((param) => {
-      console.log(param, this.node.getParamValue(param))
+      allParams[param] = this.node.getParamValue(param)
     })
+    return allParams
   }
+
 
   //todo - if you want params to vary based on velocity, need to modify noteOn func generated by script
   noteOn(note: number, velocity: number, pressure: number, slide: number): void {

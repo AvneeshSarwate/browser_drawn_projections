@@ -6,12 +6,13 @@ import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri, naiveSleep } from '@/channels/channels';
-import { FAUST_AUDIO_CONTEXT_READY, FaustTestVoice, MPEPolySynth } from '@/music/mpeSynth';
+import { FAUST_AUDIO_CONTEXT_READY, FaustTestVoice, MPEPolySynth, type MPEVoiceGraph } from '@/music/mpeSynth';
 import { FaustTestVoice as FaustOscillatorVoice } from '@/music/FaustSynthTemplate';
 import { Scale } from '@/music/scale';
 import { dateNow } from '@/channels/base_time_context';
-import { FaustOperatorVoice } from '@/music/FaustOperatorPresetWrapper';
 import { mapMidiInputToMpeSynth, MIDI_READY, midiInputs } from '@/io/midi';
+// import { FaustOperatorVoice } from '@/music/FaustOperatorPresetWrapper';
+import { FaustOperatorVoicePrecompiled } from '@/music/FaustOperatorPrecompiled/FaustOperatorPrecompiled';
 
 const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
@@ -35,7 +36,7 @@ function circleArr(n: number, rad: number, p: p5) {
   return xyZip(0, cos1, sin1, n).map(({ x, y }) => ({x: x*rad + center.x, y: y*rad + center.y}))
 }
 
-const playNote = (note: number, velocity: number, beats: number, synth: MPEPolySynth<FaustOscillatorVoice>, ctx: TimeContext) => {
+const playNote = <T extends MPEVoiceGraph>(note: number, velocity: number, beats: number, synth: MPEPolySynth<T>, ctx: TimeContext) => {
   ctx.branch(async (ctx) => {
     const voice = synth.noteOn(note, velocity, 0, 0)
     await ctx.wait(beats)
@@ -44,6 +45,32 @@ const playNote = (note: number, velocity: number, beats: number, synth: MPEPolyS
 }
 
 const scale = new Scale()
+const startLoop = <T extends MPEVoiceGraph>(synth: MPEPolySynth<T>) => {
+  const playNoteLoop = launchLoop(async (ctx) => {
+    ctx.bpm = 120
+    // ctx.branch(async (ctx) => {
+    //   while (true) {
+    //     synth.setParam('Filter', 300 + sinN(ctx.time*0.2) * 1000)
+    //     await ctx.waitSec(0.01)
+    //   }
+    // })
+    while (true) {
+      const randDegree = Math.floor(Math.random() * 8)
+      const note0 = scale.getByIndex(randDegree)
+      const note1 = scale.getByIndex(randDegree + 2)
+      playNote(note0, 100, 0.5, synth, ctx)
+      ctx.branch(async (ctx) => {
+        await ctx.wait(0.01 + sinN(ctx.time*0.2) * 0.5)
+        playNote(note1, 100, 0.5, synth, ctx)
+      })
+      console.log("played notes", note0, note1)
+      await ctx.wait(1)
+    }
+  })
+  return playNoteLoop
+}
+
+
 
 onMounted(async () => {
   try {
@@ -55,39 +82,35 @@ onMounted(async () => {
     const initialCiclePos = appState.circles.list.map(c => ({ x: c.x, y: c.y }))
 
     await FAUST_AUDIO_CONTEXT_READY
+    console.log("faust audio context ready")
 
-    // const synth = new MPEPolySynth(FaustOscillatorVoice, 16, false, true)
-    // // await naiveSleep(100) //need this sleep to allow all of the faust voice preallocation async functions to complete
-    // //todo api - need a promise on the MPEPolySynth to know when the voices are ready
-    // await synth.synthReady()
-    // const playNoteLoop = launchLoop(async (ctx) => {
-    //   ctx.bpm = 120
-    //   ctx.branch(async (ctx) => {
-    //     while (true) {
-    //       synth.setParam('Filter', 300 + sinN(ctx.time*0.2) * 1000)
-    //       await ctx.waitSec(0.01)
-    //     }
-    //   })
-    //   while (true) {
-    //     const randDegree = Math.floor(Math.random() * 8)
-    //     const note0 = scale.getByIndex(randDegree)
-    //     const note1 = scale.getByIndex(randDegree + 2)
-    //     playNote(note0, 100, 0.5, synth, ctx)
-    //     ctx.branch(async (ctx) => {
-    //       await ctx.wait(0.01 + sinN(ctx.time*0.2) * 0.5)
-    //       playNote(note1, 100, 0.5, synth, ctx)
-    //     })
-    //     console.log("played notes", note0, note1)
-    //     await ctx.wait(1)
-    //   }
-    // })
-
-    const synth = new MPEPolySynth(FaustOperatorVoice, 16, false, true)
+    const synth = new MPEPolySynth(FaustOperatorVoicePrecompiled, 16, false, true)
+    //todo api - need a promise on the MPEPolySynth to know when the voices are ready
     await synth.synthReady()
-    await MIDI_READY
-    const iac1 = midiInputs.get('IAC Driver Bus 1')!!
 
-    mapMidiInputToMpeSynth(iac1, synth, false)
+
+
+    // const synth = new MPEPolySynth(FaustOperatorVoice, 16, false, true)
+    // console.log("synth created")
+    // await synth.synthReady()
+    // console.log("synth ready")
+
+    // await MIDI_READY
+    // const iac1 = midiInputs.get('IAC Driver Bus 1')!!
+    // mapMidiInputToMpeSynth(iac1, synth, false)
+    // console.log("mapped midi input to synth")
+
+    // const playNoteLoop = startLoop(synth)
+    const voice = synth.noteOn(60, 100, 0, 0)
+    const params = voice.getAllParams()
+    console.log("params", params)
+    setTimeout(() => {
+      // voice.setBatchParams({
+      //   "/oscillator/Gate": 1,
+      // })
+      // const params2 = voice.getAllParams()["/oscillator/Gate"]
+      console.log("params2", params["/oscillator/Gate"])
+    }, 1000)
 
 
     let p5Mouse = { x: 0, y: 0 }

@@ -38,6 +38,7 @@ interface VoiceGraph {
   ready(): Promise<void>
   release: number
   polyGain: number
+  setBatchParams?: (params: Record<string, number>) => void
   //todo api - add a gain param for polyphonic volume management
 }
 
@@ -80,13 +81,14 @@ export class MPEPolySynth<T extends MPEVoiceGraph> {
     const voiceMetadata = vGraph[Symbol.metadata]
     console.log("voiceMetadata", voiceMetadata)
 
-    this.params = voiceMetadata.setterParams
+    this.params = voiceMetadata?.setterParams ?? {}
     
     if(isActualMpe && maxVoices > 14) {
       throw new Error("MPEPolySynth: maxVoices must be less than or equal to 14 for actual MPE")
     }
 
     if(preallocateVoices) {
+      console.log("preallocating voices")
       for(let i = 0; i < maxVoices; i++) {
         const voice = new this.vGraphCtor(i)
         this.voices.set(i, {isOn: false, voice})
@@ -108,6 +110,13 @@ export class MPEPolySynth<T extends MPEVoiceGraph> {
     paramDef.value = clampedValue
     this.voices.forEach(({voice}) => {
       voice[param] = clampedValue as any
+    })
+  }
+
+  //todo - make this work properly when dynamically creating new voices - only works for voice existing when this is called
+  setBatchParams(params: Record<string, number>): void {
+    this.voices.forEach(({voice}) => {
+      voice.setBatchParams(params)
     })
   }
   
@@ -765,7 +774,7 @@ process = os.sawtooth(freq) * vAmp * polyGain * env : filter;
 `;
 
 //todo - wrap this in some callback or someting so it doesn't block the main thread?
-await generator.compile(compiler, name, code, argv.join(" "));
+// await generator.compile(compiler, name, code, argv.join(" "));
 
 export class FaustTestVoice implements MPEVoiceGraph {
   id: number

@@ -23,6 +23,9 @@ filter = fi.lowpass(2, filterFreq);
 process = os.sawtooth(freq) * vAmp * polyGain * env : filter;
 
 `;
+
+//todo - need different name for each voice to avoid AudioWorkletNode name conflict?
+//gives warning but still works
 await generator.compile(compiler, name, code, argv.join(" "));
 
 export class FaustTestVoice implements MPEVoiceGraph {
