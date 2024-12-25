@@ -180,7 +180,7 @@ function createFaustMapping(operators: ParsedOperator[]): FaustMapping {
 
     operators.forEach((operator, index) => {
         const voiceNum = index + 1;
-        const prefix = `/oscillator/Voice_${voiceNum}`;
+        const prefix = `/oscillator/voice_${voiceNum}`;
 
         // Map envelope parameters
         mapping[`${prefix}/xAttack`] = operator.envelope.attack;
