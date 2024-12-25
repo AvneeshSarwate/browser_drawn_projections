@@ -116,6 +116,7 @@ export class MPEPolySynth<T extends MPEVoiceGraph> {
   //todo - make this work properly when dynamically creating new voices - only works for voice existing when this is called
   setBatchParams(params: Record<string, number>): void {
     this.voices.forEach(({voice}) => {
+      console.log("setting batch params", voice.id)
       voice.setBatchParams(params)
     })
   }

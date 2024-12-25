@@ -70,6 +70,103 @@ const startLoop = <T extends MPEVoiceGraph>(synth: MPEPolySynth<T>) => {
   return playNoteLoop
 }
 
+const setParams = (synth: MPEPolySynth<FaustOperatorVoicePrecompiled>) => {
+  const params = {
+  "/oscillator/Voice_1/xAttack": 0.0001000000015,
+  "/oscillator/Voice_1/xDecay": 1.0000003100000001,
+  "/oscillator/Voice_1/xSustain": 1,
+  "/oscillator/Voice_1/xRelease": 6.420801760000001,
+  "/oscillator/Voice_1/yCoarse": 1,
+  "/oscillator/Voice_1/yFine": 0,
+  "/oscillator/Voice_1/yMod_depth": 1,
+  "/oscillator/Voice_1/zHarmonics/h_0": 1,
+  "/oscillator/Voice_1/zHarmonics/h_1": 0,
+  "/oscillator/Voice_1/zHarmonics/h_2": 0,
+  "/oscillator/Voice_1/zHarmonics/h_3": 0,
+  "/oscillator/Voice_1/zHarmonics/h_4": 0,
+  "/oscillator/Voice_1/zHarmonics/h_5": 0,
+  "/oscillator/Voice_1/zHarmonics/h_6": 0,
+  "/oscillator/Voice_1/zHarmonics/h_7": 0,
+  "/oscillator/Voice_1/zHarmonics/h_8": 0,
+  "/oscillator/Voice_1/zHarmonics/h_9": 0,
+  "/oscillator/Voice_1/zHarmonics/h_10": 0,
+  "/oscillator/Voice_1/zHarmonics/h_11": 0,
+  "/oscillator/Voice_1/zHarmonics/h_12": 0,
+  "/oscillator/Voice_1/zHarmonics/h_13": 0,
+  "/oscillator/Voice_1/zHarmonics/h_14": 0,
+  "/oscillator/Voice_1/zHarmonics/h_15": 0,
+  "/oscillator/Voice_2/xAttack": 0.533687134,
+  "/oscillator/Voice_2/xDecay": 0.718626709,
+  "/oscillator/Voice_2/xSustain": 1,
+  "/oscillator/Voice_2/xRelease": 5.40668018,
+  "/oscillator/Voice_2/yCoarse": 1,
+  "/oscillator/Voice_2/yFine": 1,
+  "/oscillator/Voice_2/yMod_depth": 1,
+  "/oscillator/Voice_2/zHarmonics/h_0": 1,
+  "/oscillator/Voice_2/zHarmonics/h_1": 0,
+  "/oscillator/Voice_2/zHarmonics/h_2": 0,
+  "/oscillator/Voice_2/zHarmonics/h_3": 1,
+  "/oscillator/Voice_2/zHarmonics/h_4": 0,
+  "/oscillator/Voice_2/zHarmonics/h_5": 0,
+  "/oscillator/Voice_2/zHarmonics/h_6": 0,
+  "/oscillator/Voice_2/zHarmonics/h_7": 0,
+  "/oscillator/Voice_2/zHarmonics/h_8": 0,
+  "/oscillator/Voice_2/zHarmonics/h_9": 0,
+  "/oscillator/Voice_2/zHarmonics/h_10": 0,
+  "/oscillator/Voice_2/zHarmonics/h_11": 0,
+  "/oscillator/Voice_2/zHarmonics/h_12": 0,
+  "/oscillator/Voice_2/zHarmonics/h_13": 0,
+  "/oscillator/Voice_2/zHarmonics/h_14": 0,
+  "/oscillator/Voice_2/zHarmonics/h_15": 0,
+  "/oscillator/Voice_3/xAttack": 0.0001000000015,
+  "/oscillator/Voice_3/xDecay": 0.399999908,
+  "/oscillator/Voice_3/xSustain": 0.06309573352,
+  "/oscillator/Voice_3/xRelease": 0.399999908,
+  "/oscillator/Voice_3/yCoarse": 1,
+  "/oscillator/Voice_3/yFine": 0,
+  "/oscillator/Voice_3/yMod_depth": 0.0003162277571,
+  "/oscillator/Voice_3/zHarmonics/h_0": 1,
+  "/oscillator/Voice_3/zHarmonics/h_1": 0,
+  "/oscillator/Voice_3/zHarmonics/h_2": 0,
+  "/oscillator/Voice_3/zHarmonics/h_3": 0,
+  "/oscillator/Voice_3/zHarmonics/h_4": 0,
+  "/oscillator/Voice_3/zHarmonics/h_5": 0,
+  "/oscillator/Voice_3/zHarmonics/h_6": 0,
+  "/oscillator/Voice_3/zHarmonics/h_7": 0,
+  "/oscillator/Voice_3/zHarmonics/h_8": 0,
+  "/oscillator/Voice_3/zHarmonics/h_9": 0,
+  "/oscillator/Voice_3/zHarmonics/h_10": 0,
+  "/oscillator/Voice_3/zHarmonics/h_11": 0,
+  "/oscillator/Voice_3/zHarmonics/h_12": 0,
+  "/oscillator/Voice_3/zHarmonics/h_13": 0,
+  "/oscillator/Voice_3/zHarmonics/h_14": 0,
+  "/oscillator/Voice_3/zHarmonics/h_15": 0,
+  "/oscillator/Voice_4/xAttack": 0.0001000000015,
+  "/oscillator/Voice_4/xDecay": 0.399999908,
+  "/oscillator/Voice_4/xSustain": 0.06309573352,
+  "/oscillator/Voice_4/xRelease": 0.399999908,
+  "/oscillator/Voice_4/yCoarse": 1,
+  "/oscillator/Voice_4/yFine": 0,
+  "/oscillator/Voice_4/yMod_depth": 0.0003162277571,
+  "/oscillator/Voice_4/zHarmonics/h_0": 1,
+  "/oscillator/Voice_4/zHarmonics/h_1": 0,
+  "/oscillator/Voice_4/zHarmonics/h_2": 0,
+  "/oscillator/Voice_4/zHarmonics/h_3": 0,
+  "/oscillator/Voice_4/zHarmonics/h_4": 0,
+  "/oscillator/Voice_4/zHarmonics/h_5": 0,
+  "/oscillator/Voice_4/zHarmonics/h_6": 0,
+  "/oscillator/Voice_4/zHarmonics/h_7": 0,
+  "/oscillator/Voice_4/zHarmonics/h_8": 0,
+  "/oscillator/Voice_4/zHarmonics/h_9": 0,
+  "/oscillator/Voice_4/zHarmonics/h_10": 0,
+  "/oscillator/Voice_4/zHarmonics/h_11": 0,
+  "/oscillator/Voice_4/zHarmonics/h_12": 0,
+  "/oscillator/Voice_4/zHarmonics/h_13": 0,
+  "/oscillator/Voice_4/zHarmonics/h_14": 0,
+  "/oscillator/Voice_4/zHarmonics/h_15": 0
+}
+  synth.setBatchParams(params)
+}
 
 
 onMounted(async () => {
@@ -95,12 +192,17 @@ onMounted(async () => {
     // await synth.synthReady()
     // console.log("synth ready")
 
-    // await MIDI_READY
-    // const iac1 = midiInputs.get('IAC Driver Bus 1')!!
-    // mapMidiInputToMpeSynth(iac1, synth, false)
-    // console.log("mapped midi input to synth")
+    await MIDI_READY
+    const iac1 = midiInputs.get('IAC Driver Bus 1')!!
+    mapMidiInputToMpeSynth(iac1, synth, false)
+    console.log("mapped midi input to synth")
 
-    const playNoteLoop = startLoop(synth)
+    setParams(synth)
+    Array.from(synth.voices.values()).slice(0, 1).forEach(v => {
+      console.log("voice", v.voice.getAllParams())
+    })
+
+    // const playNoteLoop = startLoop(synth)
 
 
 

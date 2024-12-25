@@ -2,6 +2,9 @@ import { XMLParser } from 'fast-xml-parser';
 import * as fs from 'fs';
 import * as zlib from 'zlib';
 
+
+//run - npx ts-node node_src/operator_param_extract.ts ../Ableton/operator_rebuild\ Project/operator_rebuild.als
+
 // Constants
 const XML_HARMONICS_COUNT = 64;
 const FAUST_HARMONICS_COUNT = 16;
@@ -134,10 +137,10 @@ function fullTraverse(obj: any): Operator[] {
 
 function parseOperatorData(operator: Operator): ParsedOperator {
     const envelope: EnvelopeData = {
-        attack: Number(operator.Envelope.AttackTime.Manual['@_Value']),
-        decay: Number(operator.Envelope.DecayTime.Manual['@_Value']),
+        attack: Number(operator.Envelope.AttackTime.Manual['@_Value']) / 1000,
+        decay: Number(operator.Envelope.DecayTime.Manual['@_Value']) / 1000,
         sustain: Number(operator.Envelope.SustainLevel.Manual['@_Value']),
-        release: Number(operator.Envelope.ReleaseTime.Manual['@_Value'])
+        release: Number(operator.Envelope.ReleaseTime.Manual['@_Value']) / 1000
     };
 
     const tune: TuneData = {
@@ -188,11 +191,11 @@ function createFaustMapping(operators: ParsedOperator[]): FaustMapping {
         // Map tuning parameters
         mapping[`${prefix}/yCoarse`] = operator.tune.coarse;
         mapping[`${prefix}/yFine`] = operator.tune.fine;
-        mapping[`${prefix}/yOp_${voiceNum}_Mod_Depth`] = operator.volume;
+        mapping[`${prefix}/yMod_depth`] = operator.volume;
 
         // Map harmonics
         operator.harmonics.forEach((value, i) => {
-            mapping[`${prefix}/zHarmonics_${voiceNum}/h_${i}`] = value;
+            mapping[`${prefix}/zHarmonics/h_${i}`] = value;
         });
     });
 
