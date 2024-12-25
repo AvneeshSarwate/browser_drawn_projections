@@ -1,3 +1,5 @@
+//compile with: faust -lang wasm-i src/music/FaustOperatorPrecompiled/operator.dsp -o operator.wasm (optionally -ftz 2 to match FaustIDE cloud compiler output)
+
 import("stdfaust.lib");
 
 nHarmonics = 16;  // Change this number to experiment with different numbers of harmonics
