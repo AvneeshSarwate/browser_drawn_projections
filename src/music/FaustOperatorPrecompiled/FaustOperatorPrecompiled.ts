@@ -9,6 +9,10 @@ generated files are built by downloading from FaustIDE platform:web architecture
 operator.wasm is the dsp-module.wasm file from the download just renamed to operator.wasm.
 operator.wasm is put in the public folder (as required by Vite) so it can be fetched via fetch().
 dsp-meta.ts is the dsp-meta.json file from the download renamed and incldued as source. 
+
+
+IMPORTANT - always make sure dsp-meta is updated properly - ids of parameters can change
+between compilations, and lead to parameter mappings breaking.
  */
 
 let faustFactory: { module: WebAssembly.Module, json: string, soundfiles: {} } | null = null

@@ -1,4 +1,4 @@
-// run from project root with - npx ts-node node_src/rebuild_operator_and_presets.ts ../Ableton/operator_rebuild\ Project/operator_rebuild.als true
+// run from project root with - npx ts-node node_src/rebuild_operator_and_presets.ts ../Ableton/operator_rebuild\ Project/operator_rebuild.als true true
 
 import { parseXMLFile } from "./operator_param_extract"
 import * as fs from 'fs'
@@ -25,13 +25,17 @@ async function runCommand(command: string) {
 }
 
 const filePath = process.argv[2]
-const presetJson = parseXMLFile(filePath)!!
 
-const presetTs = `export const operatorPreset = ${presetJson}`
-fs.writeFileSync('src/sketches/faustSynthTest/operator_preset.ts', presetTs)
+const grabPreset = process.argv[3] === 'true'
+
+if (grabPreset) {
+  const presetJson = parseXMLFile(filePath)!!
+  const presetTs = `export const operatorPreset = ${presetJson}`
+  fs.writeFileSync('src/sketches/faustSynthTest/operator_preset.ts', presetTs)
+}
 
 //use shell command to compile dsp
-const rebuildDsp = process.argv[3] === 'true'
+const rebuildDsp = process.argv[4] === 'true'
 
 if (rebuildDsp) {
   
@@ -39,19 +43,14 @@ if (rebuildDsp) {
 }
 
 async function rebuildOperator() {
-  runCommand('faust -lang wasm-i src/music/FaustOperatorPrecompiled/operator.dsp -o operator.wasm')
+  await runCommand('faust -lang wasm-i src/music/FaustOperatorPrecompiled/operator.dsp -o operator.wasm')
 
-  await sleep(1000)
-  runCommand('mv operator.wasm public/operator.wasm')
-  await sleep(1000)
+  await runCommand('mv operator.wasm public/operator.wasm')
 
   //read file dsp-meta.json - //todo - somthing going wrong with how this is rewritten
-  const dspMeta = fs.readFileSync('operator.json', 'utf8')
-  const dspMetaTs = `export const dspMeta = ${dspMeta}`
+  const dspMeta = JSON.parse(fs.readFileSync('operator.json', 'utf8'))
+  const dspMetaTs = `export const dspMeta = ${JSON.stringify(dspMeta, null, 2)}`
   fs.writeFileSync('src/music/FaustOperatorPrecompiled/dsp-meta.ts', dspMetaTs)
 
-
-  // await sleep(2000)
-  // runCommand('rm operator.wasm')
-  // runCommand('rm operator.json')
+  await runCommand('rm operator.json')
 }
