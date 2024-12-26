@@ -45,7 +45,7 @@ async function rebuildOperator() {
   runCommand('mv operator.wasm public/operator.wasm')
   await sleep(1000)
 
-  //read file dsp-meta.json
+  //read file dsp-meta.json - //todo - somthing going wrong with how this is rewritten
   const dspMeta = fs.readFileSync('operator.json', 'utf8')
   const dspMetaTs = `export const dspMeta = ${dspMeta}`
   fs.writeFileSync('src/music/FaustOperatorPrecompiled/dsp-meta.ts', dspMetaTs)
