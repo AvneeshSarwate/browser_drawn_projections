@@ -68,9 +68,9 @@ export class FaustOperatorVoicePrecompiled implements MPEVoiceGraph {
     this.pitch = note
     this._pressure = pressure
     this._slide = slide
-    this.node.setParamValue("/oscillator/VelocityAmp", velocity/127)
-    this.node.setParamValue("/oscillator/Gate", 1)
-    console.log("operator noteOn", note, velocity, pressure, slide)
+    this.node.setParamValue("/operator/VelocityAmp", velocity/127)
+    this.node.setParamValue("/operator/Gate", 1)
+    // console.log("operator noteOn", note, velocity, pressure, slide)
   }
 
   setBatchParams(params: { [key: string]: number }): void {
@@ -80,23 +80,23 @@ export class FaustOperatorVoicePrecompiled implements MPEVoiceGraph {
   }
 
   get polyGain(): number {
-    return this.node.getParamValue("/oscillator/PolyGain")
+    return this.node.getParamValue("/operator/PolyGain")
   }
 
   set polyGain(value: number) {
-    this.node.setParamValue("/oscillator/PolyGain", value)
+    this.node.setParamValue("/operator/PolyGain", value)
   }
 
   get release(): number {
-    return this.node.getParamValue("/oscillator/Release")
+    return this.node.getParamValue("/operator/Release")
   }
 
   set release(value: number) {
-    this.node.setParamValue("/oscillator/Release", value)
+    this.node.setParamValue("/operator/Release", value)
   }
 
   noteOff(): void {
-    this.node.setParamValue("/oscillator/Gate", 0)
+    this.node.setParamValue("/operator/Gate", 0)
 
     // // Call the callback after the release time
     // setTimeout(() => {
@@ -124,11 +124,11 @@ export class FaustOperatorVoicePrecompiled implements MPEVoiceGraph {
   }
 
   get pitch(): number {
-    return f2m(this.node.getParamValue('/oscillator/Frequency'))
+    return f2m(this.node.getParamValue('/operator/Frequency'))
   }
 
   set pitch(value: number) {
-    this.node.setParamValue("/oscillator/Frequency", m2f(value))
+    this.node.setParamValue("/operator/Frequency", m2f(value))
   }
 
   get slide(): number {

@@ -72,99 +72,100 @@ const startLoop = <T extends MPEVoiceGraph>(synth: MPEPolySynth<T>) => {
 
 const setParams = (synth: MPEPolySynth<FaustOperatorVoicePrecompiled>) => {
   const params = {
-  "/oscillator/voice_1/xAttack": 0.0001000000015,
-  "/oscillator/voice_1/xDecay": 1.0000003100000001,
-  "/oscillator/voice_1/xSustain": 1,
-  "/oscillator/voice_1/xRelease": 6.420801760000001,
-  "/oscillator/voice_1/yCoarse": 1,
-  "/oscillator/voice_1/yFine": 0,
-  "/oscillator/voice_1/yMod_depth": 1,
-  "/oscillator/voice_1/zHarmonics/h_0": 1,
-  "/oscillator/voice_1/zHarmonics/h_1": 0,
-  "/oscillator/voice_1/zHarmonics/h_2": 0,
-  "/oscillator/voice_1/zHarmonics/h_3": 0,
-  "/oscillator/voice_1/zHarmonics/h_4": 0,
-  "/oscillator/voice_1/zHarmonics/h_5": 0,
-  "/oscillator/voice_1/zHarmonics/h_6": 0,
-  "/oscillator/voice_1/zHarmonics/h_7": 0,
-  "/oscillator/voice_1/zHarmonics/h_8": 0,
-  "/oscillator/voice_1/zHarmonics/h_9": 0,
-  "/oscillator/voice_1/zHarmonics/h_10": 0,
-  "/oscillator/voice_1/zHarmonics/h_11": 0,
-  "/oscillator/voice_1/zHarmonics/h_12": 0,
-  "/oscillator/voice_1/zHarmonics/h_13": 0,
-  "/oscillator/voice_1/zHarmonics/h_14": 0,
-  "/oscillator/voice_1/zHarmonics/h_15": 0,
-  "/oscillator/voice_2/xAttack": 0.533687134,
-  "/oscillator/voice_2/xDecay": 0.718626709,
-  "/oscillator/voice_2/xSustain": 1,
-  "/oscillator/voice_2/xRelease": 5.40668018,
-  "/oscillator/voice_2/yCoarse": 1,
-  "/oscillator/voice_2/yFine": 1,
-  "/oscillator/voice_2/yMod_depth": 1,
-  "/oscillator/voice_2/zHarmonics/h_0": 1,
-  "/oscillator/voice_2/zHarmonics/h_1": 0,
-  "/oscillator/voice_2/zHarmonics/h_2": 0,
-  "/oscillator/voice_2/zHarmonics/h_3": 1,
-  "/oscillator/voice_2/zHarmonics/h_4": 0,
-  "/oscillator/voice_2/zHarmonics/h_5": 0,
-  "/oscillator/voice_2/zHarmonics/h_6": 0,
-  "/oscillator/voice_2/zHarmonics/h_7": 0,
-  "/oscillator/voice_2/zHarmonics/h_8": 0,
-  "/oscillator/voice_2/zHarmonics/h_9": 0,
-  "/oscillator/voice_2/zHarmonics/h_10": 0,
-  "/oscillator/voice_2/zHarmonics/h_11": 0,
-  "/oscillator/voice_2/zHarmonics/h_12": 0,
-  "/oscillator/voice_2/zHarmonics/h_13": 0,
-  "/oscillator/voice_2/zHarmonics/h_14": 0,
-  "/oscillator/voice_2/zHarmonics/h_15": 0,
-  "/oscillator/voice_3/xAttack": 0.0001000000015,
-  "/oscillator/voice_3/xDecay": 0.399999908,
-  "/oscillator/voice_3/xSustain": 0.06309573352,
-  "/oscillator/voice_3/xRelease": 0.399999908,
-  "/oscillator/voice_3/yCoarse": 1,
-  "/oscillator/voice_3/yFine": 0,
-  "/oscillator/voice_3/yMod_depth": 0.0003162277571,
-  "/oscillator/voice_3/zHarmonics/h_0": 1,
-  "/oscillator/voice_3/zHarmonics/h_1": 0,
-  "/oscillator/voice_3/zHarmonics/h_2": 0,
-  "/oscillator/voice_3/zHarmonics/h_3": 0,
-  "/oscillator/voice_3/zHarmonics/h_4": 0,
-  "/oscillator/voice_3/zHarmonics/h_5": 0,
-  "/oscillator/voice_3/zHarmonics/h_6": 0,
-  "/oscillator/voice_3/zHarmonics/h_7": 0,
-  "/oscillator/voice_3/zHarmonics/h_8": 0,
-  "/oscillator/voice_3/zHarmonics/h_9": 0,
-  "/oscillator/voice_3/zHarmonics/h_10": 0,
-  "/oscillator/voice_3/zHarmonics/h_11": 0,
-  "/oscillator/voice_3/zHarmonics/h_12": 0,
-  "/oscillator/voice_3/zHarmonics/h_13": 0,
-  "/oscillator/voice_3/zHarmonics/h_14": 0,
-  "/oscillator/voice_3/zHarmonics/h_15": 0,
-  "/oscillator/voice_4/xAttack": 0.0001000000015,
-  "/oscillator/voice_4/xDecay": 0.399999908,
-  "/oscillator/voice_4/xSustain": 0.06309573352,
-  "/oscillator/voice_4/xRelease": 0.399999908,
-  "/oscillator/voice_4/yCoarse": 1,
-  "/oscillator/voice_4/yFine": 0,
-  "/oscillator/voice_4/yMod_depth": 0.0003162277571,
-  "/oscillator/voice_4/zHarmonics/h_0": 1,
-  "/oscillator/voice_4/zHarmonics/h_1": 0,
-  "/oscillator/voice_4/zHarmonics/h_2": 0,
-  "/oscillator/voice_4/zHarmonics/h_3": 0,
-  "/oscillator/voice_4/zHarmonics/h_4": 0,
-  "/oscillator/voice_4/zHarmonics/h_5": 0,
-  "/oscillator/voice_4/zHarmonics/h_6": 0,
-  "/oscillator/voice_4/zHarmonics/h_7": 0,
-  "/oscillator/voice_4/zHarmonics/h_8": 0,
-  "/oscillator/voice_4/zHarmonics/h_9": 0,
-  "/oscillator/voice_4/zHarmonics/h_10": 0,
-  "/oscillator/voice_4/zHarmonics/h_11": 0,
-  "/oscillator/voice_4/zHarmonics/h_12": 0,
-  "/oscillator/voice_4/zHarmonics/h_13": 0,
-  "/oscillator/voice_4/zHarmonics/h_14": 0,
-  "/oscillator/voice_4/zHarmonics/h_15": 0
-}
+    "/operator/PolyGain": 0.1,
+    "/operator/voice_1/xAttack": 0.0001000000015,
+    "/operator/voice_1/xDecay": 1.0000003100000001,
+    "/operator/voice_1/xSustain": 1,
+    "/operator/voice_1/xRelease": 6.420801760000001,
+    "/operator/voice_1/yCoarse": 1,
+    "/operator/voice_1/yFine": 0,
+    "/operator/voice_1/yMod_depth": 1,
+    "/operator/voice_1/zHarmonics/h_0": 1,
+    "/operator/voice_1/zHarmonics/h_1": 0,
+    "/operator/voice_1/zHarmonics/h_2": 0,
+    "/operator/voice_1/zHarmonics/h_3": 0,
+    "/operator/voice_1/zHarmonics/h_4": 0,
+    "/operator/voice_1/zHarmonics/h_5": 0,
+    "/operator/voice_1/zHarmonics/h_6": 0,
+    "/operator/voice_1/zHarmonics/h_7": 0,
+    "/operator/voice_1/zHarmonics/h_8": 0,
+    "/operator/voice_1/zHarmonics/h_9": 0,
+    "/operator/voice_1/zHarmonics/h_10": 0,
+    "/operator/voice_1/zHarmonics/h_11": 0,
+    "/operator/voice_1/zHarmonics/h_12": 0,
+    "/operator/voice_1/zHarmonics/h_13": 0,
+    "/operator/voice_1/zHarmonics/h_14": 0,
+    "/operator/voice_1/zHarmonics/h_15": 0,
+    "/operator/voice_2/xAttack": 0.533687134,
+    "/operator/voice_2/xDecay": 0.718626709,
+    "/operator/voice_2/xSustain": 1,
+    "/operator/voice_2/xRelease": 5.40668018,
+    "/operator/voice_2/yCoarse": 1,
+    "/operator/voice_2/yFine": 1,
+    "/operator/voice_2/yMod_depth": 1,
+    "/operator/voice_2/zHarmonics/h_0": 1,
+    "/operator/voice_2/zHarmonics/h_1": 0,
+    "/operator/voice_2/zHarmonics/h_2": 0,
+    "/operator/voice_2/zHarmonics/h_3": 1,
+    "/operator/voice_2/zHarmonics/h_4": 0,
+    "/operator/voice_2/zHarmonics/h_5": 0,
+    "/operator/voice_2/zHarmonics/h_6": 0,
+    "/operator/voice_2/zHarmonics/h_7": 0,
+    "/operator/voice_2/zHarmonics/h_8": 0,
+    "/operator/voice_2/zHarmonics/h_9": 0,
+    "/operator/voice_2/zHarmonics/h_10": 0,
+    "/operator/voice_2/zHarmonics/h_11": 0,
+    "/operator/voice_2/zHarmonics/h_12": 0,
+    "/operator/voice_2/zHarmonics/h_13": 0,
+    "/operator/voice_2/zHarmonics/h_14": 0,
+    "/operator/voice_2/zHarmonics/h_15": 0,
+    "/operator/voice_3/xAttack": 0.0001000000015,
+    "/operator/voice_3/xDecay": 0.399999908,
+    "/operator/voice_3/xSustain": 0.06309573352,
+    "/operator/voice_3/xRelease": 0.399999908,
+    "/operator/voice_3/yCoarse": 1,
+    "/operator/voice_3/yFine": 0,
+    "/operator/voice_3/yMod_depth": 0.0003162277571,
+    "/operator/voice_3/zHarmonics/h_0": 1,
+    "/operator/voice_3/zHarmonics/h_1": 0,
+    "/operator/voice_3/zHarmonics/h_2": 0,
+    "/operator/voice_3/zHarmonics/h_3": 0,
+    "/operator/voice_3/zHarmonics/h_4": 0,
+    "/operator/voice_3/zHarmonics/h_5": 0,
+    "/operator/voice_3/zHarmonics/h_6": 0,
+    "/operator/voice_3/zHarmonics/h_7": 0,
+    "/operator/voice_3/zHarmonics/h_8": 0,
+    "/operator/voice_3/zHarmonics/h_9": 0,
+    "/operator/voice_3/zHarmonics/h_10": 0,
+    "/operator/voice_3/zHarmonics/h_11": 0,
+    "/operator/voice_3/zHarmonics/h_12": 0,
+    "/operator/voice_3/zHarmonics/h_13": 0,
+    "/operator/voice_3/zHarmonics/h_14": 0,
+    "/operator/voice_3/zHarmonics/h_15": 0,
+    "/operator/voice_4/xAttack": 0.0001000000015,
+    "/operator/voice_4/xDecay": 0.399999908,
+    "/operator/voice_4/xSustain": 0.06309573352,
+    "/operator/voice_4/xRelease": 0.399999908,
+    "/operator/voice_4/yCoarse": 1,
+    "/operator/voice_4/yFine": 0,
+    "/operator/voice_4/yMod_depth": 0.0003162277571,
+    "/operator/voice_4/zHarmonics/h_0": 1,
+    "/operator/voice_4/zHarmonics/h_1": 0,
+    "/operator/voice_4/zHarmonics/h_2": 0,
+    "/operator/voice_4/zHarmonics/h_3": 0,
+    "/operator/voice_4/zHarmonics/h_4": 0,
+    "/operator/voice_4/zHarmonics/h_5": 0,
+    "/operator/voice_4/zHarmonics/h_6": 0,
+    "/operator/voice_4/zHarmonics/h_7": 0,
+    "/operator/voice_4/zHarmonics/h_8": 0,
+    "/operator/voice_4/zHarmonics/h_9": 0,
+    "/operator/voice_4/zHarmonics/h_10": 0,
+    "/operator/voice_4/zHarmonics/h_11": 0,
+    "/operator/voice_4/zHarmonics/h_12": 0,
+    "/operator/voice_4/zHarmonics/h_13": 0,
+    "/operator/voice_4/zHarmonics/h_14": 0,
+    "/operator/voice_4/zHarmonics/h_15": 0
+  }
   synth.setBatchParams(params)
 }
 
@@ -198,9 +199,12 @@ onMounted(async () => {
     console.log("mapped midi input to synth")
 
     setParams(synth)
-    Array.from(synth.voices.values()).slice(0, 1).forEach(v => {
-      console.log("voice", v.voice.getAllParams())
-    })
+
+    setTimeout(() => {
+      Array.from(synth.voices.values()).slice(0, 1).forEach(v => {
+        console.log("voice", v.voice.getAllParams())
+      })
+    }, 1000)
 
     // const playNoteLoop = startLoop(synth)
 
@@ -211,10 +215,10 @@ onMounted(async () => {
     // console.log("params", params)
     // setTimeout(() => {
     //   // voice.setBatchParams({
-    //   //   "/oscillator/Gate": 1,
+    //   //   "/operator/Gate": 1,
     //   // })
-    //   // const params2 = voice.getAllParams()["/oscillator/Gate"]
-    //   console.log("params2", params["/oscillator/Gate"])
+    //   // const params2 = voice.getAllParams()["/operator/Gate"]
+    //   console.log("params2", params["/operator/Gate"])
     // }, 1000)
 
     // const voice = new FaustOperatorVoicePrecompiled(5)
@@ -223,7 +227,7 @@ onMounted(async () => {
     // voice.noteOn(60, 100, 0, 0)
     // setTimeout(() => {
     //   const params = voice.getAllParams()
-    //   console.log("params", params["/oscillator/Gate"])
+    //   console.log("params", params["/operator/Gate"])
     // }, 1000)
 
 

@@ -202,7 +202,7 @@ function createFaustMapping(operators: ParsedOperator[]): FaustMapping {
     return mapping;
 }
 
-function parseXMLFile(filePath: string, useFastTraverse = false): void {
+export function parseXMLFile(filePath: string, useFastTraverse = false): string | undefined {
     console.time('XML Processing');
     
     try {
@@ -234,9 +234,7 @@ function parseXMLFile(filePath: string, useFastTraverse = false): void {
         const parsedOperators = foundOperators.map(parseOperatorData);
         const faustMapping = createFaustMapping(parsedOperators);
         
-        fs.writeFileSync('faust_params.json', JSON.stringify(faustMapping, null, 2));
-        console.log('Successfully created faust_params.json');
-        console.timeEnd('XML Processing');
+        return JSON.stringify(faustMapping, null, 2)
 
     } catch (error) {
         console.error('Error processing XML file:', error instanceof Error ? error.message : 'Unknown error');

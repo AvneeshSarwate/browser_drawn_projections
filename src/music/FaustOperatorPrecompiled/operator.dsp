@@ -1,4 +1,5 @@
 //compile with: faust -lang wasm-i src/music/FaustOperatorPrecompiled/operator.dsp -o operator.wasm (optionally -ftz 2 to match FaustIDE cloud compiler output)
+//also need to update dsp-meta.ts with the new generated dsp-meta.json
 
 import("stdfaust.lib");
 
@@ -36,7 +37,7 @@ with {
     s2 = vg(hslider("xSustain", 0.8, 0, 1, 0.001));
     r2 = vg(hslider("xRelease", 0.03, 0.001, 1, .001));
     env2 = en.adsr(a2, d2, s2, r2, t);
-    sumSignals = weightedSignals :> _ / ba.if(isEnd, totalWeight, 1) * modDepth * env2; //don't normalize harmonic sum except at last operator - todo - probs need to attentuate sum a bit (sqrt?), but not a ton
+    sumSignals = weightedSignals :> _ / ba.if(isEnd, totalWeight, totalWeight) * modDepth * env2; //don't normalize harmonic sum except at last operator - todo - probs need to attentuate sum a bit (sqrt?), but not a ton
 };
 
 

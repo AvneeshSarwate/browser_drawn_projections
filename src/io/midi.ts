@@ -61,7 +61,7 @@ export function mapMidiInputToMpeSynth<T extends MPEVoiceGraph>(input: MIDIValIn
 
   input.onAllNoteOff((event) => {
     const voice = midiDataToVoiceId.get(noteKey(event))
-    console.log("all note off", Date.now(),event.data1, noteKey(event), !!voice, voice?.id)
+    // console.log("all note off", Date.now(),event.data1, noteKey(event), !!voice, voice?.id)
     if(voice) {
       synth.noteOff(voice)
       midiDataToVoiceId.delete(noteKey(event))
