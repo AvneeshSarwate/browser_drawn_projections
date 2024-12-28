@@ -14,8 +14,10 @@ const ABLETON_OPERATOR_PATH = [
     'LiveSet',
     'Tracks',
     'MidiTrack',
+    '0',
     'DeviceChain',
     'DeviceChain',
+    'Devices',
     'Operator'
 ] as const;
 
@@ -92,8 +94,9 @@ function fastTraverse(obj: any): Operator[] {
     try {
         let current = obj;
         for (const pathElement of ABLETON_OPERATOR_PATH) {
+            const oldCurrent = current
             current = current[pathElement];
-            
+            // console.log(pathElement, current !== undefined, Object.keys(oldCurrent))
             if (!current) {
                 throw new Error(`Path element ${pathElement} not found`);
             }

@@ -1,4 +1,5 @@
-// run from project root with - npx ts-node node_src/rebuild_operator_and_presets.ts ../Ableton/operator_rebuild\ Project/operator_rebuild.als true true
+// run from project root with -
+// npx ts-node node_src/rebuild_operator_and_presets.ts ../Ableton/operator_rebuild\ Project/operator_rebuild.als true false
 
 import { parseXMLFile } from "./operator_param_extract"
 import * as fs from 'fs'
@@ -29,7 +30,7 @@ const filePath = process.argv[2]
 const grabPreset = process.argv[3] === 'true'
 
 if (grabPreset) {
-  const presetJson = parseXMLFile(filePath)!!
+  const presetJson = parseXMLFile(filePath, true)!!
   const presetTs = `export const operatorPreset = ${presetJson}`
   fs.writeFileSync('src/sketches/faustSynthTest/operator_preset.ts', presetTs)
 }
