@@ -1,9 +1,10 @@
 //compile with: faust -lang wasm-i src/music/FaustOperatorPrecompiled/operator.dsp -o operator.wasm (optionally -ftz 2 to match FaustIDE cloud compiler output)
 //also need to update dsp-meta.ts with the new generated dsp-meta.json
 
-
-//remember to turn off aliasing, interpolation, and default on filter in operator
+// settings for operator:
+//remember to turn off aliasing, interpolation ON, and default on filter in operator
 //set tone to 100%
+
 //todo - add velocity sensitivity to modulator envelopes
 
 import("stdfaust.lib");
