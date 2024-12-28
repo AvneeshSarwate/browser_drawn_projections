@@ -190,7 +190,7 @@ function createFaustMapping(operators: ParsedOperator[]): FaustMapping {
 
         // Map tuning parameters
         mapping[`${prefix}/yCoarse`] = operator.tune.coarse;
-        mapping[`${prefix}/yFine`] = operator.tune.fine;
+        mapping[`${prefix}/yFine`] = operator.tune.fine / 1000;
         mapping[`${prefix}/yMod_depth`] = operator.volume;
 
         // Map harmonics

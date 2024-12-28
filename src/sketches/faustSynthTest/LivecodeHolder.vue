@@ -72,7 +72,11 @@ const startLoop = <T extends MPEVoiceGraph>(synth: MPEPolySynth<T>) => {
 }
 
 const setParams = (synth: MPEPolySynth<FaustOperatorVoicePrecompiled>) => {
-  const params = { ...operatorPreset, "/operator/PolyGain": 0.1 }
+  const params = { 
+    ...operatorPreset, 
+    "/operator/PolyGain": 0.2,
+    "/operator/ModIndex": 14,
+  }
   synth.setBatchParams(params)
 }
 
