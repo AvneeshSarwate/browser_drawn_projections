@@ -17,6 +17,8 @@ baseFreq = hslider("Frequency", 220, 20, 2000, 0.01);
 vAmp = hslider("VelocityAmp", 0.7, 0, 1, 0.01);
 release = hslider("Release", 0.3, 0, 1, 0.01);
 polyGain = hslider("PolyGain", 0.7, 0, 1, 0.01);
+modCurve = hslider("ModCurve", 1, 0.01, 10, 0.01);
+
 
 
 harmonic_operator(modulator, ind, isEnd) = sumSignals
@@ -27,8 +29,8 @@ with {
     coarse = vg(hslider("yCoarse", 1, 1, 16, 1));
     fMult = fine + coarse;
     multFreq = baseFreq * fMult;
-    modDepth = ba.lin2LogGain(modDepthControl) * ba.if(isEnd, 1, (modIndex * multFreq)); //don't need to use modIndex for last operator in chain
-    //todo - something about log scaling here doesn't match ableton - sounds different when mod depth is not maxed out
+    modDepth = pow(ba.lin2LogGain(modDepthControl),modCurve) * ba.if(isEnd, 1, (modIndex * multFreq)); //don't need to use modIndex for last operator in chain
+    //todo - something about log scaling here doesn't match ableton
 
     hGroup(x) = vg(hgroup("zHarmonics",x));
     harmonicLevels = par(i, nHarmonics, hGroup(vslider("h_%i", i==0, 0, 1, 0.01)));

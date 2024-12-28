@@ -71,20 +71,26 @@ const startLoop = <T extends MPEVoiceGraph>(synth: MPEPolySynth<T>) => {
   return playNoteLoop
 }
 
-const setParams = (synth: MPEPolySynth<FaustOperatorVoicePrecompiled>) => {
-  const params = { 
-    ...operatorPreset, 
-    "/operator/PolyGain": 0.2,
-    "/operator/ModIndex": 21,
-  }
-  synth.setBatchParams(params)
-}
-
 const modIndexRef = ref(21)
 const synth = new MPEPolySynth(FaustOperatorVoicePrecompiled, 16, false, true)
 const setModIndex = (v: number) => {
   modIndexRef.value = v
   synth.setBatchParams({ "/operator/ModIndex": v })
+}
+const modCurveRef = ref(0.5)
+const setModCurve = (v: number) => {
+  modCurveRef.value = v
+  synth.setBatchParams({ "/operator/ModCurve": v })
+}
+
+const setParams = (synth: MPEPolySynth<FaustOperatorVoicePrecompiled>) => {
+  const params = { 
+    ...operatorPreset, 
+    "/operator/PolyGain": 0.2,
+    "/operator/ModIndex": modIndexRef.value,
+    "/operator/ModCurve": modCurveRef.value,
+  }
+  synth.setBatchParams(params)
 }
 
 onMounted(async () => {
@@ -268,9 +274,12 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div></div>
-  <input type="range" :value="modIndexRef" @input="setModIndex(($event.target as HTMLInputElement).valueAsNumber)" min="1" max="100" />
-  <div>{{ modIndexRef }}</div>
+  <div style="margin-left: 10px;">
+    <input type="range" :value="modIndexRef" @input="setModIndex(($event.target as HTMLInputElement).valueAsNumber)" min="1" max="100" />
+    <div>{{ modIndexRef }}</div>
+    <input type="range" :value="modCurveRef" @input="setModCurve(($event.target as HTMLInputElement).valueAsNumber)" min="0.01" max="10" step="0.01" />
+    <div>{{ modCurveRef }}</div>
+  </div>
 </template>
 
 <style scoped></style>
