@@ -28,7 +28,7 @@ export const operatorPreset = {
   "/operator/voice_2/xRelease": 0.050000003800000005,
   "/operator/voice_2/yCoarse": 1,
   "/operator/voice_2/yFine": 0.001,
-  "/operator/voice_2/yMod_depth": 0.03137625754,
+  "/operator/voice_2/yMod_depth": 0.03619598225,
   "/operator/voice_2/zHarmonics/h_0": 1,
   "/operator/voice_2/zHarmonics/h_1": 0,
   "/operator/voice_2/zHarmonics/h_2": 0,

@@ -3,6 +3,7 @@
 
 
 //remember to turn off aliasing, interpolation, and default on filter in operator
+//set tone to 100%
 //todo - add velocity sensitivity to modulator envelopes
 
 import("stdfaust.lib");
