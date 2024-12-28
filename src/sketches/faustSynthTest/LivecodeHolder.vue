@@ -1,7 +1,7 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
 import { type TemplateAppState, PulseCircle, appStateName } from './appState';
-import { inject, onMounted, onUnmounted } from 'vue';
+import { inject, onMounted, onUnmounted, ref } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
@@ -75,11 +75,17 @@ const setParams = (synth: MPEPolySynth<FaustOperatorVoicePrecompiled>) => {
   const params = { 
     ...operatorPreset, 
     "/operator/PolyGain": 0.2,
-    "/operator/ModIndex": 14,
+    "/operator/ModIndex": 21,
   }
   synth.setBatchParams(params)
 }
 
+const modIndexRef = ref(21)
+const synth = new MPEPolySynth(FaustOperatorVoicePrecompiled, 16, false, true)
+const setModIndex = (v: number) => {
+  modIndexRef.value = v
+  synth.setBatchParams({ "/operator/ModIndex": v })
+}
 
 onMounted(async () => {
   try {
@@ -93,7 +99,7 @@ onMounted(async () => {
     await FAUST_AUDIO_CONTEXT_READY
     console.log("faust audio context ready")
 
-    const synth = new MPEPolySynth(FaustOperatorVoicePrecompiled, 16, false, true)
+    
     // todo api - need a promise on the MPEPolySynth to know when the voices are ready
     await synth.synthReady()
 
@@ -263,6 +269,8 @@ onUnmounted(() => {
 
 <template>
   <div></div>
+  <input type="range" :value="modIndexRef" @input="setModIndex(($event.target as HTMLInputElement).valueAsNumber)" min="1" max="100" />
+  <div>{{ modIndexRef }}</div>
 </template>
 
 <style scoped></style>

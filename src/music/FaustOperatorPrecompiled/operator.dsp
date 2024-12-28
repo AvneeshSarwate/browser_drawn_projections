@@ -8,7 +8,7 @@
 import("stdfaust.lib");
 
 nHarmonics = 16;  // Change this number to experiment with different numbers of harmonics
-modIndex = hslider("ModIndex", 14, 1, 100, 1);
+modIndex = hslider("ModIndex", 21, 1, 100, 1);
 
 
 t = button("Gate") | checkbox("AOn_hold");
@@ -28,6 +28,7 @@ with {
     fMult = fine + coarse;
     multFreq = baseFreq * fMult;
     modDepth = ba.lin2LogGain(modDepthControl) * ba.if(isEnd, 1, (modIndex * multFreq)); //don't need to use modIndex for last operator in chain
+    //todo - something about log scaling here doesn't match ableton - sounds different when mod depth is not maxed out
 
     hGroup(x) = vg(hgroup("zHarmonics",x));
     harmonicLevels = par(i, nHarmonics, hGroup(vslider("h_%i", i==0, 0, 1, 0.01)));
@@ -38,10 +39,10 @@ with {
     weightedSignals = (harmonics, harmonicLevels) : ro.interleave(nHarmonics,2) : par(i,nHarmonics,*); // Make sure signals are properly paired before multiplication
     a2 = vg(hslider("xAttack", 0.03, 0.001, 1, .001));
     d2 = vg(hslider("xDecay", 0.03, 0.001, 1, .001));
-    s2 = vg(hslider("xSustain", 0.8, 0, 1, 0.001));
+    s2 = vg(hslider("xSustain", 0.8, 0, 1, 0.001)); //todo - lin2log this?
     r2 = vg(hslider("xRelease", 0.03, 0.001, 1, .001));
     env2 = en.adsr(a2, d2, s2, r2, t);
-    sumSignals = weightedSignals :> _ / ba.if(isEnd, totalWeight, sqrt(abs(totalWeight))) * modDepth * env2; //don't normalize harmonic sum except at last operator - todo - probs need to attentuate sum a bit (sqrt?), but not a ton
+    sumSignals = weightedSignals :> _ / ba.if(isEnd, totalWeight, 1) * modDepth * env2; //don't normalize harmonic sum except at last operator - todo - probs need to attentuate sum a bit (sqrt?), but not a ton
 };
 
 
