@@ -11,7 +11,7 @@
 import("stdfaust.lib");
 
 nHarmonics = 16;  // Change this number to experiment with different numbers of harmonics
-modIndex = hslider("ModIndex", 26, 1, 100, 1);
+modIndex = hslider("ModIndex", 33, 1, 100, 1);
 
 
 t = button("Gate") | checkbox("AOn_hold");
@@ -21,6 +21,8 @@ vAmp = hslider("VelocityAmp", 0.7, 0, 1, 0.01);
 release = hslider("Release", 0.3, 0, 1, 0.01);
 polyGain = hslider("PolyGain", 0.7, 0, 1, 0.01);
 modCurve = hslider("ModCurve", 0.5, 0.01, 10, 0.01);
+modChainCurve = hslider("ModChainCurve", 1, 0.01, 10, 0.01);
+mod2mod = hslider("Mod2Mod", 1, 1, 16, 0.01);
 
 
 
@@ -32,8 +34,9 @@ with {
     coarse = vg(hslider("yCoarse", 1, 1, 16, 1));
     fMult = fine + coarse;
     multFreq = baseFreq * fMult;
-    modDepth = (ba.lin2LogGain(modDepthControl)^modCurve) * ba.if(isEnd, 1, (modIndex * multFreq)); //don't need to use modIndex for last operator in chain
+    modDepth = (ba.lin2LogGain(modDepthControl)^modCurve) * ba.if(isEnd, 1, (modIndex * multFreq) / ((ind-1)^modChainCurve)); //don't need to use modIndex for last operator in chain
     //todo - something about log scaling here doesn't match ableton
+    modDepth2 = modDepth / ba.if(ind == 3, mod2mod, 1);
 
     hGroup(x) = vg(hgroup("zHarmonics",x));
     harmonicLevels = par(i, nHarmonics, hGroup(vslider("h_%i", i==0, 0, 1, 0.01)));
@@ -47,7 +50,7 @@ with {
     s2 = vg(hslider("xSustain", 0.8, 0, 1, 0.001)); //todo - lin2log this?
     r2 = vg(hslider("xRelease", 0.03, 0.001, 1, .001));
     env2 = en.adsr(a2, d2, s2, r2, t);
-    sumSignals = weightedSignals :> _ /ba.if(isEnd, totalWeight, totalWeight) * modDepth * env2; //don't normalize harmonic sum except at last operator - todo - probs need to attentuate sum a bit (sqrt?), but not a ton
+    sumSignals = weightedSignals :> _ /ba.if(isEnd, totalWeight, totalWeight) * modDepth2 * env2; //don't normalize harmonic sum except at last operator - todo - probs need to attentuate sum a bit (sqrt?), but not a ton
 };
 
 

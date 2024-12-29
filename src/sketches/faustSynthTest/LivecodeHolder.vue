@@ -71,7 +71,7 @@ const startLoop = <T extends MPEVoiceGraph>(synth: MPEPolySynth<T>) => {
   return playNoteLoop
 }
 
-const modIndexRef = ref(21)
+const modIndexRef = ref(33)
 const synth = new MPEPolySynth(FaustOperatorVoicePrecompiled, 16, false, true)
 const setModIndex = (v: number) => {
   modIndexRef.value = v
@@ -83,12 +83,26 @@ const setModCurve = (v: number) => {
   synth.setBatchParams({ "/operator/ModCurve": v })
 }
 
+const modChainCurveRef = ref(1)
+const setModChainCurve = (v: number) => {
+  modChainCurveRef.value = v
+  synth.setBatchParams({ "/operator/ModChainCurve": v })
+}
+
+const mod2modRef = ref(1)
+const setMod2mod = (v: number) => {
+  mod2modRef.value = v
+  synth.setBatchParams({ "/operator/Mod2Mod": v })
+}
+
 const setParams = (synth: MPEPolySynth<FaustOperatorVoicePrecompiled>) => {
   const params = { 
     ...operatorPreset, 
     "/operator/PolyGain": 0.2,
     "/operator/ModIndex": modIndexRef.value,
     "/operator/ModCurve": modCurveRef.value,
+    "/operator/ModChainCurve": modChainCurveRef.value,
+    "/operator/Mod2Mod": mod2modRef.value,
   }
   synth.setBatchParams(params)
 }
@@ -275,10 +289,18 @@ onUnmounted(() => {
 
 <template>
   <div style="margin-left: 10px;">
+    <label for="modIndex">ModIndex</label>
     <input type="range" :value="modIndexRef" @input="setModIndex(($event.target as HTMLInputElement).valueAsNumber)" min="1" max="100" />
     <div>{{ modIndexRef }}</div>
+    <label for="modCurve">ModCurve</label>
     <input type="range" :value="modCurveRef" @input="setModCurve(($event.target as HTMLInputElement).valueAsNumber)" min="0.01" max="10" step="0.01" />
     <div>{{ modCurveRef }}</div>
+    <label for="modChainCurve">ModChainCurve</label>
+    <input type="range" :value="modChainCurveRef" @input="setModChainCurve(($event.target as HTMLInputElement).valueAsNumber)" min="0.01" max="10" step="0.01" />
+    <div>{{ modChainCurveRef }}</div>
+    <label for="mod2mod">Mod2Mod</label>
+    <input type="range" :value="mod2modRef" @input="setMod2mod(($event.target as HTMLInputElement).valueAsNumber)" min="0.01" max="16" step="0.01" />
+    <div>{{ mod2modRef }}</div>
   </div>
 </template>
 
