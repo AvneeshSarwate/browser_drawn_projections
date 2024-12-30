@@ -71,13 +71,13 @@ const startLoop = <T extends MPEVoiceGraph>(synth: MPEPolySynth<T>) => {
   return playNoteLoop
 }
 
-const modIndexRef = ref(33)
+const modIndexRef = ref(21)
 const synth = new MPEPolySynth(FaustOperatorVoicePrecompiled, 16, false, true)
 const setModIndex = (v: number) => {
   modIndexRef.value = v
   synth.setBatchParams({ "/operator/ModIndex": v })
 }
-const modCurveRef = ref(0.5)
+const modCurveRef = ref(1)
 const setModCurve = (v: number) => {
   modCurveRef.value = v
   synth.setBatchParams({ "/operator/ModCurve": v })
@@ -290,7 +290,7 @@ onUnmounted(() => {
 <template>
   <div style="margin-left: 10px;">
     <label for="modIndex">ModIndex</label>
-    <input type="range" :value="modIndexRef" @input="setModIndex(($event.target as HTMLInputElement).valueAsNumber)" min="1" max="100" />
+    <input type="range" :value="modIndexRef" @input="setModIndex(($event.target as HTMLInputElement).valueAsNumber)" min="1" max="100" step="0.1" />
     <div>{{ modIndexRef }}</div>
     <label for="modCurve">ModCurve</label>
     <input type="range" :value="modCurveRef" @input="setModCurve(($event.target as HTMLInputElement).valueAsNumber)" min="0.01" max="10" step="0.01" />

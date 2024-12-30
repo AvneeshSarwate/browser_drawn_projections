@@ -11,7 +11,7 @@
 import("stdfaust.lib");
 
 nHarmonics = 16;  // Change this number to experiment with different numbers of harmonics
-modIndex = hslider("ModIndex", 33, 1, 100, 1);
+modIndex = hslider("ModIndex", 21, 1, 100, 0.1);
 
 
 t = button("Gate") | checkbox("AOn_hold");
@@ -20,7 +20,7 @@ baseFreq = hslider("Frequency", 220, 20, 2000, 0.01);
 vAmp = hslider("VelocityAmp", 0.7, 0, 1, 0.01);
 release = hslider("Release", 0.3, 0, 1, 0.01);
 polyGain = hslider("PolyGain", 0.7, 0, 1, 0.01);
-modCurve = hslider("ModCurve", 0.5, 0.01, 10, 0.01);
+modCurve = hslider("ModCurve", 1, 0.01, 10, 0.01);
 modChainCurve = hslider("ModChainCurve", 1, 0.01, 10, 0.01);
 mod2mod = hslider("Mod2Mod", 1, 1, 16, 0.01);
 
@@ -45,12 +45,12 @@ with {
     harmonics = par(i, nHarmonics, os.osc((multFreq+modulator) * float(i + 1))); // Generate harmonic frequencies
 
     weightedSignals = (harmonics, harmonicLevels) : ro.interleave(nHarmonics,2) : par(i,nHarmonics,*); // Make sure signals are properly paired before multiplication
-    a2 = vg(hslider("xAttack", 0.03, 0.001, 1, .001));
-    d2 = vg(hslider("xDecay", 0.03, 0.001, 1, .001));
+    a2 = vg(hslider("xAttack", 0.03, 0.001, 10, .001));
+    d2 = vg(hslider("xDecay", 0.03, 0.001, 10, .001));
     s2 = vg(hslider("xSustain", 0.8, 0, 1, 0.001)); //todo - lin2log this?
-    r2 = vg(hslider("xRelease", 0.03, 0.001, 1, .001));
+    r2 = vg(hslider("xRelease", 0.03, 0.001, 10, .001));
     env2 = en.adsr(a2, d2, s2, r2, t);
-    sumSignals = weightedSignals :> _ /ba.if(isEnd, totalWeight, totalWeight) * modDepth2 * env2; //don't normalize harmonic sum except at last operator - todo - probs need to attentuate sum a bit (sqrt?), but not a ton
+    sumSignals = weightedSignals :> _ / totalWeight  * modDepth2 * env2;
 };
 
 
