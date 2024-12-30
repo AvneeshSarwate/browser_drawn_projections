@@ -24,6 +24,13 @@ modCurve = hslider("ModCurve", 1, 0.01, 10, 0.01);
 modChainCurve = hslider("ModChainCurve", 1, 0.01, 10, 0.01);
 mod2mod = hslider("Mod2Mod", 1, 1, 16, 0.01);
 
+//this part seems correct (testing via 12th harmonic => 1st harmonic in isolation)
+harmonicSlope = hslider("HarmonicSlope", 2, 0.01, 10, 0.01);
+
+//still figuring out this part
+// (1, 12) harmonics => 1st harmonic still doesn't have enough low end
+harmonicSlopeWeight = hslider("HarmonicSlopeWeight", 1, 0.01, 10, 0.01);
+
 
 
 harmonic_operator(modulator, ind, isEnd) = sumSignals
@@ -40,9 +47,11 @@ with {
 
     hGroup(x) = vg(hgroup("zHarmonics",x));
     harmonicLevels = par(i, nHarmonics, hGroup(vslider("h_%i", i==0, 0, 1, 0.01)));
-    totalWeight = harmonicLevels :> _;
+    // totalWeight = harmonicLevels :> _;    
+    totalWeight = (harmonicLevels, par(i,nHarmonics,(i+1)^harmonicSlopeWeight)) : ro.interleave(nHarmonics,2) : par(i,nHarmonics,*) :> _;
 
-    harmonics = par(i, nHarmonics, os.osc((multFreq+modulator) * float(i + 1))); // Generate harmonic frequencies
+    // harmonics = par(i, nHarmonics, os.osc((multFreq+modulator) * float(i + 1))); // Generate harmonic frequencies
+    harmonics = par(i, nHarmonics, os.osc((multFreq+modulator) * float(i + 1)) * (i+1)^harmonicSlope); // Generate harmonic frequencies
 
     weightedSignals = (harmonics, harmonicLevels) : ro.interleave(nHarmonics,2) : par(i,nHarmonics,*); // Make sure signals are properly paired before multiplication
     a2 = vg(hslider("xAttack", 0.03, 0.001, 10, .001));

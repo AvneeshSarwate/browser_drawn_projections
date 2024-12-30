@@ -95,6 +95,18 @@ const setMod2mod = (v: number) => {
   synth.setBatchParams({ "/operator/Mod2Mod": v })
 }
 
+const harmonicSlopeRef = ref(2)
+const setHarmonicSlope = (v: number) => {
+  harmonicSlopeRef.value = v
+  synth.setBatchParams({ "/operator/HarmonicSlope": v })
+}
+
+const harmonicSlopeWeightRef = ref(1)
+const setHarmonicSlopeWeight = (v: number) => {
+  harmonicSlopeWeightRef.value = v
+  synth.setBatchParams({ "/operator/HarmonicSlopeWeight": v })
+}
+
 const setParams = (synth: MPEPolySynth<FaustOperatorVoicePrecompiled>) => {
   const params = { 
     ...operatorPreset, 
@@ -103,6 +115,8 @@ const setParams = (synth: MPEPolySynth<FaustOperatorVoicePrecompiled>) => {
     "/operator/ModCurve": modCurveRef.value,
     "/operator/ModChainCurve": modChainCurveRef.value,
     "/operator/Mod2Mod": mod2modRef.value,
+    "/operator/HarmonicSlope": harmonicSlopeRef.value,
+    "/operator/HarmonicSlopeWeight": harmonicSlopeWeightRef.value,
   }
   synth.setBatchParams(params)
 }
@@ -301,6 +315,12 @@ onUnmounted(() => {
     <label for="mod2mod">Mod2Mod</label>
     <input type="range" :value="mod2modRef" @input="setMod2mod(($event.target as HTMLInputElement).valueAsNumber)" min="0.01" max="16" step="0.01" />
     <div>{{ mod2modRef }}</div>
+    <label for="harmonicSlope">HarmonicSlope</label>
+    <input type="range" :value="harmonicSlopeRef" @input="setHarmonicSlope(($event.target as HTMLInputElement).valueAsNumber)" min="0.01" max="10" step="0.01" />
+    <div>{{ harmonicSlopeRef }}</div>
+    <label for="harmonicSlopeWeight">HarmonicSlopeWeight</label>
+    <input type="range" :value="harmonicSlopeWeightRef" @input="setHarmonicSlopeWeight(($event.target as HTMLInputElement).valueAsNumber)" min="0.01" max="10" step="0.01" />
+    <div>{{ harmonicSlopeWeightRef }}</div>
   </div>
 </template>
 
