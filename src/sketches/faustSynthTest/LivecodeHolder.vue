@@ -95,7 +95,7 @@ const setMod2mod = (v: number) => {
   synth.setBatchParams({ "/operator/Mod2Mod": v })
 }
 
-const harmonicSlopeRef = ref(2)
+const harmonicSlopeRef = ref(1)
 const setHarmonicSlope = (v: number) => {
   harmonicSlopeRef.value = v
   synth.setBatchParams({ "/operator/HarmonicSlope": v })

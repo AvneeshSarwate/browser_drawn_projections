@@ -25,7 +25,7 @@ modChainCurve = hslider("ModChainCurve", 1, 0.01, 10, 0.01);
 mod2mod = hslider("Mod2Mod", 1, 1, 16, 0.01);
 
 //this part seems correct (testing via 12th harmonic => 1st harmonic in isolation)
-harmonicSlope = hslider("HarmonicSlope", 2, 0.01, 10, 0.01);
+harmonicSlope = hslider("HarmonicSlope", 1, 0.01, 10, 0.01);
 
 //still figuring out this part
 // (1, 12) harmonics => 1st harmonic still doesn't have enough low end
@@ -41,17 +41,17 @@ with {
     coarse = vg(hslider("yCoarse", 1, 1, 16, 1));
     fMult = fine + coarse;
     multFreq = baseFreq * fMult;
-    modDepth = (ba.lin2LogGain(modDepthControl)^modCurve) * ba.if(isEnd, 1, (modIndex * multFreq) / ((ind-1)^modChainCurve)); //don't need to use modIndex for last operator in chain
+    modMult = ba.if(isEnd, 1, (modIndex * multFreq) / ((ind-1)^modChainCurve)); //don't need to use modIndex for last operator in chain
+    modDepth = (ba.lin2LogGain(modDepthControl)^modCurve) * modMult; //don't need to use modIndex for last operator in chain
     //todo - something about log scaling here doesn't match ableton
     modDepth2 = modDepth / ba.if(ind == 3, mod2mod, 1);
 
     hGroup(x) = vg(hgroup("zHarmonics",x));
     harmonicLevels = par(i, nHarmonics, hGroup(vslider("h_%i", i==0, 0, 1, 0.01)));
-    // totalWeight = harmonicLevels :> _;    
-    totalWeight = (harmonicLevels, par(i,nHarmonics,(i+1)^harmonicSlopeWeight)) : ro.interleave(nHarmonics,2) : par(i,nHarmonics,*) :> _;
+    totalWeight = harmonicLevels :> _;    
 
-    // harmonics = par(i, nHarmonics, os.osc((multFreq+modulator) * float(i + 1))); // Generate harmonic frequencies
-    harmonics = par(i, nHarmonics, os.osc((multFreq+modulator) * float(i + 1)) * (i+1)^harmonicSlope); // Generate harmonic frequencies
+    hSlope = (1-isEnd) * harmonicSlope; //same as ba.if(isEnd, 0, harmonicSlope), maybe more efficient?
+    harmonics = par(i, nHarmonics, os.osc((multFreq+modulator) * float(i + 1)) * (i+1)^hSlope); // Generate harmonic frequencies
 
     weightedSignals = (harmonics, harmonicLevels) : ro.interleave(nHarmonics,2) : par(i,nHarmonics,*); // Make sure signals are properly paired before multiplication
     a2 = vg(hslider("xAttack", 0.03, 0.001, 10, .001));
