@@ -77,7 +77,7 @@ const setModIndex = (v: number) => {
   modIndexRef.value = v
   synth.setBatchParams({ "/operator/ModIndex": v })
 }
-const modCurveRef = ref(1)
+const modCurveRef = ref(0.5)
 const setModCurve = (v: number) => {
   modCurveRef.value = v
   synth.setBatchParams({ "/operator/ModCurve": v })

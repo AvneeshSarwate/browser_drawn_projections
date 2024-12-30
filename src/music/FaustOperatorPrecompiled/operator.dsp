@@ -20,7 +20,7 @@ baseFreq = hslider("Frequency", 220, 20, 2000, 0.01);
 vAmp = hslider("VelocityAmp", 0.7, 0, 1, 0.01);
 release = hslider("Release", 0.3, 0, 1, 0.01);
 polyGain = hslider("PolyGain", 0.7, 0, 1, 0.01);
-modCurve = hslider("ModCurve", 1, 0.01, 10, 0.01);
+modCurve = hslider("ModCurve", 0.5, 0.01, 10, 0.01);
 modChainCurve = hslider("ModChainCurve", 1, 0.01, 10, 0.01);
 mod2mod = hslider("Mod2Mod", 1, 1, 16, 0.01);
 
