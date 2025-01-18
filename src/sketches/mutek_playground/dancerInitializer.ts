@@ -48,7 +48,7 @@ export const createDancerScene = async (renderer: THREE.WebGLRenderer, renderTar
 
   // Load textures
   const loader = new KTX2Loader()
-    .setTranscoderPath("node_modules/three/examples/jsm/libs/basis/")
+    .setTranscoderPath("../node_modules/three/examples/jsm/libs/basis/")
     .detectSupport(renderer);
 
   console.log(loader);
