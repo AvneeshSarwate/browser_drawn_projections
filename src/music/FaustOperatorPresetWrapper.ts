@@ -1,6 +1,6 @@
 
 import { FaustMonoDspGenerator, FaustMonoAudioWorkletNode } from "@grame/faustwasm";
-import { argv, compiler, f2m, faustAudioContext, param, type MPEVoiceGraph, m2f } from "./mpeSynth";
+import { argv, compiler, f2m, faustAudioContext, param, type MPEVoiceGraph, m2f, FAUST_AUDIO_CONTEXT_READY } from "./mpeSynth";
 
 const generator = new FaustMonoDspGenerator();
 const name = "oscillator"
@@ -59,7 +59,10 @@ outSignal = v4 * vAmp * polyGain;
 process = outSignal, outSignal;
 
 `;
-const compilePromise = generator.compile(compiler, name, code, argv.join(" "));
+const compilePromise = (async () => {
+  await FAUST_AUDIO_CONTEXT_READY
+  return generator.compile(compiler, name, code, argv.join(" "));
+})()
 
 export class FaustOperatorVoice implements MPEVoiceGraph {
   id: number

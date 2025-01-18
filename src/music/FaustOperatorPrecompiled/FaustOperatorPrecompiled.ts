@@ -1,6 +1,6 @@
 
 import { FaustMonoDspGenerator, FaustMonoAudioWorkletNode, type FaustDspMeta } from "@grame/faustwasm";
-import { argv, compiler, f2m, faustAudioContext, param, type MPEVoiceGraph, m2f } from "../mpeSynth";
+import { f2m, faustAudioContext, param, type MPEVoiceGraph, m2f } from "../mpeSynth";
 import { dspMeta } from "./dsp-meta";
 const generator = new FaustMonoDspGenerator();
 

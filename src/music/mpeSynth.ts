@@ -734,21 +734,23 @@ import { instantiateFaustModuleFromFile,
   FaustMonoAudioWorkletNode} from "@grame/faustwasm";
 
 
-// initialize the libfaust wasm
-const faustModule = await instantiateFaustModuleFromFile("../node_modules/@grame/faustwasm/libfaust-wasm/libfaust-wasm.js");
 
 // Get the Faust compiler
-const libFaust = new LibFaust(faustModule);
+let libFaust: LibFaust
+export let compiler: FaustCompiler
 // @ts-ignore
 window.libFaust = libFaust;
 console.log(libFaust.version());
-export const compiler = new FaustCompiler(libFaust);
 export const argv = ["-I", "libraries/"];
 export const faustAudioContext = new AudioContext();
 
 //a promise that resolves after a click on the document body and resumes the audio context
 export const FAUST_AUDIO_CONTEXT_READY = new Promise<void>(resolve => {
-  const resume = () => {
+  const resume = async () => {
+    const faustModule = await instantiateFaustModuleFromFile("../node_modules/@grame/faustwasm/libfaust-wasm/libfaust-wasm.js");
+    libFaust = new LibFaust(faustModule);
+    compiler = new FaustCompiler(libFaust);
+
     faustAudioContext.resume()
     resolve()
     document.body.removeEventListener('click', resume)

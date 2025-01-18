@@ -43,8 +43,6 @@ onMounted(async () => {
     const code = () => { //todo template - is this code-array pattern really needed in the template?
       clearDrawFuncs() //todo template - move this to cleanup block?
 
-      let lastTime = performance.now()
-      let deltaTime = 0
       appState.drawFunctions.push(() => {
         dancerScene.animate()
       })
