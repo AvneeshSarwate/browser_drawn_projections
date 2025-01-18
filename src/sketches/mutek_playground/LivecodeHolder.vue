@@ -1,11 +1,13 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
-import { type TemplateAppState, PulseCircle, appStateName } from './appState';
+import * as THREE from "three";
+import { type TemplateAppState, PulseCircle, appStateName, resolution } from './appState';
 import { inject, onMounted, onUnmounted } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
+import { createDancerScene } from './dancerInitializer';
 
 const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
@@ -22,6 +24,7 @@ const clearDrawFuncs = () => {
   appState.drawFuncMap = new Map()
 }
 
+
 onMounted(async () => {
   try {
 
@@ -34,14 +37,21 @@ onMounted(async () => {
       p5Mouse = targetToP5Coords(ev, p5i, threeCanvas)
     }, threeCanvas)
 
+    const dancerRenderTarget = new THREE.WebGLRenderTarget(resolution.width, resolution.height)
+    const dancerScene = await createDancerScene(appState.threeRenderer!!, dancerRenderTarget)
+
     const code = () => { //todo template - is this code-array pattern really needed in the template?
       clearDrawFuncs() //todo template - move this to cleanup block?
 
-      
+      let lastTime = performance.now()
+      let deltaTime = 0
+      appState.drawFunctions.push(() => {
+        dancerScene.animate()
+      })
       
 
-      const passthru = new Passthru({ src: p5Canvas })
-      const canvasPaint = new CanvasPaint({ src: passthru })
+
+      const canvasPaint = new CanvasPaint({ src: dancerRenderTarget })
 
       shaderGraphEndNode = canvasPaint
       appState.shaderDrawFunc = () => shaderGraphEndNode!!.renderAll(appState.threeRenderer!!)
