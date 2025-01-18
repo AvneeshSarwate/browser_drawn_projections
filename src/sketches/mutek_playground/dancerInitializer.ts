@@ -255,8 +255,6 @@ export const createDancerScene = async (renderer: THREE.WebGLRenderer, renderTar
     dancers.forEach(dancer => {
       dancer.setFrame(Math.floor(accumTime * dancer.params.fps) % dancer.params.frameCount)
     })
-
-    requestAnimationFrame(() => animate(renderTarget));
   }
 
   return {
