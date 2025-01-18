@@ -2,6 +2,9 @@ import * as THREE from "three";
 import { KTX2Loader } from "three/examples/jsm/loaders/KTX2Loader.js";
 import { Line2, LineGeometry, LineMaterial } from "three/examples/jsm/Addons.js";
 import { resolution } from "./appState";
+import { REVISION } from 'three';
+const THREE_PATH = `https://unpkg.com/three@0.${REVISION}.x`;
+const UNPKG_PATH = `https://unpkg.com/three@0.${REVISION}.x/examples/jsm/libs/basis/`;
 
 type PeopleData =  {
   [key: string]: {
@@ -45,10 +48,15 @@ type Point = {
 const people = ["aroma", "chloe", "chris", "diana", "idris", "iman", "jah", "jesse", "kat", "kurush", "latasha", "martin", "robert", "rupal", "sara", "segnon", "senay", "shreya", "stoney", "zandie"]
 
 export const createDancerScene = async (renderer: THREE.WebGLRenderer, renderTarget: THREE.WebGLRenderTarget) => {
-
+  let transcoderPath = "../node_modules/three/examples/jsm/libs/basis/"
+  if (import.meta.env.PROD) {
+    console.log("running in production mode")
+    transcoderPath = UNPKG_PATH
+  } 
+  
   // Load textures
   const loader = new KTX2Loader()
-    .setTranscoderPath("../node_modules/three/examples/jsm/libs/basis/")
+    .setTranscoderPath(transcoderPath)
     .detectSupport(renderer);
 
   console.log(loader);
