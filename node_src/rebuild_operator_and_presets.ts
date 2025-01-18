@@ -44,7 +44,7 @@ if (rebuildDsp) {
 }
 
 async function rebuildOperator() {
-  await runCommand('faust -lang wasm-i src/music/FaustOperatorPrecompiled/operator.dsp -o operator.wasm')
+  await runCommand('faust -lang wasm-i -ct 1 -es 1 -mcd 16 -mdd 1024 -mdy 33 -single -ftz 2 src/music/FaustOperatorPrecompiled/operator.dsp -o operator.wasm')
 
   await runCommand('mv operator.wasm public/operator.wasm')
 

@@ -75,49 +75,55 @@ const modIndexRef = ref(21)
 const synth = new MPEPolySynth(FaustOperatorVoicePrecompiled, 16, false, true)
 const setModIndex = (v: number) => {
   modIndexRef.value = v
-  synth.setBatchParams({ "/operator/ModIndex": v })
+  synth.setBatchParams({ "/operator_2_op/ModIndex": v })
 }
 const modCurveRef = ref(0.5)
 const setModCurve = (v: number) => {
   modCurveRef.value = v
-  synth.setBatchParams({ "/operator/ModCurve": v })
+  synth.setBatchParams({ "/operator_2_op/ModCurve": v })
 }
 
 const modChainCurveRef = ref(1)
 const setModChainCurve = (v: number) => {
   modChainCurveRef.value = v
-  synth.setBatchParams({ "/operator/ModChainCurve": v })
+  synth.setBatchParams({ "/operator_2_op/ModChainCurve": v })
 }
 
 const mod2modRef = ref(1)
 const setMod2mod = (v: number) => {
   mod2modRef.value = v
-  synth.setBatchParams({ "/operator/Mod2Mod": v })
+  synth.setBatchParams({ "/operator_2_op/Mod2Mod": v })
 }
 
 const harmonicSlopeRef = ref(1)
 const setHarmonicSlope = (v: number) => {
   harmonicSlopeRef.value = v
-  synth.setBatchParams({ "/operator/HarmonicSlope": v })
+  synth.setBatchParams({ "/operator_2_op/HarmonicSlope": v })
 }
 
 const harmonicSlopeWeightRef = ref(1)
 const setHarmonicSlopeWeight = (v: number) => {
   harmonicSlopeWeightRef.value = v
-  synth.setBatchParams({ "/operator/HarmonicSlopeWeight": v })
+  synth.setBatchParams({ "/operator_2_op/HarmonicSlopeWeight": v })
 }
 
 const setParams = (synth: MPEPolySynth<FaustOperatorVoicePrecompiled>) => {
   const params = { 
     ...operatorPreset, 
-    "/operator/PolyGain": 0.2,
-    "/operator/ModIndex": modIndexRef.value,
-    "/operator/ModCurve": modCurveRef.value,
-    "/operator/ModChainCurve": modChainCurveRef.value,
-    "/operator/Mod2Mod": mod2modRef.value,
-    "/operator/HarmonicSlope": harmonicSlopeRef.value,
-    "/operator/HarmonicSlopeWeight": harmonicSlopeWeightRef.value,
+    "/operator_2_op/PolyGain": 0.2,
+    "/operator_2_op/ModIndex": modIndexRef.value,
+    "/operator_2_op/ModCurve": modCurveRef.value,
+    "/operator_2_op/ModChainCurve": modChainCurveRef.value,
+    "/operator_2_op/Mod2Mod": mod2modRef.value,
+    "/operator_2_op/HarmonicSlope": harmonicSlopeRef.value,
+    "/operator_2_op/HarmonicSlopeWeight": harmonicSlopeWeightRef.value,
   }
+  //remove all params that start with "/operator_2_op/voice_3" or "/operator_2_op/voice_4"
+  Object.keys(params as { [key: string]: number }).forEach(k => {
+    if (k.startsWith("/operator_2_op/voice_3") || k.startsWith("/operator_2_op/voice_4")) {
+      delete params[k]
+    }
+  })
   synth.setBatchParams(params)
 }
 
@@ -166,10 +172,10 @@ onMounted(async () => {
     // console.log("params", params)
     // setTimeout(() => {
     //   // voice.setBatchParams({
-    //   //   "/operator/Gate": 1,
+    //   //   "/operator_2_op/Gate": 1,
     //   // })
-    //   // const params2 = voice.getAllParams()["/operator/Gate"]
-    //   console.log("params2", params["/operator/Gate"])
+    //   // const params2 = voice.getAllParams()["/operator_2_op/Gate"]
+    //   console.log("params2", params["/operator_2_op/Gate"])
     // }, 1000)
 
     // const voice = new FaustOperatorVoicePrecompiled(5)
@@ -178,7 +184,7 @@ onMounted(async () => {
     // voice.noteOn(60, 100, 0, 0)
     // setTimeout(() => {
     //   const params = voice.getAllParams()
-    //   console.log("params", params["/operator/Gate"])
+    //   console.log("params", params["/operator_2_op/Gate"])
     // }, 1000)
 
 
