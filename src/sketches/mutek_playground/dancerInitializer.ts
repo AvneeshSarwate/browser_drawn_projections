@@ -161,7 +161,7 @@ export const createDancerScene = async (renderer: THREE.WebGLRenderer, renderTar
     const lineGeometry = new LineGeometry()
     const lineMaterial = new LineMaterial( {
       color: 0xffffff,
-      linewidth: 5, // in world units with size attenuation, pixels otherwise
+      linewidth: 2, // in world units with size attenuation, pixels otherwise
       // vertexColors: true,
       dashed: false,
       alphaToCoverage: true,
@@ -221,11 +221,11 @@ export const createDancerScene = async (renderer: THREE.WebGLRenderer, renderTar
 
 
    //4x5 grid positions
-   const rows = 4
-   const cols = 5
-   const blockWidth = window.innerWidth / cols 
-   const blockHeight = window.innerHeight / rows
-   const blockSize = 140//Math.min(blockWidth, blockHeight)
+   const rows = 3
+   const cols = 7
+   const blockWidth = resolution.width / cols 
+   const blockHeight = resolution.height / rows
+   const blockSize = 200//Math.min(blockWidth, blockHeight)
  
    const positions = Array.from({length: rows * cols}, (_, i) => ({
      x: (i % cols) * blockWidth + blockWidth / 2,
@@ -234,6 +234,7 @@ export const createDancerScene = async (renderer: THREE.WebGLRenderer, renderTar
    const numQuads = rows * cols
 
   for (let i = 0; i < numQuads; i++) {
+    if(!people[i]) continue
     const dancer = createDancer(people[i], blockSize, positions[i])
     dancers.set(dancer.id, dancer)
   }
