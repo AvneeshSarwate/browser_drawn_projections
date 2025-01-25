@@ -38,7 +38,7 @@ export default defineConfig({
   },
   build: {
     target: 'esnext',
-    sourcemap: true,
+    // sourcemap: true,
     minify: false, //enabling this breaks the faust wasm module
     rollupOptions: {
       output: {
