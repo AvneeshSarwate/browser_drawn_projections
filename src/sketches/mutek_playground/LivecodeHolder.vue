@@ -31,6 +31,8 @@ const selectedDancerIndex = ref(1)
 const speed = ref(0.125)
 const filterFreq = ref(1500) //lerp outline to circle based on filter
 const release = ref(0.15) //pulse outlien out based on release
+const bassNote = ref(0)
+const bassVol = ref(0.5)
 
 onMounted(async () => {
   try {
@@ -68,11 +70,20 @@ onMounted(async () => {
 
     await FAUST_AUDIO_CONTEXT_READY
     const synth = new MPEPolySynth(FaustTestVoice, 32, false, true)
+    const synth2 = new MPEPolySynth(FaustTestVoice, 2, false, true)
     await synth.synthReady()
+    await synth2.synthReady()
 
     synth.setParam('release', 0.15)
     synth.setParam('polyGain', 0.2)
     synth.setParam('Filter', 1500)
+
+    const bassPitches = [36, 38, 40, 41, 43, 45, 47, 48]
+    const bassVoice = synth2.noteOn(bassPitches[bassNote.value], 100, 0, 0)
+    let bassMidi = bassPitches[bassNote.value]
+    let bassTarget = bassMidi
+    bassVoice.polyGain = bassVol.value
+    bassVoice.Filter = 600
 
     const lerpDancer = dancerScene.createDancer("kurush", 500, {x: 400, y: 200})
     lerpDancer.group.position.z = 1
@@ -95,6 +106,11 @@ onMounted(async () => {
         chordPulseData.activeChord = selectedDancerIndex.value
         synth.setParam('Filter', filterFreq.value)
         synth.setParam('release', release.value)
+
+        //slider sets target bass note, and this loop 
+        //interpolates towards the target note over about 10 frames.
+        //each note has it's own dancer, and the dancers interpolate along with the notes
+
         lerpDancer.lerpDef.lerp = logisticSigmoid(sinN(Date.now() * 0.001 * 0.3), 0.8)
         lerpDancer.updateLerp()
       }
@@ -153,6 +169,18 @@ onUnmounted(() => {
     <label for="release">Release</label>
     <input type="range" v-model.number="release" :min="0" :max="1" :step="0.01" />
     <span>{{ release }}</span>
+  </div>
+
+  <div>
+    <label for="bassNote">Bass Note</label>
+    <input type="range" v-model.number="bassNote" :min="0" :max="7" />
+    <span>{{ bassNote }}</span>
+  </div>
+
+  <div>
+    <label for="bassVol">Bass Vol</label>
+    <input type="range" v-model.number="bassVol" :min="0" :max="1" :step="0.01" />
+    <span>{{ bassVol }}</span>
   </div>
 </template>
 
