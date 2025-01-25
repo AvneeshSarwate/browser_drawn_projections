@@ -76,7 +76,7 @@ type Point = {
 
 type DancerName = "aroma" | "chloe" | "chris" | "diana" | "idris" | "iman" | "jah" | "jesse" | "kat" | "kurush" | "latasha" | "martin" | "robert" | "rupal" | "sara" | "segnon" | "senay" | "shreya" | "stoney" | "zandie"
 export const people: DancerName[] = ["aroma", "chloe", "chris", "diana", "idris", "iman", "jah", "jesse", "kat", "kurush", "latasha", "martin", "robert", "rupal", "sara", "segnon", "senay", "shreya", "stoney", "zandie"]
-
+export const framesPerPerson: Record<string, number> = {}
 export const createDancerScene = async (renderer: THREE.WebGLRenderer, renderTarget: THREE.WebGLRenderTarget) => {
   let transcoderPath = "../node_modules/three/examples/jsm/libs/basis/"
   if (import.meta.env.PROD) {
@@ -100,6 +100,7 @@ export const createDancerScene = async (renderer: THREE.WebGLRenderer, renderTar
         (textureArray) => {
           const texArr = textureArray as THREE.CompressedArrayTexture
           textureLengthMap[textureName] = texArr.source.data.depth
+          framesPerPerson[textureName.split("_")[0]] = texArr.source.data.depth
           console.log(`${textureName}:`, "frames", texArr.mipmaps!!.length, "megs", texArr.mipmaps!![0].data.length / 1000000, "format", texArr.format);
           resolve(texArr);
         },

@@ -7,11 +7,12 @@ import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
-import { createDancerScene } from './dancerInitializer';
+import { createDancerScene, framesPerPerson, people } from './dancerInitializer';
 import { notePulse } from "./audiovisualProcesses";
 import { FAUST_AUDIO_CONTEXT_READY, MPEPolySynth } from "@/music/mpeSynth";
 import { FaustTestVoice } from "@/music/FaustSynthTemplate";
 import { logisticSigmoid } from "@/rendering/logisticSigmoid";
+import { lerp } from "three/src/math/MathUtils.js";
 const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
 let timeLoops: CancelablePromisePoxy<any>[] = []
@@ -79,13 +80,14 @@ onMounted(async () => {
     synth.setParam('Filter', 1500)
 
     const bassPitches = [36, 38, 40, 41, 43, 45, 47, 48]
+    const bassDancers = people.slice(10, 18)
     const bassVoice = synth2.noteOn(bassPitches[bassNote.value], 100, 0, 0)
     let bassMidi = bassPitches[bassNote.value]
     let bassTarget = bassMidi
     bassVoice.polyGain = bassVol.value
     bassVoice.Filter = 600
 
-    const lerpDancer = dancerScene.createDancer("kurush", 500, {x: 400, y: 200})
+    const lerpDancer = dancerScene.createDancer("kurush", 500, {x: 700, y: 250})
     lerpDancer.group.position.z = 1
     lerpDancer.quadVisible(false)
     lerpDancer.lerpDef.lerping = true
@@ -99,6 +101,11 @@ onMounted(async () => {
       notePulse(chordPulseData, synth, ctx)
     })
 
+    let bassNoteTarget = bassNote.value
+    let lastTarget = bassNoteTarget
+    const slideTime = 120
+    let slideProg = 0
+    let loopFrame = 0
     launchLoop(async (ctx) => {
       while(true) {
         await ctx.waitFrame()
@@ -111,8 +118,22 @@ onMounted(async () => {
         //interpolates towards the target note over about 10 frames.
         //each note has it's own dancer, and the dancers interpolate along with the notes
 
-        lerpDancer.lerpDef.lerp = logisticSigmoid(sinN(Date.now() * 0.001 * 0.3), 0.8)
+        if(bassNoteTarget !== bassNote.value) {
+          lastTarget = bassNoteTarget
+          bassNoteTarget = bassNote.value
+          lerpDancer.lerpDef.fromDancer = bassDancers[lastTarget]
+          lerpDancer.lerpDef.toDancer = bassDancers[bassNoteTarget]
+          slideProg = 0
+        }
+
+        slideProg = Math.min(slideProg + 1, slideTime)
+        lerpDancer.lerpDef.fromFrame = Math.floor(loopFrame/10) % framesPerPerson[lerpDancer.lerpDef.fromDancer]
+        lerpDancer.lerpDef.toFrame = Math.floor(loopFrame/10) % framesPerPerson[lerpDancer.lerpDef.toDancer]
+        lerpDancer.lerpDef.lerp = logisticSigmoid(slideProg / slideTime, 0.8)
         lerpDancer.updateLerp()
+        loopFrame++
+
+        bassVoice.pitch = lerp(bassPitches[lastTarget], bassPitches[bassNoteTarget], slideProg / slideTime)
       }
     })
 
