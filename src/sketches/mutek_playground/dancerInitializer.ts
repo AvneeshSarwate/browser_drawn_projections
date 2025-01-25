@@ -37,6 +37,15 @@ export type Dancer = {
   quad: THREE.Mesh
   uniforms: { [key: string]: { value: any } }
   params: QuadParam
+  lerpDef: {
+    lerping: boolean
+    lerp: number
+    fromDancer: DancerName
+    toDancer: DancerName
+    fromFrame: number
+    toFrame: number
+  }
+  updateLerp: () => void
   setFrame: (frame: number) => void
   remove: () => void
   quadVisible: (b: boolean) => void
@@ -46,7 +55,7 @@ export type Dancer = {
 async function getPeopleData() {
   //replace with fetch and cast to RawPeopleData
   // const peopleData = people.map(person => countoursAndSkeletonForPersonTHREE(person))
-  const peopleDataResponse = await fetch('allPeopleData.json')
+  const peopleDataResponse = await fetch('allPeopleData_equiSpline.json')
   const peopleData = await peopleDataResponse.json() as PeopleData
   people.forEach(person => {
     peopleData[person].splineFrames = peopleData[person].splineFrames.map(frame => frame.map(pt => new THREE.Vector2(pt.x, pt.y)))
@@ -207,6 +216,15 @@ export const createDancerScene = async (renderer: THREE.WebGLRenderer, renderTar
     }
     quadParams.push(params)
 
+    const lerpDef = {
+      lerping: false,
+      lerp: 0,
+      fromDancer: dancerName,
+      toDancer: dancerName,
+      fromFrame: 0,
+      toFrame: 0,
+    }
+
     const id = crypto.randomUUID()
     return {
       id,
@@ -216,12 +234,19 @@ export const createDancerScene = async (renderer: THREE.WebGLRenderer, renderTar
       quad,
       uniforms: uniformsClone,
       params,
+      lerpDef,
       quadVisible: (b: boolean) => quad.visible = b,
       lineVisible: (b: boolean) => line.visible = b,
       setFrame: (frame: number) => {
 
         uniformsClone.frame.value = frame % params.frameCount
         line.geometry.setFromPoints(peopleData[dancerName].splineFrames[frame % params.frameCount])
+      },
+      updateLerp: () => {
+        const startFrame = peopleData[lerpDef.fromDancer].splineFrames[lerpDef.fromFrame % params.frameCount]
+        const endFrame = peopleData[lerpDef.toDancer].splineFrames[lerpDef.toFrame % params.frameCount]
+        const lerpFrame = startFrame.map((pt, i) => pt.clone().lerp(endFrame[i], lerpDef.lerp))
+        line.geometry.setFromPoints(lerpFrame)
       },
       remove: () => {
         //sometimes performance tanks when doing this synchronously

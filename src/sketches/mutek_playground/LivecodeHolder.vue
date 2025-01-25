@@ -11,6 +11,7 @@ import { createDancerScene } from './dancerInitializer';
 import { notePulse } from "./audiovisualProcesses";
 import { FAUST_AUDIO_CONTEXT_READY, MPEPolySynth } from "@/music/mpeSynth";
 import { FaustTestVoice } from "@/music/FaustSynthTemplate";
+import { logisticSigmoid } from "@/rendering/logisticSigmoid";
 const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
 let timeLoops: CancelablePromisePoxy<any>[] = []
@@ -28,7 +29,8 @@ const clearDrawFuncs = () => {
 
 const selectedDancerIndex = ref(1)
 const speed = ref(0.125)
-
+const filterFreq = ref(1500) //lerp outline to circle based on filter
+const release = ref(0.15) //pulse outlien out based on release
 
 onMounted(async () => {
   try {
@@ -64,14 +66,6 @@ onMounted(async () => {
       stop: false
     }
 
-    launchLoop(async (ctx) => {
-      while(true) {
-        await ctx.waitFrame()
-        chordPulseData.speed = speed.value
-        chordPulseData.activeChord = selectedDancerIndex.value
-      }
-    })
-
     await FAUST_AUDIO_CONTEXT_READY
     const synth = new MPEPolySynth(FaustTestVoice, 32, false, true)
     await synth.synthReady()
@@ -80,9 +74,30 @@ onMounted(async () => {
     synth.setParam('polyGain', 0.2)
     synth.setParam('Filter', 1500)
 
+    const lerpDancer = dancerScene.createDancer("kurush", 500, {x: 400, y: 200})
+    lerpDancer.group.position.z = 1
+    lerpDancer.quadVisible(false)
+    lerpDancer.lerpDef.lerping = true
+    lerpDancer.lerpDef.fromDancer = "kurush"
+    lerpDancer.lerpDef.toDancer = "chloe"
+    lerpDancer.lerpDef.fromFrame = 0
+    lerpDancer.lerpDef.toFrame = 0
+
     launchLoop(async (ctx) => {
       await ctx.wait(0.1)
       notePulse(chordPulseData, synth, ctx)
+    })
+
+    launchLoop(async (ctx) => {
+      while(true) {
+        await ctx.waitFrame()
+        chordPulseData.speed = speed.value
+        chordPulseData.activeChord = selectedDancerIndex.value
+        synth.setParam('Filter', filterFreq.value)
+        synth.setParam('release', release.value)
+        lerpDancer.lerpDef.lerp = logisticSigmoid(sinN(Date.now() * 0.001 * 0.3), 0.8)
+        lerpDancer.updateLerp()
+      }
     })
 
     appState.drawFunctions.push(() => {
@@ -126,6 +141,18 @@ onUnmounted(() => {
     <label for="activeChord">Active Chord</label>
     <input type="range" v-model.number="selectedDancerIndex" :min="0" :max="4" />
     <span>{{ selectedDancerIndex }}</span>
+  </div>
+
+  <div>
+    <label for="filterFreq">Filter Freq</label>
+    <input type="range" v-model.number="filterFreq" :min="0" :max="10000" />
+    <span>{{ filterFreq }}</span>
+  </div>
+
+  <div>
+    <label for="release">Release</label>
+    <input type="range" v-model.number="release" :min="0" :max="1" :step="0.01" />
+    <span>{{ release }}</span>
   </div>
 </template>
 
