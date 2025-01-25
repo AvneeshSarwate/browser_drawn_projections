@@ -738,9 +738,6 @@ import { instantiateFaustModuleFromFile,
 // Get the Faust compiler
 let libFaust: LibFaust
 export let compiler: FaustCompiler
-// @ts-ignore
-window.libFaust = libFaust;
-console.log(libFaust.version());
 export const argv = ["-I", "libraries/"];
 export const faustAudioContext = new AudioContext();
 
@@ -750,6 +747,9 @@ export const FAUST_AUDIO_CONTEXT_READY = new Promise<void>(resolve => {
     const faustModule = await instantiateFaustModuleFromFile("../node_modules/@grame/faustwasm/libfaust-wasm/libfaust-wasm.js");
     libFaust = new LibFaust(faustModule);
     compiler = new FaustCompiler(libFaust);
+    // @ts-ignore
+    window.libFaust = libFaust;
+    console.log(libFaust.version());
 
     faustAudioContext.resume()
     resolve()

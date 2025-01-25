@@ -24,6 +24,25 @@ type PeopleData =  {
   }
 }
 
+type QuadParam = {
+  texName: string
+  frameCount: number
+  fps: number
+}
+export type Dancer = {
+  id: string
+  dancerName: string
+  group: THREE.Group
+  line: Line2
+  quad: THREE.Mesh
+  uniforms: { [key: string]: { value: any } }
+  params: QuadParam
+  setFrame: (frame: number) => void
+  remove: () => void
+  quadVisible: (b: boolean) => void
+  lineVisible: (b: boolean) => void
+}
+
 async function getPeopleData() {
   //replace with fetch and cast to RawPeopleData
   // const peopleData = people.map(person => countoursAndSkeletonForPersonTHREE(person))
@@ -45,7 +64,9 @@ type Point = {
 // const canvas = document.querySelector<HTMLCanvasElement>("#three-canvas")!;
 
 // const splineFrames = contours.diana.frames.map(frame => bezierToCatmullRomExact(frame))
-const people = ["aroma", "chloe", "chris", "diana", "idris", "iman", "jah", "jesse", "kat", "kurush", "latasha", "martin", "robert", "rupal", "sara", "segnon", "senay", "shreya", "stoney", "zandie"]
+
+type DancerName = "aroma" | "chloe" | "chris" | "diana" | "idris" | "iman" | "jah" | "jesse" | "kat" | "kurush" | "latasha" | "martin" | "robert" | "rupal" | "sara" | "segnon" | "senay" | "shreya" | "stoney" | "zandie"
+export const people: DancerName[] = ["aroma", "chloe", "chris", "diana", "idris", "iman", "jah", "jesse", "kat", "kurush", "latasha", "martin", "robert", "rupal", "sara", "segnon", "senay", "shreya", "stoney", "zandie"]
 
 export const createDancerScene = async (renderer: THREE.WebGLRenderer, renderTarget: THREE.WebGLRenderTarget) => {
   let transcoderPath = "../node_modules/three/examples/jsm/libs/basis/"
@@ -132,28 +153,15 @@ export const createDancerScene = async (renderer: THREE.WebGLRenderer, renderTar
   material.transparent = true;
   material.side = THREE.DoubleSide;
   
-  const dancers: Map<string, {
-    dancerName: string
-    group: THREE.Group
-    line: Line2
-    quad: THREE.Mesh
-    uniforms: { [key: string]: { value: any } }
-    params: QuadParam
-    setFrame: (frame: number) => void
-    remove: () => void
-  }> = new Map()
+
+  const dancers: Map<string, Dancer> = new Map()
 
   const baseFps = 15
-  type QuadParam = {
-    texName: string
-    frameCount: number
-    fps: number
-  }
   const quadParams: QuadParam[] = []
 
   //todo add Line2 for outlines here
 
-  function createDancer(dancerName: string, blockSize: number, position: {x: number, y: number}) {
+  function createDancer(dancerName: DancerName, blockSize: number, position: {x: number, y: number}): Dancer {
     const textureName = `${dancerName}_texture_array.ktx2`
     const matClone = material.clone()
     const uniformsClone = {
@@ -208,9 +216,12 @@ export const createDancerScene = async (renderer: THREE.WebGLRenderer, renderTar
       quad,
       uniforms: uniformsClone,
       params,
+      quadVisible: (b: boolean) => quad.visible = b,
+      lineVisible: (b: boolean) => line.visible = b,
       setFrame: (frame: number) => {
-        uniformsClone.frame.value = frame
-        line.geometry.setFromPoints(peopleData[dancerName].splineFrames[frame])
+
+        uniformsClone.frame.value = frame % params.frameCount
+        line.geometry.setFromPoints(peopleData[dancerName].splineFrames[frame % params.frameCount])
       },
       remove: () => {
         //sometimes performance tanks when doing this synchronously
@@ -233,7 +244,6 @@ export const createDancerScene = async (renderer: THREE.WebGLRenderer, renderTar
    const cols = 7
    const blockWidth = resolution.width / cols 
    const blockHeight = resolution.height / rows
-   const blockSize = 200//Math.min(blockWidth, blockHeight)
  
    const positions = Array.from({length: rows * cols}, (_, i) => ({
      x: (i % cols) * blockWidth + blockWidth / 2,
@@ -241,16 +251,21 @@ export const createDancerScene = async (renderer: THREE.WebGLRenderer, renderTar
    }))
    const numQuads = rows * cols
 
-  for (let i = 0; i < numQuads; i++) {
-    if(!people[i]) continue
-    const dancer = createDancer(people[i], blockSize, positions[i])
-    dancers.set(dancer.id, dancer)
-  }
+  // for (let i = 0; i < numQuads; i++) {
+  //   if(!people[i]) continue
+  //   const dancer = createDancer(people[i], blockSize, positions[i])
+  //   dancers.set(dancer.id, dancer)
+  // }
 
   
 
   let lastTime = performance.now()
   let accumTime = 0
+
+  const renderScene = (renderTarget: THREE.WebGLRenderTarget) => {
+    renderer.setRenderTarget(renderTarget)
+    renderer.render(scene, orthoCam);
+  }
 
   const animate = (renderTarget: THREE.WebGLRenderTarget) => {
     const newTime = performance.now()
@@ -258,12 +273,11 @@ export const createDancerScene = async (renderer: THREE.WebGLRenderer, renderTar
     lastTime = newTime
     accumTime += deltaTime / 1000
 
-    renderer.setRenderTarget(renderTarget)
-    renderer.render(scene, orthoCam);
-
     dancers.forEach(dancer => {
       dancer.setFrame(Math.floor(accumTime * dancer.params.fps) % dancer.params.frameCount)
     })
+
+    renderScene(renderTarget)
   }
 
   return {
@@ -271,6 +285,7 @@ export const createDancerScene = async (renderer: THREE.WebGLRenderer, renderTar
     dancers,
     createDancer,
     scene,
-    renderer
+    renderer,
+    renderScene
   }
 }

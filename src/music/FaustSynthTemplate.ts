@@ -26,7 +26,16 @@ process = os.sawtooth(freq) * vAmp * polyGain * env : filter;
 
 //todo - need different name for each voice to avoid AudioWorkletNode name conflict?
 //gives warning but still works
-await generator.compile(compiler, name, code, argv.join(" "));
+let isCompiled = false
+let compilerPromise: Promise<FaustMonoDspGenerator>
+const compile = async () => {
+  if(!isCompiled) {
+    isCompiled = true
+    console.log("compiling")
+    compilerPromise = generator.compile(compiler, name, code, argv.join(" "));
+  } 
+  await compilerPromise
+}
 
 export class FaustTestVoice implements MPEVoiceGraph {
   id: number
@@ -40,7 +49,8 @@ export class FaustTestVoice implements MPEVoiceGraph {
   constructor(id: number) {
     this.id = id
     const nodeMakeNode = async () =>{
-      this.node = await generator.createNode(faustAudioContext);
+      await compile()
+      this.node = await generator.createNode(faustAudioContext, name+Math.random().toString());
       this.node.connect(faustAudioContext.destination);
       this.node.start();
     } 
@@ -73,6 +83,7 @@ export class FaustTestVoice implements MPEVoiceGraph {
     return this.node.getParamValue("/oscillator/PolyGain")
   }
 
+  @param(0, 1, 0.7)
   set polyGain(value: number) {
     this.node.setParamValue("/oscillator/PolyGain", value)
   }
@@ -81,6 +92,7 @@ export class FaustTestVoice implements MPEVoiceGraph {
     return this.node.getParamValue("/oscillator/Release")
   }
 
+  @param(0, 10, 0.05)
   set release(value: number) {
     this.node.setParamValue("/oscillator/Release", value)
   }
