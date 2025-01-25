@@ -134,6 +134,7 @@ onMounted(async () => {
         loopFrame++
 
         bassVoice.pitch = lerp(bassPitches[lastTarget], bassPitches[bassNoteTarget], slideProg / slideTime)
+        bassVoice.polyGain = bassVol.value
       }
     })
 

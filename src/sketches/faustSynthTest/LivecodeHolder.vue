@@ -6,7 +6,7 @@ import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri, naiveSleep } from '@/channels/channels';
-import { FAUST_AUDIO_CONTEXT_READY, FaustTestVoice, MPEPolySynth, type MPEVoiceGraph } from '@/music/mpeSynth';
+import { FAUST_AUDIO_CONTEXT_READY, MPEPolySynth, type MPEVoiceGraph } from '@/music/mpeSynth';
 import { FaustTestVoice as FaustOscillatorVoice } from '@/music/FaustSynthTemplate';
 import { Scale } from '@/music/scale';
 import { dateNow } from '@/channels/base_time_context';
