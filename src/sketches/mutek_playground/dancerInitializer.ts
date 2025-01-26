@@ -4,7 +4,6 @@ import { Line2, LineGeometry, LineMaterial } from "three/examples/jsm/Addons.js"
 import { resolution } from "./appState";
 import { REVISION } from 'three';
 import { Earcut } from 'three/src/extras/Earcut.js';
-const THREE_PATH = `https://unpkg.com/three@0.${REVISION}.x`;
 const UNPKG_PATH = `https://unpkg.com/three@0.${REVISION}.x/examples/jsm/libs/basis/`;
 
 const OUTLINE_LENGTH = 821
@@ -35,6 +34,19 @@ type QuadParam = {
   dancerName: string
   showRegions: boolean
 }
+
+type DancerShapeUniforms = {
+  color1: { value: THREE.Vector4 }
+  color2: { value: THREE.Vector4 }
+  color3: { value: THREE.Vector4 }
+  color4: { value: THREE.Vector4 }
+  color5: { value: THREE.Vector4 }
+  color6: { value: THREE.Vector4 }
+  xMid: { value: number }
+  yBottom: { value: number }
+  yTop: { value: number }
+}
+
 export type Dancer = {
   id: string
   group: THREE.Group
@@ -53,8 +65,9 @@ export type Dancer = {
   dancerShape: {
     mesh: THREE.Mesh
     geometry: THREE.BufferGeometry
-    material: THREE.MeshBasicMaterial
+    material: THREE.ShaderMaterial
   }
+  dancerShapeUniforms: DancerShapeUniforms
   updateLerp: () => void
   setFrame: (frame: number) => void
   remove: () => void
@@ -111,6 +124,30 @@ function updateOutlineFlatGeometry(geometry: THREE.BufferGeometry, points: THREE
 
     geometry.setDrawRange(0, quadIndices.length)
   }
+}
+
+function getDancerBounds(frame: THREE.Vector2[]) {
+  let xMin = Infinity
+  let xMax = -Infinity
+  let yMin = Infinity
+  let yMax = -Infinity
+  frame.forEach(pt => {
+    xMin = Math.min(xMin, pt.x)
+    xMax = Math.max(xMax, pt.x)
+    yMin = Math.min(yMin, pt.y)
+    yMax = Math.max(yMax, pt.y)
+  })
+  const xMid = (xMin + xMax) / 2
+  const yBottom = yMin + (yMax - yMin) / 3
+  const yTop = yMin + (yMax - yMin) * 2 / 3
+  return {xMid, yBottom, yTop}
+}
+
+function updateDancerShapeUniforms(dancerShapeUniforms: DancerShapeUniforms, frame: THREE.Vector2[]) {
+  const {xMid, yBottom, yTop} = getDancerBounds(frame)
+  dancerShapeUniforms.xMid.value = xMid / OUTLINE_GRID_SIZE
+  dancerShapeUniforms.yBottom.value = yBottom / OUTLINE_GRID_SIZE
+  dancerShapeUniforms.yTop.value = yTop / OUTLINE_GRID_SIZE
 }
 
 async function getPeopleData() {
@@ -223,6 +260,61 @@ export const createDancerScene = async (renderer: THREE.WebGLRenderer, renderTar
   });
   material.transparent = true;
   material.side = THREE.DoubleSide;
+
+
+  const dancerShapeUniforms = {
+    color1: { value: new THREE.Vector4(1, 0, 0, 1) },
+    color2: { value: new THREE.Vector4(0, 1, 0, 1) },
+    color3: { value: new THREE.Vector4(0, 0, 1, 1) },
+    color4: { value: new THREE.Vector4(1, 1, 0, 1) },
+    color5: { value: new THREE.Vector4(0, 1, 1, 1) },
+    color6: { value: new THREE.Vector4(1, 0, 1, 1) },
+    xMid: { value: 0.5 },
+    yBottom: { value: 0.33 },
+    yTop: { value: 0.66 },
+  }
+  const dancerShapeMaterial = new THREE.ShaderMaterial({
+    uniforms: dancerShapeUniforms,
+    vertexShader: `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform vec4 color1;
+      uniform vec4 color2;
+      uniform vec4 color3;
+      uniform vec4 color4;
+      uniform vec4 color5;
+      uniform vec4 color6;
+      uniform float xMid;
+      uniform float yBottom;
+      uniform float yTop;
+      varying vec2 vUv;
+      void main() {
+        vec4 outColor = vec4(0,0,0,0);
+
+        if(vUv.x < xMid && vUv.y < yBottom) {
+          outColor = color1;
+        } else if(vUv.x < xMid && vUv.y > yBottom && vUv.y < yTop) {
+          outColor = color2;
+        } else if(vUv.x < xMid && vUv.y > yTop) {
+          outColor = color3;
+        } else if(vUv.x > xMid && vUv.y < yBottom) {
+          outColor = color4;
+        } else if(vUv.x > xMid && vUv.y > yBottom && vUv.y < yTop) {
+          outColor = color5;
+        } else if(vUv.x > xMid && vUv.y > yTop) {
+          outColor = color6;
+        }
+        gl_FragColor = outColor;
+      }
+    `,
+  });
+  dancerShapeMaterial.transparent = true;
+  dancerShapeMaterial.side = THREE.DoubleSide;
   
 
   const dancers: Map<string, Dancer> = new Map()
@@ -291,8 +383,8 @@ export const createDancerScene = async (renderer: THREE.WebGLRenderer, renderTar
     dancerShapeGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(OUTLINE_LENGTH * 3), 3))
     dancerShapeGeometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(OUTLINE_LENGTH * 2), 2))
     dancerShapeGeometry.setIndex(new THREE.BufferAttribute(new Uint32Array(OUTLINE_LENGTH*3), 1))
-    const dancerShapeMaterial = new THREE.MeshBasicMaterial({color: 0xffffff, side: THREE.DoubleSide})
-    const dancerShapeMesh = new THREE.Mesh(dancerShapeGeometry, dancerShapeMaterial)
+    const dancerShapeMat = dancerShapeMaterial.clone()
+    const dancerShapeMesh = new THREE.Mesh(dancerShapeGeometry, dancerShapeMat)
     // dancerShapeMesh.scale.set(blockSize / 512, blockSize / 512, 1)
     dancerShapeMesh.position.x = - blockSize / 2
     dancerShapeMesh.position.y = - blockSize / 2
@@ -304,8 +396,20 @@ export const createDancerScene = async (renderer: THREE.WebGLRenderer, renderTar
     const dancerShape = {
       mesh: dancerShapeMesh,
       geometry: dancerShapeGeometry,
-      material: dancerShapeMaterial,
+      material: dancerShapeMat,
     }
+    const dancerShapeUniforms = {
+      color1: { value: new THREE.Vector4(1, 0, 0, 1) },
+      color2: { value: new THREE.Vector4(0, 1, 0, 1) },
+      color3: { value: new THREE.Vector4(0, 0, 1, 1) },
+      color4: { value: new THREE.Vector4(1, 1, 0, 1) },
+      color5: { value: new THREE.Vector4(0, 1, 1, 1) },
+      color6: { value: new THREE.Vector4(1, 0, 1, 1) },
+      xMid: { value: 0.5 },
+      yBottom: { value: 0.33 },
+      yTop: { value: 0.66 },
+    }
+    dancerShapeMat.uniforms = dancerShapeUniforms
 
     scene.add(group)
 
@@ -316,6 +420,7 @@ export const createDancerScene = async (renderer: THREE.WebGLRenderer, renderTar
       quad,
       uniforms: uniformsClone,
       dancerShape,
+      dancerShapeUniforms,
       params,
       lerpDef,
       quadVisible: (b: boolean) => quad.visible = b,
@@ -330,6 +435,7 @@ export const createDancerScene = async (renderer: THREE.WebGLRenderer, renderTar
         line.geometry.setFromPoints(frameData)
         if(params.showRegions) {
           updateOutlineFlatGeometry(dancerShape.geometry, frameData)
+          updateDancerShapeUniforms(dancerShapeUniforms, frameData)
         }
       },
       updateLerp: () => {
@@ -339,6 +445,7 @@ export const createDancerScene = async (renderer: THREE.WebGLRenderer, renderTar
         line.geometry.setFromPoints(lerpFrame)
         if(params.showRegions) {
           updateOutlineFlatGeometry(dancerShape.geometry, lerpFrame)
+          updateDancerShapeUniforms(dancerShapeUniforms, lerpFrame)
         }
       },
       remove: () => {

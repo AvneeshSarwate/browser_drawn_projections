@@ -94,10 +94,10 @@ onMounted(async () => {
     lerpDancer.lerpDef.fromFrame = 0
     lerpDancer.lerpDef.toFrame = 0
 
-    const segmentDancer = dancerScene.createDancer("kurush", 500, {x: 900, y: 200})
-    // segmentDancer.quadVisible(false)
+    const segmentDancer = dancerScene.createDancer("chris", 500, {x: 900, y: 200})
+    segmentDancer.quadVisible(false)
     segmentDancer.regionsVisible(true)
-    // segmentDancer.lineVisible(false)
+    segmentDancer.lineVisible(false)
 
     launchLoop(async (ctx) => {
       await ctx.wait(0.1)
