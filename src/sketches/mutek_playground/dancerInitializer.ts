@@ -3,8 +3,12 @@ import { KTX2Loader } from "three/examples/jsm/loaders/KTX2Loader.js";
 import { Line2, LineGeometry, LineMaterial } from "three/examples/jsm/Addons.js";
 import { resolution } from "./appState";
 import { REVISION } from 'three';
+import { Earcut } from 'three/src/extras/Earcut.js';
 const THREE_PATH = `https://unpkg.com/three@0.${REVISION}.x`;
 const UNPKG_PATH = `https://unpkg.com/three@0.${REVISION}.x/examples/jsm/libs/basis/`;
+
+const OUTLINE_LENGTH = 821
+const OUTLINE_GRID_SIZE = 512
 
 type PeopleData =  {
   [key: string]: {
@@ -28,10 +32,11 @@ type QuadParam = {
   texName: string
   frameCount: number
   fps: number
+  dancerName: string
+  showRegions: boolean
 }
 export type Dancer = {
   id: string
-  dancerName: string
   group: THREE.Group
   line: Line2
   quad: THREE.Mesh
@@ -45,11 +50,67 @@ export type Dancer = {
     fromFrame: number
     toFrame: number
   }
+  dancerShape: {
+    mesh: THREE.Mesh
+    geometry: THREE.BufferGeometry
+    material: THREE.MeshBasicMaterial
+  }
   updateLerp: () => void
   setFrame: (frame: number) => void
   remove: () => void
   quadVisible: (b: boolean) => void
   lineVisible: (b: boolean) => void
+  regionsVisible: (b: boolean) => void
+}
+
+function updateOutlineFlatGeometry(geometry: THREE.BufferGeometry, points: THREE.Vector2[]) {
+
+  const debug = false
+
+  if(!debug) {
+    const posAttribute = geometry.getAttribute('position')
+    for(let i = 0; i < points.length; i++) {
+      posAttribute.setXYZ(i, points[i].x, points[i].y, 0)
+    }
+    posAttribute.needsUpdate = true
+
+    const uvAttribute = geometry.getAttribute('uv')
+    for(let i = 0; i < points.length; i++) {
+      uvAttribute.setXY(i, points[i].x/OUTLINE_GRID_SIZE, points[i].y/OUTLINE_GRID_SIZE)
+    }
+    uvAttribute.needsUpdate = true
+
+    const indices = Earcut.triangulate(points.map(pt => [pt.x, pt.y]).flat())
+    const indexAttribute = geometry.getIndex()
+    indexAttribute.set(indices)
+    indexAttribute.needsUpdate = true
+
+    geometry.setDrawRange(0, indices.length)
+  } else {
+
+    // as a debug test, draw an indexed quad
+    const size = 250
+    const quadPts = [new THREE.Vector2(0, 0), new THREE.Vector2(size, 0), new THREE.Vector2(size, size), new THREE.Vector2(0, size)]
+    const quadIndices = [0, 1, 2, 0, 2, 3]
+    const posAttribute = geometry.getAttribute('position')
+    for(let i = 0; i < quadPts.length; i++) {
+      posAttribute.setXYZ(i, quadPts[i].x, quadPts[i].y, 0)
+    }
+    posAttribute.needsUpdate = true
+
+    const uvAttribute = geometry.getAttribute('uv')
+    for(let i = 0; i < quadPts.length; i++) {
+      uvAttribute.setXY(i, quadPts[i].x/OUTLINE_GRID_SIZE, quadPts[i].y/OUTLINE_GRID_SIZE)
+    }
+    uvAttribute.needsUpdate = true
+
+    // const indices = Earcut.triangulate(quadPts.map(pt => [pt.x, pt.y]).flat())
+    const indexAttribute = geometry.getIndex()
+    indexAttribute.set(quadIndices)
+    indexAttribute.needsUpdate = true
+
+    geometry.setDrawRange(0, quadIndices.length)
+  }
 }
 
 async function getPeopleData() {
@@ -167,7 +228,6 @@ export const createDancerScene = async (renderer: THREE.WebGLRenderer, renderTar
   const dancers: Map<string, Dancer> = new Map()
 
   const baseFps = 15
-  const quadParams: QuadParam[] = []
 
   //todo add Line2 for outlines here
 
@@ -207,15 +267,14 @@ export const createDancerScene = async (renderer: THREE.WebGLRenderer, renderTar
     group.position.y = position.y
     group.add(quad)
     group.add(line)
-
-    scene.add(group)
     
-    const params = {
+    const params: QuadParam = {
       texName: textureName,
       frameCount: textureLengthMap[textureName],
       fps: baseFps,
+      dancerName,
+      showRegions: false,
     }
-    quadParams.push(params)
 
     const lerpDef = {
       lerping: false,
@@ -227,27 +286,60 @@ export const createDancerScene = async (renderer: THREE.WebGLRenderer, renderTar
     }
 
     const id = crypto.randomUUID()
+
+    const dancerShapeGeometry = new THREE.BufferGeometry()
+    dancerShapeGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(OUTLINE_LENGTH * 3), 3))
+    dancerShapeGeometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(OUTLINE_LENGTH * 2), 2))
+    dancerShapeGeometry.setIndex(new THREE.BufferAttribute(new Uint32Array(OUTLINE_LENGTH*3), 1))
+    const dancerShapeMaterial = new THREE.MeshBasicMaterial({color: 0xffffff, side: THREE.DoubleSide})
+    const dancerShapeMesh = new THREE.Mesh(dancerShapeGeometry, dancerShapeMaterial)
+    // dancerShapeMesh.scale.set(blockSize / 512, blockSize / 512, 1)
+    dancerShapeMesh.position.x = - blockSize / 2
+    dancerShapeMesh.position.y = - blockSize / 2
+    dancerShapeMesh.translateZ(0.005)
+    dancerShapeMesh.visible = false
+    dancerShapeMesh.frustumCulled = false
+    group.add(dancerShapeMesh)
+
+    const dancerShape = {
+      mesh: dancerShapeMesh,
+      geometry: dancerShapeGeometry,
+      material: dancerShapeMaterial,
+    }
+
+    scene.add(group)
+
     return {
       id,
-      dancerName,
       group,
       line,
       quad,
       uniforms: uniformsClone,
+      dancerShape,
       params,
       lerpDef,
       quadVisible: (b: boolean) => quad.visible = b,
       lineVisible: (b: boolean) => line.visible = b,
+      regionsVisible: (b: boolean) => {
+        dancerShape.mesh.visible = b
+        params.showRegions = b
+      },
       setFrame: (frame: number) => {
-
         uniformsClone.frame.value = frame % params.frameCount
-        line.geometry.setFromPoints(peopleData[dancerName].splineFrames[frame % params.frameCount])
+        const frameData = peopleData[params.dancerName].splineFrames[frame % params.frameCount]
+        line.geometry.setFromPoints(frameData)
+        if(params.showRegions) {
+          updateOutlineFlatGeometry(dancerShape.geometry, frameData)
+        }
       },
       updateLerp: () => {
         const startFrame = peopleData[lerpDef.fromDancer].splineFrames[lerpDef.fromFrame % params.frameCount]
         const endFrame = peopleData[lerpDef.toDancer].splineFrames[lerpDef.toFrame % params.frameCount]
         const lerpFrame = startFrame.map((pt, i) => pt.clone().lerp(endFrame[i], lerpDef.lerp))
         line.geometry.setFromPoints(lerpFrame)
+        if(params.showRegions) {
+          updateOutlineFlatGeometry(dancerShape.geometry, lerpFrame)
+        }
       },
       remove: () => {
         //sometimes performance tanks when doing this synchronously
@@ -255,9 +347,12 @@ export const createDancerScene = async (renderer: THREE.WebGLRenderer, renderTar
           scene.remove(group)
           line.removeFromParent()
           quad.removeFromParent()
+          dancerShape.mesh.removeFromParent()
           lineMaterial.dispose()
           lineGeometry.dispose()
           matClone.dispose()
+          dancerShapeGeometry.dispose()
+          dancerShapeMaterial.dispose()
           dancers.delete(id)
         }, 1)
       }

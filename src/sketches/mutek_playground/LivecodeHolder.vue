@@ -55,11 +55,11 @@ onMounted(async () => {
     })
 
     const dancerChords = [
-    {dancer: dancerScene.createDancer("kurush", 200, {x: 100, y: 200}), chord: [47, 48]},
-      {dancer: dancerScene.createDancer("chloe", 200, {x: 200, y: 200}), chord: [48, 55]},
-      {dancer: dancerScene.createDancer("chris", 200, {x: 300, y: 200}), chord: [55, 59]},
-      {dancer: dancerScene.createDancer("iman", 200, {x: 400, y: 200}), chord: [55, 65]},
-      {dancer: dancerScene.createDancer("aroma", 200, {x: 500, y: 200}), chord: [58, 65]}
+    {dancer: dancerScene.createDancer("kurush", 200, {x: 300, y: 200}), chord: [47, 48]},
+      {dancer: dancerScene.createDancer("chloe", 200, {x: 400, y: 200}), chord: [48, 55]},
+      {dancer: dancerScene.createDancer("chris", 200, {x: 500, y: 200}), chord: [55, 59]},
+      {dancer: dancerScene.createDancer("iman", 200, {x: 600, y: 200}), chord: [55, 65]},
+      {dancer: dancerScene.createDancer("aroma", 200, {x: 700, y: 200}), chord: [58, 65]}
     ]
 
     const chordPulseData = {
@@ -82,19 +82,22 @@ onMounted(async () => {
     const bassPitches = [36, 38, 40, 41, 43, 45, 47, 48]
     const bassDancers = people.slice(10, 18)
     const bassVoice = synth2.noteOn(bassPitches[bassNote.value], 100, 0, 0)
-    let bassMidi = bassPitches[bassNote.value]
-    let bassTarget = bassMidi
     bassVoice.polyGain = bassVol.value
     bassVoice.Filter = 600
 
-    const lerpDancer = dancerScene.createDancer("kurush", 500, {x: 700, y: 250})
+    const lerpDancer = dancerScene.createDancer(bassDancers[bassNote.value], 500, {x: 150, y: 250})
     lerpDancer.group.position.z = 1
     lerpDancer.quadVisible(false)
     lerpDancer.lerpDef.lerping = true
-    lerpDancer.lerpDef.fromDancer = "kurush"
-    lerpDancer.lerpDef.toDancer = "chloe"
+    lerpDancer.lerpDef.fromDancer = bassDancers[bassNote.value]
+    lerpDancer.lerpDef.toDancer = bassDancers[bassNote.value]
     lerpDancer.lerpDef.fromFrame = 0
     lerpDancer.lerpDef.toFrame = 0
+
+    const segmentDancer = dancerScene.createDancer("kurush", 500, {x: 900, y: 200})
+    // segmentDancer.quadVisible(false)
+    segmentDancer.regionsVisible(true)
+    // segmentDancer.lineVisible(false)
 
     launchLoop(async (ctx) => {
       await ctx.wait(0.1)
@@ -135,6 +138,8 @@ onMounted(async () => {
 
         bassVoice.pitch = lerp(bassPitches[lastTarget], bassPitches[bassNoteTarget], slideProg / slideTime)
         bassVoice.polyGain = bassVol.value
+
+        segmentDancer.setFrame(Math.floor(loopFrame/10) % framesPerPerson[segmentDancer.params.dancerName])
       }
     })
 
