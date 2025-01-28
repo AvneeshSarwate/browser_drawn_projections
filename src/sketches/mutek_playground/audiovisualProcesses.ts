@@ -115,6 +115,12 @@ pick melodic contour - either same as last, 1 note diff, new (only if cache not 
   melodic contour is deltas from root note - 2-6 notes, all same duration
   when fully new melodic contour is made, cache it if cache size < 5
 wait 2-6 8th notes before playing next phrase (or with some small prob, no extra wait)
+
+//parmeters for control
+- probability of no gap between phrases
+- root note (+/- 1 degree)
+- base speed
+- repeat exact last phrase (binary)
 */
 
 

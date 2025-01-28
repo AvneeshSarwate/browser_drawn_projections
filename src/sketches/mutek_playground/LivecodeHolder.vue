@@ -14,6 +14,7 @@ import { FaustTestVoice } from "@/music/FaustSynthTemplate";
 import { logisticSigmoid } from "@/rendering/logisticSigmoid";
 import { lerp } from "three/src/math/MathUtils.js";
 import { FMChorusVoice } from "@/music/FMChorusSynth";
+import { MIDI_READY, midiInputs } from "@/io/midi";
 const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
 let timeLoops: CancelablePromisePoxy<any>[] = []
@@ -29,12 +30,15 @@ const clearDrawFuncs = () => {
   appState.drawFuncMap = new Map()
 }
 
-const selectedDancerIndex = ref(1)
-const speed = ref(0.125)
-const filterFreq = ref(1500) //lerp outline to circle based on filter
-const release = ref(0.15) //pulse outlien out based on release
-const bassNote = ref(0)
-const bassVol = ref(0.5)
+const paramDef = {
+  activeChord: {val: 1, min: 0, max: 4, midiCC: 1},
+  speed: {val: 0.125, min: 0, max: 1, midiCC: 2},
+  filterFreq: {val: 1500, min: 0, max: 10000, midiCC: 3},
+  release: {val: 0.15, min: 0, max: 1, midiCC: 4},
+  bassNote: {val: 0, min: 0, max: 7, midiCC: 5},
+  bassVol: {val: 0.5, min: 0, max: 1, midiCC: 6}
+}
+const paramMap = ref(paramDef)
 
 onMounted(async () => {
   try {
@@ -70,6 +74,24 @@ onMounted(async () => {
       stop: false
     }
 
+    await MIDI_READY
+
+    const midiIn = midiInputs.get("IAC Driver Bus 1")!!
+    midiIn.onAllControlChange((ev) => {
+      const cc = ev.control
+      const val = ev.value / 127
+      
+      //for each param, check if the cc matches
+      //if it does, set the param to the value
+      const paramNames: (keyof typeof paramDef)[] = Object.keys(paramDef) as (keyof typeof paramDef)[]
+      paramNames.forEach(paramName => {
+        if(paramDef[paramName].midiCC === cc) {
+          paramMap.value[paramName].val = paramDef[paramName].min + (paramDef[paramName].max - paramDef[paramName].min) * val
+        }
+      })
+
+    })
+
     await FAUST_AUDIO_CONTEXT_READY
     const synth = new MPEPolySynth(FaustTestVoice, 32, false, true)
     const synth2 = new MPEPolySynth(FaustTestVoice, 2, false, true)
@@ -86,16 +108,16 @@ onMounted(async () => {
 
     const bassPitches = [36, 38, 40, 41, 43, 45, 47, 48]
     const bassDancers = people.slice(10, 18)
-    const bassVoice = synth2.noteOn(bassPitches[bassNote.value], 100, 0, 0)
-    bassVoice.polyGain = bassVol.value
+    const bassVoice = synth2.noteOn(bassPitches[paramMap.value.bassNote.val], 100, 0, 0)
+    bassVoice.polyGain = paramMap.value.bassVol.val
     bassVoice.Filter = 600
 
-    const lerpDancer = dancerScene.createDancer(bassDancers[bassNote.value], 500, {x: 150, y: 250})
+    const lerpDancer = dancerScene.createDancer(bassDancers[paramMap.value.bassNote.val], 500, {x: 150, y: 250})
     lerpDancer.group.position.z = 1
     lerpDancer.quadVisible(false)
     lerpDancer.lerpDef.lerping = true
-    lerpDancer.lerpDef.fromDancer = bassDancers[bassNote.value]
-    lerpDancer.lerpDef.toDancer = bassDancers[bassNote.value]
+    lerpDancer.lerpDef.fromDancer = bassDancers[paramMap.value.bassNote.val]
+    lerpDancer.lerpDef.toDancer = bassDancers[paramMap.value.bassNote.val]
     lerpDancer.lerpDef.fromFrame = 0
     lerpDancer.lerpDef.toFrame = 0
 
@@ -109,7 +131,7 @@ onMounted(async () => {
       notePulse(chordPulseData, synth, ctx)
     })
 
-    let bassNoteTarget = bassNote.value
+    let bassNoteTarget = paramMap.value.bassNote.val
     let lastTarget = bassNoteTarget
     const slideTime = 120
     let slideProg = 0
@@ -117,18 +139,18 @@ onMounted(async () => {
     launchLoop(async (ctx) => {
       while(true) {
         await ctx.waitFrame()
-        chordPulseData.speed = speed.value
-        chordPulseData.activeChord = selectedDancerIndex.value
-        synth.setParam('Filter', filterFreq.value)
-        synth.setParam('release', release.value)
+        chordPulseData.speed = paramMap.value.speed.val
+        chordPulseData.activeChord = paramMap.value.activeChord.val
+        synth.setParam('Filter', paramMap.value.filterFreq.val)
+        synth.setParam('release', paramMap.value.release.val)
 
         //slider sets target bass note, and this loop 
         //interpolates towards the target note over about 10 frames.
         //each note has it's own dancer, and the dancers interpolate along with the notes
 
-        if(bassNoteTarget !== bassNote.value) {
+        if(bassNoteTarget !== paramMap.value.bassNote.val) {
           lastTarget = bassNoteTarget
-          bassNoteTarget = bassNote.value
+          bassNoteTarget = paramMap.value.bassNote.val
           lerpDancer.lerpDef.fromDancer = bassDancers[lastTarget]
           lerpDancer.lerpDef.toDancer = bassDancers[bassNoteTarget]
           slideProg = 0
@@ -142,7 +164,7 @@ onMounted(async () => {
         loopFrame++
 
         bassVoice.pitch = lerp(bassPitches[lastTarget], bassPitches[bassNoteTarget], slideProg / slideTime)
-        bassVoice.polyGain = bassVol.value
+        bassVoice.polyGain = paramMap.value.bassVol.val
 
         segmentDancer.setFrame(Math.floor(loopFrame/10) % framesPerPerson[segmentDancer.params.dancerName])
       }
@@ -186,38 +208,38 @@ onUnmounted(() => {
 <template>
   <div>
     <label for="speed">Speed</label>
-    <input type="range" v-model.number="speed" :min="0" :max="1" :step="0.01" />
-    <span>{{ speed }}</span>
+    <input type="range" v-model.number="paramMap.speed.val" :min="paramMap.speed.min" :max="paramMap.speed.max" :step="0.01" />
+    <span>{{ paramMap.speed.val }}</span>
   </div>
 
   <div>
     <label for="activeChord">Active Chord</label>
-    <input type="range" v-model.number="selectedDancerIndex" :min="0" :max="4" />
-    <span>{{ selectedDancerIndex }}</span>
+    <input type="range" v-model.number="paramMap.activeChord.val" :min="paramMap.activeChord.min" :max="paramMap.activeChord.max" />
+    <span>{{ paramMap.activeChord.val }}</span>
   </div>
 
   <div>
     <label for="filterFreq">Filter Freq</label>
-    <input type="range" v-model.number="filterFreq" :min="0" :max="10000" />
-    <span>{{ filterFreq }}</span>
+    <input type="range" v-model.number="paramMap.filterFreq.val" :min="paramMap.filterFreq.min" :max="paramMap.filterFreq.max" />
+    <span>{{ paramMap.filterFreq.val }}</span>
   </div>
 
   <div>
     <label for="release">Release</label>
-    <input type="range" v-model.number="release" :min="0" :max="1" :step="0.01" />
-    <span>{{ release }}</span>
+    <input type="range" v-model.number="paramMap.release.val" :min="paramMap.release.min" :max="paramMap.release.max" :step="0.01" />
+    <span>{{ paramMap.release.val }}</span>
   </div>
 
   <div>
     <label for="bassNote">Bass Note</label>
-    <input type="range" v-model.number="bassNote" :min="0" :max="7" />
-    <span>{{ bassNote }}</span>
+    <input type="range" v-model.number="paramMap.bassNote.val" :min="paramMap.bassNote.min" :max="paramMap.bassNote.max" />
+    <span>{{ paramMap.bassNote.val }}</span>
   </div>
 
   <div>
     <label for="bassVol">Bass Vol</label>
-    <input type="range" v-model.number="bassVol" :min="0" :max="1" :step="0.01" />
-    <span>{{ bassVol }}</span>
+    <input type="range" v-model.number="paramMap.bassVol.val" :min="paramMap.bassVol.min" :max="paramMap.bassVol.max" :step="0.01" />
+    <span>{{ paramMap.bassVol.val }}</span>
   </div>
 </template>
 
