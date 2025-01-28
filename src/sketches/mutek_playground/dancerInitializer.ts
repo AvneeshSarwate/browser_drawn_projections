@@ -33,6 +33,12 @@ type QuadParam = {
   fps: number
   dancerName: string
   showRegions: boolean
+  color1: THREE.Vector4
+  color2: THREE.Vector4
+  color3: THREE.Vector4
+  color4: THREE.Vector4
+  color5: THREE.Vector4
+  color6: THREE.Vector4
 }
 
 type DancerShapeUniforms = {
@@ -366,6 +372,12 @@ export const createDancerScene = async (renderer: THREE.WebGLRenderer, renderTar
       fps: baseFps,
       dancerName,
       showRegions: false,
+      color1: new THREE.Vector4(1, 0, 0, 1),
+      color2: new THREE.Vector4(0, 1, 0, 1),
+      color3: new THREE.Vector4(0, 0, 1, 1),
+      color4: new THREE.Vector4(1, 1, 0, 1),
+      color5: new THREE.Vector4(0, 1, 1, 1),
+      color6: new THREE.Vector4(1, 0, 1, 1),
     }
 
     const lerpDef = {

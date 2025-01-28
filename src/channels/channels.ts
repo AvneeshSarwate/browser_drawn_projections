@@ -369,7 +369,7 @@ export const tri = (phase: number): number => {
 
 export const biasedTri = (phase: number, bias: number): number => {
   //bias is 0 to 1, and is the point where the triangle wave is at its peak
-  return 1 - Math.abs((phase % 1) * 2 - 1) * (1-bias) + bias
+  return phase < bias ? phase / bias : 1 - (phase - bias) / (1 - bias)
 }
 
 export const saw = (phase: number): number => {

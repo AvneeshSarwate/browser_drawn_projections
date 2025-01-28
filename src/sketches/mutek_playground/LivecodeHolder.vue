@@ -8,11 +8,12 @@ import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, tar
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
 import { createDancerScene, framesPerPerson, people } from './dancerInitializer';
-import { notePulse } from "./audiovisualProcesses";
+import { notePulse, randomPhraseDancer } from "./audiovisualProcesses";
 import { FAUST_AUDIO_CONTEXT_READY, MPEPolySynth } from "@/music/mpeSynth";
 import { FaustTestVoice } from "@/music/FaustSynthTemplate";
 import { logisticSigmoid } from "@/rendering/logisticSigmoid";
 import { lerp } from "three/src/math/MathUtils.js";
+import { FMChorusVoice } from "@/music/FMChorusSynth";
 const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
 let timeLoops: CancelablePromisePoxy<any>[] = []
@@ -72,8 +73,12 @@ onMounted(async () => {
     await FAUST_AUDIO_CONTEXT_READY
     const synth = new MPEPolySynth(FaustTestVoice, 32, false, true)
     const synth2 = new MPEPolySynth(FaustTestVoice, 2, false, true)
+    const synth3 = new MPEPolySynth(FMChorusVoice, 2, false, true)
     await synth.synthReady()
     await synth2.synthReady()
+    await synth3.synthReady()
+
+    synth3.setParam('polyGain', 0.3)
 
     synth.setParam('release', 0.15)
     synth.setParam('polyGain', 0.2)
@@ -141,6 +146,11 @@ onMounted(async () => {
 
         segmentDancer.setFrame(Math.floor(loopFrame/10) % framesPerPerson[segmentDancer.params.dancerName])
       }
+    })
+
+    launchLoop(async (ctx) => {
+      await ctx.wait(0.1)
+      randomPhraseDancer(segmentDancer, synth3, ctx)
     })
 
     appState.drawFunctions.push(() => {

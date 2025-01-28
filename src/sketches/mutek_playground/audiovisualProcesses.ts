@@ -1,7 +1,8 @@
 import { biasedTri, type BrowserTimeContext } from "@/channels/channels";
 import type { Dancer } from "./dancerInitializer";
 import type { MPEPolySynth, MPEVoiceGraph } from "@/music/mpeSynth";
-import type { AbletonClip, AbletonNote } from "@/io/abletonClips";
+import { AbletonClip, type AbletonNote } from "@/io/abletonClips";
+import { Scale } from "@/music/scale";
 
 
 const pulseChord = <T extends MPEVoiceGraph>(chord: number[], synth: MPEPolySynth<T>, duration: number, ctx: BrowserTimeContext) => {
@@ -45,6 +46,9 @@ export const notePulse = <T extends MPEVoiceGraph>(dancersAndChords: {dcMap: {da
 
 const playNote = <T extends MPEVoiceGraph>(ctx: BrowserTimeContext, noteData: AbletonNote, inst: MPEPolySynth<T>) => {
   const {pitch, velocity, duration: noteDur} = noteData;
+  if(!isFinite(pitch)) {
+    debugger
+  }
   const voice = inst.noteOn(pitch, velocity, 0, 0)
   ctx.branch(async ctx => {
     await ctx.wait((noteDur ?? 0.1) * 0.98)
@@ -57,37 +61,51 @@ const arrayRandChoice = <T>(arr: T[]) => {
   return arr[Math.floor(Math.random() * arr.length)]
 }
 
-const dancePhrase = <T extends MPEVoiceGraph>(dancer: Dancer, clip: AbletonClip, synth: MPEPolySynth<T>, ctx: BrowserTimeContext) => {
-  const phraseDuration = clip.duration
+const dancePhrase = async <T extends MPEVoiceGraph>(dancer: Dancer, clip: AbletonClip, synth: MPEPolySynth<T>, ctx: BrowserTimeContext) => {
   const startColors = {
-    color1: dancer.dancerShapeUniforms.color1.value.clone(),
-    color2: dancer.dancerShapeUniforms.color2.value.clone(),
-    color3: dancer.dancerShapeUniforms.color3.value.clone(),
-    color4: dancer.dancerShapeUniforms.color4.value.clone(),
-    color5: dancer.dancerShapeUniforms.color5.value.clone(),
-    color6: dancer.dancerShapeUniforms.color6.value.clone(),
+    color1: dancer.params.color1.clone(),
+    color2: dancer.params.color2.clone(),
+    color3: dancer.params.color3.clone(),
+    color4: dancer.params.color4.clone(),
+    color5: dancer.params.color5.clone(),
+    color6: dancer.params.color6.clone(),
   }
   const colorKeys = Object.keys(startColors)
-  ctx.branch(async ctx => {
-    for (const [i, note] of clip.noteBuffer().entries()) {
-      await ctx.wait(note.preDelta)
-      playNote(ctx, note.note, synth)
 
-      ctx.branch(async ctx => {
-        const duration = 0.3
-        const startTime = ctx.time
-        while(ctx.time - startTime < duration) {
-          const rampVal = biasedTri((ctx.time - startTime) / duration, 0.25)
-          const colorKey = arrayRandChoice(colorKeys)
-          const newColor = startColors[colorKey].clone().multiplyScalar(rampVal)
-          dancer.dancerShapeUniforms[colorKey].value = newColor
-          await ctx.waitSec(0.016)
-        }
-      })
+  for (const [i, note] of clip.noteBuffer().entries()) {
+    await ctx.wait(note.preDelta)
+    playNote(ctx, note.note, synth)
 
-      await ctx.wait(note.postDelta ?? 0)
-    }
-  })
+    ctx.branch(async ctx => {
+      const duration = note.note.duration
+      const startBeat = ctx.beats
+      const colorKey = arrayRandChoice(colorKeys)
+      while(ctx.beats - startBeat < duration) {
+        const rampVal = biasedTri((ctx.beats - startBeat) / duration, 0.25)
+        const newColor = startColors[colorKey].clone().multiplyScalar(rampVal)
+        dancer.dancerShapeUniforms[colorKey].value = newColor
+        await ctx.waitSec(0.016)
+      }
+    })
+
+    await ctx.wait(note.postDelta ?? 0)
+  }
+}
+
+export const randomPhraseDancer = async <T extends MPEVoiceGraph>(dancer: Dancer, synth: MPEPolySynth<T>, ctx: BrowserTimeContext) => {
+  const generator = new MelodyGenerator()
+  let lastSpeed = 1
+  const useLastSpeedProb = 0.5
+  while(true) {
+    const clip = generator.generateMelody()
+    lastSpeed = Math.random() < useLastSpeedProb ? lastSpeed : (Math.random()**2) * 2 + 0.25
+    const scaledClip = clip.scale(lastSpeed)
+    ctx.branch(async ctx => {
+      await dancePhrase(dancer, scaledClip, synth, ctx)
+    })
+    await ctx.wait(scaledClip.duration)
+    await ctx.wait(arrayRandChoice([0, 0, 0, 2, 3, 4, 5, 6]) * 0.25)
+  }
 }
 
 /*
@@ -98,3 +116,95 @@ pick melodic contour - either same as last, 1 note diff, new (only if cache not 
   when fully new melodic contour is made, cache it if cache size < 5
 wait 2-6 8th notes before playing next phrase (or with some small prob, no extra wait)
 */
+
+
+function evenRandomWalk(state: number, lowBound: number, highBound: number) {
+  //step up/down 3, 2, 1 steps with equal probability
+  const choices = [-3, -2, -1, 1, 2, 3]
+  //filter choices to be within bounds
+  const filteredChoices = choices.filter(choice => state + choice >= lowBound && state + choice <= highBound)
+  //choose one at random
+  const choice = arrayRandChoice(filteredChoices)
+  const retVal = state + choice
+  if(!isFinite(retVal)) {
+    debugger
+  }
+  return retVal
+}
+
+function melodyRandomWalk(state: number, lowBound: number, highBound: number) {
+  const choices = [-3, -2, -1, -1, 0, 1, 1, 2, 3]
+  //filter choices to be within bounds
+  const filteredChoices = choices.filter(choice => state + choice >= lowBound && state + choice <= highBound)
+  //choose one at random
+  const choice = arrayRandChoice(filteredChoices)
+  const retVal = state + choice
+  if(!isFinite(retVal)) {
+    debugger
+  }
+  return retVal
+}
+
+class MelodyGenerator {
+  cache: number[][] = []
+  lastRoot: number = 0 //a scale degree delta relative to scale root
+  lastMelodicContour: number[] = [] //a list of scale degree deltas from root
+  scale = new Scale()
+  sameRootProb = 0.5
+
+  selectRoot() {
+    const sameRoot = Math.random() < this.sameRootProb
+    if(sameRoot) {
+      return this.lastRoot
+    } else {
+      return evenRandomWalk(this.lastRoot, -7, 7)
+    }
+  }
+
+  generateMelodicContour() {
+    const contour = []
+    const numNotes = Math.floor(Math.random() * 4) + 2
+    let note = 0
+    for(let i = 0; i < numNotes; i++) {
+      contour.push(note)
+      note = melodyRandomWalk(note, -5, 5)
+    }
+    return contour
+  }
+
+  generateMelody() {
+    this.lastRoot = this.selectRoot()
+
+    const melodyChoices = ['same', 'oneNoteDiff', 'new', 'fromCache']
+    if(this.cache.length === 0) {
+      melodyChoices.splice(melodyChoices.indexOf('fromCache'), 1)
+    }
+    if(this.cache.length === 5) {
+      melodyChoices.splice(melodyChoices.indexOf('new'), 1)
+    }
+    const melodyChoice = arrayRandChoice(melodyChoices)
+
+    let contour: number[] = []
+    if(melodyChoice === 'same') {
+      contour = this.lastMelodicContour
+    } else if(melodyChoice === 'oneNoteDiff') {
+      contour = this.lastMelodicContour.map(note => note)
+      contour[Math.floor(Math.random() * contour.length)] = arrayRandChoice([-3, -2, -1, 0, 1, 2, 3])
+    } else if(melodyChoice === 'new') {
+      contour = this.generateMelodicContour()
+      this.cache.push(contour)
+    } else if(melodyChoice === 'fromCache') {
+      contour = arrayRandChoice(this.cache)
+    }
+    this.lastMelodicContour = contour
+
+    const finalContour = contour.map(note => this.lastRoot + note)
+    const melody = this.scale.getMultiple(finalContour)
+    const notes = melody.map((pitch, i) => {
+      return {pitch, velocity: 100, position: i * 0.5, duration: 0.5}
+    })
+
+    return new AbletonClip(`melody_${this.lastRoot}`, notes.length * 0.5, notes)
+  }
+
+}
