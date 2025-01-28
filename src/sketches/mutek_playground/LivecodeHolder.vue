@@ -30,13 +30,14 @@ const clearDrawFuncs = () => {
   appState.drawFuncMap = new Map()
 }
 
+//todo note somewhere special midi CCs that might break with naive usage, like those for RPN/NRPN  [6, 98, 99, 100, 101]
 const paramDef = {
-  activeChord: {val: 1, min: 0, max: 4, midiCC: 1},
-  speed: {val: 0.125, min: 0, max: 1, midiCC: 2},
-  filterFreq: {val: 1500, min: 0, max: 10000, midiCC: 3},
-  release: {val: 0.15, min: 0, max: 1, midiCC: 4},
-  bassNote: {val: 0, min: 0, max: 7, midiCC: 5},
-  bassVol: {val: 0.5, min: 0, max: 1, midiCC: 6}
+  activeChord: {val: 1, min: 0, max: 4, midiCC: 1, quantize: true},
+  speed: {val: 0.125, min: 0, max: 1, midiCC: 2, quantize: false},
+  filterFreq: {val: 1500, min: 0, max: 10000, midiCC: 3, quantize: false},
+  release: {val: 0.15, min: 0, max: 1, midiCC: 4, quantize: false},
+  bassNote: {val: 0, min: 0, max: 7, midiCC: 5, quantize: true},
+  bassVol: {val: 0.5, min: 0, max: 1, midiCC: 7, quantize: false} 
 }
 const paramMap = ref(paramDef)
 
@@ -76,21 +77,23 @@ onMounted(async () => {
 
     await MIDI_READY
 
-    const midiIn = midiInputs.get("IAC Driver Bus 1")!!
-    midiIn.onAllControlChange((ev) => {
-      const cc = ev.control
-      const val = ev.value / 127
-      
-      //for each param, check if the cc matches
-      //if it does, set the param to the value
-      const paramNames: (keyof typeof paramDef)[] = Object.keys(paramDef) as (keyof typeof paramDef)[]
-      paramNames.forEach(paramName => {
-        if(paramDef[paramName].midiCC === cc) {
-          paramMap.value[paramName].val = paramDef[paramName].min + (paramDef[paramName].max - paramDef[paramName].min) * val
-        }
+    const midiIn = midiInputs.get("IAC Driver Bus 1")
+    if(midiIn) {
+      midiIn.onAllControlChange((ev) => {
+        const cc = ev.control
+        const val = ev.value / 127
+        
+        //for each param, check if the cc matches
+        //if it does, set the param to the value
+        const paramNames: (keyof typeof paramDef)[] = Object.keys(paramDef) as (keyof typeof paramDef)[]
+        paramNames.forEach(paramName => {
+          if(paramDef[paramName].midiCC === cc) {
+            const sliderVal = paramDef[paramName].min + (paramDef[paramName].max - paramDef[paramName].min) * val
+            paramMap.value[paramName].val = paramDef[paramName].quantize ? Math.floor(sliderVal) : sliderVal
+          }
+        })
       })
-
-    })
+    }
 
     await FAUST_AUDIO_CONTEXT_READY
     const synth = new MPEPolySynth(FaustTestVoice, 32, false, true)
@@ -207,37 +210,43 @@ onUnmounted(() => {
 
 <template>
   <div>
-    <label for="speed">Speed</label>
+    <label for="speed">Speed - midi cc: {{ paramMap.speed.midiCC }}</label> 
+    <br/>
     <input type="range" v-model.number="paramMap.speed.val" :min="paramMap.speed.min" :max="paramMap.speed.max" :step="0.01" />
     <span>{{ paramMap.speed.val }}</span>
   </div>
 
   <div>
-    <label for="activeChord">Active Chord</label>
+    <label for="activeChord">Active Chord - midi cc: {{ paramMap.activeChord.midiCC }}</label>
+    <br/>
     <input type="range" v-model.number="paramMap.activeChord.val" :min="paramMap.activeChord.min" :max="paramMap.activeChord.max" />
     <span>{{ paramMap.activeChord.val }}</span>
   </div>
 
   <div>
-    <label for="filterFreq">Filter Freq</label>
+    <label for="filterFreq">Filter Freq - midi cc: {{ paramMap.filterFreq.midiCC }}</label>
+    <br/>
     <input type="range" v-model.number="paramMap.filterFreq.val" :min="paramMap.filterFreq.min" :max="paramMap.filterFreq.max" />
     <span>{{ paramMap.filterFreq.val }}</span>
   </div>
 
   <div>
-    <label for="release">Release</label>
+    <label for="release">Release - midi cc: {{ paramMap.release.midiCC }}</label>
+    <br/>
     <input type="range" v-model.number="paramMap.release.val" :min="paramMap.release.min" :max="paramMap.release.max" :step="0.01" />
     <span>{{ paramMap.release.val }}</span>
   </div>
 
   <div>
-    <label for="bassNote">Bass Note</label>
+    <label for="bassNote">Bass Note - midi cc: {{ paramMap.bassNote.midiCC }}</label>
+    <br/>
     <input type="range" v-model.number="paramMap.bassNote.val" :min="paramMap.bassNote.min" :max="paramMap.bassNote.max" />
     <span>{{ paramMap.bassNote.val }}</span>
   </div>
 
   <div>
-    <label for="bassVol">Bass Vol</label>
+    <label for="bassVol">Bass Vol - midi cc: {{ paramMap.bassVol.midiCC }}</label>
+    <br/>
     <input type="range" v-model.number="paramMap.bassVol.val" :min="paramMap.bassVol.min" :max="paramMap.bassVol.max" :step="0.01" />
     <span>{{ paramMap.bassVol.val }}</span>
   </div>
