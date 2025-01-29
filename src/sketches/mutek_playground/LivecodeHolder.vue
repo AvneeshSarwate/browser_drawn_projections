@@ -240,9 +240,11 @@ onUnmounted(() => {
 </script>
 
 <template>
-
+  <div id="startScreen">
+    click anywhere to start
+  </div>
   <button id="randomizeParams" @click="randomizeParams">Randomize Params</button>
-  <div>
+  <div style="margin-left: 10px;">
     <label for="mainVolume">Main Volume - midi cc: {{ paramMap.mainVolume.midiCC }}</label>
     <br/>
     <input type="range" v-model.number="paramMap.mainVolume.val" :min="paramMap.mainVolume.min" :max="paramMap.mainVolume.max" :step="0.01" />
@@ -354,6 +356,11 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+
+#startScreen {
+  margin-top: 10px;
+  margin-left: 10px;
+}
 
 #randomizeParams {
   margin-bottom: 10px;

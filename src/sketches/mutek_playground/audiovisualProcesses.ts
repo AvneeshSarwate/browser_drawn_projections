@@ -147,7 +147,7 @@ export const randomPhraseDancer = async <T extends MPEVoiceGraph>(
   while (true) {
     const clip = generator.generateMelody()
     const sameSpeedProb = 0.5
-    const newSpeed = (params.baseSpeed.val*0.8 + (Math.random()**2) *0.2) ** 2 * 2 + 0.25
+    const newSpeed = ((1-params.baseSpeed.val)*0.8 + (Math.random()**2) *0.2) ** 2 * 2 + 0.25
     lastSpeed = Math.random() < sameSpeedProb ? lastSpeed : newSpeed
     const scaledClip = clip.scale(lastSpeed)
     ctx.branch(async (ctx) => {
