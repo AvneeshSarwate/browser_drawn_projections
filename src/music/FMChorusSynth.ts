@@ -29,6 +29,10 @@ lfo = os.osc(rate) * depth; // Modulating signal for delay
 chorusEffect(input) = mix * (input : de.sdelay(2 * depth, 128, depth + lfo)) 
                         + (1 - mix) * input;
 
+
+echoFdbk = hslider("EchoFdbk", 0.3, 0, 1, 0.01);
+echoTime = hslider("EchoTime", 0.3, 0.01, 10, 0.01);
+
 detune = hslider("Detune", 1, 0, 50, 0.01);
 modRelease = hslider("ModRelease", 0.3, 0, 1, 0.01);
 
@@ -42,7 +46,8 @@ env = gate : en.adsr(0.01, 0.1, 0.8, release);
 filter = fi.lowpass(2, filterFreq);
 
 oscSig = os.osc(freq + mod0 * freq*2);
-process = oscSig  * vAmp * polyGain * env : filter : chorusEffect;
+sig = oscSig  * vAmp * polyGain * env : filter : chorusEffect : ef.echo(10, echoTime, echoFdbk);
+process = sig;
 
 `;
 
@@ -178,6 +183,24 @@ export class FMChorusVoice implements MPEVoiceGraph {
   @param(20, 10000, 3000)
   set Filter(value: number) {
     this.node.setParamValue("/oscillator/Filter", value);
+  }
+
+  get echoFdbk(): number {
+    return this.node.getParamValue("/oscillator/EchoFdbk");
+  }
+
+  @param(0, 1, 0.3)
+  set echoFdbk(value: number) {
+    this.node.setParamValue("/oscillator/EchoFdbk", value);
+  }
+
+  get echoTime(): number {
+    return this.node.getParamValue("/oscillator/EchoTime");
+  }
+
+  @param(0.01, 10, 0.3)
+  set echoTime(value: number) {
+    this.node.setParamValue("/oscillator/EchoTime", value);
   }
 
 }

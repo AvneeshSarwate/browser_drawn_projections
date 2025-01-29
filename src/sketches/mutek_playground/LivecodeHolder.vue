@@ -32,14 +32,27 @@ const clearDrawFuncs = () => {
 
 //todo note somewhere special midi CCs that might break with naive usage, like those for RPN/NRPN  [6, 98, 99, 100, 101]
 const paramDef = {
+  mainVolume: {val: 0.5, min: 0, max: 1, midiCC: -1, quantize: false},
+  chordVolume: {val: 0.3, min: 0, max: 1, midiCC: 9, quantize: false},
   activeChord: {val: 1, min: 0, max: 4, midiCC: 1, quantize: true},
-  speed: {val: 0.125, min: 0, max: 1, midiCC: 2, quantize: false},
-  filterFreq: {val: 1500, min: 0, max: 10000, midiCC: 3, quantize: false},
-  release: {val: 0.15, min: 0, max: 1, midiCC: 4, quantize: false},
+  chordSpeed: {val: 0.5, min: 0, max: 1, midiCC: 2, quantize: false},
+  chordFilter: {val: 3000, min: 0, max: 10000, midiCC: 3, quantize: false},
+  chordRelease: {val: 0.15, min: 0, max: 1, midiCC: 4, quantize: false},
   bassNote: {val: 0, min: 0, max: 7, midiCC: 5, quantize: true},
-  bassVol: {val: 0.5, min: 0, max: 1, midiCC: 7, quantize: false} 
+  bassVol: {val: 0.5, min: 0, max: 1, midiCC: 7, quantize: false},
+  melodyVol: {val: 0.3, min: 0, max: 1, midiCC: 8, quantize: false},
+  melodyEchoFdbk: {val: 0.5, min: 0, max: 0.95, midiCC: 11, quantize: false},
+  melodyEchoTime: {val: 0.3, min: 0.01, max: 1, midiCC: 12, quantize: false},
 }
 const paramMap = ref(paramDef)
+
+const randomizeParams = () => {
+  Object.keys(paramDef).forEach((key: keyof typeof paramDef) => {
+    if(key === "mainVolume") return
+    const val = Math.random() * (paramDef[key].max - paramDef[key].min) + paramDef[key].min
+    paramMap.value[key].val = paramDef[key].quantize ? Math.round(val) : val
+  })
+}
 
 onMounted(async () => {
   try {
@@ -96,24 +109,25 @@ onMounted(async () => {
     }
 
     await FAUST_AUDIO_CONTEXT_READY
-    const synth = new MPEPolySynth(FaustTestVoice, 32, false, true)
-    const synth2 = new MPEPolySynth(FaustTestVoice, 2, false, true)
-    const synth3 = new MPEPolySynth(FMChorusVoice, 2, false, true)
-    await synth.synthReady()
-    await synth2.synthReady()
-    await synth3.synthReady()
+    const chordSynth = new MPEPolySynth(FaustTestVoice, 32, false, true)
+    const bassSynth = new MPEPolySynth(FaustTestVoice, 2, false, true)
+    const melodySynth = new MPEPolySynth(FMChorusVoice, 2, false, true)
+    await chordSynth.synthReady()
+    await bassSynth.synthReady()
+    await melodySynth.synthReady()
 
-    synth3.setParam('polyGain', 0.3)
+    melodySynth.setParam('polyGain', 0.3)
 
-    synth.setParam('release', 0.15)
-    synth.setParam('polyGain', 0.2)
-    synth.setParam('Filter', 1500)
+    chordSynth.setParam('release', 0.15)
+    chordSynth.setParam('polyGain', 0.2)
+    chordSynth.setParam('Filter', 1500)
 
     const bassPitches = [36, 38, 40, 41, 43, 45, 47, 48]
     const bassDancers = people.slice(10, 18)
-    const bassVoice = synth2.noteOn(bassPitches[paramMap.value.bassNote.val], 100, 0, 0)
+    bassSynth.setParam('Filter', 600)
+    const bassVoice = bassSynth.noteOn(bassPitches[paramMap.value.bassNote.val], 100, 0, 0)
     bassVoice.polyGain = paramMap.value.bassVol.val
-    bassVoice.Filter = 600
+    // bassVoice.Filter = 1200
 
     const lerpDancer = dancerScene.createDancer(bassDancers[paramMap.value.bassNote.val], 500, {x: 150, y: 250})
     lerpDancer.group.position.z = 1
@@ -131,7 +145,7 @@ onMounted(async () => {
 
     launchLoop(async (ctx) => {
       await ctx.wait(0.1)
-      notePulse(chordPulseData, synth, ctx)
+      notePulse(chordPulseData, chordSynth, ctx)
     })
 
     let bassNoteTarget = paramMap.value.bassNote.val
@@ -142,10 +156,11 @@ onMounted(async () => {
     launchLoop(async (ctx) => {
       while(true) {
         await ctx.waitFrame()
-        chordPulseData.speed = paramMap.value.speed.val
+        chordPulseData.speed = 0.05 + (1- paramMap.value.chordSpeed.val)**2
         chordPulseData.activeChord = paramMap.value.activeChord.val
-        synth.setParam('Filter', paramMap.value.filterFreq.val)
-        synth.setParam('release', paramMap.value.release.val)
+        chordSynth.setParam('Filter', paramMap.value.chordFilter.val)
+        chordSynth.setParam('release', paramMap.value.chordRelease.val)
+        
 
         //slider sets target bass note, and this loop 
         //interpolates towards the target note over about 10 frames.
@@ -167,15 +182,22 @@ onMounted(async () => {
         loopFrame++
 
         bassVoice.pitch = lerp(bassPitches[lastTarget], bassPitches[bassNoteTarget], slideProg / slideTime)
-        bassVoice.polyGain = paramMap.value.bassVol.val
-
+        
         segmentDancer.setFrame(Math.floor(loopFrame/10) % framesPerPerson[segmentDancer.params.dancerName])
+
+        melodySynth.setParam('echoFdbk', paramMap.value.melodyEchoFdbk.val)
+        melodySynth.setParam('echoTime', paramMap.value.melodyEchoTime.val)
+
+        const MAIN_VOLUME = paramMap.value.mainVolume.val
+        bassVoice.polyGain = paramMap.value.bassVol.val * MAIN_VOLUME
+        chordSynth.setParam('polyGain', paramMap.value.chordVolume.val * MAIN_VOLUME)
+        melodySynth.setParam('polyGain', paramMap.value.melodyVol.val * MAIN_VOLUME)
       }
     })
 
     launchLoop(async (ctx) => {
       await ctx.wait(0.1)
-      randomPhraseDancer(segmentDancer, synth3, ctx)
+      randomPhraseDancer(segmentDancer, melodySynth, ctx)
     })
 
     appState.drawFunctions.push(() => {
@@ -209,47 +231,112 @@ onUnmounted(() => {
 </script>
 
 <template>
+
+  <button id="randomizeParams" @click="randomizeParams">Randomize Params</button>
   <div>
-    <label for="speed">Speed - midi cc: {{ paramMap.speed.midiCC }}</label> 
+    <label for="mainVolume">Main Volume - midi cc: {{ paramMap.mainVolume.midiCC }}</label>
     <br/>
-    <input type="range" v-model.number="paramMap.speed.val" :min="paramMap.speed.min" :max="paramMap.speed.max" :step="0.01" />
-    <span>{{ paramMap.speed.val }}</span>
+    <input type="range" v-model.number="paramMap.mainVolume.val" :min="paramMap.mainVolume.min" :max="paramMap.mainVolume.max" :step="0.01" />
+    <span>{{ paramMap.mainVolume.val.toFixed(2) }}</span>
   </div>
 
-  <div>
-    <label for="activeChord">Active Chord - midi cc: {{ paramMap.activeChord.midiCC }}</label>
-    <br/>
-    <input type="range" v-model.number="paramMap.activeChord.val" :min="paramMap.activeChord.min" :max="paramMap.activeChord.max" />
-    <span>{{ paramMap.activeChord.val }}</span>
-  </div>
+  <div id="paramControls">
+    <div>
+      <h3>Chord parameters</h3>
+      <div>
+        <label for="chordVolume">Chord Volume - midi cc: {{ paramMap.chordVolume.midiCC }}</label> 
+        <br/>
+        <input type="range" v-model.number="paramMap.chordVolume.val" :min="paramMap.chordVolume.min" :max="paramMap.chordVolume.max" :step="0.01" />
+        <span>{{ paramMap.chordVolume.val.toFixed(2) }}</span>
+      </div>
 
-  <div>
-    <label for="filterFreq">Filter Freq - midi cc: {{ paramMap.filterFreq.midiCC }}</label>
-    <br/>
-    <input type="range" v-model.number="paramMap.filterFreq.val" :min="paramMap.filterFreq.min" :max="paramMap.filterFreq.max" />
-    <span>{{ paramMap.filterFreq.val }}</span>
-  </div>
+      <div>
+        <label for="chordSpeed">Chord Speed - midi cc: {{ paramMap.chordSpeed.midiCC }}</label> 
+        <br/>
+        <input type="range" v-model.number="paramMap.chordSpeed.val" :min="paramMap.chordSpeed.min" :max="paramMap.chordSpeed.max" :step="0.01" />
+        <span>{{ paramMap.chordSpeed.val.toFixed(2) }}</span>
+      </div>
 
-  <div>
-    <label for="release">Release - midi cc: {{ paramMap.release.midiCC }}</label>
-    <br/>
-    <input type="range" v-model.number="paramMap.release.val" :min="paramMap.release.min" :max="paramMap.release.max" :step="0.01" />
-    <span>{{ paramMap.release.val }}</span>
-  </div>
+      <div>
+        <label for="activeChord">Active Chord - midi cc: {{ paramMap.activeChord.midiCC }}</label>
+        <br/>
+        <input type="range" v-model.number="paramMap.activeChord.val" :min="paramMap.activeChord.min" :max="paramMap.activeChord.max" />
+        <span>{{ paramMap.activeChord.val }}</span>
+      </div>
 
-  <div>
-    <label for="bassNote">Bass Note - midi cc: {{ paramMap.bassNote.midiCC }}</label>
-    <br/>
-    <input type="range" v-model.number="paramMap.bassNote.val" :min="paramMap.bassNote.min" :max="paramMap.bassNote.max" />
-    <span>{{ paramMap.bassNote.val }}</span>
-  </div>
+      <div>
+        <label for="chordFilter">Chord Filter - midi cc: {{ paramMap.chordFilter.midiCC }}</label>
+        <br/>
+        <input type="range" v-model.number="paramMap.chordFilter.val" :min="paramMap.chordFilter.min" :max="paramMap.chordFilter.max" />
+        <span>{{ paramMap.chordFilter.val.toFixed(2) }}</span>
+      </div>
 
-  <div>
-    <label for="bassVol">Bass Vol - midi cc: {{ paramMap.bassVol.midiCC }}</label>
-    <br/>
-    <input type="range" v-model.number="paramMap.bassVol.val" :min="paramMap.bassVol.min" :max="paramMap.bassVol.max" :step="0.01" />
-    <span>{{ paramMap.bassVol.val }}</span>
+      <div>
+        <label for="chordRelease">Chord Release - midi cc: {{ paramMap.chordRelease.midiCC }}</label>
+        <br/>
+        <input type="range" v-model.number="paramMap.chordRelease.val" :min="paramMap.chordRelease.min" :max="paramMap.chordRelease.max" :step="0.01" />
+        <span>{{ paramMap.chordRelease.val.toFixed(2) }}</span>
+      </div>
+    </div>
+
+    <div>
+      <h3>Bass parameters</h3>
+      <div>
+        <label for="bassVol">Bass Vol - midi cc: {{ paramMap.bassVol.midiCC }}</label>
+        <br/>
+        <input type="range" v-model.number="paramMap.bassVol.val" :min="paramMap.bassVol.min" :max="paramMap.bassVol.max" :step="0.01" />
+        <span>{{ paramMap.bassVol.val.toFixed(2) }}</span>
+      </div>
+
+      <div>
+        <label for="bassNote">Bass Note - midi cc: {{ paramMap.bassNote.midiCC }}</label>
+        <br/>
+        <input type="range" v-model.number="paramMap.bassNote.val" :min="paramMap.bassNote.min" :max="paramMap.bassNote.max" />
+        <span>{{ paramMap.bassNote.val }}</span>
+      </div>
+    </div>
+
+    <div>
+      <h3>Melody parameters</h3>
+      <div>
+        <label for="melodyVol">Melody Vol - midi cc: {{ paramMap.melodyVol.midiCC }}</label>
+        <br/>
+        <input type="range" v-model.number="paramMap.melodyVol.val" :min="paramMap.melodyVol.min" :max="paramMap.melodyVol.max" :step="0.01" />
+        <span>{{ paramMap.melodyVol.val.toFixed(2) }}</span>
+      </div>
+
+      <div>
+        <label for="melodyEchoFdbk">Melody Echo Fdbk - midi cc: {{ paramMap.melodyEchoFdbk.midiCC }}</label>
+        <br/>
+        <input type="range" v-model.number="paramMap.melodyEchoFdbk.val" :min="paramMap.melodyEchoFdbk.min" :max="paramMap.melodyEchoFdbk.max" :step="0.01" />
+        <span>{{ paramMap.melodyEchoFdbk.val.toFixed(2) }}</span>
+      </div>
+
+
+      <div>
+        <label for="melodyEchoTime">Melody Echo Time - midi cc: {{ paramMap.melodyEchoTime.midiCC }}</label>
+        <br/>
+        <input type="range" v-model.number="paramMap.melodyEchoTime.val" :min="paramMap.melodyEchoTime.min" :max="paramMap.melodyEchoTime.max" :step="0.01" />
+        <span>{{ paramMap.melodyEchoTime.val.toFixed(2) }}</span>
+      </div>
+    </div>
   </div>
 </template>
 
-<style scoped></style>
+<style scoped>
+
+#randomizeParams {
+  margin-bottom: 10px;
+  margin-left: 10px;
+  margin-top: 10px;
+}
+
+#paramControls {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  margin-left: 10px;
+}
+</style>
+
+

@@ -81,7 +81,7 @@ const dancePhrase = async <T extends MPEVoiceGraph>(dancer: Dancer, clip: Ableto
       const startBeat = ctx.beats
       const colorKey = arrayRandChoice(colorKeys)
       while(ctx.beats - startBeat < duration) {
-        const rampVal = biasedTri((ctx.beats - startBeat) / duration, 0.25)
+        const rampVal = 0.5 + 0.5 * biasedTri((ctx.beats - startBeat) / duration, 0.25)
         const newColor = startColors[colorKey].clone().multiplyScalar(rampVal)
         dancer.dancerShapeUniforms[colorKey].value = newColor
         await ctx.waitSec(0.016)

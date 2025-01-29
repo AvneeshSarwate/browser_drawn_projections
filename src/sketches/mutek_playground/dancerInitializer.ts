@@ -58,7 +58,11 @@ export type Dancer = {
   group: THREE.Group
   line: Line2
   quad: THREE.Mesh
-  uniforms: { [key: string]: { value: any } }
+  uniforms: { 
+    frame: { value: number }
+    textureArray: { value: THREE.CompressedArrayTexture }
+    makeBlackThresh: { value: number }
+  }
   params: QuadParam
   lerpDef: {
     lerping: boolean
@@ -269,12 +273,12 @@ export const createDancerScene = async (renderer: THREE.WebGLRenderer, renderTar
 
 
   const dancerShapeUniforms = {
-    color1: { value: new THREE.Vector4(1, 0, 0, 1) },
-    color2: { value: new THREE.Vector4(0, 1, 0, 1) },
-    color3: { value: new THREE.Vector4(0, 0, 1, 1) },
-    color4: { value: new THREE.Vector4(1, 1, 0, 1) },
-    color5: { value: new THREE.Vector4(0, 1, 1, 1) },
-    color6: { value: new THREE.Vector4(1, 0, 1, 1) },
+    color1: { value: new THREE.Vector4(0.5, 0, 0, 1) },
+    color2: { value: new THREE.Vector4(0, 0.5, 0, 1) },
+    color3: { value: new THREE.Vector4(0, 0, 0.5, 1) },
+    color4: { value: new THREE.Vector4(0.5, 0.5, 0, 1) },
+    color5: { value: new THREE.Vector4(0, 0.5, 0.5, 1) },
+    color6: { value: new THREE.Vector4(0.5, 0, 0.5, 1) },
     xMid: { value: 0.5 },
     yBottom: { value: 0.33 },
     yTop: { value: 0.66 },
@@ -411,12 +415,12 @@ export const createDancerScene = async (renderer: THREE.WebGLRenderer, renderTar
       material: dancerShapeMat,
     }
     const dancerShapeUniforms = {
-      color1: { value: new THREE.Vector4(1, 0, 0, 1) },
-      color2: { value: new THREE.Vector4(0, 1, 0, 1) },
-      color3: { value: new THREE.Vector4(0, 0, 1, 1) },
-      color4: { value: new THREE.Vector4(1, 1, 0, 1) },
-      color5: { value: new THREE.Vector4(0, 1, 1, 1) },
-      color6: { value: new THREE.Vector4(1, 0, 1, 1) },
+      color1: { value: new THREE.Vector4(0.5, 0, 0, 1) },
+      color2: { value: new THREE.Vector4(0, 0.5, 0, 1) },
+      color3: { value: new THREE.Vector4(0, 0, 0.5, 1) },
+      color4: { value: new THREE.Vector4(0.5, 0.5, 0, 1) },
+      color5: { value: new THREE.Vector4(0, 0.5, 0.5, 1) },
+      color6: { value: new THREE.Vector4(0.5, 0, 0.5, 1) },
       xMid: { value: 0.5 },
       yBottom: { value: 0.33 },
       yTop: { value: 0.66 },
