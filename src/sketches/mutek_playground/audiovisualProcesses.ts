@@ -47,6 +47,7 @@ export const notePulse = <T extends MPEVoiceGraph>(
           dc.dancer.setFrame(frame)
         } else {
           dc.dancer.quadVisible(false)
+          if(frame % 4 == 0) dc.dancer.setFrame(Math.floor(frame/4))
         }
       })
       frame++
@@ -138,14 +139,16 @@ const waitChoices = [
 export const randomPhraseDancer = async <T extends MPEVoiceGraph>(
   dancer: Dancer,
   synth: MPEPolySynth<T>,
-  params: { noWaitProb: {val: number}; sameSpeedProb: {val: number}; root5Prob: {val: number} },
+  params: { noWaitProb: {val: number}; baseSpeed: {val: number}; root5Prob: {val: number} },
   ctx: BrowserTimeContext
 ) => {
   const generator = new MelodyGenerator(() => params.root5Prob.val)
   let lastSpeed = 1
   while (true) {
     const clip = generator.generateMelody()
-    lastSpeed = Math.random() < params.sameSpeedProb.val ? lastSpeed : Math.random() ** 2 * 2 + 0.25
+    const sameSpeedProb = 0.5
+    const newSpeed = (params.baseSpeed.val*0.8 + (Math.random()**2) *0.2) ** 2 * 2 + 0.25
+    lastSpeed = Math.random() < sameSpeedProb ? lastSpeed : newSpeed
     const scaledClip = clip.scale(lastSpeed)
     ctx.branch(async (ctx) => {
       await dancePhrase(dancer, scaledClip, synth, ctx)

@@ -44,7 +44,7 @@ const paramDef = {
   melodyEchoFdbk: {val: 0.5, min: 0, max: 0.95, midiCC: 11, quantize: false},
   melodyEchoTime: {val: 0.33, min: 0.01, max: 1, midiCC: 12, quantize: false},
   melodyNoWaitProb: {val: 0.2, min: 0, max: 1, midiCC: 13, quantize: false},
-  melodySameSpeedProb: {val: 0.5, min: 0, max: 1, midiCC: 14, quantize: false},
+  melodyBaseSpeed: {val: 0.5, min: 0, max: 1, midiCC: 14, quantize: false},
   melodyRoot5Prob: {val: 0.2, min: 0, max: 1, midiCC: 15, quantize: false},
 }
 const paramMap = ref(paramDef)
@@ -142,6 +142,7 @@ onMounted(async () => {
     lerpDancer.lerpDef.toFrame = 0
 
     const segmentDancer = dancerScene.createDancer("chris", 500, {x: 900, y: 200})
+    segmentDancer.params.dancerName = 'rupal'
     segmentDancer.quadVisible(false)
     segmentDancer.regionsVisible(true)
     segmentDancer.lineVisible(false)
@@ -202,7 +203,7 @@ onMounted(async () => {
       await ctx.wait(0.1)
       const params = {
         noWaitProb: paramMap.value.melodyNoWaitProb,
-        sameSpeedProb: paramMap.value.melodySameSpeedProb,
+        baseSpeed: paramMap.value.melodyBaseSpeed,
         root5Prob: paramMap.value.melodyRoot5Prob
       }
       randomPhraseDancer(segmentDancer, melodySynth, params, ctx)
@@ -336,10 +337,10 @@ onUnmounted(() => {
       </div>
 
       <div>
-        <label for="melodySameSpeedProb">Melody Same Speed Prob - midi cc: {{ paramMap.melodySameSpeedProb.midiCC }}</label>
+        <label for="melodyBaseSpeed">Melody Base Speed - midi cc: {{ paramMap.melodyBaseSpeed.midiCC }}</label>
         <br/>
-        <input type="range" v-model.number="paramMap.melodySameSpeedProb.val" :min="paramMap.melodySameSpeedProb.min" :max="paramMap.melodySameSpeedProb.max" :step="0.01" />
-        <span>{{ paramMap.melodySameSpeedProb.val.toFixed(2) }}</span>
+        <input type="range" v-model.number="paramMap.melodyBaseSpeed.val" :min="paramMap.melodyBaseSpeed.min" :max="paramMap.melodyBaseSpeed.max" :step="0.01" />
+        <span>{{ paramMap.melodyBaseSpeed.val.toFixed(2) }}</span>
       </div>
 
       <div>

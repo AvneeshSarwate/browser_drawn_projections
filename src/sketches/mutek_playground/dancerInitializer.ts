@@ -31,7 +31,7 @@ type QuadParam = {
   texName: string
   frameCount: number
   fps: number
-  dancerName: string
+  dancerName: DancerName
   showRegions: boolean
   color1: THREE.Vector4
   color2: THREE.Vector4
