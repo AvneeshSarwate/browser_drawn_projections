@@ -34,15 +34,15 @@ const clearDrawFuncs = () => {
 //todo note somewhere special midi CCs that might break with naive usage, like those for RPN/NRPN  [6, 98, 99, 100, 101]
 const paramDef = {
   mainVolume: {val: 0.5, min: 0, max: 1, midiCC: -1, quantize: false},
-  chordVolume: {val: 0.3, min: 0, max: 1, midiCC: 9, quantize: false},
-  activeChord: {val: 1, min: 0, max: 4, midiCC: 1, quantize: true},
-  chordSpeed: {val: 0.5, min: 0, max: 1, midiCC: 2, quantize: false},
-  chordFilter: {val: 3000, min: 0, max: 10000, midiCC: 3, quantize: false},
-  chordRelease: {val: 0.15, min: 0, max: 1, midiCC: 4, quantize: false},
-  bassNote: {val: 0, min: 0, max: 7, midiCC: 5, quantize: true},
+  chordVolume: {val: 0.3, min: 0, max: 1, midiCC: 1, quantize: false},
+  activeChord: {val: 1, min: 0, max: 4, midiCC: 2, quantize: true},
+  chordSpeed: {val: 0.5, min: 0, max: 1, midiCC: 3, quantize: false},
+  chordFilter: {val: 3000, min: 0, max: 10000, midiCC: 4, quantize: false},
+  chordRelease: {val: 0.15, min: 0, max: 1, midiCC: 5, quantize: false},
   bassVol: {val: 0.5, min: 0, max: 1, midiCC: 7, quantize: false},
-  bassFilterLfoRate: {val: 0.1, min: 0, max: 1, midiCC: 16, quantize: false},
-  melodyVol: {val: 0.3, min: 0, max: 1, midiCC: 8, quantize: false},
+  bassNote: {val: 0, min: 0, max: 7, midiCC: 8, quantize: true},
+  bassFilterLfoRate: {val: 0.1, min: 0, max: 1, midiCC: 9, quantize: false},
+  melodyVol: {val: 0.3, min: 0, max: 1, midiCC: 10, quantize: false},
   melodyEchoFdbk: {val: 0.5, min: 0, max: 0.95, midiCC: 11, quantize: false},
   melodyEchoTime: {val: 0.33, min: 0.01, max: 1, midiCC: 12, quantize: false},
   melodyNoWaitProb: {val: 0.2, min: 0, max: 1, midiCC: 13, quantize: false},
@@ -275,17 +275,17 @@ onUnmounted(() => {
       </div>
 
       <div>
-        <label for="chordSpeed">Chord Speed - midi cc: {{ paramMap.chordSpeed.midiCC }}</label> 
-        <br/>
-        <input type="range" v-model.number="paramMap.chordSpeed.val" :min="paramMap.chordSpeed.min" :max="paramMap.chordSpeed.max" :step="0.01" />
-        <span>{{ paramMap.chordSpeed.val.toFixed(2) }}</span>
-      </div>
-
-      <div>
         <label for="activeChord">Active Chord - midi cc: {{ paramMap.activeChord.midiCC }}</label>
         <br/>
         <input type="range" v-model.number="paramMap.activeChord.val" :min="paramMap.activeChord.min" :max="paramMap.activeChord.max" />
         <span>{{ paramMap.activeChord.val }}</span>
+      </div>
+
+      <div>
+        <label for="chordSpeed">Chord Speed - midi cc: {{ paramMap.chordSpeed.midiCC }}</label> 
+        <br/>
+        <input type="range" v-model.number="paramMap.chordSpeed.val" :min="paramMap.chordSpeed.min" :max="paramMap.chordSpeed.max" :step="0.01" />
+        <span>{{ paramMap.chordSpeed.val.toFixed(2) }}</span>
       </div>
 
       <div>

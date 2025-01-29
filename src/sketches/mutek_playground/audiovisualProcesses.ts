@@ -51,9 +51,11 @@ export const notePulse = <T extends MPEVoiceGraph>(
       dancersAndChords.dcMap.forEach((dc, index) => {
         if (index === dancersAndChords.activeChord) {
           dc.dancer.quadVisible(true)
+          dc.dancer.lineVisible(false)
           dc.dancer.setFrame(frame)
         } else {
           dc.dancer.quadVisible(false)
+          dc.dancer.lineVisible(true)
           if(frame % 4 == 0) dc.dancer.setFrame(Math.floor(frame/4))
         }
       })
