@@ -76,12 +76,14 @@ onMounted(async () => {
       dancerScene.dancers.get(id)?.remove()
     })
 
+    // have 6 diff 7th chords, and with some low probability (0.2), play an inversion/subset with 3 notes
+    //root degrees, 7 1 3 4 5 6?
     const dancerChords = [
-    {dancer: dancerScene.createDancer("kurush", 200, {x: 300, y: 200}), chord: [47, 48]},
-      {dancer: dancerScene.createDancer("chloe", 200, {x: 400, y: 200}), chord: [48, 55]},
-      {dancer: dancerScene.createDancer("chris", 200, {x: 500, y: 200}), chord: [55, 59]},
-      {dancer: dancerScene.createDancer("iman", 200, {x: 600, y: 200}), chord: [55, 65]},
-      {dancer: dancerScene.createDancer("aroma", 200, {x: 700, y: 200}), chord: [58, 65]}
+      {dancer: dancerScene.createDancer("kurush", 200, {x: 300, y: 200}), chord: [47, 48]}, //min2
+      {dancer: dancerScene.createDancer("chloe", 200, {x: 400, y: 200}), chord: [48, 55]}, //5th
+      {dancer: dancerScene.createDancer("chris", 200, {x: 500, y: 200}), chord: [55, 59]}, //maj3
+      {dancer: dancerScene.createDancer("iman", 200, {x: 600, y: 200}), chord: [55, 65]}, //min7
+      {dancer: dancerScene.createDancer("aroma", 200, {x: 700, y: 200}), chord: [58, 65]} //5th
     ]
 
     const chordPulseData = {
