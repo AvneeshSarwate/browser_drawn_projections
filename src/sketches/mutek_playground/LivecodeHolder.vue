@@ -15,6 +15,7 @@ import { logisticSigmoid } from "@/rendering/logisticSigmoid";
 import { lerp } from "three/src/math/MathUtils.js";
 import { FMChorusVoice } from "@/music/FMChorusSynth";
 import { MIDI_READY, midiInputs } from "@/io/midi";
+import { Scale } from "@/music/scale";
 const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
 let timeLoops: CancelablePromisePoxy<any>[] = []
@@ -40,6 +41,7 @@ const paramDef = {
   chordRelease: {val: 0.15, min: 0, max: 1, midiCC: 4, quantize: false},
   bassNote: {val: 0, min: 0, max: 7, midiCC: 5, quantize: true},
   bassVol: {val: 0.5, min: 0, max: 1, midiCC: 7, quantize: false},
+  bassFilterLfoRate: {val: 0.1, min: 0, max: 1, midiCC: 16, quantize: false},
   melodyVol: {val: 0.3, min: 0, max: 1, midiCC: 8, quantize: false},
   melodyEchoFdbk: {val: 0.5, min: 0, max: 0.95, midiCC: 11, quantize: false},
   melodyEchoTime: {val: 0.33, min: 0.01, max: 1, midiCC: 12, quantize: false},
@@ -78,12 +80,14 @@ onMounted(async () => {
 
     // have 6 diff 7th chords, and with some low probability (0.2), play an inversion/subset with 3 notes
     //root degrees, 7 1 3 4 5 6?
+    //be opinionated about the inversions? don't want this to sound like a practice backing track generator
+    const scale = new Scale(null, 48)
     const dancerChords = [
-      {dancer: dancerScene.createDancer("kurush", 200, {x: 300, y: 200}), chord: [47, 48]}, //min2
-      {dancer: dancerScene.createDancer("chloe", 200, {x: 400, y: 200}), chord: [48, 55]}, //5th
-      {dancer: dancerScene.createDancer("chris", 200, {x: 500, y: 200}), chord: [55, 59]}, //maj3
-      {dancer: dancerScene.createDancer("iman", 200, {x: 600, y: 200}), chord: [55, 65]}, //min7
-      {dancer: dancerScene.createDancer("aroma", 200, {x: 700, y: 200}), chord: [58, 65]} //5th
+      {dancer: dancerScene.createDancer("kurush", 200, {x: 300, y: 200}), chord: scale.getMultiple([-1, 1, 3, 5])}, 
+      {dancer: dancerScene.createDancer("chloe", 200, {x: 400, y: 200}), chord: scale.getMultiple([0, 2, 4, 6])}, 
+      {dancer: dancerScene.createDancer("chris", 200, {x: 500, y: 200}), chord: scale.getMultiple([1, 3, 5, 7])}, 
+      {dancer: dancerScene.createDancer("iman", 200, {x: 600, y: 200}), chord: scale.getMultiple([2, 4, 6, 8])}, 
+      {dancer: dancerScene.createDancer("aroma", 200, {x: 700, y: 200}), chord: scale.getMultiple([3, 5, 7, 9])} 
     ]
 
     const chordPulseData = {
@@ -159,9 +163,11 @@ onMounted(async () => {
     const slideTime = 120
     let slideProg = 0
     let loopFrame = 0
+    let bassFilterLfoTime = 0
     launchLoop(async (ctx) => {
       while(true) {
         await ctx.waitFrame()
+
         chordPulseData.speed = 0.05 + (1- paramMap.value.chordSpeed.val)**2
         chordPulseData.activeChord = paramMap.value.activeChord.val
         chordSynth.setParam('Filter', paramMap.value.chordFilter.val)
@@ -188,6 +194,11 @@ onMounted(async () => {
         loopFrame++
 
         bassVoice.pitch = lerp(bassPitches[lastTarget], bassPitches[bassNoteTarget], slideProg / slideTime)
+        bassFilterLfoTime += paramMap.value.bassFilterLfoRate.val
+        bassVoice.Filter = 600 + sinN(bassFilterLfoTime * 0.08)**2 * 3000
+        lerpDancer.line.material.linewidth = 2 + sinN(bassFilterLfoTime * 0.08)*5
+
+
         
         segmentDancer.setFrame(Math.floor(loopFrame/10) % framesPerPerson[segmentDancer.params.dancerName])
 
@@ -254,7 +265,7 @@ onUnmounted(() => {
   </div>
 
   <div id="paramControls">
-    <div>
+    <div class="paramColumn">
       <h3>Chord parameters</h3>
       <div>
         <label for="chordVolume">Chord Volume - midi cc: {{ paramMap.chordVolume.midiCC }}</label> 
@@ -292,7 +303,7 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <div>
+    <div class="paramColumn">
       <h3>Bass parameters</h3>
       <div>
         <label for="bassVol">Bass Vol - midi cc: {{ paramMap.bassVol.midiCC }}</label>
@@ -307,9 +318,16 @@ onUnmounted(() => {
         <input type="range" v-model.number="paramMap.bassNote.val" :min="paramMap.bassNote.min" :max="paramMap.bassNote.max" />
         <span>{{ paramMap.bassNote.val }}</span>
       </div>
+
+      <div>
+        <label for="bassFilterLfoRate">Bass Filter Lfo Rate - midi cc: {{ paramMap.bassFilterLfoRate.midiCC }}</label>
+        <br/>
+        <input type="range" v-model.number="paramMap.bassFilterLfoRate.val" :min="paramMap.bassFilterLfoRate.min" :max="paramMap.bassFilterLfoRate.max" :step="0.01" />
+        <span>{{ paramMap.bassFilterLfoRate.val.toFixed(2) }}</span>
+      </div>
     </div>
 
-    <div>
+    <div class="paramColumn">
       <h3>Melody parameters</h3>
       <div>
         <label for="melodyVol">Melody Vol - midi cc: {{ paramMap.melodyVol.midiCC }}</label>
@@ -375,6 +393,10 @@ onUnmounted(() => {
   flex-direction: row;
   gap: 10px;
   margin-left: 10px;
+}
+
+.paramColumn {
+  width: 250px;
 }
 </style>
 

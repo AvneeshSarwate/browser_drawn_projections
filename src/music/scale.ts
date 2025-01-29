@@ -12,7 +12,7 @@ export class Scale {
   private root: number = 60
 
   constructor(notes?: number[], root?: number) {
-    if (notes !== undefined) {
+    if (notes) {
       const minNote = Math.min(...notes)
       const normedNotes = notes.sort((a, b) => a - b).map((n) => n - minNote)
       this.degrees = normedNotes

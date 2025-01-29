@@ -5,15 +5,22 @@ import { AbletonClip, type AbletonNote } from '@/io/abletonClips'
 import { Scale } from '@/music/scale'
 
 const pulseChord = <T extends MPEVoiceGraph>(
-  chord: number[],
+  initialChord: number[],
   synth: MPEPolySynth<T>,
   duration: number,
   ctx: BrowserTimeContext
 ) => {
+  const scale = new Scale(null, 48)
+  const degrees = initialChord.map(degree => scale.getIndFromPitch(degree))
+  const inversionDegrees = degrees.map(i => i)
+  inversionDegrees[0] += 7
+  if(Math.random() < 0.2) inversionDegrees[1] += 7
+  const inversion = scale.getMultiple(inversionDegrees)
+  const chord = Math.random() < 0.2 ? inversion : initialChord
   ctx.branch(async (ctx) => {
     const voices: MPEVoiceGraph[] = []
     for (let i = 0; i < chord.length; i++) {
-      voices.push(synth.noteOn(chord[i], 100, 0, 0))
+      voices.push(synth.noteOn(chord[i], 70 + Math.random() * 30, 0, 0))
     }
     await ctx.wait(duration)
     for (let i = 0; i < chord.length; i++) {
@@ -65,7 +72,9 @@ const playNote = <T extends MPEVoiceGraph>(
 ) => {
   const { pitch, velocity, duration: noteDur } = noteData
   if (!isFinite(pitch)) {
-    debugger
+    // debugger
+    console.warn("bad pitch",noteData)
+    return
   }
   const voice = inst.noteOn(pitch, velocity, 0, 0)
   ctx.branch(async (ctx) => {

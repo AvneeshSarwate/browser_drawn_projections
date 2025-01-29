@@ -39,6 +39,7 @@ type QuadParam = {
   color4: THREE.Vector4
   color5: THREE.Vector4
   color6: THREE.Vector4
+  lineWidth: number
 }
 
 type DancerShapeUniforms = {
@@ -382,6 +383,7 @@ export const createDancerScene = async (renderer: THREE.WebGLRenderer, renderTar
       color4: new THREE.Vector4(1, 1, 0, 1),
       color5: new THREE.Vector4(0, 1, 1, 1),
       color6: new THREE.Vector4(1, 0, 1, 1),
+      lineWidth: 2,
     }
 
     const lerpDef = {
