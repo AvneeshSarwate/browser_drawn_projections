@@ -42,7 +42,10 @@ const paramDef = {
   bassVol: {val: 0.5, min: 0, max: 1, midiCC: 7, quantize: false},
   melodyVol: {val: 0.3, min: 0, max: 1, midiCC: 8, quantize: false},
   melodyEchoFdbk: {val: 0.5, min: 0, max: 0.95, midiCC: 11, quantize: false},
-  melodyEchoTime: {val: 0.3, min: 0.01, max: 1, midiCC: 12, quantize: false},
+  melodyEchoTime: {val: 0.33, min: 0.01, max: 1, midiCC: 12, quantize: false},
+  melodyNoWaitProb: {val: 0.2, min: 0, max: 1, midiCC: 13, quantize: false},
+  melodySameSpeedProb: {val: 0.5, min: 0, max: 1, midiCC: 14, quantize: false},
+  melodyRoot5Prob: {val: 0.2, min: 0, max: 1, midiCC: 15, quantize: false},
 }
 const paramMap = ref(paramDef)
 
@@ -186,7 +189,7 @@ onMounted(async () => {
         segmentDancer.setFrame(Math.floor(loopFrame/10) % framesPerPerson[segmentDancer.params.dancerName])
 
         melodySynth.setParam('echoFdbk', paramMap.value.melodyEchoFdbk.val)
-        melodySynth.setParam('echoTime', paramMap.value.melodyEchoTime.val)
+        melodySynth.setParam('echoTime', paramMap.value.melodyEchoTime.val ** 1.7)
 
         const MAIN_VOLUME = paramMap.value.mainVolume.val
         bassVoice.polyGain = paramMap.value.bassVol.val * MAIN_VOLUME
@@ -197,7 +200,12 @@ onMounted(async () => {
 
     launchLoop(async (ctx) => {
       await ctx.wait(0.1)
-      randomPhraseDancer(segmentDancer, melodySynth, ctx)
+      const params = {
+        noWaitProb: paramMap.value.melodyNoWaitProb,
+        sameSpeedProb: paramMap.value.melodySameSpeedProb,
+        root5Prob: paramMap.value.melodyRoot5Prob
+      }
+      randomPhraseDancer(segmentDancer, melodySynth, params, ctx)
     })
 
     appState.drawFunctions.push(() => {
@@ -318,6 +326,27 @@ onUnmounted(() => {
         <br/>
         <input type="range" v-model.number="paramMap.melodyEchoTime.val" :min="paramMap.melodyEchoTime.min" :max="paramMap.melodyEchoTime.max" :step="0.01" />
         <span>{{ paramMap.melodyEchoTime.val.toFixed(2) }}</span>
+      </div>
+
+      <div>
+        <label for="melodyNoWaitProb">Melody No Wait Prob - midi cc: {{ paramMap.melodyNoWaitProb.midiCC }}</label>
+        <br/>
+        <input type="range" v-model.number="paramMap.melodyNoWaitProb.val" :min="paramMap.melodyNoWaitProb.min" :max="paramMap.melodyNoWaitProb.max" :step="0.01" />
+        <span>{{ paramMap.melodyNoWaitProb.val.toFixed(2) }}</span>
+      </div>
+
+      <div>
+        <label for="melodySameSpeedProb">Melody Same Speed Prob - midi cc: {{ paramMap.melodySameSpeedProb.midiCC }}</label>
+        <br/>
+        <input type="range" v-model.number="paramMap.melodySameSpeedProb.val" :min="paramMap.melodySameSpeedProb.min" :max="paramMap.melodySameSpeedProb.max" :step="0.01" />
+        <span>{{ paramMap.melodySameSpeedProb.val.toFixed(2) }}</span>
+      </div>
+
+      <div>
+        <label for="root5Prob">Root 5 Prob - midi cc: {{ paramMap.melodyRoot5Prob.midiCC }}</label>
+        <br/>
+        <input type="range" v-model.number="paramMap.melodyRoot5Prob.val" :min="paramMap.melodyRoot5Prob.min" :max="paramMap.melodyRoot5Prob.max" :step="0.01" />
+        <span>{{ paramMap.melodyRoot5Prob.val.toFixed(2) }}</span>
       </div>
     </div>
   </div>
