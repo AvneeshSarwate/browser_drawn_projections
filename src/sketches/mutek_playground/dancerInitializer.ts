@@ -183,10 +183,8 @@ type Point = {
 
 // const splineFrames = contours.diana.frames.map(frame => bezierToCatmullRomExact(frame))
 
-type DancerName = "aroma" | "chloe" | "chris" | "diana" | "idris" | "iman" | "jah" | "jesse" | "kat" | "kurush" | "latasha" | "martin" | "robert" | "rupal" | "sara" | "segnon" | "senay" | "shreya" | "stoney" | "zandie"
-export const people: DancerName[] = ["aroma", "chloe", "chris", "diana", "idris", "iman", "jah", "jesse", "kat", "kurush", "latasha", "martin", "robert", "rupal", "sara", "segnon", "senay", "shreya", "stoney", "zandie"]
-export const framesPerPerson: Record<string, number> = {}
-export const createDancerScene = async (renderer: THREE.WebGLRenderer, renderTarget: THREE.WebGLRenderTarget) => {
+
+export const createKTX2Loader = (renderer: THREE.WebGLRenderer) => {
   let transcoderPath = "../node_modules/three/examples/jsm/libs/basis/"
   if (import.meta.env.PROD) {
     console.log("running in production mode")
@@ -199,6 +197,15 @@ export const createDancerScene = async (renderer: THREE.WebGLRenderer, renderTar
     .detectSupport(renderer);
 
   console.log(loader);
+  return loader
+}
+
+
+type DancerName = "aroma" | "chloe" | "chris" | "diana" | "idris" | "iman" | "jah" | "jesse" | "kat" | "kurush" | "latasha" | "martin" | "robert" | "rupal" | "sara" | "segnon" | "senay" | "shreya" | "stoney" | "zandie"
+export const people: DancerName[] = ["aroma", "chloe", "chris", "diana", "idris", "iman", "jah", "jesse", "kat", "kurush", "latasha", "martin", "robert", "rupal", "sara", "segnon", "senay", "shreya", "stoney", "zandie"]
+export const framesPerPerson: Record<string, number> = {}
+export const createDancerScene = async (renderer: THREE.WebGLRenderer, loader: KTX2Loader, renderTarget: THREE.WebGLRenderTarget) => {
+  
 
   const textures = people.map(person => `${person}_texture_array.ktx2`)
   const textureLengthMap: Record<string, number> = {}

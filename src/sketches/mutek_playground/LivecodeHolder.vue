@@ -7,7 +7,7 @@ import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
-import { createDancerScene, framesPerPerson, people } from './dancerInitializer';
+import { createDancerScene, createKTX2Loader, framesPerPerson, people } from './dancerInitializer';
 import { notePulse, randomPhraseDancer } from "./audiovisualProcesses";
 import { FAUST_AUDIO_CONTEXT_READY, MPEPolySynth } from "@/music/mpeSynth";
 import { FaustTestVoice } from "@/music/FaustSynthTemplate";
@@ -16,6 +16,7 @@ import { lerp } from "three/src/math/MathUtils.js";
 import { FMChorusVoice } from "@/music/FMChorusSynth";
 import { MIDI_READY, midiInputs } from "@/io/midi";
 import { Scale } from "@/music/scale";
+import { AlphaDisplay, CompositeShaderEffect } from "@/rendering/customFX";
 const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
 let timeLoops: CancelablePromisePoxy<any>[] = []
@@ -66,28 +67,31 @@ onMounted(async () => {
     const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
     const threeCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
 
+    appState.threeRenderer!!.setClearAlpha(0)
+
     let p5Mouse = { x: 0, y: 0 }
     mousemoveEvent((ev) => {
       p5Mouse = targetToP5Coords(ev, p5i, threeCanvas)
     }, threeCanvas)
 
-    const dancerRenderTarget = new THREE.WebGLRenderTarget(resolution.width, resolution.height)
-    const dancerScene = await createDancerScene(appState.threeRenderer!!, dancerRenderTarget)
-    
-    Array.from(dancerScene.dancers.keys()).forEach(id => {
-      dancerScene.dancers.get(id)?.remove()
-    })
+    const chordsRenderTarget = new THREE.WebGLRenderTarget(resolution.width, resolution.height)
+    const melodyRenderTarget = new THREE.WebGLRenderTarget(resolution.width, resolution.height)
+    const bassRenderTarget = new THREE.WebGLRenderTarget(resolution.width, resolution.height)
+    const ktx2Loader = createKTX2Loader(appState.threeRenderer!!)
+    const chordsScene = await createDancerScene(appState.threeRenderer!!, ktx2Loader, chordsRenderTarget)
+    const melodyScene = await createDancerScene(appState.threeRenderer!!, ktx2Loader, melodyRenderTarget)
+    const bassScene = await createDancerScene(appState.threeRenderer!!, ktx2Loader, bassRenderTarget)
 
     // have 6 diff 7th chords, and with some low probability (0.2), play an inversion/subset with 3 notes
     //root degrees, 7 1 3 4 5 6?
     //be opinionated about the inversions? don't want this to sound like a practice backing track generator
     const scale = new Scale(null, 48)
     const dancerChords = [
-      {dancer: dancerScene.createDancer("kurush", 200, {x: 300, y: 200}), chord: scale.getMultiple([-1, 1, 3, 5])}, 
-      {dancer: dancerScene.createDancer("chloe", 200, {x: 400, y: 200}), chord: scale.getMultiple([0, 2, 4, 6])}, 
-      {dancer: dancerScene.createDancer("chris", 200, {x: 500, y: 200}), chord: scale.getMultiple([1, 3, 5, 7])}, 
-      {dancer: dancerScene.createDancer("iman", 200, {x: 600, y: 200}), chord: scale.getMultiple([2, 4, 6, 8])}, 
-      {dancer: dancerScene.createDancer("aroma", 200, {x: 700, y: 200}), chord: scale.getMultiple([3, 5, 7, 9])} 
+      {dancer: chordsScene.createDancer("kurush", 200, {x: 300, y: 200}), chord: scale.getMultiple([-1, 1, 3, 5])}, 
+      {dancer: chordsScene.createDancer("chloe", 200, {x: 400, y: 200}), chord: scale.getMultiple([0, 2, 4, 6])}, 
+      {dancer: chordsScene.createDancer("chris", 200, {x: 500, y: 200}), chord: scale.getMultiple([1, 3, 5, 7])}, 
+      {dancer: chordsScene.createDancer("iman", 200, {x: 600, y: 200}), chord: scale.getMultiple([2, 4, 6, 8])}, 
+      {dancer: chordsScene.createDancer("aroma", 200, {x: 700, y: 200}), chord: scale.getMultiple([3, 5, 7, 9])} 
     ]
 
     const chordPulseData = {
@@ -138,7 +142,7 @@ onMounted(async () => {
     bassVoice.polyGain = paramMap.value.bassVol.val
     // bassVoice.Filter = 1200
 
-    const lerpDancer = dancerScene.createDancer(bassDancers[paramMap.value.bassNote.val], 500, {x: 150, y: 250})
+    const lerpDancer = bassScene.createDancer(bassDancers[paramMap.value.bassNote.val], 500, {x: 150, y: 250})
     lerpDancer.group.position.z = 1
     lerpDancer.quadVisible(false)
     lerpDancer.lerpDef.lerping = true
@@ -147,7 +151,7 @@ onMounted(async () => {
     lerpDancer.lerpDef.fromFrame = 0
     lerpDancer.lerpDef.toFrame = 0
 
-    const segmentDancer = dancerScene.createDancer("chris", 500, {x: 900, y: 200})
+    const segmentDancer = melodyScene.createDancer("chris", 500, {x: 900, y: 200})
     segmentDancer.params.dancerName = 'rupal'
     segmentDancer.quadVisible(false)
     segmentDancer.regionsVisible(true)
@@ -222,11 +226,21 @@ onMounted(async () => {
       randomPhraseDancer(segmentDancer, melodySynth, params, ctx)
     })
 
+    const chordsPassthru = new Passthru({ src: chordsRenderTarget })
+    const melodyPassthru = new Passthru({ src: melodyRenderTarget })
+    const bassPassthru = new Passthru({ src: bassRenderTarget })
+
+    const compositeShaderEffect = new CompositeShaderEffect([
+      bassPassthru, melodyPassthru, chordsPassthru, 
+    ], 3)
+
     appState.drawFunctions.push(() => {
-      dancerScene.renderScene(dancerRenderTarget)
+      chordsScene.renderScene(chordsRenderTarget)
+      melodyScene.renderScene(melodyRenderTarget)
+      bassScene.renderScene(bassRenderTarget)
     })
 
-    const canvasPaint = new CanvasPaint({ src: dancerRenderTarget })
+    const canvasPaint = new CanvasPaint({ src: compositeShaderEffect })
 
     shaderGraphEndNode = canvasPaint
     appState.shaderDrawFunc = () => shaderGraphEndNode!!.renderAll(appState.threeRenderer!!)

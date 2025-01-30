@@ -507,3 +507,23 @@ export class Bloom extends CustomShaderEffect {
     super.setUniforms(fullUniforms)
   }
 }
+
+
+const alphaDisplayFs = glsl`
+precision highp float;
+
+uniform sampler2D src;
+varying vec2 vUV;
+
+void main() {
+  vec4 color = texture2D(src, vUV);
+  gl_FragColor = vec4(color.a, color.a, color.a, 1.0);
+}
+`
+
+export class AlphaDisplay extends CustomShaderEffect {
+  effectName = "AlphaDisplay"
+  constructor(inputs: {src: ShaderSource}, width = 1280, height = 720) {
+    super(alphaDisplayFs, inputs, width, height)
+  }
+}
