@@ -160,22 +160,23 @@ uniform sampler2D src;
 uniform float preAdd;
 uniform float postAdd;
 uniform float mult;
+uniform bool colorOnly;
 
 varying vec2 vUV;
 
 void main() {
   vec4 color = texture2D(src, vUV);
-  color = color * (mult + preAdd) + postAdd;
-  gl_FragColor = color;
+  vec4 color2 = color * (mult + preAdd) + postAdd;
+  gl_FragColor = colorOnly ? vec4(color2.rgb, color.a) : color2;
 }`
 
 export class MathOp extends CustomShaderEffect {
   effectName = "MathOp"
   constructor(inputs: {src: ShaderSource}, width = 1280, height = 720) {
     super(mathOpFs, inputs, width, height)
-    this.setUniforms({preAdd: 0, postAdd: 0, mult: 1})
+    this.setUniforms({preAdd: 0, postAdd: 0, mult: 1, colorOnly: false})
   }
-  setUniforms(uniforms: {preAdd?: Dynamic<number>, postAdd?: Dynamic<number>, mult?: Dynamic<number>}): void {
+  setUniforms(uniforms: {preAdd?: Dynamic<number>, postAdd?: Dynamic<number>, mult?: Dynamic<number>, colorOnly?: Dynamic<boolean>}): void {
     super.setUniforms(uniforms)
   }
 }
@@ -525,5 +526,27 @@ export class AlphaDisplay extends CustomShaderEffect {
   effectName = "AlphaDisplay"
   constructor(inputs: {src: ShaderSource}, width = 1280, height = 720) {
     super(alphaDisplayFs, inputs, width, height)
+  }
+}
+
+//a shader that takes the rgb of one input and the alpha of another and blends them together
+const alphaColorSpliceFs = glsl`
+precision highp float;
+
+uniform sampler2D colorInput;
+uniform sampler2D alphaInput;
+
+varying vec2 vUV;
+
+void main() {
+  vec4 color = texture2D(colorInput, vUV);
+  vec4 alpha = texture2D(alphaInput, vUV);
+  gl_FragColor = vec4(color.rgb, alpha.a);
+}`
+
+export class AlphaColorSplice extends CustomShaderEffect {
+  effectName = "AlphaColorSplice"
+  constructor(inputs: {colorInput: ShaderSource, alphaInput: ShaderSource}, width = 1280, height = 720) {
+    super(alphaColorSpliceFs, inputs, width, height)
   }
 }

@@ -17,7 +17,7 @@ import { FMChorusVoice } from "@/music/FMChorusSynth";
 import { FMChorusPrecompiled } from "@/music/FMChorusPrecompiled/FMChorusPrecompiled";
 import { MIDI_READY, midiInputs } from "@/io/midi";
 import { Scale } from "@/music/scale";
-import { AlphaDisplay, AntiAlias, Bloom, CompositeShaderEffect, HorizontalBlur, LayerBlend, MathOp, RGDisplace, Transform, VerticalBlur } from "@/rendering/customFX";
+import { AlphaColorSplice, AlphaDisplay, AntiAlias, Bloom, CompositeShaderEffect, HorizontalBlur, LayerBlend, MathOp, RGDisplace, Transform, VerticalBlur } from "@/rendering/customFX";
 import { HorizontalAlternateDisplace, PointZoom } from "../nov21demo/customFx";
 import type { MultiSegmentLineShape } from "../nov21demo/multiSegmentLine/multiSegmentLineUtil";
 import { getTransformedShapePoints } from "../nov21demo/tldrawWrapperPlain";
@@ -47,23 +47,25 @@ const hexToRgb = (hex: string) => {
   return [r, g, b]
 }
 
-const shaderGraph0 = (src: ShaderSource) => {
+const melodyShaderGraph = (src: ShaderSource) => {
   const p5Passthru = new Passthru({ src })
   const antiAlias = new AntiAlias({ src: p5Passthru })
   const feedback = new FeedbackNode(antiAlias)
   const vertBlur = new VerticalBlur({ src: feedback })
   const horBlur = new HorizontalBlur({ src: vertBlur })
   const transform = new Transform({ src: horBlur })
-  const mathOp = new MathOp({ src: transform })
-  const layerOverlay = new LayerBlend({ src1: p5Passthru, src2: mathOp })
+  const colorMathOp = new MathOp({ src: transform })
+  const alphaMathOp = new MathOp({ src: transform })
+  const alphaColorSplice = new AlphaColorSplice({ colorInput: colorMathOp, alphaInput: alphaMathOp })
+  const layerOverlay = new LayerBlend({ src1: p5Passthru, src2: alphaColorSplice })
   const bloom = new Bloom({ src: layerOverlay })
   feedback.setFeedbackSrc(layerOverlay);
-  mathOp.setUniforms({mult: () => .997});
-
+  colorMathOp.setUniforms({mult: () => .99 + 0.02 * paramMap.value.melodyEchoTime.val, colorOnly: true});
+  alphaMathOp.setUniforms({mult: () => .997});
   return bloom
 }
 
-const shaderGraph1 = (src: ShaderSource) => {
+const chordsShaderGraph = (src: ShaderSource) => {
   const p5Passthru = new Passthru({ src })
   const antiAlias = new AntiAlias({ src: p5Passthru })
   const feedback = new FeedbackNode(antiAlias)
@@ -78,7 +80,7 @@ const shaderGraph1 = (src: ShaderSource) => {
   return layerOverlay
 }
 
-const shaderGraph2 = (src: ShaderSource, dancer: Dancer) => {
+const bassShaderGraph = (src: ShaderSource, dancer: Dancer) => {
 
   const shapeCenterX = () => {
     const xMid = dancer.dancerShapeUniforms.xMid.value * OUTLINE_GRID_SIZE / dancer.group.scale.x
@@ -116,13 +118,13 @@ const shaderGraph2 = (src: ShaderSource, dancer: Dancer) => {
 //todo note somewhere special midi CCs that might break with naive usage, like those for RPN/NRPN  [6, 98, 99, 100, 101]
 const paramDef = {
   mainVolume: { val: 0.5, min: 0, max: 1, midiCC: -1, quantize: false },
-  chordVolume: { val: 0.3, min: 0, max: 1, midiCC: 1, quantize: false },
+  chordVolume: { val: 0.3*0, min: 0, max: 1, midiCC: 1, quantize: false },
   chordPan: { val: 0.35, min: 0, max: 1, midiCC: -1, quantize: false },
   activeChord: {val: 1, min: 0, max: 4, midiCC: 2, quantize: true},
   chordSpeed: {val: 0.5, min: 0, max: 1, midiCC: 3, quantize: false},
   chordFilter: {val: 3000, min: 400, max: 10000, midiCC: 4, quantize: false},
   chordRelease: {val: 0.15, min: 0, max: 1, midiCC: 5, quantize: false},
-  bassVol: { val: 0.5, min: 0, max: 1, midiCC: 7, quantize: false },
+  bassVol: { val: 0.5*0, min: 0, max: 1, midiCC: 7, quantize: false },
   bassPan: { val: 0.5, min: 0, max: 1, midiCC: -1, quantize: false },
   bassNote: {val: 0, min: 0, max: 7, midiCC: 8, quantize: true},
   bassFilterLfoRate: {val: 0.1, min: 0, max: 1, midiCC: 9, quantize: false},
@@ -263,6 +265,7 @@ onMounted(async () => {
     let loopFrame = 0
     let bassFilterLfoTime = 0
     launchLoop(async (ctx) => {
+      // eslint-disable-next-line no-constant-condition
       while(true) {
         await ctx.waitFrame()
 
@@ -327,9 +330,9 @@ onMounted(async () => {
       randomPhraseDancer(segmentDancer, melodySynth, params, ctx)
     })
 
-    const chordsPassthru = shaderGraph1(chordsRenderTarget)
-    const melodyPassthru = shaderGraph0(melodyRenderTarget)
-    const bassPassthru = shaderGraph2(bassRenderTarget, lerpDancer)
+    const chordsPassthru = chordsShaderGraph(chordsRenderTarget)
+    const melodyPassthru = melodyShaderGraph(melodyRenderTarget)
+    const bassPassthru = bassShaderGraph(bassRenderTarget, lerpDancer)
 
     const compositeShaderEffect = new CompositeShaderEffect([
       bassPassthru, melodyPassthru, chordsPassthru, 
