@@ -19,8 +19,6 @@ import { MIDI_READY, midiInputs } from "@/io/midi";
 import { Scale } from "@/music/scale";
 import { AlphaColorSplice, AlphaDisplay, AntiAlias, Bloom, CompositeShaderEffect, HorizontalBlur, LayerBlend, MathOp, RGDisplace, Transform, VerticalBlur } from "@/rendering/customFX";
 import { HorizontalAlternateDisplace, PointZoom } from "../nov21demo/customFx";
-import type { MultiSegmentLineShape } from "../nov21demo/multiSegmentLine/multiSegmentLineUtil";
-import { getTransformedShapePoints } from "../nov21demo/tldrawWrapperPlain";
 import { WavefoldChorusVoice } from "@/music/WavefoldChorusSynth";
 const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
@@ -59,10 +57,12 @@ const melodyShaderGraph = (src: ShaderSource) => {
   const alphaColorSplice = new AlphaColorSplice({ colorInput: colorMathOp, alphaInput: alphaMathOp })
   const layerOverlay = new LayerBlend({ src1: p5Passthru, src2: alphaColorSplice })
   const bloom = new Bloom({ src: layerOverlay })
+  const finalFade = new MathOp({ src: bloom })
   feedback.setFeedbackSrc(layerOverlay);
   colorMathOp.setUniforms({mult: () => .99 + 0.02 * paramMap.value.melodyEchoTime.val, colorOnly: true});
-  alphaMathOp.setUniforms({mult: () => .997});
-  return bloom
+  alphaMathOp.setUniforms({ mult: () => .997 });
+  finalFade.setUniforms({ mult: () => paramMap.value.melodyVol.val < 0.15 ? paramMap.value.melodyVol.val / 0.15 : 1 });
+  return finalFade
 }
 
 const chordsShaderGraph = (src: ShaderSource) => {
@@ -73,11 +73,12 @@ const chordsShaderGraph = (src: ShaderSource) => {
   const displace = new RGDisplace({ src: feedback, displacementMap: horDisplaceSrc })
   const mathOp = new MathOp({ src: displace })
   const layerOverlay = new LayerBlend({ src1: p5Passthru, src2: mathOp })
+  const finalFade = new MathOp({ src: layerOverlay })
   feedback.setFeedbackSrc(layerOverlay);
   mathOp.setUniforms({ mult: () => fadeawayDuration});
   displace.setUniforms({ strength: 0.001 })
-
-  return layerOverlay
+  finalFade.setUniforms({ mult: () => paramMap.value.chordVolume.val < 0.15 ? paramMap.value.chordVolume.val / 0.15 : 1 });
+  return finalFade
 }
 
 const bassShaderGraph = (src: ShaderSource, dancer: Dancer) => {
@@ -107,12 +108,13 @@ const bassShaderGraph = (src: ShaderSource, dancer: Dancer) => {
   const mathOp = new MathOp({ src: pointZoom })
   const layerOverlay = new LayerBlend({ src1: p5Passthru, src2: mathOp })
   const bloom = new Bloom({ src: layerOverlay })
-
+  const finalFade = new MathOp({ src: bloom })
   feedback.setFeedbackSrc(layerOverlay);
   pointZoom.setUniforms({centerX: shapeCenterX, centerY: shapeCenterY, strength: -0.01})
   mathOp.setUniforms({mult: () => fadeawayDuration});
+  finalFade.setUniforms({ mult: () => paramMap.value.bassVol.val < 0.15 ? paramMap.value.bassVol.val / 0.15 : 1 });
 
-  return bloom
+  return finalFade
 }
 
 //todo note somewhere special midi CCs that might break with naive usage, like those for RPN/NRPN  [6, 98, 99, 100, 101]
