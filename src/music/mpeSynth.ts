@@ -739,10 +739,11 @@ import { instantiateFaustModuleFromFile,
 let libFaust: LibFaust
 export let compiler: FaustCompiler
 export const argv = ["-I", "libraries/"];
+// export const argv = ["-I", "/usr/share/project/"];
 export const faustAudioContext = new AudioContext();
 let faustModulePath = "../node_modules/@grame/faustwasm/libfaust-wasm/libfaust-wasm.js"
 if (import.meta.env.PROD) {
-  faustModulePath = "libFaust/libfaust-wasm.js"
+  faustModulePath = "libfaust-wasm/libfaust-wasm.js"
   // faustModulePath = "https://unpkg.com/@grame/faustwasm@0.8.0/libfaust-wasm/libfaust-wasm.js"
   // faustModulePath = 'faustwasm/libfaust-wasm/libfaust-wasm.js'
 }

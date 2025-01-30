@@ -14,12 +14,14 @@ import { FaustTestVoice } from "@/music/FaustSynthTemplate";
 import { logisticSigmoid } from "@/rendering/logisticSigmoid";
 import { lerp } from "three/src/math/MathUtils.js";
 import { FMChorusVoice } from "@/music/FMChorusSynth";
+import { FMChorusPrecompiled } from "@/music/FMChorusPrecompiled/FMChorusPrecompiled";
 import { MIDI_READY, midiInputs } from "@/io/midi";
 import { Scale } from "@/music/scale";
 import { AlphaDisplay, AntiAlias, Bloom, CompositeShaderEffect, HorizontalBlur, LayerBlend, MathOp, RGDisplace, Transform, VerticalBlur } from "@/rendering/customFX";
 import { HorizontalAlternateDisplace, PointZoom } from "../nov21demo/customFx";
 import type { MultiSegmentLineShape } from "../nov21demo/multiSegmentLine/multiSegmentLineUtil";
 import { getTransformedShapePoints } from "../nov21demo/tldrawWrapperPlain";
+import { WavefoldChorusVoice } from "@/music/WavefoldChorusSynth";
 const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
 let timeLoops: CancelablePromisePoxy<any>[] = []
@@ -207,7 +209,7 @@ onMounted(async () => {
     await sleep(10)
     const chordSynth = new MPEPolySynth(FaustTestVoice, 32, false, true)
     const bassSynth = new MPEPolySynth(FaustTestVoice, 2, false, true)
-    const melodySynth = new MPEPolySynth(FMChorusVoice, 2, false, true)
+    const melodySynth = new MPEPolySynth(WavefoldChorusVoice, 2, false, true)
     await chordSynth.synthReady()
     await bassSynth.synthReady()
     await melodySynth.synthReady()
@@ -443,16 +445,16 @@ onUnmounted(() => {
           <span>{{ paramMap.melodyVol.val.toFixed(2) }}</span>
         </div>
 
-        <div>
+        <!-- <div>
           <label for="melodyEchoFdbk">Melody Echo Fdbk - midi cc: {{ paramMap.melodyEchoFdbk.midiCC }}</label>
           <br/>
           <input type="range" v-model.number="paramMap.melodyEchoFdbk.val" :min="paramMap.melodyEchoFdbk.min" :max="paramMap.melodyEchoFdbk.max" :step="0.01" />
           <span>{{ paramMap.melodyEchoFdbk.val.toFixed(2) }}</span>
-        </div>
+        </div> -->
 
 
         <div>
-          <label for="melodyEchoTime">Melody Echo Time - midi cc: {{ paramMap.melodyEchoTime.midiCC }}</label>
+          <label for="melodyEchoTime">Melody Reverb Time - midi cc: {{ paramMap.melodyEchoTime.midiCC }}</label>
           <br/>
           <input type="range" v-model.number="paramMap.melodyEchoTime.val" :min="paramMap.melodyEchoTime.min" :max="paramMap.melodyEchoTime.max" :step="0.01" />
           <span>{{ paramMap.melodyEchoTime.val.toFixed(2) }}</span>
