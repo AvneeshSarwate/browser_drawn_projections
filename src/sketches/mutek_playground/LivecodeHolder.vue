@@ -3,11 +3,11 @@
 import * as THREE from "three";
 import { type TemplateAppState, PulseCircle, appStateName, resolution } from './appState';
 import { inject, onMounted, onUnmounted, ref } from 'vue';
-import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
+import { CanvasPaint, FeedbackNode, Passthru, type ShaderEffect, type ShaderSource } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
-import { createDancerScene, createKTX2Loader, framesPerPerson, people } from './dancerInitializer';
+import { createDancerScene, createKTX2Loader, framesPerPerson, people, type Dancer } from './dancerInitializer';
 import { notePulse, randomPhraseDancer } from "./audiovisualProcesses";
 import { FAUST_AUDIO_CONTEXT_READY, MPEPolySynth } from "@/music/mpeSynth";
 import { FaustTestVoice } from "@/music/FaustSynthTemplate";
@@ -16,7 +16,10 @@ import { lerp } from "three/src/math/MathUtils.js";
 import { FMChorusVoice } from "@/music/FMChorusSynth";
 import { MIDI_READY, midiInputs } from "@/io/midi";
 import { Scale } from "@/music/scale";
-import { AlphaDisplay, CompositeShaderEffect } from "@/rendering/customFX";
+import { AlphaDisplay, AntiAlias, CompositeShaderEffect, HorizontalBlur, LayerBlend, MathOp, RGDisplace, Transform, VerticalBlur } from "@/rendering/customFX";
+import { HorizontalAlternateDisplace, PointZoom } from "../nov21demo/customFx";
+import type { MultiSegmentLineShape } from "../nov21demo/multiSegmentLine/multiSegmentLineUtil";
+import { getTransformedShapePoints } from "../nov21demo/tldrawWrapperPlain";
 const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
 let timeLoops: CancelablePromisePoxy<any>[] = []
@@ -30,6 +33,67 @@ const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromis
 const clearDrawFuncs = () => {
   appState.drawFunctions = []
   appState.drawFuncMap = new Map()
+}
+
+const fadeawayDuration = 0.99
+
+const shaderGraph0 = (src: ShaderSource) => {
+  const p5Passthru = new Passthru({ src })
+  const antiAlias = new AntiAlias({ src: p5Passthru })
+  const feedback = new FeedbackNode(antiAlias)
+  const vertBlur = new VerticalBlur({ src: feedback })
+  const horBlur = new HorizontalBlur({ src: vertBlur })
+  const transform = new Transform({ src: horBlur })
+  const mathOp = new MathOp({ src: transform })
+  const layerOverlay = new LayerBlend({ src1: p5Passthru, src2: mathOp })
+  feedback.setFeedbackSrc(layerOverlay);
+  mathOp.setUniforms({mult: () => fadeawayDuration});
+
+  return layerOverlay
+}
+
+const shaderGraph1 = (src: ShaderSource) => {
+  const p5Passthru = new Passthru({ src })
+  const antiAlias = new AntiAlias({ src: p5Passthru })
+  const feedback = new FeedbackNode(antiAlias)
+  const horDisplaceSrc = new HorizontalAlternateDisplace()
+  const displace = new RGDisplace({ src: feedback, displacementMap: horDisplaceSrc })
+  const mathOp = new MathOp({ src: displace })
+  const layerOverlay = new LayerBlend({ src1: p5Passthru, src2: mathOp })
+  feedback.setFeedbackSrc(layerOverlay);
+  mathOp.setUniforms({ mult: () => fadeawayDuration});
+  displace.setUniforms({ strength: 0.001 })
+
+  return layerOverlay
+}
+
+const shaderGraph2 = (src: ShaderSource, dancer: Dancer) => {
+
+  const shapeCenterX = () => {
+    return 5
+  }
+  const shapeCenterY = () => {
+    return 5
+  }
+
+  const p5Passthru = new Passthru({ src })
+  const antiAlias = new AntiAlias({ src: p5Passthru })
+  const feedback = new FeedbackNode(antiAlias)
+
+  
+  const vertBlur = new VerticalBlur({ src: feedback })
+  const horBlur = new HorizontalBlur({ src: vertBlur })
+  const pointZoom = new PointZoom({ src: horBlur })
+
+
+  const mathOp = new MathOp({ src: pointZoom })
+  const layerOverlay = new LayerBlend({ src1: p5Passthru, src2: mathOp })
+
+  feedback.setFeedbackSrc(layerOverlay);
+  pointZoom.setUniforms({centerX: shapeCenterX, centerY: shapeCenterY, strength: -0.01})
+  mathOp.setUniforms({mult: () => fadeawayDuration});
+
+  return layerOverlay
 }
 
 //todo note somewhere special midi CCs that might break with naive usage, like those for RPN/NRPN  [6, 98, 99, 100, 101]
@@ -226,8 +290,8 @@ onMounted(async () => {
       randomPhraseDancer(segmentDancer, melodySynth, params, ctx)
     })
 
-    const chordsPassthru = new Passthru({ src: chordsRenderTarget })
-    const melodyPassthru = new Passthru({ src: melodyRenderTarget })
+    const chordsPassthru = shaderGraph1(chordsRenderTarget)
+    const melodyPassthru = shaderGraph0(melodyRenderTarget)
     const bassPassthru = new Passthru({ src: bassRenderTarget })
 
     const compositeShaderEffect = new CompositeShaderEffect([
