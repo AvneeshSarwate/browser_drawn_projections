@@ -83,7 +83,7 @@ const chordsShaderGraph = (src: ShaderSource) => {
     pixelSize: () => {
       const filterRange = paramMap.value.chordFilter.max - paramMap.value.chordFilter.min
       const filterProg = paramMap.value.chordFilter.val - paramMap.value.chordFilter.min
-      return 1 + (filterProg / filterRange) ** 2 * 10
+      return 1 + (filterProg / filterRange)**1.5 * 12
     }
   })
   return finalFade
@@ -133,11 +133,11 @@ const paramDef = {
   chordSpeed: {val: 0.5, min: 0, max: 1, midiCC: 3, quantize: false},
   chordFilter: {val: 3000, min: 400, max: 10000, midiCC: 4, quantize: false},
   chordRelease: {val: 0.15, min: 0, max: 1, midiCC: 5, quantize: false},
-  bassVol: { val: 0.5*0, min: 0, max: 1, midiCC: 7, quantize: false },
+  bassVol: { val: 0.5, min: 0, max: 1, midiCC: 7, quantize: false },
   bassPan: { val: 0.5, min: 0, max: 1, midiCC: -1, quantize: false },
   bassNote: {val: 0, min: 0, max: 7, midiCC: 8, quantize: true},
   bassFilterLfoRate: {val: 0.1, min: 0, max: 1, midiCC: 9, quantize: false},
-  melodyVol: { val: 0.3*0, min: 0, max: 1, midiCC: 10, quantize: false },
+  melodyVol: { val: 0.3, min: 0, max: 1, midiCC: 10, quantize: false },
   melodyPan: { val: 0.65, min: 0, max: 1, midiCC: -1, quantize: false },
   melodyEchoFdbk: {val: 0.5, min: 0, max: 0.95, midiCC: 11, quantize: false},
   melodyEchoTime: {val: 0.33, min: 0.01, max: 0.98, midiCC: 12, quantize: false},
