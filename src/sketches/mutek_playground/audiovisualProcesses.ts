@@ -196,7 +196,9 @@ function evenRandomWalk(state: number, lowBound: number, highBound: number) {
   const choice = arrayRandChoice(filteredChoices)
   const retVal = state + choice
   if (!isFinite(retVal)) {
-    debugger
+    // debugger
+    console.warn("bad even random walk", state, lowBound, highBound, choice, retVal)
+    return state
   }
   return retVal
 }
@@ -211,7 +213,9 @@ function melodyRandomWalk(state: number, lowBound: number, highBound: number) {
   const choice = arrayRandChoice(filteredChoices)
   const retVal = state + choice
   if (!isFinite(retVal)) {
-    debugger
+    // debugger
+    console.warn("bad melody random walk", state, lowBound, highBound, choice, retVal)
+    return state
   }
   return retVal
 }
@@ -228,7 +232,12 @@ const findRoot5 = (degree: number) => {
 }
 
 class MelodyGenerator {
-  cache: number[][] = []
+  cache: number[][] = [
+    [1, 0, 2, 1, 3, 2],
+    [4, 2, 0],
+    [0, 1, 2, 3, 4],
+    [2, 2, 2, 0]
+  ]
   lastRoot: number = 0 //a scale degree delta relative to scale root
   lastMelodicContour: number[] = [] //a list of scale degree deltas from root
   scale = new Scale()

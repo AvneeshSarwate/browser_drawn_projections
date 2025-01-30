@@ -115,18 +115,21 @@ const shaderGraph2 = (src: ShaderSource, dancer: Dancer) => {
 
 //todo note somewhere special midi CCs that might break with naive usage, like those for RPN/NRPN  [6, 98, 99, 100, 101]
 const paramDef = {
-  mainVolume: {val: 0.5, min: 0, max: 1, midiCC: -1, quantize: false},
-  chordVolume: {val: 0.3, min: 0, max: 1, midiCC: 1, quantize: false},
+  mainVolume: { val: 0.5, min: 0, max: 1, midiCC: -1, quantize: false },
+  chordVolume: { val: 0.3, min: 0, max: 1, midiCC: 1, quantize: false },
+  chordPan: { val: 0.5, min: 0, max: 1, midiCC: -1, quantize: false },
   activeChord: {val: 1, min: 0, max: 4, midiCC: 2, quantize: true},
   chordSpeed: {val: 0.5, min: 0, max: 1, midiCC: 3, quantize: false},
   chordFilter: {val: 3000, min: 0, max: 10000, midiCC: 4, quantize: false},
   chordRelease: {val: 0.15, min: 0, max: 1, midiCC: 5, quantize: false},
-  bassVol: {val: 0.5, min: 0, max: 1, midiCC: 7, quantize: false},
+  bassVol: { val: 0.5, min: 0, max: 1, midiCC: 7, quantize: false },
+  bassPan: { val: 0.5, min: 0, max: 1, midiCC: -1, quantize: false },
   bassNote: {val: 0, min: 0, max: 7, midiCC: 8, quantize: true},
   bassFilterLfoRate: {val: 0.1, min: 0, max: 1, midiCC: 9, quantize: false},
-  melodyVol: {val: 0.3, min: 0, max: 1, midiCC: 10, quantize: false},
+  melodyVol: { val: 0.3, min: 0, max: 1, midiCC: 10, quantize: false },
+  melodyPan: { val: 0.5, min: 0, max: 1, midiCC: -1, quantize: false },
   melodyEchoFdbk: {val: 0.5, min: 0, max: 0.95, midiCC: 11, quantize: false},
-  melodyEchoTime: {val: 0.33, min: 0.01, max: 1, midiCC: 12, quantize: false},
+  melodyEchoTime: {val: 0.33, min: 0.01, max: 0.98, midiCC: 12, quantize: false},
   melodyNoWaitProb: {val: 0.2, min: 0, max: 1, midiCC: 13, quantize: false},
   melodyBaseSpeed: {val: 0.5, min: 0, max: 1, midiCC: 14, quantize: false},
   melodyRoot5Prob: {val: 0.2, min: 0, max: 1, midiCC: 15, quantize: false},
@@ -265,6 +268,10 @@ onMounted(async () => {
         chordPulseData.activeChord = paramMap.value.activeChord.val
         chordSynth.setParam('Filter', paramMap.value.chordFilter.val)
         chordSynth.setParam('release', paramMap.value.chordRelease.val)
+
+        chordSynth.setParam('pan', paramMap.value.chordPan.val)
+        bassSynth.setParam('pan', paramMap.value.bassPan.val)
+        melodySynth.setParam('pan', paramMap.value.melodyPan.val)
         
 
         //slider sets target bass note, and this loop 
@@ -385,6 +392,13 @@ onUnmounted(() => {
         </div>
 
         <div>
+          <label for="chordPan">Chord Pan - midi cc: {{ paramMap.chordPan.midiCC }}</label>
+          <br/>
+          <input type="range" v-model.number="paramMap.chordPan.val" :min="paramMap.chordPan.min" :max="paramMap.chordPan.max" :step="0.01" />
+          <span>{{ paramMap.chordPan.val.toFixed(2) }}</span>
+        </div>
+
+        <div>
           <label for="activeChord">Active Chord - midi cc: {{ paramMap.activeChord.midiCC }}</label>
           <br/>
           <input type="range" v-model.number="paramMap.activeChord.val" :min="paramMap.activeChord.min" :max="paramMap.activeChord.max" />
@@ -423,6 +437,13 @@ onUnmounted(() => {
         </div>
 
         <div>
+          <label for="bassPan">Bass Pan - midi cc: {{ paramMap.bassPan.midiCC }}</label>
+          <br/>
+          <input type="range" v-model.number="paramMap.bassPan.val" :min="paramMap.bassPan.min" :max="paramMap.bassPan.max" :step="0.01" />
+          <span>{{ paramMap.bassPan.val.toFixed(2) }}</span>
+        </div>
+
+        <div>
           <label for="bassNote">Bass Note - midi cc: {{ paramMap.bassNote.midiCC }}</label>
           <br/>
           <input type="range" v-model.number="paramMap.bassNote.val" :min="paramMap.bassNote.min" :max="paramMap.bassNote.max" />
@@ -444,6 +465,13 @@ onUnmounted(() => {
           <br/>
           <input type="range" v-model.number="paramMap.melodyVol.val" :min="paramMap.melodyVol.min" :max="paramMap.melodyVol.max" :step="0.01" />
           <span>{{ paramMap.melodyVol.val.toFixed(2) }}</span>
+        </div>
+
+        <div>
+          <label for="melodyPan">Melody Pan - midi cc: {{ paramMap.melodyPan.midiCC }}</label>
+          <br/>
+          <input type="range" v-model.number="paramMap.melodyPan.val" :min="paramMap.melodyPan.min" :max="paramMap.melodyPan.max" :step="0.01" />
+          <span>{{ paramMap.melodyPan.val.toFixed(2) }}</span>
         </div>
 
         <!-- <div>
