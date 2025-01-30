@@ -117,17 +117,17 @@ const shaderGraph2 = (src: ShaderSource, dancer: Dancer) => {
 const paramDef = {
   mainVolume: { val: 0.5, min: 0, max: 1, midiCC: -1, quantize: false },
   chordVolume: { val: 0.3, min: 0, max: 1, midiCC: 1, quantize: false },
-  chordPan: { val: 0.5, min: 0, max: 1, midiCC: -1, quantize: false },
+  chordPan: { val: 0.35, min: 0, max: 1, midiCC: -1, quantize: false },
   activeChord: {val: 1, min: 0, max: 4, midiCC: 2, quantize: true},
   chordSpeed: {val: 0.5, min: 0, max: 1, midiCC: 3, quantize: false},
-  chordFilter: {val: 3000, min: 0, max: 10000, midiCC: 4, quantize: false},
+  chordFilter: {val: 3000, min: 400, max: 10000, midiCC: 4, quantize: false},
   chordRelease: {val: 0.15, min: 0, max: 1, midiCC: 5, quantize: false},
   bassVol: { val: 0.5, min: 0, max: 1, midiCC: 7, quantize: false },
   bassPan: { val: 0.5, min: 0, max: 1, midiCC: -1, quantize: false },
   bassNote: {val: 0, min: 0, max: 7, midiCC: 8, quantize: true},
   bassFilterLfoRate: {val: 0.1, min: 0, max: 1, midiCC: 9, quantize: false},
   melodyVol: { val: 0.3, min: 0, max: 1, midiCC: 10, quantize: false },
-  melodyPan: { val: 0.5, min: 0, max: 1, midiCC: -1, quantize: false },
+  melodyPan: { val: 0.65, min: 0, max: 1, midiCC: -1, quantize: false },
   melodyEchoFdbk: {val: 0.5, min: 0, max: 0.95, midiCC: 11, quantize: false},
   melodyEchoTime: {val: 0.33, min: 0.01, max: 0.98, midiCC: 12, quantize: false},
   melodyNoWaitProb: {val: 0.2, min: 0, max: 1, midiCC: 13, quantize: false},
@@ -136,9 +136,11 @@ const paramDef = {
 }
 const paramMap = ref(paramDef)
 
+const dontRandomize = ['mainVolume', 'melodyPan', 'chordPan', 'bassPan']
+
 const randomizeParams = () => {
   Object.keys(paramDef).forEach((key: keyof typeof paramDef) => {
-    if(key === "mainVolume") return
+    if(dontRandomize.includes(key)) return
     const val = Math.random() * (paramDef[key].max - paramDef[key].min) + paramDef[key].min
     paramMap.value[key].val = paramDef[key].quantize ? Math.round(val) : val
   })
@@ -306,7 +308,7 @@ onMounted(async () => {
         segmentDancer.setFrame(Math.floor(loopFrame/10) % framesPerPerson[segmentDancer.params.dancerName])
 
         melodySynth.setParam('echoFdbk', paramMap.value.melodyEchoFdbk.val)
-        melodySynth.setParam('echoTime', paramMap.value.melodyEchoTime.val ** 1.7)
+        melodySynth.setParam('echoTime', paramMap.value.melodyEchoTime.val)
 
         const MAIN_VOLUME = paramMap.value.mainVolume.val
         bassVoice.polyGain = paramMap.value.bassVol.val * MAIN_VOLUME
@@ -392,13 +394,6 @@ onUnmounted(() => {
         </div>
 
         <div>
-          <label for="chordPan">Chord Pan - midi cc: {{ paramMap.chordPan.midiCC }}</label>
-          <br/>
-          <input type="range" v-model.number="paramMap.chordPan.val" :min="paramMap.chordPan.min" :max="paramMap.chordPan.max" :step="0.01" />
-          <span>{{ paramMap.chordPan.val.toFixed(2) }}</span>
-        </div>
-
-        <div>
           <label for="activeChord">Active Chord - midi cc: {{ paramMap.activeChord.midiCC }}</label>
           <br/>
           <input type="range" v-model.number="paramMap.activeChord.val" :min="paramMap.activeChord.min" :max="paramMap.activeChord.max" />
@@ -465,13 +460,6 @@ onUnmounted(() => {
           <br/>
           <input type="range" v-model.number="paramMap.melodyVol.val" :min="paramMap.melodyVol.min" :max="paramMap.melodyVol.max" :step="0.01" />
           <span>{{ paramMap.melodyVol.val.toFixed(2) }}</span>
-        </div>
-
-        <div>
-          <label for="melodyPan">Melody Pan - midi cc: {{ paramMap.melodyPan.midiCC }}</label>
-          <br/>
-          <input type="range" v-model.number="paramMap.melodyPan.val" :min="paramMap.melodyPan.min" :max="paramMap.melodyPan.max" :step="0.01" />
-          <span>{{ paramMap.melodyPan.val.toFixed(2) }}</span>
         </div>
 
         <!-- <div>
