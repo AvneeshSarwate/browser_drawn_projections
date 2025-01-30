@@ -35,8 +35,6 @@ const clearDrawFuncs = () => {
   appState.drawFuncMap = new Map()
 }
 
-const fadeawayDuration = 0.99
-
 const hexToRgb = (hex: string) => {
   hex = hex.slice(1)
   const r = parseInt(hex.slice(0, 2), 16) / 255
@@ -157,7 +155,8 @@ const randomizeParams = () => {
   })
 }
 
-const loadingComplete = ref(false)
+const showControls = ref(false)
+const assetsStillLoading = ref(true)
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
 onMounted(async () => {
@@ -183,43 +182,40 @@ onMounted(async () => {
     const melodyScene = await createDancerScene(appState.threeRenderer!!, melodyRenderTarget, assets)
     const bassScene = await createDancerScene(appState.threeRenderer!!, bassRenderTarget, assets)
 
+    assetsStillLoading.value = false
+
     // have 6 diff 7th chords, and with some low probability (0.2), play an inversion/subset with 3 notes
     //root degrees, 7 1 3 4 5 6?
     //be opinionated about the inversions? don't want this to sound like a practice backing track generator
     const scale = new Scale(null, 48)
     const dancerChords = [
-      {dancer: chordsScene.createDancer("kurush", 200, {x: 300, y: 200}), chord: scale.getMultiple([-1, 1, 3, 5])}, 
-      {dancer: chordsScene.createDancer("chloe", 200, {x: 400, y: 200}), chord: scale.getMultiple([0, 2, 4, 6])}, 
-      {dancer: chordsScene.createDancer("chris", 200, {x: 500, y: 200}), chord: scale.getMultiple([1, 3, 5, 7])}, 
-      {dancer: chordsScene.createDancer("iman", 200, {x: 600, y: 200}), chord: scale.getMultiple([2, 4, 6, 8])}, 
-      {dancer: chordsScene.createDancer("aroma", 200, {x: 700, y: 200}), chord: scale.getMultiple([3, 5, 7, 9])} 
+      { dancer: chordsScene.createDancer("kurush", 200, { x: 300, y: 200 }), chord: scale.getMultiple([-1, 1, 3, 5]) },
+      { dancer: chordsScene.createDancer("chloe", 200, { x: 400, y: 200 }), chord: scale.getMultiple([0, 2, 4, 6]) },
+      { dancer: chordsScene.createDancer("chris", 200, { x: 500, y: 200 }), chord: scale.getMultiple([1, 3, 5, 7]) },
+      { dancer: chordsScene.createDancer("iman", 200, { x: 600, y: 200 }), chord: scale.getMultiple([2, 4, 6, 8]) },
+      { dancer: chordsScene.createDancer("aroma", 200, { x: 700, y: 200 }), chord: scale.getMultiple([3, 5, 7, 9]) }
     ]
 
-    const chordPulseData = {
-      dcMap: dancerChords,
-      activeChord: 1,
-      speed: 0.125,
-      stop: false
-    }
+    if (window.MIDIAccess) {
+      await MIDI_READY
 
-    await MIDI_READY
+      const midiIn = midiInputs.get("IAC Driver Bus 1")
+      if (midiIn) {
+        midiIn.onAllControlChange((ev) => {
+          const cc = ev.control
+          const val = ev.value / 127
 
-    const midiIn = midiInputs.get("IAC Driver Bus 1")
-    if(midiIn) {
-      midiIn.onAllControlChange((ev) => {
-        const cc = ev.control
-        const val = ev.value / 127
-        
-        //for each param, check if the cc matches
-        //if it does, set the param to the value
-        const paramNames: (keyof typeof paramDef)[] = Object.keys(paramDef) as (keyof typeof paramDef)[]
-        paramNames.forEach(paramName => {
-          if(paramDef[paramName].midiCC === cc) {
-            const sliderVal = paramDef[paramName].min + (paramDef[paramName].max - paramDef[paramName].min) * val
-            paramMap.value[paramName].val = paramDef[paramName].quantize ? Math.floor(sliderVal) : sliderVal
-          }
+          //for each param, check if the cc matches
+          //if it does, set the param to the value
+          const paramNames: (keyof typeof paramDef)[] = Object.keys(paramDef) as (keyof typeof paramDef)[]
+          paramNames.forEach(paramName => {
+            if (paramDef[paramName].midiCC === cc) {
+              const sliderVal = paramDef[paramName].min + (paramDef[paramName].max - paramDef[paramName].min) * val
+              paramMap.value[paramName].val = paramDef[paramName].quantize ? Math.floor(sliderVal) : sliderVal
+            }
+          })
         })
-      })
+      }
     }
 
     await FAUST_AUDIO_CONTEXT_READY
@@ -261,6 +257,13 @@ onMounted(async () => {
     segmentDancer.quadVisible(false)
     segmentDancer.regionsVisible(true)
     segmentDancer.lineVisible(false)
+
+    const chordPulseData = {
+      dcMap: dancerChords,
+      activeChord: 1,
+      speed: 0.125,
+      stop: false
+    }
 
     launchLoop(async (ctx) => {
       await ctx.wait(0.1)
@@ -363,7 +366,7 @@ onMounted(async () => {
 
     await sleep(10)
     
-    loadingComplete.value = true
+    showControls.value = true
   } catch (e) {
     console.warn(e)
   }
@@ -384,9 +387,12 @@ onUnmounted(() => {
 
 <template>
   <div id="startScreen">
-    click anywhere to initialze and start sound
+    Click anywhere to initialze and start sound
   </div>
-  <div id="allControls" v-if="loadingComplete">
+  <div id="loadingScreen" v-if="assetsStillLoading">
+    Assets still loading...
+  </div>
+  <div id="allControls" v-if="showControls">
     <button id="randomizeParams" @click="randomizeParams">Randomize Params</button>
     <div style="margin-left: 10px;">
       <label for="mainVolume">Main Volume - midi cc: {{ paramMap.mainVolume.midiCC }}</label>
@@ -517,6 +523,11 @@ onUnmounted(() => {
 <style scoped>
 
 #startScreen {
+  margin-top: 10px;
+  margin-left: 10px;
+}
+
+#loadingScreen {
   margin-top: 10px;
   margin-left: 10px;
 }
