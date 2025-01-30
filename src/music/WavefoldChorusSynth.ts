@@ -60,7 +60,7 @@ freq = hslider("Frequency", 440, 20, 2000, 1);
 vAmp = hslider("VelocityAmp", 0.7, 0, 1, 0.01);
 release = hslider("Release", 0.3, 0, 1, 0.01);
 polyGain = hslider("PolyGain", 0.7, 0, 1, 0.01);
-
+panVal = hslider("Pan", 0.5, 0, 1, 0.01);
 
 
 
@@ -95,7 +95,7 @@ filter = fi.lowpass(2, filterFreq);
 
 sig = oscSig  * vAmp * polyGain * env : filter : chorusEffect;
 sigRev = sig : re.mono_freeverb(echoTime, echoTime, 0.7, 0.5)* 0.8 : re.mono_freeverb(echoTime, echoTime, 0.7, 0.5)* 0.8 : co.limiter_1176_R4_mono; 
-process = sigRev;
+process = (sigRev, sigRev) : sp.constantPowerPan(panVal);
 `
 
 //todo - need different name for each voice to avoid AudioWorkletNode name conflict?
@@ -171,6 +171,15 @@ export class WavefoldChorusVoice implements MPEVoiceGraph {
     this.node.setParamValue("/oscillator/Release", value)
   }
 
+  get pan(): number {
+    return this.node.getParamValue("/oscillator/Pan")
+  }
+
+  @param(0, 1, 0.5)
+  set pan(value: number) {
+    this.node.setParamValue("/oscillator/Pan", value)
+  }
+  
   noteOff(): void {
     this.node.setParamValue("/oscillator/Gate", 0)
 

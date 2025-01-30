@@ -147,7 +147,7 @@ export class MPEPolySynth<T extends MPEVoiceGraph> {
   //todo testing - see how this external id plays with voice stealing and voice allocation
   //todo api - add a dict param that allows for setting params by name
   noteOn(note: number, velocity: number, pressure: number, slide: number, id?: number): T {
-    let voice = this.getVoice(id)
+    const voice = this.getVoice(id)
     voice.noteOn(note, velocity, pressure, slide)
     return voice
   }
