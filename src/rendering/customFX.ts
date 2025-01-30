@@ -550,3 +550,37 @@ export class AlphaColorSplice extends CustomShaderEffect {
     super(alphaColorSpliceFs, inputs, width, height)
   }
 }
+
+
+const pixelateFs = glsl`
+precision highp float;
+
+uniform sampler2D src;
+uniform float pixelSize;
+uniform float width;
+uniform float height;
+
+varying vec2 vUV;
+
+void main() {
+  vec2 uv = vUV;
+  vec2 resolution = vec2(width, height);
+  vec2 pixelatedUV = floor(uv * resolution / pixelSize) * (pixelSize / resolution);
+  gl_FragColor = texture2D(src, pixelatedUV);
+}
+`
+
+export class Pixelate extends CustomShaderEffect {
+  effectName = "Pixelate"
+  constructor(inputs: {src: ShaderSource}, width = 1280, height = 720) {
+    super(pixelateFs, inputs, width, height)
+    this.setUniforms({pixelSize: 1})
+  }
+  setUniforms(uniforms: {pixelSize: Dynamic<number>}): void {
+    super.setUniforms({
+      ...uniforms,
+      width: this.width,
+      height: this.height
+    })
+  }
+}

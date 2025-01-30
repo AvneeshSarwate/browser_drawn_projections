@@ -17,7 +17,7 @@ import { FMChorusVoice } from "@/music/FMChorusSynth";
 import { FMChorusPrecompiled } from "@/music/FMChorusPrecompiled/FMChorusPrecompiled";
 import { MIDI_READY, midiInputs } from "@/io/midi";
 import { Scale } from "@/music/scale";
-import { AlphaColorSplice, AlphaDisplay, AntiAlias, Bloom, CompositeShaderEffect, HorizontalBlur, LayerBlend, MathOp, RGDisplace, Transform, VerticalBlur } from "@/rendering/customFX";
+import { AlphaColorSplice, AlphaDisplay, AntiAlias, Bloom, CompositeShaderEffect, HorizontalBlur, LayerBlend, MathOp, Pixelate, RGDisplace, Transform, VerticalBlur } from "@/rendering/customFX";
 import { HorizontalAlternateDisplace, PointZoom } from "../nov21demo/customFx";
 import { WavefoldChorusVoice } from "@/music/WavefoldChorusSynth";
 const appState = inject<TemplateAppState>(appStateName)!!
@@ -73,11 +73,19 @@ const chordsShaderGraph = (src: ShaderSource) => {
   const displace = new RGDisplace({ src: feedback, displacementMap: horDisplaceSrc })
   const mathOp = new MathOp({ src: displace })
   const layerOverlay = new LayerBlend({ src1: p5Passthru, src2: mathOp })
-  const finalFade = new MathOp({ src: layerOverlay })
+  const pixelate = new Pixelate({ src: layerOverlay })
+  const finalFade = new MathOp({ src: pixelate })
   feedback.setFeedbackSrc(layerOverlay);
-  mathOp.setUniforms({ mult: () => fadeawayDuration});
+  mathOp.setUniforms({ mult: () => 0.95 + paramMap.value.chordRelease.val * 0.05 * 0.99});
   displace.setUniforms({ strength: 0.001 })
   finalFade.setUniforms({ mult: () => paramMap.value.chordVolume.val < 0.15 ? paramMap.value.chordVolume.val / 0.15 : 1 });
+  pixelate.setUniforms({
+    pixelSize: () => {
+      const filterRange = paramMap.value.chordFilter.max - paramMap.value.chordFilter.min
+      const filterProg = paramMap.value.chordFilter.val - paramMap.value.chordFilter.min
+      return 1 + (filterProg / filterRange) ** 2 * 10
+    }
+  })
   return finalFade
 }
 
@@ -98,7 +106,6 @@ const bassShaderGraph = (src: ShaderSource, dancer: Dancer) => {
   const p5Passthru = new Passthru({ src })
   const antiAlias = new AntiAlias({ src: p5Passthru })
   const feedback = new FeedbackNode(antiAlias)
-
   
   const vertBlur = new VerticalBlur({ src: feedback })
   const horBlur = new HorizontalBlur({ src: vertBlur })
@@ -110,8 +117,8 @@ const bassShaderGraph = (src: ShaderSource, dancer: Dancer) => {
   const bloom = new Bloom({ src: layerOverlay })
   const finalFade = new MathOp({ src: bloom })
   feedback.setFeedbackSrc(layerOverlay);
-  pointZoom.setUniforms({centerX: shapeCenterX, centerY: shapeCenterY, strength: -0.01})
-  mathOp.setUniforms({mult: () => fadeawayDuration});
+  pointZoom.setUniforms({centerX: shapeCenterX, centerY: shapeCenterY, strength: -0.005})
+  mathOp.setUniforms({mult: () => 0.998});
   finalFade.setUniforms({ mult: () => paramMap.value.bassVol.val < 0.15 ? paramMap.value.bassVol.val / 0.15 : 1 });
 
   return finalFade
@@ -120,7 +127,7 @@ const bassShaderGraph = (src: ShaderSource, dancer: Dancer) => {
 //todo note somewhere special midi CCs that might break with naive usage, like those for RPN/NRPN  [6, 98, 99, 100, 101]
 const paramDef = {
   mainVolume: { val: 0.5, min: 0, max: 1, midiCC: -1, quantize: false },
-  chordVolume: { val: 0.3*0, min: 0, max: 1, midiCC: 1, quantize: false },
+  chordVolume: { val: 0.3, min: 0, max: 1, midiCC: 1, quantize: false },
   chordPan: { val: 0.35, min: 0, max: 1, midiCC: -1, quantize: false },
   activeChord: {val: 1, min: 0, max: 4, midiCC: 2, quantize: true},
   chordSpeed: {val: 0.5, min: 0, max: 1, midiCC: 3, quantize: false},
@@ -130,7 +137,7 @@ const paramDef = {
   bassPan: { val: 0.5, min: 0, max: 1, midiCC: -1, quantize: false },
   bassNote: {val: 0, min: 0, max: 7, midiCC: 8, quantize: true},
   bassFilterLfoRate: {val: 0.1, min: 0, max: 1, midiCC: 9, quantize: false},
-  melodyVol: { val: 0.3, min: 0, max: 1, midiCC: 10, quantize: false },
+  melodyVol: { val: 0.3*0, min: 0, max: 1, midiCC: 10, quantize: false },
   melodyPan: { val: 0.65, min: 0, max: 1, midiCC: -1, quantize: false },
   melodyEchoFdbk: {val: 0.5, min: 0, max: 0.95, midiCC: 11, quantize: false},
   melodyEchoTime: {val: 0.33, min: 0.01, max: 0.98, midiCC: 12, quantize: false},
