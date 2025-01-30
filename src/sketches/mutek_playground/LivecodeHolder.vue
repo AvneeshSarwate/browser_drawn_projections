@@ -7,7 +7,7 @@ import { CanvasPaint, FeedbackNode, Passthru, type ShaderEffect, type ShaderSour
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
-import { createDancerScene, createKTX2Loader, framesPerPerson, OUTLINE_GRID_SIZE, people, type Dancer } from './dancerInitializer';
+import { createDancerScene, createKTX2Loader, framesPerPerson, loadDancerAssets, OUTLINE_GRID_SIZE, people, type Dancer } from './dancerInitializer';
 import { notePulse, randomPhraseDancer } from "./audiovisualProcesses";
 import { FAUST_AUDIO_CONTEXT_READY, MPEPolySynth } from "@/music/mpeSynth";
 import { FaustTestVoice } from "@/music/FaustSynthTemplate";
@@ -162,9 +162,10 @@ onMounted(async () => {
     const melodyRenderTarget = new THREE.WebGLRenderTarget(resolution.width, resolution.height)
     const bassRenderTarget = new THREE.WebGLRenderTarget(resolution.width, resolution.height)
     const ktx2Loader = createKTX2Loader(appState.threeRenderer!!)
-    const chordsScene = await createDancerScene(appState.threeRenderer!!, ktx2Loader, chordsRenderTarget)
-    const melodyScene = await createDancerScene(appState.threeRenderer!!, ktx2Loader, melodyRenderTarget)
-    const bassScene = await createDancerScene(appState.threeRenderer!!, ktx2Loader, bassRenderTarget)
+    const assets = await loadDancerAssets(ktx2Loader)
+    const chordsScene = await createDancerScene(appState.threeRenderer!!, chordsRenderTarget, assets)
+    const melodyScene = await createDancerScene(appState.threeRenderer!!, melodyRenderTarget, assets)
+    const bassScene = await createDancerScene(appState.threeRenderer!!, bassRenderTarget, assets)
 
     // have 6 diff 7th chords, and with some low probability (0.2), play an inversion/subset with 3 notes
     //root degrees, 7 1 3 4 5 6?
