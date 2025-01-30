@@ -16,7 +16,7 @@ import { lerp } from "three/src/math/MathUtils.js";
 import { FMChorusVoice } from "@/music/FMChorusSynth";
 import { MIDI_READY, midiInputs } from "@/io/midi";
 import { Scale } from "@/music/scale";
-import { AlphaDisplay, AntiAlias, CompositeShaderEffect, HorizontalBlur, LayerBlend, MathOp, RGDisplace, Transform, VerticalBlur } from "@/rendering/customFX";
+import { AlphaDisplay, AntiAlias, Bloom, CompositeShaderEffect, HorizontalBlur, LayerBlend, MathOp, RGDisplace, Transform, VerticalBlur } from "@/rendering/customFX";
 import { HorizontalAlternateDisplace, PointZoom } from "../nov21demo/customFx";
 import type { MultiSegmentLineShape } from "../nov21demo/multiSegmentLine/multiSegmentLineUtil";
 import { getTransformedShapePoints } from "../nov21demo/tldrawWrapperPlain";
@@ -37,6 +37,14 @@ const clearDrawFuncs = () => {
 
 const fadeawayDuration = 0.99
 
+const hexToRgb = (hex: string) => {
+  hex = hex.slice(1)
+  const r = parseInt(hex.slice(0, 2), 16) / 255
+  const g = parseInt(hex.slice(2, 4), 16) / 255
+  const b = parseInt(hex.slice(4, 6), 16) / 255
+  return [r, g, b]
+}
+
 const shaderGraph0 = (src: ShaderSource) => {
   const p5Passthru = new Passthru({ src })
   const antiAlias = new AntiAlias({ src: p5Passthru })
@@ -46,10 +54,11 @@ const shaderGraph0 = (src: ShaderSource) => {
   const transform = new Transform({ src: horBlur })
   const mathOp = new MathOp({ src: transform })
   const layerOverlay = new LayerBlend({ src1: p5Passthru, src2: mathOp })
+  const bloom = new Bloom({ src: layerOverlay })
   feedback.setFeedbackSrc(layerOverlay);
-  mathOp.setUniforms({mult: () => fadeawayDuration});
+  mathOp.setUniforms({mult: () => .997});
 
-  return layerOverlay
+  return bloom
 }
 
 const shaderGraph1 = (src: ShaderSource) => {
@@ -93,12 +102,13 @@ const shaderGraph2 = (src: ShaderSource, dancer: Dancer) => {
 
   const mathOp = new MathOp({ src: pointZoom })
   const layerOverlay = new LayerBlend({ src1: p5Passthru, src2: mathOp })
+  const bloom = new Bloom({ src: layerOverlay })
 
   feedback.setFeedbackSrc(layerOverlay);
   pointZoom.setUniforms({centerX: shapeCenterX, centerY: shapeCenterY, strength: -0.01})
   mathOp.setUniforms({mult: () => fadeawayDuration});
 
-  return layerOverlay
+  return bloom
 }
 
 //todo note somewhere special midi CCs that might break with naive usage, like those for RPN/NRPN  [6, 98, 99, 100, 101]
@@ -206,6 +216,7 @@ onMounted(async () => {
 
     const bassPitches = [36, 38, 40, 41, 43, 45, 47, 48]
     const bassDancers = people.slice(10, 18)
+    const bassColors = ['#003f5c', '#58508d', '#8a508f', '#bc5090', '#de5a79', '#ff6361', '#ff8531', '#ffa600'].map(hexToRgb)
     bassSynth.setParam('Filter', 600)
     const bassVoice = bassSynth.noteOn(bassPitches[paramMap.value.bassNote.val], 100, 0, 0)
     bassVoice.polyGain = paramMap.value.bassVol.val
@@ -264,13 +275,16 @@ onMounted(async () => {
         lerpDancer.lerpDef.toFrame = Math.floor(loopFrame/10) % framesPerPerson[lerpDancer.lerpDef.toDancer]
         lerpDancer.lerpDef.lerp = logisticSigmoid(slideProg / slideTime, 0.8)
         lerpDancer.updateLerp()
+        const lastColor = bassColors[lastTarget]
+        const newColor = bassColors[bassNoteTarget]
+        const lerpColor = [0, 0, 0].map((_, i) => lerp(lastColor[i], newColor[i], slideProg / slideTime))
+        lerpDancer.line.material.color.setRGB(lerpColor[0], lerpColor[1], lerpColor[2])
         loopFrame++
 
         bassVoice.pitch = lerp(bassPitches[lastTarget], bassPitches[bassNoteTarget], slideProg / slideTime)
         bassFilterLfoTime += paramMap.value.bassFilterLfoRate.val
         bassVoice.Filter = 600 + sinN(bassFilterLfoTime * 0.08)**2 * 3000
         lerpDancer.line.material.linewidth = 2 + sinN(bassFilterLfoTime * 0.08)*5
-
 
         
         segmentDancer.setFrame(Math.floor(loopFrame/10) % framesPerPerson[segmentDancer.params.dancerName])
