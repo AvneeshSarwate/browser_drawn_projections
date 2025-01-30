@@ -7,7 +7,7 @@ import { CanvasPaint, FeedbackNode, Passthru, type ShaderEffect, type ShaderSour
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
-import { createDancerScene, createKTX2Loader, framesPerPerson, people, type Dancer } from './dancerInitializer';
+import { createDancerScene, createKTX2Loader, framesPerPerson, OUTLINE_GRID_SIZE, people, type Dancer } from './dancerInitializer';
 import { notePulse, randomPhraseDancer } from "./audiovisualProcesses";
 import { FAUST_AUDIO_CONTEXT_READY, MPEPolySynth } from "@/music/mpeSynth";
 import { FaustTestVoice } from "@/music/FaustSynthTemplate";
@@ -70,10 +70,15 @@ const shaderGraph1 = (src: ShaderSource) => {
 const shaderGraph2 = (src: ShaderSource, dancer: Dancer) => {
 
   const shapeCenterX = () => {
-    return 5
+    const xMid = dancer.dancerShapeUniforms.xMid.value * OUTLINE_GRID_SIZE / dancer.group.scale.x
+    const x = xMid - dancer.group.position.x
+    return x / resolution.width
   }
   const shapeCenterY = () => {
-    return 5
+    const yTop = dancer.dancerShapeUniforms.yTop.value * OUTLINE_GRID_SIZE / dancer.group.scale.y
+    const yBottom = dancer.dancerShapeUniforms.yBottom.value * OUTLINE_GRID_SIZE / dancer.group.scale.y
+    const y = (yTop + yBottom) / 2
+    return y / resolution.height
   }
 
   const p5Passthru = new Passthru({ src })
@@ -292,7 +297,7 @@ onMounted(async () => {
 
     const chordsPassthru = shaderGraph1(chordsRenderTarget)
     const melodyPassthru = shaderGraph0(melodyRenderTarget)
-    const bassPassthru = new Passthru({ src: bassRenderTarget })
+    const bassPassthru = shaderGraph2(bassRenderTarget, lerpDancer)
 
     const compositeShaderEffect = new CompositeShaderEffect([
       bassPassthru, melodyPassthru, chordsPassthru, 

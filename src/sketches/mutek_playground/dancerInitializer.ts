@@ -7,7 +7,7 @@ import { Earcut } from 'three/src/extras/Earcut.js';
 const UNPKG_PATH = `https://unpkg.com/three@0.${REVISION}.x/examples/jsm/libs/basis/`;
 
 const OUTLINE_LENGTH = 821
-const OUTLINE_GRID_SIZE = 512
+export const OUTLINE_GRID_SIZE = 512
 
 type PeopleData =  {
   [key: string]: {
