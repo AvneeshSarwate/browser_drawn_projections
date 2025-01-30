@@ -19,7 +19,7 @@ panVal = hslider("Pan", 0.5, 0, 1, 0.01);
 //custom parameters for each voice
 filterFreq = hslider("Filter", 3000, 20, 10000, 0.1);
 
-env = gate : en.adsr(0.01, 0.1, 0.8, release);
+env = gate : en.adsr(0.04, 0.1, 0.8, release);
 filter = fi.lowpass(2, filterFreq);
 sig = os.sawtooth(freq) * vAmp * polyGain * env : filter;
 process = (sig, sig) : sp.constantPowerPan(panVal);
@@ -107,7 +107,7 @@ export class FaustTestVoice implements MPEVoiceGraph {
   set pan(value: number) {
     this.node.setParamValue("/oscillator/Pan", value)
   }
-  
+
   noteOff(): void {
     this.node.setParamValue("/oscillator/Gate", 0)
 
