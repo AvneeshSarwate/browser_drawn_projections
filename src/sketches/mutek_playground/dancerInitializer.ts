@@ -201,12 +201,15 @@ export const createKTX2Loader = (renderer: THREE.WebGLRenderer) => {
 }
 
 
-type DancerName = "aroma" | "chloe" | "chris" | "diana" | "idris" | "iman" | "jah" | "jesse" | "kat" | "kurush" | "latasha" | "martin" | "robert" | "rupal" | "sara" | "segnon" | "senay" | "shreya" | "stoney" | "zandie"
-export const people: DancerName[] = ["aroma", "chloe", "chris", "diana", "idris", "iman", "jah", "jesse", "kat", "kurush", "latasha", "martin", "robert", "rupal", "sara", "segnon", "senay", "shreya", "stoney", "zandie"]
-export const framesPerPerson: Record<string, number> = {}
-export const createDancerScene = async (renderer: THREE.WebGLRenderer, loader: KTX2Loader, renderTarget: THREE.WebGLRenderTarget) => {
-  
+type LoadAssetsResult = {
+  textures: string[]
+  textureLengthMap: Record<string, number>
+  texturesByName: Record<string, THREE.CompressedArrayTexture>
+  textureArrays: THREE.CompressedArrayTexture[]
+  peopleData: PeopleData
+}
 
+export const loadDancerAssets = async (loader: KTX2Loader): Promise<LoadAssetsResult> => {
   const textures = people.map(person => `${person}_texture_array.ktx2`)
   const textureLengthMap: Record<string, number> = {}
   const loadTexturePromises = textures.map(textureName => {
@@ -236,6 +239,16 @@ export const createDancerScene = async (renderer: THREE.WebGLRenderer, loader: K
 
   // const peopleData = people.map(person => countoursAndSkeletonForPersonTHREE(person))
   const peopleData = await getPeopleData()
+  return {textures, textureLengthMap,texturesByName, textureArrays, peopleData}
+}
+
+
+type DancerName = "aroma" | "chloe" | "chris" | "diana" | "idris" | "iman" | "jah" | "jesse" | "kat" | "kurush" | "latasha" | "martin" | "robert" | "rupal" | "sara" | "segnon" | "senay" | "shreya" | "stoney" | "zandie"
+export const people: DancerName[] = ["aroma", "chloe", "chris", "diana", "idris", "iman", "jah", "jesse", "kat", "kurush", "latasha", "martin", "robert", "rupal", "sara", "segnon", "senay", "shreya", "stoney", "zandie"]
+export const framesPerPerson: Record<string, number> = {}
+export const createDancerScene = async (renderer: THREE.WebGLRenderer, renderTarget: THREE.WebGLRenderTarget, assets: LoadAssetsResult) => {
+  const {textures, textureLengthMap, texturesByName, textureArrays, peopleData} = assets
+
 
   // Scene
   const scene = new THREE.Scene();
