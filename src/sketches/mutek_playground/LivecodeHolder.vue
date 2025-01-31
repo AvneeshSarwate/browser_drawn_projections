@@ -237,6 +237,7 @@ onMounted(async () => {
 
     const bassPitches = [36, 38, 40, 41, 43, 45, 47, 48]
     const bassDancers = people.slice(10, 18)
+    bassDancers[0] = people[3]
     const bassColors = ['#003f5c', '#58508d', '#8a508f', '#bc5090', '#de5a79', '#ff6361', '#ff8531', '#ffa600'].map(hexToRgb)
     bassSynth.setParam('Filter', 600)
     const bassVoice = bassSynth.noteOn(bassPitches[paramMap.value.bassNote.val], 100, 0, 0)
