@@ -7,7 +7,9 @@ const resRef = ref(resolution)
 </script>
 
 <template>
-  This page is best viewed on desktop in the Chrome browser.
+  <div id="instructions">
+    This page is best viewed on desktop in the Chrome browser.
+  </div>
   <div id="canvasContainer" :style="{width: resRef.width + 'px', height: resRef.height + 'px'}">
     <canvas id="p5Canvas" :width="resRef.width" :height="resRef.height" abitrary-prop="somethi"></canvas>
     <canvas id="threeCanvas" :width="resRef.width" :height="resRef.height" abitrary-prop="somethi"></canvas>
@@ -19,9 +21,17 @@ const resRef = ref(resolution)
 
 
 <style scoped>
+
+#instructions {
+  margin-left: 30px;
+  margin-bottom: 10px;
+  margin-top: 30px;
+}
+
 #canvasContainer {
   background-color: black;
   position: relative;
+  margin-left: 30px;
 }
 
 #p5Canvas {

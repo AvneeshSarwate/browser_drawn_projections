@@ -395,46 +395,70 @@ onUnmounted(() => {
   </div>
   <div id="allControls" v-if="showControls">
     <button id="randomizeParams" @click="randomizeParams">Randomize Params</button>
-    <div style="margin-left: 10px;">
-      <label for="mainVolume">Main Volume - midi cc: {{ paramMap.mainVolume.midiCC }}</label>
-      <br/>
+    <div style="margin-left: 30px; margin-bottom: 10px;">
+      <h3>Main Volume</h3>
       <input type="range" v-model.number="paramMap.mainVolume.val" :min="paramMap.mainVolume.min" :max="paramMap.mainVolume.max" :step="0.01" />
       <span>{{ paramMap.mainVolume.val.toFixed(2) }}</span>
     </div>
 
     <div id="paramControls">
       <div class="paramColumn">
+        <h3>Bass parameters</h3>
+        <div>
+          <label for="bassVol">Bass Volume</label>
+          <br/>
+          <input type="range" v-model.number="paramMap.bassVol.val" :min="paramMap.bassVol.min" :max="paramMap.bassVol.max" :step="0.01" />
+          <span>{{ paramMap.bassVol.val.toFixed(2) }}</span>
+        </div>
+
+        <div>
+          <label for="bassNote">Bass Note</label>
+          <br/>
+          <input type="range" v-model.number="paramMap.bassNote.val" :min="paramMap.bassNote.min" :max="paramMap.bassNote.max" />
+          <span>{{ paramMap.bassNote.val }}</span>
+        </div>
+
+        <div>
+          <label for="bassFilterLfoRate">Bass Filter Lfo Rate</label>
+          <br/>
+          <input type="range" v-model.number="paramMap.bassFilterLfoRate.val" :min="paramMap.bassFilterLfoRate.min" :max="paramMap.bassFilterLfoRate.max" :step="0.01" />
+          <span>{{ paramMap.bassFilterLfoRate.val.toFixed(2) }}</span>
+        </div>
+      </div>
+
+
+      <div class="paramColumn">
         <h3>Chord parameters</h3>
         <div>
-          <label for="chordVolume">Chord Volume - midi cc: {{ paramMap.chordVolume.midiCC }}</label> 
+          <label for="chordVolume">Chord Volume</label> 
           <br/>
           <input type="range" v-model.number="paramMap.chordVolume.val" :min="paramMap.chordVolume.min" :max="paramMap.chordVolume.max" :step="0.01" />
           <span>{{ paramMap.chordVolume.val.toFixed(2) }}</span>
         </div>
 
         <div>
-          <label for="activeChord">Active Chord - midi cc: {{ paramMap.activeChord.midiCC }}</label>
+          <label for="activeChord">Active Chord</label>
           <br/>
           <input type="range" v-model.number="paramMap.activeChord.val" :min="paramMap.activeChord.min" :max="paramMap.activeChord.max" />
           <span>{{ paramMap.activeChord.val }}</span>
         </div>
 
         <div>
-          <label for="chordSpeed">Chord Speed - midi cc: {{ paramMap.chordSpeed.midiCC }}</label> 
+          <label for="chordSpeed">Chord Speed</label> 
           <br/>
           <input type="range" v-model.number="paramMap.chordSpeed.val" :min="paramMap.chordSpeed.min" :max="paramMap.chordSpeed.max" :step="0.01" />
           <span>{{ paramMap.chordSpeed.val.toFixed(2) }}</span>
         </div>
 
         <div>
-          <label for="chordFilter">Chord Filter - midi cc: {{ paramMap.chordFilter.midiCC }}</label>
+          <label for="chordFilter">Chord Filter</label>
           <br/>
           <input type="range" v-model.number="paramMap.chordFilter.val" :min="paramMap.chordFilter.min" :max="paramMap.chordFilter.max" />
           <span>{{ paramMap.chordFilter.val.toFixed(2) }}</span>
         </div>
 
         <div>
-          <label for="chordRelease">Chord Release - midi cc: {{ paramMap.chordRelease.midiCC }}</label>
+          <label for="chordRelease">Chord Release</label>
           <br/>
           <input type="range" v-model.number="paramMap.chordRelease.val" :min="paramMap.chordRelease.min" :max="paramMap.chordRelease.max" :step="0.01" />
           <span>{{ paramMap.chordRelease.val.toFixed(2) }}</span>
@@ -442,40 +466,9 @@ onUnmounted(() => {
       </div>
 
       <div class="paramColumn">
-        <h3>Bass parameters</h3>
-        <div>
-          <label for="bassVol">Bass Vol - midi cc: {{ paramMap.bassVol.midiCC }}</label>
-          <br/>
-          <input type="range" v-model.number="paramMap.bassVol.val" :min="paramMap.bassVol.min" :max="paramMap.bassVol.max" :step="0.01" />
-          <span>{{ paramMap.bassVol.val.toFixed(2) }}</span>
-        </div>
-
-        <div>
-          <label for="bassPan">Bass Pan - midi cc: {{ paramMap.bassPan.midiCC }}</label>
-          <br/>
-          <input type="range" v-model.number="paramMap.bassPan.val" :min="paramMap.bassPan.min" :max="paramMap.bassPan.max" :step="0.01" />
-          <span>{{ paramMap.bassPan.val.toFixed(2) }}</span>
-        </div>
-
-        <div>
-          <label for="bassNote">Bass Note - midi cc: {{ paramMap.bassNote.midiCC }}</label>
-          <br/>
-          <input type="range" v-model.number="paramMap.bassNote.val" :min="paramMap.bassNote.min" :max="paramMap.bassNote.max" />
-          <span>{{ paramMap.bassNote.val }}</span>
-        </div>
-
-        <div>
-          <label for="bassFilterLfoRate">Bass Filter Lfo Rate - midi cc: {{ paramMap.bassFilterLfoRate.midiCC }}</label>
-          <br/>
-          <input type="range" v-model.number="paramMap.bassFilterLfoRate.val" :min="paramMap.bassFilterLfoRate.min" :max="paramMap.bassFilterLfoRate.max" :step="0.01" />
-          <span>{{ paramMap.bassFilterLfoRate.val.toFixed(2) }}</span>
-        </div>
-      </div>
-
-      <div class="paramColumn">
         <h3>Melody parameters</h3>
         <div>
-          <label for="melodyVol">Melody Vol - midi cc: {{ paramMap.melodyVol.midiCC }}</label>
+          <label for="melodyVol">Melody Vol</label>
           <br/>
           <input type="range" v-model.number="paramMap.melodyVol.val" :min="paramMap.melodyVol.min" :max="paramMap.melodyVol.max" :step="0.01" />
           <span>{{ paramMap.melodyVol.val.toFixed(2) }}</span>
@@ -490,28 +483,28 @@ onUnmounted(() => {
 
 
         <div>
-          <label for="melodyEchoTime">Melody Reverb Time - midi cc: {{ paramMap.melodyEchoTime.midiCC }}</label>
+          <label for="melodyEchoTime">Melody Reverb Time</label>
           <br/>
           <input type="range" v-model.number="paramMap.melodyEchoTime.val" :min="paramMap.melodyEchoTime.min" :max="paramMap.melodyEchoTime.max" :step="0.01" />
           <span>{{ paramMap.melodyEchoTime.val.toFixed(2) }}</span>
         </div>
 
         <div>
-          <label for="melodyNoWaitProb">Melody No Wait Prob - midi cc: {{ paramMap.melodyNoWaitProb.midiCC }}</label>
+          <label for="melodyNoWaitProb">Melody No Wait Prob</label>
           <br/>
           <input type="range" v-model.number="paramMap.melodyNoWaitProb.val" :min="paramMap.melodyNoWaitProb.min" :max="paramMap.melodyNoWaitProb.max" :step="0.01" />
           <span>{{ paramMap.melodyNoWaitProb.val.toFixed(2) }}</span>
         </div>
 
         <div>
-          <label for="melodyBaseSpeed">Melody Base Speed - midi cc: {{ paramMap.melodyBaseSpeed.midiCC }}</label>
+          <label for="melodyBaseSpeed">Melody Base Speed</label>
           <br/>
           <input type="range" v-model.number="paramMap.melodyBaseSpeed.val" :min="paramMap.melodyBaseSpeed.min" :max="paramMap.melodyBaseSpeed.max" :step="0.01" />
           <span>{{ paramMap.melodyBaseSpeed.val.toFixed(2) }}</span>
         </div>
 
         <div>
-          <label for="root5Prob">Root 5 Prob - midi cc: {{ paramMap.melodyRoot5Prob.midiCC }}</label>
+          <label for="root5Prob">Root 5 Prob</label>
           <br/>
           <input type="range" v-model.number="paramMap.melodyRoot5Prob.val" :min="paramMap.melodyRoot5Prob.min" :max="paramMap.melodyRoot5Prob.max" :step="0.01" />
           <span>{{ paramMap.melodyRoot5Prob.val.toFixed(2) }}</span>
@@ -525,17 +518,17 @@ onUnmounted(() => {
 
 #startScreen {
   margin-top: 10px;
-  margin-left: 10px;
+  margin-left: 30px;
 }
 
 #loadingScreen {
   margin-top: 10px;
-  margin-left: 10px;
+  margin-left: 30px;
 }
 
 #randomizeParams {
   margin-bottom: 10px;
-  margin-left: 10px;
+  margin-left: 30px;
   margin-top: 10px;
 }
 
@@ -543,7 +536,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: row;
   gap: 10px;
-  margin-left: 10px;
+  margin-left: 30px;
 }
 
 .paramColumn {

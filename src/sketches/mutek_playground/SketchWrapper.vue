@@ -15,3 +15,9 @@ provide(appStateName, appState)
   <SketchInitializer></SketchInitializer>
   <LivecodeHolder></LivecodeHolder>
 </template>
+
+<style>
+body {
+  background-color: rgb(186, 186, 186);
+}
+</style>
