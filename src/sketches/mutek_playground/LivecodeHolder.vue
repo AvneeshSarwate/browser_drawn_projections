@@ -387,7 +387,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div id="startScreen">
+  <div id="startScreen" v-if="!showControls">
     Click anywhere to initialze and start sound
   </div>
   <div id="loadingScreen" v-if="assetsStillLoading">
