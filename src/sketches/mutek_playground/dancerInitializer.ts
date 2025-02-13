@@ -213,13 +213,18 @@ type LoadAssetsResult = {
   peopleData: PeopleData
 }
 
-export const loadDancerAssets = async (loader: KTX2Loader): Promise<LoadAssetsResult> => {
-  const textures = people.map(person => `${person}_texture_array.ktx2`)
+export const loadDancerAssets = async (loader: KTX2Loader, usedDancers?: DancerName[]): Promise<LoadAssetsResult> => {
+  const usedPeople = usedDancers || people
+  const textures = usedPeople.map(person => `${person}_texture_array.ktx2`)
   const textureLengthMap: Record<string, number> = {}
+  let textureUrlPrefix = ''
+  if(import.meta.env.PROD) {
+    textureUrlPrefix = 'https://avneeshsarwate-cdn.com/'
+  }
   const loadTexturePromises = textures.map(textureName => {
     return new Promise<THREE.CompressedArrayTexture>((resolve, reject) => {
       loader.load(
-        textureName,
+        `${textureUrlPrefix}${textureName}`,
         (textureArray) => {
           const texArr = textureArray as THREE.CompressedArrayTexture
           textureLengthMap[textureName] = texArr.source.data.depth
@@ -247,7 +252,7 @@ export const loadDancerAssets = async (loader: KTX2Loader): Promise<LoadAssetsRe
 }
 
 
-type DancerName = "aroma" | "chloe" | "chris" | "diana" | "idris" | "iman" | "jah" | "jesse" | "kat" | "kurush" | "latasha" | "martin" | "robert" | "rupal" | "sara" | "segnon" | "senay" | "shreya" | "stoney" | "zandie"
+export type DancerName = "aroma" | "chloe" | "chris" | "diana" | "idris" | "iman" | "jah" | "jesse" | "kat" | "kurush" | "latasha" | "martin" | "robert" | "rupal" | "sara" | "segnon" | "senay" | "shreya" | "stoney" | "zandie"
 export const people: DancerName[] = ["aroma", "chloe", "chris", "diana", "idris", "iman", "jah", "jesse", "kat", "kurush", "latasha", "martin", "robert", "rupal", "sara", "segnon", "senay", "shreya", "stoney", "zandie"]
 export const framesPerPerson: Record<string, number> = {}
 export const createDancerScene = async (renderer: THREE.WebGLRenderer, renderTarget: THREE.WebGLRenderTarget, assets: LoadAssetsResult) => {

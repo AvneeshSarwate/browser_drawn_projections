@@ -7,7 +7,7 @@ import { CanvasPaint, FeedbackNode, Passthru, type ShaderEffect, type ShaderSour
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
-import { createDancerScene, createKTX2Loader, framesPerPerson, loadDancerAssets, OUTLINE_GRID_SIZE, people, type Dancer } from './dancerInitializer';
+import { createDancerScene, createKTX2Loader, framesPerPerson, loadDancerAssets, OUTLINE_GRID_SIZE, people, type Dancer, type DancerName } from './dancerInitializer';
 import { notePulse, randomPhraseDancer } from "./audiovisualProcesses";
 import { FAUST_AUDIO_CONTEXT_READY, MPEPolySynth } from "@/music/mpeSynth";
 import { FaustTestVoice } from "@/music/FaustSynthTemplate";
@@ -177,7 +177,8 @@ onMounted(async () => {
     const melodyRenderTarget = new THREE.WebGLRenderTarget(resolution.width, resolution.height)
     const bassRenderTarget = new THREE.WebGLRenderTarget(resolution.width, resolution.height)
     const ktx2Loader = createKTX2Loader(appState.threeRenderer!!)
-    const assets = await loadDancerAssets(ktx2Loader)
+    const allUsedDancers: DancerName[] = ['kurush', 'chloe', 'chris', 'iman', 'aroma', 'diana', 'martin', 'robert', 'rupal', 'sara', 'segnon', 'senay', 'shreya', 'rupal']
+    const assets = await loadDancerAssets(ktx2Loader, allUsedDancers)
     const chordsScene = await createDancerScene(appState.threeRenderer!!, chordsRenderTarget, assets)
     const melodyScene = await createDancerScene(appState.threeRenderer!!, melodyRenderTarget, assets)
     const bassScene = await createDancerScene(appState.threeRenderer!!, bassRenderTarget, assets)
@@ -253,8 +254,7 @@ onMounted(async () => {
     lerpDancer.lerpDef.fromFrame = 0
     lerpDancer.lerpDef.toFrame = 0
 
-    const segmentDancer = melodyScene.createDancer("chris", 500, {x: 900, y: 200})
-    segmentDancer.params.dancerName = 'rupal'
+    const segmentDancer = melodyScene.createDancer("rupal", 500, {x: 900, y: 200})
     segmentDancer.quadVisible(false)
     segmentDancer.regionsVisible(true)
     segmentDancer.lineVisible(false)
