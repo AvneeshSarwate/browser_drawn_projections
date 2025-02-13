@@ -164,7 +164,11 @@ function updateDancerShapeUniforms(dancerShapeUniforms: DancerShapeUniforms, fra
 async function getPeopleData() {
   //replace with fetch and cast to RawPeopleData
   // const peopleData = people.map(person => countoursAndSkeletonForPersonTHREE(person))
-  const peopleDataResponse = await fetch('allPeopleData_equiSpline.json')
+  let peopleDataUrl = "allPeopleData_equiSpline.json"
+  if(import.meta.env.PROD) {
+    peopleDataUrl = "https://avneeshsarwate-cdn.com/allPeopleData_equiSpline.json"
+  }
+  const peopleDataResponse = await fetch(peopleDataUrl)
   const peopleData = await peopleDataResponse.json() as PeopleData
   people.forEach(person => {
     peopleData[person].splineFrames = peopleData[person].splineFrames.map(frame => frame.map(pt => new THREE.Vector2(pt.x, pt.y)))
