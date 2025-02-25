@@ -4,7 +4,7 @@ import { argv, compiler, f2m, faustAudioContext, param, type MPEVoiceGraph, m2f 
 import { dspMeta } from "./dsp-meta";
 const generator = new FaustMonoDspGenerator();
 
-const name = "oscillator"
+const name = "WavefoldChorusSynth_clicks"
 
 let faustFactory: { module: WebAssembly.Module, json: string, soundfiles: {} } | null = null
 
@@ -21,7 +21,7 @@ const compilePromise = (async () => {
 })()
 
 
-export class WavefoldChorusVoice_clicks implements MPEVoiceGraph {
+export class WavefoldChorusVoice_clicksPrecompiled implements MPEVoiceGraph {
   id: number
 
   //defensive programming - user should call MPEPolySynth.synthReady() before starting to play notes
@@ -37,6 +37,7 @@ export class WavefoldChorusVoice_clicks implements MPEVoiceGraph {
       this.node = await generator.createNode(faustAudioContext, name+Math.random().toString(), faustFactory);
       this.node.connect(faustAudioContext.destination);
       this.node.start();
+      console.log("WavefoldChorus params", this.getAllParams())
     } 
     this.constructorPromise = nodeMakeNode() //should ideally be pre-allocated in outer MPEPolySynth constructor
   }
@@ -59,39 +60,40 @@ export class WavefoldChorusVoice_clicks implements MPEVoiceGraph {
     this.pitch = note
     this._pressure = pressure
     this._slide = slide
-    this.node.setParamValue("oscillator/VelocityAmp", velocity)
-    this.node.setParamValue("/oscillator/Gate", 1)
+    this.node.setParamValue(`/${name}/VelocityAmp`, velocity)
+    this.node.setParamValue(`/${name}/Gate`, 1)
+    console.log("noteon params", `/${name}/VelocityAmp`, velocity, `/${name}/Gate`, 1)
   }
 
   get polyGain(): number {
-    return this.node.getParamValue("/oscillator/PolyGain")
+    return this.node.getParamValue(`/${name}/PolyGain`)
   }
 
   @param(0, 1, 0.7)
   set polyGain(value: number) {
-    this.node.setParamValue("/oscillator/PolyGain", value)
+    this.node.setParamValue(`/${name}/PolyGain`, value)
   }
 
   get release(): number {
-    return this.node.getParamValue("/oscillator/Release")
+    return this.node.getParamValue(`/${name}/Release`)
   }
 
   @param(0, 10, 0.05)
   set release(value: number) {
-    this.node.setParamValue("/oscillator/Release", value)
+    this.node.setParamValue(`/${name}/Release`, value)
   }
 
   get pan(): number {
-    return this.node.getParamValue("/oscillator/Pan")
+    return this.node.getParamValue(`/${name}/Pan`)
   }
 
   @param(0, 1, 0.5)
   set pan(value: number) {
-    this.node.setParamValue("/oscillator/Pan", value)
+    this.node.setParamValue(`/${name}/Pan`, value)
   }
 
   noteOff(): void {
-    this.node.setParamValue("/oscillator/Gate", 0)
+    this.node.setParamValue(`/${name}/Gate`, 0)
 
     // // Call the callback after the release time
     // setTimeout(() => {
@@ -119,11 +121,11 @@ export class WavefoldChorusVoice_clicks implements MPEVoiceGraph {
   }
 
   get pitch(): number {
-    return f2m(this.node.getParamValue('/oscillator/Frequency'))
+    return f2m(this.node.getParamValue(`/${name}/Frequency`))
   }
 
   set pitch(value: number) {
-    this.node.setParamValue("/oscillator/Frequency", m2f(value))
+    this.node.setParamValue(`/${name}/Frequency`, m2f(value))
   }
 
   get slide(): number {
@@ -143,48 +145,48 @@ export class WavefoldChorusVoice_clicks implements MPEVoiceGraph {
   }
 
   get Filter(): number {
-    return this.node.getParamValue("/oscillator/Filter");
+    return this.node.getParamValue(`/${name}/Filter`);
   }
 
   @param(20, 10000, 3000)
   set Filter(value: number) {
-    this.node.setParamValue("/oscillator/Filter", value);
+    this.node.setParamValue(`/${name}/Filter`, value);
   }
 
   get detune(): number {
-    return this.node.getParamValue("/oscillator/Detune")
+    return this.node.getParamValue(`/${name}/Detune`)
   }
 
   @param(0, 50, 1)
   set detune(value: number) {
-    this.node.setParamValue("/oscillator/Detune", value)
+    this.node.setParamValue(`/${name}/Detune`, value)
   }
 
   get modRelease(): number {
-    return this.node.getParamValue("/oscillator/ModRelease")
+    return this.node.getParamValue(`/${name}/ModRelease`)
   }
 
   @param(0, 1, 0.3)
   set modRelease(value: number) {
-    this.node.setParamValue("/oscillator/ModRelease", value)
+    this.node.setParamValue(`/${name}/ModRelease`, value)
   }
 
   get echoFdbk(): number {
-    return this.node.getParamValue("/oscillator/EchoFdbk");
+    return this.node.getParamValue(`/${name}/EchoFdbk`);
   }
 
   @param(0, 1, 0.3)
   set echoFdbk(value: number) {
-    this.node.setParamValue("/oscillator/EchoFdbk", value);
+    this.node.setParamValue(`/${name}/EchoFdbk`, value);
   }
 
   get echoTime(): number {
-    return this.node.getParamValue("/oscillator/EchoTime");
+    return this.node.getParamValue(`/${name}/EchoTime`);
   }
 
   @param(0.01, 10, 0.3)
   set echoTime(value: number) {
-    this.node.setParamValue("/oscillator/EchoTime", value);
+    this.node.setParamValue(`/${name}/EchoTime`, value);
   }
 
 }

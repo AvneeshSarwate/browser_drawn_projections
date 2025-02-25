@@ -8,6 +8,8 @@ import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
 import { FAUST_AUDIO_CONTEXT_READY, MPEPolySynth, type MPEVoiceGraph } from '@/music/mpeSynth';
 import { WavefoldChorusVoice_clicks } from '@/music/WavefoldChorusSynth_clicks';
+import { WavefoldChorusVoice_clicksPrecompiled } from '@/music/WavefoldChorusSynth_clicksPrecompiled/WavefoldChorusSynth_clicksPrecompiled';
+import { FMChorusPrecompiled } from '@/music/FMChorusPrecompiled/FMChorusPrecompiled';
 
 const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
@@ -67,7 +69,8 @@ onMounted(() => {
       //   }
       // })
 
-      const voice = new WavefoldChorusVoice_clicks(0)
+      const voice = new FMChorusPrecompiled(0)
+      // const voice = new WavefoldChorusVoice_clicksPrecompiled(0)
       await voice.ready()
 
       launchLoop(async (ctx) => {
