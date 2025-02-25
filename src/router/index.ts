@@ -38,7 +38,8 @@ export const sketchNames = [
   'ishitaGestures',
   'scTimeTest',
   'faustSynthTest',
-  'mutek_playground'
+  'mutek_playground',
+  'faustDebug'
 ]
 
 const sketchRoutes = sketchNames.map(name => {

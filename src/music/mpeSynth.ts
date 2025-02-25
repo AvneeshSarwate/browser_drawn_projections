@@ -1,5 +1,6 @@
-import * as Tone from 'tone'
+// import * as Tone from 'tone'
 import { v4 as uuidv4 } from 'uuid';
+import type { MIDIValOutput } from '@midival/core';
 
 
 //polyfil for Symbol.metadata (typescript doesnt emit a polyfil for backwards compat reasons? discussion in links below)
@@ -237,222 +238,215 @@ export function param(low: number, high: number, defaultVal: number) {
   }
 }
 
-function testDecorator(ths: any, context: any) {
-  // context.metadata ??= {}
-  context.metadata[context.name] = context.name
-  return
-}
+// export class FatOscillatorVoice implements MPEVoiceGraph {
+//   private oscillator: Tone.FatOscillator
+//   private filter: Tone.Filter
+//   private distortionNode: Tone.Distortion
+//   private ampEnv: Tone.AmplitudeEnvelope
+//   private outputGain: Tone.Gain
+//   private _polyGain: Tone.Gain
+//   private _pitch: number
+//   private _pressure: number
+//   private _slide: number
+//   id: number
 
+//   voiceName: string = "fatOsc"
 
-export class FatOscillatorVoice implements MPEVoiceGraph {
-  private oscillator: Tone.FatOscillator
-  private filter: Tone.Filter
-  private distortionNode: Tone.Distortion
-  private ampEnv: Tone.AmplitudeEnvelope
-  private outputGain: Tone.Gain
-  private _polyGain: Tone.Gain
-  private _pitch: number
-  private _pressure: number
-  private _slide: number
-  id: number
+//   constructor(id: number) {
+//     console.log("fatOscVoice constructor", id)
+//     this.id = id
+//     this.oscillator = new Tone.FatOscillator().start()
+//     // this.oscillator.volume.value = -20
+//     // this.oscillator.type = "sine"
+//     this.filter = new Tone.Filter({ type: "lowpass" })
+//     this.filter.Q.value = 25
+//     this.distortionNode = new Tone.Distortion()
+//     this.ampEnv = new Tone.AmplitudeEnvelope({
+//       attack: 0.01,
+//       decay: 0.2,
+//       sustain: 0.9,
+//       release: 0.05
+//     })
+//     this.outputGain = new Tone.Gain(0.1)
+//     this._polyGain = new Tone.Gain(0.1)
 
-  voiceName: string = "fatOsc"
+//     // todo api - have output of all voices be a raw webAudio gain node (RWGN), which all get merged into a RWGN in the mpeSynth
+//     // this allows MPEVoiceGraphs to be implemented with either Tone.js or raw webAudio
+//     // MPEPolySynth then needs to manually be connected to it's destination (another node or webaudio AudioDestinationNode)
+//     // const rawGain = new GainNode(Tone.context.rawContext)
+//     // Tone.connect(this.outputGain, rawGain)
+//     // rawGain can also be at the end of the chain() call
 
-  constructor(id: number) {
-    console.log("fatOscVoice constructor", id)
-    this.id = id
-    this.oscillator = new Tone.FatOscillator().start()
-    // this.oscillator.volume.value = -20
-    // this.oscillator.type = "sine"
-    this.filter = new Tone.Filter({ type: "lowpass" })
-    this.filter.Q.value = 25
-    this.distortionNode = new Tone.Distortion()
-    this.ampEnv = new Tone.AmplitudeEnvelope({
-      attack: 0.01,
-      decay: 0.2,
-      sustain: 0.9,
-      release: 0.05
-    })
-    this.outputGain = new Tone.Gain(0.1)
-    this._polyGain = new Tone.Gain(0.1)
+//     this.oscillator.chain(this.distortionNode, this.filter, this.ampEnv, this.outputGain, this._polyGain, Tone.getDestination())
 
-    // todo api - have output of all voices be a raw webAudio gain node (RWGN), which all get merged into a RWGN in the mpeSynth
-    // this allows MPEVoiceGraphs to be implemented with either Tone.js or raw webAudio
-    // MPEPolySynth then needs to manually be connected to it's destination (another node or webaudio AudioDestinationNode)
-    // const rawGain = new GainNode(Tone.context.rawContext)
-    // Tone.connect(this.outputGain, rawGain)
-    // rawGain can also be at the end of the chain() call
+//     this._pitch = 0
+//     this._pressure = 0
+//     this._slide = 0
+//   }
 
-    this.oscillator.chain(this.distortionNode, this.filter, this.ampEnv, this.outputGain, this._polyGain, Tone.getDestination())
+//   ready(): Promise<void> {
+//     return new Promise<void>(resolve => { resolve() })
+//   }
 
-    this._pitch = 0
-    this._pressure = 0
-    this._slide = 0
-  }
+//   set polyGain(value: number) {
+//     this._polyGain.gain.value = value
+//   }
 
-  ready(): Promise<void> {
-    return new Promise<void>(resolve => { resolve() })
-  }
+//   get polyGain(): number {
+//     return this._polyGain.gain.value
+//   }
 
-  set polyGain(value: number) {
-    this._polyGain.gain.value = value
-  }
+//   get pitch(): number {
+//     return this._pitch
+//   }
 
-  get polyGain(): number {
-    return this._polyGain.gain.value
-  }
+//   set pitch(value: number) {
+//     this._pitch = value
+//     this.oscillator.frequency.value = Tone.Midi(value).toFrequency()
+//   }
 
-  get pitch(): number {
-    return this._pitch
-  }
+//   get pressure(): number {
+//     return this._pressure
+//   }
 
-  set pitch(value: number) {
-    this._pitch = value
-    this.oscillator.frequency.value = Tone.Midi(value).toFrequency()
-  }
+//   set pressure(value: number) {
+//     this._pressure = value
+//     this.filter.frequency.value = 100 + (value/127) * 3000 // Example mapping
+//   }
 
-  get pressure(): number {
-    return this._pressure
-  }
+//   get slide(): number {
+//     return this._slide
+//   }
 
-  set pressure(value: number) {
-    this._pressure = value
-    this.filter.frequency.value = 100 + (value/127) * 3000 // Example mapping
-  }
+//   set slide(value: number) {
+//     this._slide = value
+//     this.distortionNode.distortion = Math.pow(value/127, 2.5) // Example mapping
+//   }
 
-  get slide(): number {
-    return this._slide
-  }
+//   noteOn(note: number, velocity: number, pressure: number, slide: number): void {
+//     this.pitch = note
+//     this._pressure = pressure
+//     this._slide = slide
+//     this.ampEnv.triggerAttack("+0", velocity)
+//   }
 
-  set slide(value: number) {
-    this._slide = value
-    this.distortionNode.distortion = Math.pow(value/127, 2.5) // Example mapping
-  }
+//   noteOff(): void {
+//     this.ampEnv.triggerRelease()
 
-  noteOn(note: number, velocity: number, pressure: number, slide: number): void {
-    this.pitch = note
-    this._pressure = pressure
-    this._slide = slide
-    this.ampEnv.triggerAttack("+0", velocity)
-  }
+//     // Call the callback after the release time
+//     setTimeout(() => {
+//       if (this.voiceFinishedCB) {
+//         this.voiceFinishedCB()
+//       }
+//     }, Number(this.ampEnv.release) * 1000) // Convert seconds to milliseconds
+//   }
 
-  noteOff(): void {
-    this.ampEnv.triggerRelease()
+//   forceFinish(): void {
+//     // Same as noteOff, but immediate
+//     this.ampEnv.cancel()
+//     if (this.voiceFinishedCB) {
+//       this.voiceFinishedCB()
+//     }
+//   }
 
-    // Call the callback after the release time
-    setTimeout(() => {
-      if (this.voiceFinishedCB) {
-        this.voiceFinishedCB()
-      }
-    }, Number(this.ampEnv.release) * 1000) // Convert seconds to milliseconds
-  }
+//   voiceFinishedCB?: () => void
 
-  forceFinish(): void {
-    // Same as noteOff, but immediate
-    this.ampEnv.cancel()
-    if (this.voiceFinishedCB) {
-      this.voiceFinishedCB()
-    }
-  }
+//   dispose(): void {
+//     this.oscillator.disconnect()
+//     this.filter.disconnect()
+//     this.distortionNode.disconnect()
+//     this.ampEnv.disconnect()
+//     this.outputGain.disconnect()
 
-  voiceFinishedCB?: () => void
+//     this.oscillator.dispose()
+//     this.filter.dispose()
+//     this.distortionNode.dispose()
+//     this.ampEnv.dispose()
+//     this.outputGain.dispose()
+//   }
 
-  dispose(): void {
-    this.oscillator.disconnect()
-    this.filter.disconnect()
-    this.distortionNode.disconnect()
-    this.ampEnv.disconnect()
-    this.outputGain.disconnect()
+//   //========== params ==========
 
-    this.oscillator.dispose()
-    this.filter.dispose()
-    this.distortionNode.dispose()
-    this.ampEnv.dispose()
-    this.outputGain.dispose()
-  }
+//   get filterFrequency(): number {
+//     return this.filter.frequency.immediate()
+//   }
 
-  //========== params ==========
+//   @param(50, 3000, 400)
+//   set filterFrequency(value: number) {
+//     this.filter.frequency.value = value
+//   }
 
-  get filterFrequency(): number {
-    return this.filter.frequency.immediate()
-  }
+//   get filterQ(): number {
+//     return this.filter.Q.value
+//   }
 
-  @param(50, 3000, 400)
-  set filterFrequency(value: number) {
-    this.filter.frequency.value = value
-  }
+//   @param(0, 100, 10)
+//   set filterQ(value: number) {
+//     this.filter.Q.value = value
+//   }
 
-  get filterQ(): number {
-    return this.filter.Q.value
-  }
+//   get count(): number {
+//     return this.oscillator.count
+//   }
 
-  @param(0, 100, 10)
-  set filterQ(value: number) {
-    this.filter.Q.value = value
-  }
+//   @param(1, 20, 3)
+//   set count(value: number) {
+//     this.oscillator.count = value
+//   }
 
-  get count(): number {
-    return this.oscillator.count
-  }
+//   get spread(): number {
+//     return this.oscillator.spread
+//   }
 
-  @param(1, 20, 3)
-  set count(value: number) {
-    this.oscillator.count = value
-  }
+//   @param(0, 100, 3)
+//   set spread(value: number) {
+//     this.oscillator.spread = value
+//   }
 
-  get spread(): number {
-    return this.oscillator.spread
-  }
+//   get attack(): number {
+//     return Number(this.ampEnv.attack)
+//   }
+//   @param(0, 5, 0.1)
+//   set attack(value: number) {
+//     this.ampEnv.attack = value
+//   }
 
-  @param(0, 100, 3)
-  set spread(value: number) {
-    this.oscillator.spread = value
-  }
+//   get decay(): number {
+//     return Number(this.ampEnv.decay)
+//   }
 
-  get attack(): number {
-    return Number(this.ampEnv.attack)
-  }
-  @param(0, 5, 0.1)
-  set attack(value: number) {
-    this.ampEnv.attack = value
-  }
+//   @param(0, 5, 0.2)
+//   set decay(value: number) {
+//     this.ampEnv.decay = value
+//   }
 
-  get decay(): number {
-    return Number(this.ampEnv.decay)
-  }
+//   get sustain(): number {
+//     return this.ampEnv.sustain
+//   }
 
-  @param(0, 5, 0.2)
-  set decay(value: number) {
-    this.ampEnv.decay = value
-  }
+//   @param(0, 1, 0.9)
+//   set sustain(value: number) {
+//     this.ampEnv.sustain = value
+//   }
 
-  get sustain(): number {
-    return this.ampEnv.sustain
-  }
+//   get release(): number {
+//     return Number(this.ampEnv.release)
+//   }
 
-  @param(0, 1, 0.9)
-  set sustain(value: number) {
-    this.ampEnv.sustain = value
-  }
+//   @param(0, 5, 0.6)
+//   set release(value: number) {
+//     this.ampEnv.release = value
+//   }
 
-  get release(): number {
-    return Number(this.ampEnv.release)
-  }
+//   get distortion(): number {
+//     return this.distortionNode.distortion
+//   }
 
-  @param(0, 5, 0.6)
-  set release(value: number) {
-    this.ampEnv.release = value
-  }
-
-  get distortion(): number {
-    return this.distortionNode.distortion
-  }
-
-  @param(0, 1, 0.5)
-  set distortion(value: number) {
-    this.distortionNode.distortion = value
-  }
-}
+//   @param(0, 1, 0.5)
+//   set distortion(value: number) {
+//     this.distortionNode.distortion = value
+//   }
+// }
 
 
 // const fatOscVoice = new FatOscillatorVoice(1)
@@ -539,188 +533,10 @@ export class MidiMPEVoiceGraph implements MPEVoiceGraph {
   }
 }
 
-export const getMPESynth = () => {
-  const synth = new MPEPolySynth(FatOscillatorVoice)
-  return synth
-}
-
-
-
-import {el, type ElemNode} from '@elemaudio/core';
-import WebRenderer from '@elemaudio/web-renderer';
-import type { MIDIValOutput } from '@midival/core';
- 
-const ctx = new AudioContext();
-const core = new WebRenderer();
-
-
-async function initializeElementaryRenderer() {
-  const node = await core.initialize(ctx, {
-    numberOfInputs: 0,
-    numberOfOutputs: 1,
-    outputChannelCount: [2],
-  });
-
-  node.connect(ctx.destination);
-}
- 
-// (async function main() {
-//   let node = await core.initialize(ctx, {
-//     numberOfInputs: 0,
-//     numberOfOutputs: 1,
-//     outputChannelCount: [2],
-//   });
- 
-//   node.connect(ctx.destination);
- 
-//   let stats = await core.render(el.cycle(440), el.cycle(441));
-//   console.log("Elementary stats", stats);
-// })();
-
-
-const elemVoiceRegistry = new Map<string, ElemNode>()
-function refreshElemVoiceRegistry() {
-  const nodes = Array.from(elemVoiceRegistry.values())
-  core.render(...nodes)
-}
-/**
- * a global voice registry is needed for VoiceGraphs made with elementary to work with the 
- * current MPEPolySynth implementation, as MPEPolySynth assumes that each voice is responsible
- * for connecting itself to the final output destination. It is not set up to be modularly 
- * routed into an effect. If you wanted to set up modular ouputs on each voice, you would need
- * each voice to have a specific output node, and MPEPolySynth would need it's own output
- * node that all voices connect to, which then connects to the final output destination.
- * 
- * For VoiceGraphs made with Elementary, you could give each voice it's own WebRenderer, 
- * because each webRenderer is just an audioWorkletNode. 
- * 
- * For Tone.js you could also try to pull out the underlying webAudio nodes and connect them, 
- * but it might not work that well because Tone.js uses the wrapper library for the AudioContext.
- * Still, if you can get the actual underlying audio context from the wrapper, you could maybe
- * use it as the source context for Elementary nodes, allowing interop
- *  
- */
-
-const midi2freq = (midi: number) => Tone.Midi(midi).toFrequency()
-
-//unused
-export class ElementaryBasicVoice implements MPEVoiceGraph {
-
-  private pitchSetter: (value: number) => void
-  private gainSetter: (value: number) => void
-  private asdrTrigger: (value: number) => void
-  private elementaryId: string
-  private _pitch: number = 0
-  id: number
-
-  release: number = 0.3 //as hardcoded in the adsr in constructor
-
-  constructor(id: number) {
-    this.id = id
-    this.elementaryId = uuidv4()
-    const [adsrTriggerNode, setAdsrTrigger] = core.createRef('const', {value: 0}, [])
-    const adsr = el.adsr(0.01, 0.2, 0.9, 0.05, adsrTriggerNode as ElemNode);
-    const [osc, setOscFreq] = core.createRef('cycle', {frequency: 440}, [])
-    const [gain, setGain] = core.createRef('const', {value: 0}, [])
-    this.pitchSetter = setOscFreq as (value: number) => void
-    this.gainSetter = setGain as (value: number) => void
-    this.asdrTrigger = setAdsrTrigger as (value: number) => void
-
-    const outNode = el.mul(el.mul(osc as ElemNode, adsr), gain as ElemNode)
-
-    elemVoiceRegistry.set(this.elementaryId, outNode)
-    refreshElemVoiceRegistry()
-  }
-
-  polyGain = 1 //unused here, since we aren't really using this implemenation
-
-  ready(): Promise<void> {
-    return new Promise<void>(resolve => { resolve() })
-  }
-
-  get pitch(): number {
-    return this._pitch
-  }
-
-  set pitch(value: number) {
-    this.pitchSetter(midi2freq(value))
-  }
-
-  noteOn(note: number, velocity: number, pressure: number, slide: number): void {
-    this.pitch = note
-    this.gainSetter(velocity)
-    this.asdrTrigger(1)
-  }
-
-  noteOff(): void {
-    this.asdrTrigger(0)
-  }
-
-  forceFinish(): void {
-    this.noteOff()
-  }
-
-  _pressure: number = 0
-  _slide: number = 0
-
-  get pressure(): number {
-    return this._pressure
-  }
-
-  set pressure(value: number) {
-    this._pressure = value
-  }
-
-  get slide(): number {
-    return this._slide
-  }
-
-  set slide(value: number) {
-    this._slide = value
-  }
-
-  dispose(): void {
-    elemVoiceRegistry.delete(this.elementaryId)
-    refreshElemVoiceRegistry()
-  }
-}
-
-export function getElementarySynth() {
-  return new MPEPolySynth(ElementaryBasicVoice)
-}
-
-//example pulled from TS 5.2 announcement for decorator metadata
-// interface Context {
-//   name: string;
-//   metadata: Record<PropertyKey, unknown>;
+// export const getMPESynth = () => {
+//   const synth = new MPEPolySynth(FatOscillatorVoice)
+//   return synth
 // }
-// function setMetadata(_target: any, context: any) {
-//   context.metadata ??= {}
-//   context.metadata[context.name] = true;
-// }
-// class SomeClass {
-//   @setMetadata
-//   foo = 123;
-//   @setMetadata
-//   accessor bar = "hello!";
-//   @setMetadata
-//   baz() { }
-// }
-
-// // @ts-ignore
-// const ourMetadata = SomeClass[Symbol.metadata];
-// console.log("docs metadata test", JSON.stringify(ourMetadata));
-
-
-
-const audioStart = async () => {
-  await Tone.start()
-  Tone.Transport.start()
-  console.log('audio is ready', Tone.Transport.bpm.value, Tone.context.lookAhead)
-  // setTimeout(testCancel, 50)
-  document.querySelector('body')?.removeEventListener('click', audioStart)
-}
-document.querySelector('body')?.addEventListener('click', audioStart)
 
 
 
@@ -729,9 +545,7 @@ document.querySelector('body')?.addEventListener('click', audioStart)
 
 import { instantiateFaustModuleFromFile,
   LibFaust,
-  FaustMonoDspGenerator,
-  FaustCompiler, 
-  FaustMonoAudioWorkletNode} from "@grame/faustwasm";
+  FaustCompiler} from "@grame/faustwasm";
 
 
 
@@ -742,11 +556,11 @@ export const argv = ["-I", "libraries/"];
 // export const argv = ["-I", "/usr/share/project/"];
 export const faustAudioContext = new AudioContext();
 let faustModulePath = "../node_modules/@grame/faustwasm/libfaust-wasm/libfaust-wasm.js"
-if (import.meta.env.PROD) {
-  faustModulePath = "libfaust-wasm/libfaust-wasm.js"
-  // faustModulePath = "https://unpkg.com/@grame/faustwasm@0.8.0/libfaust-wasm/libfaust-wasm.js"
-  // faustModulePath = 'faustwasm/libfaust-wasm/libfaust-wasm.js'
-}
+// if (import.meta.env.PROD) {
+//   faustModulePath = "libfaust-wasm/libfaust-wasm.js"
+//   // faustModulePath = "https://unpkg.com/@grame/faustwasm@0.8.0/libfaust-wasm/libfaust-wasm.js"
+//   // faustModulePath = 'faustwasm/libfaust-wasm/libfaust-wasm.js'
+// }
 const faustModule = await instantiateFaustModuleFromFile(faustModulePath);
 
 //a promise that resolves after a click on the document body and resumes the audio context

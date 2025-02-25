@@ -6,6 +6,8 @@ import { REVISION } from 'three';
 import { Earcut } from 'three/src/extras/Earcut.js';
 const UNPKG_PATH = `https://unpkg.com/three@0.${REVISION}.x/examples/jsm/libs/basis/`;
 
+const glsl = x => x[0];
+
 const OUTLINE_LENGTH = 821
 export const OUTLINE_GRID_SIZE = 512
 
@@ -278,14 +280,14 @@ export const createDancerScene = async (renderer: THREE.WebGLRenderer, renderTar
   const geometry = new THREE.PlaneGeometry(size, size);
   const material = new THREE.ShaderMaterial({
     uniforms,
-    vertexShader: `
+    vertexShader: glsl`
       varying vec2 vUv;
       void main() {
         vUv = uv;
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }
     `,
-    fragmentShader: `
+    fragmentShader: glsl`
       uniform sampler2DArray textureArray;
       uniform float frame;
       uniform float makeBlackThresh;
@@ -315,14 +317,14 @@ export const createDancerScene = async (renderer: THREE.WebGLRenderer, renderTar
   }
   const dancerShapeMaterial = new THREE.ShaderMaterial({
     uniforms: dancerShapeUniforms,
-    vertexShader: `
+    vertexShader: glsl`
       varying vec2 vUv;
       void main() {
         vUv = uv;
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }
     `,
-    fragmentShader: `
+    fragmentShader: glsl`
       uniform vec4 color1;
       uniform vec4 color2;
       uniform vec4 color3;
