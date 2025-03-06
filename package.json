@@ -26,7 +26,7 @@
     "@types/seedrandom": "^3.0.8",
     "@types/tinycolor2": "^1.4.6",
     "@vueuse/core": "^10.3.0",
-    "ableton-js": "^3.4.1",
+    "ableton-js": "^3.6.0",
     "acorn": "^8.11.3",
     "babylonjs": "^6.19.1",
     "dat.gui": "^0.7.9",
