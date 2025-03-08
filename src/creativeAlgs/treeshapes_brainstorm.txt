@@ -1,0 +1,154 @@
+2D TreeShapes brainstorm 
+
+
+Don’t need the API to be slick right away, just need to build the “low level” api that exposes all the necessary operations. Can build the high level api after experimenting and letting abstractions emerge 
+- Edge cases ignored for now- 
+    - Don’t try to keep shapes “inside” parent
+    - Assume there is a child at every parent point 
+- Starting point:
+    - Fold function that takes into account how many child layers to flatten with fold (and figures out the 2 “legs” on either side of parent point problem)
+    - A foldLerp val [0-1] to remember folding state 
+    - A draw function (not implemented, just a handle to one using p5 that draws its points) and a draw flag as to whether to draw that shape specifically or not
+        - For now draw function is simple point connecting lines, and it is caller’s responsibility to set flag (and for current testing, it’s only set on “leaf” shapes
+
+
+Hypothesis - to enable cleaner folding, shapes will need to be “manually” closed (e.g, square has 5 points - last point is first repeated) (e.g. all lines are explicit
+- Where the duplicated point is will be significant in the aesthetics of [un]folding 
+- Probably want a utility to “rotate” the duplicated point easily 
+
+Need to figure out how to keep child shapes “inside” parent shape so they fold “out” onto parent border - naive implementation would just center a child shape on the parent point, but ideally you want one child point on the parent point such that the child is fully “inside” the parent, and can unwrap right onto the parent border, with the 2 “legs” of the unfolding on either side of the parent point being of equal length (this will be non-trivial with shapes with odd numbers of points)
+- What about parent child relationships where there isn’t a child at every specific point for the parent? Do they unfold to the point of the next parent?
+    - Need a generally smooth looking algorithm for lerping one m-segmented line into an n-segmented line for m < n w.l.o.g.)
+        - mapping m onto n where n stays static - can you do it by just distributing extra points along the m-point line
+        - Mapping n onto m where m stays static - similarly distribute “merge pairs” of points evenly along the line?
+
+Specific cases to think about (heirarchical squares)
+- 2 levels of shape 
+    - 4 squares folding into 1 square
+- 3 levels of shape. (Looks like 4x4 arrangement of squares)
+    - 16 squares folding into 4 squares
+        - Lowest level of shape folds into mid level + consolidates into parent
+    - 16 squares rearranging to outline of outermost square
+        - Mid level folding into top level
+- Question - Does fold have to be full tree hierarchically aware? Or does it only have to know parent, or grand parent
+- Is n-layers-of-squares model enough to parse out all folding/consolidation edge cases
+    - Is 4 levels of shape enough to catch all edge cases 
+- For 4 layers of squares (8 by 8 squares)
+    - Consider all combos/orders of consolidation
+        - Consolidate just layer 3 - you have 4 by 4 squares of 2x size
+        - Consolidate layer 3 then 1 - 
+- Question - can a square only visually “unfold” when all its child layers are fully unfolded?
+    - Potential answer - folding is a hierarchical operation where you can decide how many layers down to flatten into a single stream that lerps together - eg, in 4 layer case 8x8, you could trigger folding at the 2nd layer (one below the root) and fold layers 2 and 3 at once, so your 8 by 8 lerps directly into 64 squares along the perimeter of the outer square 
+    - Or, if you fold in the following order, you get the initial “primitives moving up the hierarchy” look - layer 4, then 3-4 together, then 2-3-4 together 
+
+If adding and removing points on a single shape is outside of the scope of the TreeShape abstraction, is consolidating child points also outside of the scope of the abstraction?
+- consolidation does feel core to the concept of folding the child into a parent, esp for folding a middle layer up where that middle layer’s children are individual shapes that don’t get folded  
+- Should there be an interface for point transforms/lerps defined by TreeShape? One that composes with folding (eg can be lerped in parallel, so child-consolidation is just a special case? 
+- Need some function or representation (and consistent interface?)  of how to “finalize/commit” a point transform that changes the number of points - eg in a child-consolidation, you can lerp all the child points to the root position, but eventually you want to remove the duplicates 
+- The fold/consolidate/etc operations all run on the children, and don’t necessarily have to run simultaneously on all children - API should be oriented around acting on children to fold into parent, not on parent absorbing into children 
+- For fold/consolidation of a middle layer, what if the children of the middle layer are not all the same? - potential answer - this is not the responsibility of the TreeShape abstraction - up to the user to build trees that compose nicely visually 
+
+
+Comments form source file
+/*
+base case - get 3 layers of square working properly with just outline drawing, 
+but handle all folding edge cases
+
+need to think of 2 different operations 
+"shape folding" - which is the oulines of children unfolding to the parent
+"point consolidating" - which is all the points of the children then lerping back 
+  and deduplicating so the parent as the original number of points again
+
+point-consolidating could be optional?
+can point consolidation be lerped at the same time as shape-folding?
+  or does it have to happen after?
+*/
+
+
+
+An important part of this visual language is reversibility of a transformation/gesture - you can do a thing and then smoothly return to the previous state 
+- how does this work with layer folding? Does a layer keep the history of what was folded into it? Or is there a “save fold” function that destroys the history? 
+- If you wanted to repeatedly spawn out new children and fold this back, how does this work? The merged points of the folded children need to be collapsed back into the original points at some stage 
+    - Does this child point collapse happen after a “save fold” method is called? 
+    - Can only undo a fold until you call save-fold
+
+What about folding only one child at a time back into parent layer 
+
+For child shapes folding into parent, could have different “fold modes” depending on what type of shape a child is? 
+- Outline of child lerping into segment of parent (or, lerping into merger 2 half-segments that connect to its corresponding parent point)
+- Just shrinking into a “point” 
+
+Practically, depth will probs never be more than 3/4, but folding transitions may be a frequent occurrence 
+
+What would a simultaneous multi layer folding look like? Probably pretty cool 
+
+Basic representation of TreeShapes
+- list of child points or TreeShapes-sites 
+    - Site is just a TreeShape plus a position 
+- Transformation 
+- Render function
+- Render parameter dict 
+- Fold-up function 
+    - Points lerp into the “segment” of the TreeShape site of parent 
+    - Has an interpolation parameter 
+
+Need to smoothly add/remove points as well 
+- Do an evenly distributed one-to-many mapping between larger and smaller point set and duplicate points create equal length point lists and then lerp point lists 
+
+Basic shape types to transform between 
+- Filled Polygon 
+    - Getting fill animation to work while folding up is a challenge 
+    - Do polygons always transition to an outline/line before folding up? 
+    - How does lerping between different fill types work 
+        - Just limit it to shaders and crossfade for now? 
+    - Can a polygon with a fill type have child TreeShapes?  
+- Outline 
+- Point/segment running on line 
+
+
+minimal hierarchical special case 
+- Only shape type is outline 
+- Closed outlines aren’t really closed so can lerp into any other line
+
+
+Specific looks/ideas 
+- parent is a figure 8, segment runs across it, a child polygon blooms open as the segment intersects the child point - starts opening when segment first hits, max when segment evenly on either side, closes when segment is past 
+    - Can generate a melodic phrase and a corresponding shape like this, with child blooming polygons distributed according to the rhythm of the phrase (can have notion of rests and notes in the children so you can still construct and evenly spaced spline) 
+
+
+
+
+
+#2dAnimationGrammar 
+2d generative animation system/language/grammar
+- Smooth transitions between various types of “things” 
+    - The biggest thing missing in lazier “generative” animations is continuity of change
+        - Sometimes you get good systems that have lots of different outputs, so you can have change between diff things with the system (e.g reaction diffusion + displacement) 
+        - But there isn’t a great version of this for 2d/geometric stuff 
+    - Set of points can expand from the point to become a set of polygons
+    - A set of polygons can “wind out” and become a single continuous line
+    - A set of points can become a spline path that something travels around
+    - A traveling thing can deposit points that become a set of points (but stay locked on the path?)
+    - All these things can also be hierarchical 
+        - Squares travel along a path, and there is a runner traveling along the path of edges of each square
+        - To make transformation space complete, do you need a way to “flatten” one level of hierarchy into another?
+            - Eg, square of square of squares (if “square of squares”-SoS is 4 “points” with a small square at each point, “square of square of squares” is 4 “points” with SoS at each point
+            - How does bottom-most fold up?
+            - How does top-most fold down
+                - Is this just same as 2nd to top folding up?
+            - Can middle layers fold together independently? 
+            - How does merging 2 layers of different “types” work? Would be diff from just merging 2 things of diff type, since you also have to merge N => 1 or split 1 => N depending on if you’re merging “up” (merging several things into one thing) or “down” (splitting one thing into several) 
+                - Potential solution - every type also defines split and merge capabilities for self-composition
+    - Transformation between all types is defined, so you can generatively interpolate between them 
+    - There are common transforms on the “things” such that they can be applied randomly/generatively 
+    - The transformations are parametric, so they can be swept or pulsed 
+        - Combo of hierarchy vs swept/pulsed transformations can get you structural music mappings 
+        - This can let you have an abstract tree structure of things, with the abstract parameter arcs static wrt the structure of the tree, but what the “things” of each node/level are can smoothly change, and what param specific param is being controlled by what arc can change  
+    - All “things” should ideally be expressible from some common base - an ordered list of points? (Or hierarchically, an ordered list of ordered lists of points?)
+        - If there’s N “things”, you’d need NxN transitions, but you could also just define K < 5 most common things so you only have NxK transitions to define
+            - Those core K things should be quite different, and the KxK transitions should be particularly good  
+    - If base “things” are clean 2D motion graphics type stuff (shapes, lines, intentional points), how to add texture/messiness and keep smooth transitions?
+        - One strategy - when things get messy/textured, they should smoothly ramp in from the “clean” version, and thing to thing transitions only happen in the “clean” state 
+    - You are defining a visual language as much as a programatic one
+    - Practical consideration - cpu vs gpu drawing - how it plays into visual language and implementation complexity 
+    - Don’t have to cover “all the things” - just need it to be fun to play with 
