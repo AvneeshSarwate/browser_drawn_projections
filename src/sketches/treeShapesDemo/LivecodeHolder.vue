@@ -29,6 +29,13 @@ const clearDrawFuncs = () => {
 let foldingShape: TreeShape | null = null
 const foldDepth = ref(1)
 
+// Animation control
+const autoAnimating = ref(false)
+const autoAnimationDelay = ref(1000) // ms between animations
+
+// Store original positions
+const originalPositions: Record<number, { x: number, y: number }> = {}
+
 // UI Control methods
 const selectShape = (index: number) => {
   if (appState.rootShapes.length > index) {
@@ -66,12 +73,193 @@ const updateFoldDepth = () => {
   // and will automatically update
 }
 
+// Save original positions for animation and transformation
+function saveOriginalPositions() {
+  appState.rootShapes.forEach((shape, index) => {
+    if (shape.points.length > 0) {
+      // Calculate the center of the shape
+      let centerX = 0, centerY = 0;
+      shape.points.forEach(p => {
+        centerX += p.x;
+        centerY += p.y;
+      });
+      centerX /= shape.points.length;
+      centerY /= shape.points.length;
+      
+      originalPositions[index] = { x: centerX, y: centerY };
+    }
+  });
+}
+
+// Animation Controls
+const startAnimationLoop = () => {
+  if (autoAnimating.value) return; // Already running
+  
+  autoAnimating.value = true;
+  
+  // Save initial positions if not already saved
+  if (Object.keys(originalPositions).length === 0) {
+    saveOriginalPositions();
+  }
+  
+  // Create animation loop using the function defined in the code block
+  launchLoop(async (ctx) => {
+    // Animation loop
+    while (autoAnimating.value) {
+      // Animate square with outline folding
+      selectShape(0);
+      setFoldMode('outline');
+      foldingShape = appState.rootShapes[0];
+      foldingShape.startFold(foldDepth.value);
+      
+      // Wait for animation to complete + delay
+      await ctx.waitSec(3);
+      
+      // Animate circle with shrink folding
+      selectShape(1);
+      setFoldMode('shrink');
+      foldingShape = appState.rootShapes[1];
+      foldingShape.startFold(foldDepth.value);
+      
+      // Wait for animation to complete + delay
+      await ctx.waitSec(3);
+      
+      // Animate triangle with segment folding
+      selectShape(2);
+      setFoldMode('segment');
+      foldingShape = appState.rootShapes[2];
+      foldingShape.startFold(foldDepth.value);
+      
+      // Wait for animation to complete + delay
+      await ctx.waitSec(3);
+      
+      // Animate shape positions
+      ctx.branch(async (posCtx) => {
+        // Move square right
+        const squareStartX = originalPositions[0].x;
+        const squareStartY = originalPositions[0].y;
+        const steps = 60; // 60 steps for 1 second at 60fps
+        
+        for (let i = 0; i < steps; i++) {
+          const progress = i / steps;
+          const newX = squareStartX + (200 * progress);
+          moveShape(0, newX, squareStartY);
+          await posCtx.waitFrame();
+        }
+      });
+      
+      ctx.branch(async (posCtx) => {
+        // Move circle up
+        const circleStartX = originalPositions[1].x;
+        const circleStartY = originalPositions[1].y;
+        const steps = 60; // 60 steps for 1 second at 60fps
+        
+        for (let i = 0; i < steps; i++) {
+          const progress = i / steps;
+          const newY = circleStartY - (150 * progress);
+          moveShape(1, circleStartX, newY);
+          await posCtx.waitFrame();
+        }
+      });
+      
+      ctx.branch(async (posCtx) => {
+        // Move triangle left
+        const triangleStartX = originalPositions[2].x;
+        const triangleStartY = originalPositions[2].y;
+        const steps = 60; // 60 steps for 1 second at 60fps
+        
+        for (let i = 0; i < steps; i++) {
+          const progress = i / steps;
+          const newX = triangleStartX - (100 * progress);
+          moveShape(2, newX, triangleStartY);
+          await posCtx.waitFrame();
+        }
+      });
+      
+      // Wait for position animations to complete
+      await ctx.waitSec(3);
+      
+      // Return shapes to original positions
+      ctx.branch(async (posCtx) => {
+        // Return square to original position
+        const currentX = originalPositions[0].x + 200;
+        const steps = 60; // 60 steps for 1 second at 60fps
+        
+        for (let i = 0; i < steps; i++) {
+          const progress = i / steps;
+          const newX = currentX - (200 * progress);
+          moveShape(0, newX, originalPositions[0].y);
+          await posCtx.waitFrame();
+        }
+      });
+      
+      ctx.branch(async (posCtx) => {
+        // Return circle to original position
+        const currentY = originalPositions[1].y - 150;
+        const steps = 60; // 60 steps for 1 second at 60fps
+        
+        for (let i = 0; i < steps; i++) {
+          const progress = i / steps;
+          const newY = currentY + (150 * progress);
+          moveShape(1, originalPositions[1].x, newY);
+          await posCtx.waitFrame();
+        }
+      });
+      
+      ctx.branch(async (posCtx) => {
+        // Return triangle to original position
+        const currentX = originalPositions[2].x - 100;
+        const steps = 60; // 60 steps for 1 second at 60fps
+        
+        for (let i = 0; i < steps; i++) {
+          const progress = i / steps;
+          const newX = currentX + (100 * progress);
+          moveShape(2, newX, originalPositions[2].y);
+          await posCtx.waitFrame();
+        }
+      });
+      
+      // Wait for position reset to complete
+      await ctx.waitSec(3);
+    }
+  });
+}
+
+const stopAnimationLoop = () => {
+  autoAnimating.value = false;
+}
+
 // Helper function to apply fold mode recursively
 const applyFoldModeRecursive = (shape: TreeShape, mode: FoldMode) => {
   shape.foldMode = mode
   shape.children.forEach(child => {
     applyFoldModeRecursive(child, mode)
   })
+}
+
+// Move a shape to a new position
+function moveShape(shapeIndex: number, newX: number, newY: number) {
+  const shape = appState.rootShapes[shapeIndex];
+  if (!shape) return;
+  
+  // Calculate the center of the shape
+  let centerX = 0, centerY = 0;
+  shape.points.forEach(p => {
+    centerX += p.x;
+    centerY += p.y;
+  });
+  centerX /= shape.points.length;
+  centerY /= shape.points.length;
+  
+  // Calculate the offset
+  const offsetX = newX - centerX;
+  const offsetY = newY - centerY;
+  
+  // Apply the offset to all points
+  shape.setPoints(shape.points.map(p => ({
+    x: p.x + offsetX,
+    y: p.y + offsetY
+  })));
 }
 
 onMounted(() => {
@@ -216,7 +404,7 @@ onMounted(() => {
             
           const foldingStatus = foldingShape ? 
             'Currently folding' : 
-            'Ready';
+            (autoAnimating.value ? 'Auto-animating' : 'Ready');
             
           debugInfo.innerHTML = `
             <div style="margin: 10px 0; text-align: center; font-family: sans-serif; color: #333;">
@@ -250,7 +438,146 @@ onMounted(() => {
         // Update status info
         updateStatusInfo()
       })
-
+      
+      // Create an animation sequence using TimeContext
+      function startAnimationLoop() {
+        if (autoAnimating.value) return; // Already running
+        
+        autoAnimating.value = true;
+        
+        // Save initial positions if not already saved
+        if (Object.keys(originalPositions).length === 0) {
+          saveOriginalPositions();
+        }
+        
+        // Create animation loop
+        launchLoop(async (ctx) => {
+          // Animation loop
+          while (autoAnimating.value) {
+            // Animate square with outline folding
+            selectShape(0);
+            setFoldMode('outline');
+            foldingShape = appState.rootShapes[0];
+            foldingShape.startFold(foldDepth.value);
+            
+            // Wait for animation to complete + delay
+            await ctx.waitSec(3);
+            
+            // Animate circle with shrink folding
+            selectShape(1);
+            setFoldMode('shrink');
+            foldingShape = appState.rootShapes[1];
+            foldingShape.startFold(foldDepth.value);
+            
+            // Wait for animation to complete + delay
+            await ctx.waitSec(3);
+            
+            // Animate triangle with segment folding
+            selectShape(2);
+            setFoldMode('segment');
+            foldingShape = appState.rootShapes[2];
+            foldingShape.startFold(foldDepth.value);
+            
+            // Wait for animation to complete + delay
+            await ctx.waitSec(3);
+            
+            // Animate shape positions
+            ctx.branch(async (posCtx) => {
+              // Move square right
+              const squareStartX = originalPositions[0].x;
+              const squareStartY = originalPositions[0].y;
+              const steps = 60; // 60 steps for 1 second at 60fps
+              
+              for (let i = 0; i < steps; i++) {
+                const progress = i / steps;
+                const newX = squareStartX + (200 * progress);
+                moveShape(0, newX, squareStartY);
+                await posCtx.waitFrame();
+              }
+            });
+            
+            ctx.branch(async (posCtx) => {
+              // Move circle up
+              const circleStartX = originalPositions[1].x;
+              const circleStartY = originalPositions[1].y;
+              const steps = 60; // 60 steps for 1 second at 60fps
+              
+              for (let i = 0; i < steps; i++) {
+                const progress = i / steps;
+                const newY = circleStartY - (150 * progress);
+                moveShape(1, circleStartX, newY);
+                await posCtx.waitFrame();
+              }
+            });
+            
+            ctx.branch(async (posCtx) => {
+              // Move triangle left
+              const triangleStartX = originalPositions[2].x;
+              const triangleStartY = originalPositions[2].y;
+              const steps = 60; // 60 steps for 1 second at 60fps
+              
+              for (let i = 0; i < steps; i++) {
+                const progress = i / steps;
+                const newX = triangleStartX - (100 * progress);
+                moveShape(2, newX, triangleStartY);
+                await posCtx.waitFrame();
+              }
+            });
+            
+            // Wait for position animations to complete
+            await ctx.waitSec(3);
+            
+            // Return shapes to original positions
+            ctx.branch(async (posCtx) => {
+              // Return square to original position
+              const currentX = originalPositions[0].x + 200;
+              const steps = 60; // 60 steps for 1 second at 60fps
+              
+              for (let i = 0; i < steps; i++) {
+                const progress = i / steps;
+                const newX = currentX - (200 * progress);
+                moveShape(0, newX, originalPositions[0].y);
+                await posCtx.waitFrame();
+              }
+            });
+            
+            ctx.branch(async (posCtx) => {
+              // Return circle to original position
+              const currentY = originalPositions[1].y - 150;
+              const steps = 60; // 60 steps for 1 second at 60fps
+              
+              for (let i = 0; i < steps; i++) {
+                const progress = i / steps;
+                const newY = currentY + (150 * progress);
+                moveShape(1, originalPositions[1].x, newY);
+                await posCtx.waitFrame();
+              }
+            });
+            
+            ctx.branch(async (posCtx) => {
+              // Return triangle to original position
+              const currentX = originalPositions[2].x - 100;
+              const steps = 60; // 60 steps for 1 second at 60fps
+              
+              for (let i = 0; i < steps; i++) {
+                const progress = i / steps;
+                const newX = currentX + (100 * progress);
+                moveShape(2, newX, originalPositions[2].y);
+                await posCtx.waitFrame();
+              }
+            });
+            
+            // Wait for position reset to complete
+            await ctx.waitSec(3);
+          }
+        });
+      }
+      
+      // Function to stop animation loop
+      function stopAnimationLoop() {
+        autoAnimating.value = false;
+      }
+      
       // Apply fold mode to a shape and all its children
       function applyFoldModeRecursive(shape: TreeShape, mode: FoldMode) {
         shape.foldMode = mode
@@ -342,6 +669,17 @@ onUnmounted(() => {
           </button>
         </div>
       </div>
+      
+      <div class="control-group">
+        <div class="control-label">Auto Animation</div>
+        <div class="control-buttons">
+          <button @click="startAnimationLoop" class="btn" :class="{ active: autoAnimating }">Start Animation</button>
+          <button @click="stopAnimationLoop" class="btn">Stop Animation</button>
+        </div>
+        <div class="control-info">
+          Runs a complete animation cycle with folding and movement
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -421,5 +759,12 @@ onUnmounted(() => {
 
 .action-buttons {
   margin-top: 20px;
+}
+
+.control-info {
+  font-size: 0.8em;
+  color: #666;
+  margin-top: 5px;
+  text-align: center;
 }
 </style>
