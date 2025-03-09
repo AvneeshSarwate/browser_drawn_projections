@@ -54,6 +54,7 @@ export class TreeShape2 {
   //     - thought - multi-level folding is just how many layers to flatten into the lerp.
   //     - client is responsible for making sure layers are folded in the correct order.
   //     - question - do you pick pivot point from shape points only or also children?
+  //       - potential anwser - mapping of source to target points is modular and can have different strategies?
   //todo - figure out how to save state for folds
 
 
