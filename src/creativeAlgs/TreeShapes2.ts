@@ -21,7 +21,16 @@ type Point = {
 
 export type FoldMode = 'outline' | 'shrink' | 'segment'
 
+const mod2 = (n: number, m: number) => (n % m + m) % m
+const lerp = (a: Point, b: Point, t: number) => ({
+  x: a.x + (b.x - a.x) * t,
+  y: a.y + (b.y - a.y) * t
+})
+
 export class TreeShape2 {
+  //todo - for now points are explicit, and not relative coordinates to the parent
+  /*points represent a closed shape (e.g., last point automatically connected to the first),
+  but which shape is the "start" point can be changed at render time depending on folding logic*/
   points: {point: Point, child?: TreeShape2}[] //points of the shape, and potentially a child at that point
   id: string
   foldProgress: number = 0 //how folded the child is into it's parent, range 0-1
@@ -37,12 +46,42 @@ export class TreeShape2 {
   drawFunc?: (points: Point[]) => void
 
 
+  getFlattenedPoints(depth: number): Point[] {
+    //an inorder traversal of the tree to get points of leaf nodes
 
-  baseFold(amount: number) {
+    const children = this.points.map(p => p.child).filter(c => c)
+
+    //if the shape has no children, return the points
+    if (children.length === 0 || depth === 0) {
+      return this.points.map(p => p.point)
+    }
+  
+    return children.map(c => c.getFlattenedPoints(depth - 1)).flat()    
+  }
+
+  baseFold(depth: number, amount: number) {
     //identify closest point to the parent point (pivot point) (and rotate shape duplicated point accordingly?)
 
-    //create mapping of parent target points
+    const points = this.getFlattenedPoints(depth) //for now, ignore selecting pivot or optimal lerp mapping
 
+    //create mapping of parent target points
+    const parentPrevPoint = this.parent!.points[mod2(this.parent!.parentPointIndex! - 1, this.parent!.points.length)].point
+    const parentPoint = this.parent!.points[this.parent!.parentPointIndex!].point
+    const parentNextPoint = this.parent!.points[mod2(this.parent!.parentPointIndex! + 1, this.parent!.points.length)].point
+    const halfToNext = lerp(parentPoint, parentNextPoint, 0.5)
+    const halfToPrev = lerp(parentPoint, parentPrevPoint, 0.5)
+
+    const parentIndex = Math.floor(points.length / 2)
+    const numBefore = parentIndex
+    const numAfter = points.length - (parentIndex + 1)
+
+    //todo check indexing off by 1
+    const pointsBefore = Array.from({length: numBefore}, (_, i) => lerp(halfToPrev, parentPoint, (i + 1) / numBefore))
+    const pointsAfter = Array.from({length: numAfter}, (_, i) => lerp(parentPoint, halfToNext, (i + 1) / numAfter))
+
+    const targetPoints = [...pointsBefore, parentPoint, ...pointsAfter]
+
+    const lerpedPoints = points.map((p, i) => lerp(p, targetPoints[i], amount))
     //lerp points towards the parent target points
   }
 
