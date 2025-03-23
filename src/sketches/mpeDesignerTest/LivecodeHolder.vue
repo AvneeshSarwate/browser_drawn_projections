@@ -6,7 +6,7 @@ import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
-import { getMPESynth } from '@/music/mpeSynth';
+// import { getMPESynth } from '@/music/mpeSynth';
 import { MIDI_READY, mapMidiInputToMpeSynth, midiInputs } from '@/io/midi';
 
 const appState = inject<TemplateAppState>(appStateName)!!
@@ -40,10 +40,10 @@ onMounted(async () => {
 
     await MIDI_READY
 
-    const mpeSynth = getMPESynth()
+    // const mpeSynth = getMPESynth()
     const midiIn = midiInputs.get("IAC Driver Bus 1")!!
 
-    mapMidiInputToMpeSynth(midiIn, mpeSynth, true)
+    // mapMidiInputToMpeSynth(midiIn, mpeSynth, true)
 
 
     const code = () => { //todo template - is this code-array pattern really needed in the template?

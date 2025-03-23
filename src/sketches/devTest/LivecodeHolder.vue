@@ -6,7 +6,7 @@ import * as THREE from 'three'
 import { inject, onMounted, onUnmounted, ref } from 'vue';
 import * as a from './planeAnimations'
 import { groupedAnimation0 } from './modularizedTransforms';
-import { xyZip, sinN, cosN, EventChop, steps, now, launch, Ramp, sin, cos, CancelablePromisePoxy, TimeContext } from '@/channels/channels';
+import { xyZip, sinN, cosN, EventChop, steps, now, launch, Ramp, sin, cos, type CancelablePromisePoxy, type TimeContext } from '@/channels/channels';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { MediaAudioAnalyzer } from '@/rendering/VideoAudioAnalyzer';
 import WaveSurfer from 'wavesurfer.js'
@@ -24,7 +24,7 @@ import studio from '@theatre/studio'
 import { getProject, types } from '@theatre/core';
 import { anim0 } from './animations'
 import { getAnimPos, type TheatreSequence } from '@/animation/beziers'
-import { getMPESynth, type MPEVoiceGraph } from '@/music/mpeSynth';
+// import { getMPESynth, type MPEVoiceGraph } from '@/music/mpeSynth';
 
 
 const p = getAnimPos("aa", 0.5, anim0.sheetsById['sheet 1'].sequence)
@@ -77,9 +77,9 @@ const reset = () => {
 // const waveAudioBands = new MediaAudioAnalyzer(wavesurfer.getMediaElement() as HTMLVideoElement)
 
 
-const synth = getMPESynth()
-let voice0: MPEVoiceGraph | undefined = undefined
-let voice1: MPEVoiceGraph | undefined = undefined
+// const synth = getMPESynth()
+// let voice0: MPEVoiceGraph | undefined = undefined
+// let voice1: MPEVoiceGraph | undefined = undefined
 let notesOn = false
 
 onMounted(() => {
@@ -195,28 +195,28 @@ onMounted(() => {
         })
 
         //on mouseclick, useLaunchLoop to play some notes using synth
-        mousedownEvent(ev => {
-          const scale = new Scale()
-          launchLoop(async ctx => {
-            const starTime = now()
-            for (let i = 0; i < 8; i++) {
-              const note = scale.getByIndex(i)
-              console.log("note time", i, note, (now() - starTime).toFixed(2))
-              const voice = synth.noteOn(note, 20, 0.02, 0.005)
-              await ctx.branchWait(async (c) => {
-                await c.waitSec(.05)
-                synth.noteOff(voice)
-              })
-              await ctx.waitSec(.25)
-            }
-          })
+        // mousedownEvent(ev => {
+        //   const scale = new Scale()
+        //   launchLoop(async ctx => {
+        //     const starTime = now()
+        //     for (let i = 0; i < 8; i++) {
+        //       const note = scale.getByIndex(i)
+        //       console.log("note time", i, note, (now() - starTime).toFixed(2))
+        //       const voice = synth.noteOn(note, 20, 0.02, 0.005)
+        //       await ctx.branchWait(async (c) => {
+        //         await c.waitSec(.05)
+        //         synth.noteOff(voice)
+        //       })
+        //       await ctx.waitSec(.25)
+        //     }
+        //   })
 
-          // if (!notesOn) {
-          //   voice0 = synth.noteOn(60, 20, 0.02, 0.005)
-          //   voice1 = synth.noteOn(64, 20, 0.02, 0.005)
-          //   notesOn = true
-          // }
-        }, threeCanvas)
+        //   // if (!notesOn) {
+        //   //   voice0 = synth.noteOn(60, 20, 0.02, 0.005)
+        //   //   voice1 = synth.noteOn(64, 20, 0.02, 0.005)
+        //   //   notesOn = true
+        //   // }
+        // }, threeCanvas)
 
         
 
@@ -263,9 +263,9 @@ onUnmounted(() => {
   clearListeners()
   timeLoops.forEach(loop => loop.cancel())
   timeLoops = []
-  if (voice0) synth.noteOff(voice0)
-  if (voice1) synth.noteOff(voice1)
-  synth.dispose()
+  // if (voice0) synth.noteOff(voice0)
+  // if (voice1) synth.noteOff(voice1)
+  // synth.dispose()
 })
 
 
@@ -314,10 +314,7 @@ setInterval(() => {
     <AutoUI :object-to-edit="uiObjRef"/>
   </Teleport>
   <!-- sliders that control the pressure on the two sustained voices -->
-  <div v-if="notesOn">
-    <input type="range" min="0" max="0.1" step="0.001" v-model="voice0!!.pressure" />
-    <input type="range" min="0" max="0.1" step="0.001" v-model="voice1!!.pressure" />
-  </div>
+  
 </template>
 
 <style scoped></style>./appState
