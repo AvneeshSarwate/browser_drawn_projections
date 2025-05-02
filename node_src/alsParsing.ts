@@ -4,6 +4,7 @@ import * as zlib from "zlib";
 import { WebSocket } from 'ws';
 
 let fileName = "td_ableton/pianos Project/pianos.als";
+fileName = "/Users/avneeshsarwate/Ableton/midi_studies Project/midi_note_metadata_inspect.als"
 
 const gzipedFile = fs.readFileSync(fileName);
 const xml = zlib.gunzipSync(gzipedFile).toString();
@@ -12,15 +13,18 @@ const xml = zlib.gunzipSync(gzipedFile).toString();
 //clip map message is a hot reload, fresh_clipMap is a reload from a new file
 type MsgType = "clipMap" | "fresh_clipMap"
 
-type AbletonNote = { pitch: number, duration: number, velocity: number, position: number }
+type AbletonNote = { pitch: number, duration: number, velocity: number, offVelocity: number, probability: number, position: number, isEnabled: boolean }
 type AbletonClip = { name: string, duration: number, notes: AbletonNote[] }
 
 function parseXmlNote(xmlNote: any, pitchStr: string): AbletonNote {
   const pitch = Number(pitchStr);
   const duration = Number(xmlNote["@_Duration"]);
   const velocity = Number(xmlNote["@_Velocity"]);
+  const offVelocity = Number(xmlNote["@_OffVelocity"]);
+  const probability = Number(xmlNote["@_Probability"]);
+  const isEnabled = xmlNote["@_IsEnabled"] == "true";
   const position = Number(xmlNote["@_Time"]);
-  return { pitch, duration, velocity, position };
+  return { pitch, duration, velocity, offVelocity, probability, position, isEnabled };
 }
 
 
@@ -37,7 +41,7 @@ function parseXML(xml: string): Map<string, AbletonClip> {
 
   const clipMap = new Map<string, AbletonClip>();
 
-  tracks.forEach((track: any, track_ind) => {
+  tracks.forEach((track: any, track_ind: number) => {
     const clipSlotList = track.DeviceChain.MainSequencer.ClipSlotList.ClipSlot;
     clipSlotList.forEach((slot: any, slot_ind: number) => {
       const clip = slot?.ClipSlot?.Value?.MidiClip;
@@ -54,6 +58,7 @@ function parseXML(xml: string): Map<string, AbletonClip> {
 
           xmlNotes.forEach((note: any) => {
             notes.push(parseXmlNote(note, pitchStr))
+            console.log("note", notes[notes.length - 1])
           })
           
         })
