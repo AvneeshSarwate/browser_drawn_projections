@@ -57,6 +57,7 @@ export class AbletonClip {
     return new AbletonClip(this.name, this.duration, noteClone);
   }
 
+  //time stretch
   scale(factor: number): AbletonClip {
     const clone = this.clone();
     clone.notes.forEach(note => {
@@ -67,6 +68,7 @@ export class AbletonClip {
     return clone;
   }
 
+  //time shift
   shift(delta: number): AbletonClip {
     const clone = this.clone();
     clone.notes.forEach(note => {
