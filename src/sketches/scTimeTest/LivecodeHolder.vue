@@ -7,14 +7,14 @@ import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, tar
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
 import { MIDI_READY, midiOutputs } from '@/io/midi';
-import { launchSC } from '@/channels/supercolliderTimeContext';
+import { launchSC, SuperColliderTimeContext } from '@/channels/supercolliderTimeContext';
 
 const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
 let timeLoops: CancelablePromisePoxy<any>[] = []
 
-const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromisePoxy<any> => {
-  const loop = launch(block)
+const launchLoop = (block: (ctx: SuperColliderTimeContext) => Promise<any>): CancelablePromisePoxy<any> => {
+  const loop = launchSC(block)
   timeLoops.push(loop)
   return loop
 }
@@ -47,89 +47,7 @@ onMounted(async () => {
 
     const code = async () => { //todo template - is this code-array pattern really needed in the template?
       clearDrawFuncs() //todo template - move this to cleanup block?
-      appState.circles.list.forEach(c => c.debugDraw = false)
 
-      const drawingCursor = (p: p5) => {
-        p.push()
-        p.strokeWeight(10)
-        p.stroke(255, 0, 0)
-        p.noFill()
-        p.circle(p5Mouse.x, p5Mouse.y, 30)
-        p.pop()
-      }
-
-      let seqInd = 0
-      launchLoop(async (ctx) => {
-        // eslint-disable-next-line no-constant-condition
-        while (true) {
-          if (appState.circles.list.length > 0) {
-            const randIndex = Math.floor(Math.random() * appState.circles.list.length)
-            seqInd = (seqInd + 1) % appState.circles.list.length
-            appState.circles.list[seqInd].trigger()
-          }
-          await ctx.waitSec(0.05)
-        }
-      })
-
-      let lerpEvt = new Ramp(1)
-      let lerpLoop: CancelablePromisePoxy<any> | undefined = undefined
-      singleKeydownEvent('f', (ev) => {
-        const basePositions = appState.circles.list.map(c => ({ x: c.x, y: c.y }))
-        const targetPositions = circleArr(appState.circles.list.length, 300, p5i)
-
-        const lerp = (t: number) => {
-          appState.circles.list.forEach((c, i) => {
-            c.x = initialCiclePos[i].x + (targetPositions[i].x - initialCiclePos[i].x) * t
-            c.y = initialCiclePos[i].y + (targetPositions[i].y - initialCiclePos[i].y) * t
-          })
-        }
-
-        lerpLoop?.cancel()
-        lerpEvt = new Ramp(2)
-        lerpEvt.trigger()
-        lerpLoop = launchLoop(async (ctx) => {
-          while (lerpEvt.val() < 1) {
-            const v  =lerpEvt.val()
-            const triVal = tri(v)
-            // console.log("triVal", triVal)
-            lerp(triVal)
-            await ctx.waitFrame()
-          }
-          appState.circles.list.forEach((c, i) => {
-            c.x = initialCiclePos[i].x
-            c.y = initialCiclePos[i].y
-          })
-
-        })
-      })
-
-
-      //sketchTodo - make all of these listen on threeCanvas
-      singleKeydownEvent('d', (ev) => {
-        appState.drawing = !appState.drawing
-        console.log("drawing: " + appState.drawing)
-        if (appState.drawing) {
-          appState.drawFuncMap.set("debugDraw", drawingCursor)
-        } else {
-          appState.drawFuncMap.delete("debugDraw")
-        }
-      })
-
-      singleKeydownEvent('s', (ev) => {
-        if (appState.drawing) {
-          const newCircle = new PulseCircle(p5Mouse.x, p5Mouse.y, 100)
-          newCircle.debugDraw = false
-          appState.circles.pushItem(newCircle)
-          initialCiclePos.push({ x: newCircle.x, y: newCircle.y })
-          console.log("adding circle", newCircle)
-        }
-      })
-
-      
-      appState.drawFunctions.push((p: p5) => {
-        // console.log("drawing circles", appState.circles.list.length)
-        appState.circles.list.forEach(c => c.draw(p))
-      })
 
       const passthru = new Passthru({ src: p5Canvas })
       const canvasPaint = new CanvasPaint({ src: passthru })
@@ -143,7 +61,7 @@ onMounted(async () => {
 
       const midiOut = midiOutputs.get("IAC Driver Bus 1")!!
 
-      launchSC(async (ctx) => {
+      launchLoop(async (ctx) => {
 
         const start = Date.now()
         await ctx.initialBeatSync()
@@ -155,7 +73,7 @@ onMounted(async () => {
           while(true) {
             await ctx.wait(1)
             // console.log("wait 1")
-            ctx.branchWait(async (ctx) => {
+            ctx.branch(async (ctx) => {
               const note = 60 + Math.floor(Math.random() * 12)
               midiOut.sendNoteOn(note, 80)
               await ctx.wait(0.2)
@@ -168,7 +86,7 @@ onMounted(async () => {
           console.log("branch 2 time", ctx.time.toFixed(3))
           while(true) {
             await ctx.wait(1)
-            ctx.branchWait(async (ctx) => {
+            ctx.branch(async (ctx) => {
               const note = 48 + Math.floor(Math.random() * 12)
               midiOut.sendNoteOn(note, 80)
               await ctx.wait(0.2)
