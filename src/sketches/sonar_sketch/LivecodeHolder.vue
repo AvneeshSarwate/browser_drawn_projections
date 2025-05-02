@@ -41,6 +41,7 @@ onMounted(async() => {
     const iac1 = midiOutputs.get('IAC Driver Bus 1')!!
     const iac2 = midiOutputs.get('IAC Driver Bus 2')!!
     const iac3 = midiOutputs.get('IAC Driver Bus 3')!!
+    const iac4 = midiOutputs.get('IAC Driver Bus 3')!!
 
     const drum0 = () => clipMap.get('drum0')!!.clone()
 

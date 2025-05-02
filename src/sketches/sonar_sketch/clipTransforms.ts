@@ -1,4 +1,5 @@
 import { AbletonClip, type AbletonNote } from '@/io/abletonClips';
+import { Scale } from '@/music/scale';
 
 export type MarkerSegmentResult = {
   marker: AbletonNote;
@@ -22,7 +23,7 @@ export type MarkerSegmentResult = {
  * @param eighthNote  length of an ⅛-note (default 0.5 when 1 = quarter-note)
  * @param markerPitch pitch value that designates a marker (default 0)
  */
-export function segmentByPitch0Markers(
+export function segmentByPitchMarker(
   clip: AbletonClip,
   eighthNote = 0.5,
   markerPitch = 0,
@@ -87,6 +88,9 @@ export function segmentByPitch0Markers(
   return results;
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Helper-driven slicing / transposition
+// ────────────────────────────────────────────────────────────────────────────
 
 /**
  * write me a function that takes an Ableton Clip with segment markers, and then returns a sliced and transposed version of the clip.
@@ -111,4 +115,82 @@ export function segmentByPitch0Markers(
  * 
  * the output is a list of AbletonClips, one for each slice.
  */
+
+
+export type SliceDefinition = {
+  /** index in the marker array (chronological order)                        */ 
+  index: number;
+  /** transposition in scale-degrees (positive = up)                          */
+  scaleDegree: number;
+  /** gap that will be inserted *after* this slice before the next one starts */
+  quantization: number;
+  /** time-stretch factor for this slice (1 =no change, 0.5 =double-speed …)  */
+  speedScaling: number;
+};
+
+/**
+ * Produces a list of transformed slices from an Ableton clip that contains
+ * disabled  pitch-0 marker notes.  
+ *
+ *   •  The slice boundaries are taken from `segmentByPitch0Markers()`  
+ *   •  Each requested slice is looked-up by index, speed-scaled, transposed
+ *      by `scaleDegree` steps inside `inputScale`, then moved so that it starts
+ *      immediately after the previous slice plus `quantization`.  
+ *
+ * If a definition references a non-existing marker index it is skipped.
+ */
+export function sliceAndTransposeByMarkers(
+  inputClip: AbletonClip,
+  defs: SliceDefinition[],
+  inputScale: Scale,
+): AbletonClip[] {
+  // build all (marker, full, clipped) triples in timeline order
+  const segments = segmentByPitchMarker(inputClip);
+
+  const output: AbletonClip[] = [];
+  let playHead = 0;                         // timeline position for next slice
+
+  defs.forEach((def, sliceIdx) => {
+    const seg = segments[def.index];
+    if (!seg) return;                       // marker index out of range → skip
+
+    // 1. start from the clipped variant of that segment
+    let slice = seg.clippedClip.clone();
+
+    // 2. speed-scale (stretch / compress in time)
+    if (def.speedScaling !== 1) {
+      slice = slice.scale(def.speedScaling);
+    }
+
+    // 3. transpose by scale-degree steps *inside* the given scale
+    if (def.scaleDegree !== 0) {
+      slice = slice.scaleTranspose(def.scaleDegree, inputScale);
+    }
+
+    // 4. place the slice at the current play-head position
+    slice = slice.shift(playHead);
+    slice.name = `${inputClip.name}_slice_${sliceIdx}`;
+
+    output.push(slice);
+
+    // 5. advance play-head → end of slice + per-slice quantization gap
+    playHead = playHead + slice.duration + def.quantization;
+  });
+
+  return output;
+}
+
+/**
+ * ideas
+ * a live coding area to allow you to define a trackerlike list of slices to play
+ * 
+ * clipName - sliceInd - transpose - speed - quantForNextSlice
+ * 
+ * tranpose could also be a relative value, relative to first/last/highest/lowest note of last slice
+ * 
+ * could then also have algorithms to generate slice definitions (or manual templates of slice definitions)
+ */
+
+
+
 
