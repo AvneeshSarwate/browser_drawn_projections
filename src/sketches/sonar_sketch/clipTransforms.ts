@@ -118,13 +118,14 @@ export function segmentByPitchMarker(
 
 
 export type SliceDefinition = {
+  clipName: string;     // NEW – which clip in the map to slice
   /** index in the marker array (chronological order)                        */ 
   index: number;
   /** transposition in scale-degrees (positive = up)                          */
   scaleDegree: number;
-  /** gap that will be inserted *after* this slice before the next one starts */
+  /** gap inserted *after* this slice before the next one starts              */
   quantization: number;
-  /** time-stretch factor for this slice (1 =no change, 0.5 =double-speed …)  */
+  /** time-stretch factor (1 = no change, 0.5 = double-speed …)               */
   speedScaling: number;
 };
 
@@ -132,7 +133,7 @@ export type SliceDefinition = {
  * Produces a list of transformed slices from an Ableton clip that contains
  * disabled  pitch-0 marker notes.  
  *
- *   •  The slice boundaries are taken from `segmentByPitch0Markers()`  
+ *   •  The slice boundaries are taken from `segmentByPitchMarker()`  
  *   •  Each requested slice is looked-up by index, speed-scaled, transposed
  *      by `scaleDegree` steps inside `inputScale`, then moved so that it starts
  *      immediately after the previous slice plus `quantization`.  
@@ -140,44 +141,49 @@ export type SliceDefinition = {
  * If a definition references a non-existing marker index it is skipped.
  */
 export function sliceAndTransposeByMarkers(
-  inputClip: AbletonClip,
+  clipPool: Map<string, AbletonClip>,    // NEW – collection of source clips
   defs: SliceDefinition[],
   inputScale: Scale,
 ): AbletonClip[] {
-  // build all (marker, full, clipped) triples in timeline order
-  const segments = segmentByPitchMarker(inputClip);
+  const output: AbletonClip[] = [];                            // timeline position for next slice
 
-  const output: AbletonClip[] = [];
-  let playHead = 0;                         // timeline position for next slice
+  // cache marker-segment arrays per clip so we only compute them once
+  const segmentationCache = new Map<string, MarkerSegmentResult[]>();
 
   defs.forEach((def, sliceIdx) => {
+    const srcClip = clipPool.get(def.clipName);
+    if (!srcClip) return;                   // unknown clip – skip slice
+
+    // get (or compute & cache) marker segments for this clip
+    let segments = segmentationCache.get(def.clipName);
+    if (!segments) {
+      segments = segmentByPitchMarker(srcClip);
+      segmentationCache.set(def.clipName, segments);
+    }
+
     const seg = segments[def.index];
-    if (!seg) return;                       // marker index out of range → skip
+    if (!seg) return;                       // invalid marker index – skip
 
     // 1. start from the clipped variant of that segment
     let slice = seg.clippedClip.clone();
 
-    // 2. speed-scale (stretch / compress in time)
+    // 2. speed-scale
     if (def.speedScaling !== 1) {
       slice = slice.scale(def.speedScaling);
     }
 
-    // 3. transpose by scale-degree steps *inside* the given scale
+    // 3. transpose by scale-degree inside the given scale
     if (def.scaleDegree !== 0) {
       slice = slice.scaleTranspose(def.scaleDegree, inputScale);
     }
 
-    // 4. place the slice at the current play-head position
-    slice = slice.shift(playHead);
-    slice.name = `${inputClip.name}_slice_${sliceIdx}`;
+    // 4. quantize the duration
+    slice.duration = def.quantization == 0 ? slice.duration : Math.ceil(slice.duration / def.quantization) * def.quantization;
 
     output.push(slice);
-
-    // 5. advance play-head → end of slice + per-slice quantization gap
-    playHead = playHead + slice.duration + def.quantization;
   });
 
-  return output;
+  return output; //clips can be joined into a single one with AbletonClip.concat(...clips)
 }
 
 /**
