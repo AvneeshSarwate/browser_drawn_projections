@@ -46,13 +46,14 @@ const parseSliceText = (text: string): SliceDefinition[] =>
     .map((l) => l.trim())
     .filter(Boolean)
     .map((line) => {
-      const [clipName, ind, deg, speed, quant] = line.split(/\s*-\s*/);
+      const [clipName, indStr, degStr, speedStr, quantStr] = line.split(/\s*:\s*/);
+      
       return {
         clipName: clipName.trim(),
-        index: Number(ind),
-        scaleDegree: Number(deg),
-        speedScaling: Number(speed),
-        quantization: Number(quant),
+        index: Number(indStr),
+        scaleDegree: Number(degStr),
+        speedScaling: Number(speedStr),
+        quantization: Number(quantStr),
       } as SliceDefinition;
     });
 
@@ -72,14 +73,18 @@ const playVoice = (voiceIdx: number) => {
     await playClipFn!(srcClip.clone(), ctx, midiOuts[voiceIdx]);
 
   if (v.isLooping) {
-    v.loopHandle?.cancel();
-    v.loopHandle = launchLoop(async (ctx) => {
-      while (true) await playOnce(ctx);
-    });
+    v.loopHandle?.cancel(); //todo make sure this cancels the loop
+    launchQueue.push(async (ctx) => {
+      v.loopHandle = launch(async (ctx) => {
+        while (v.isLooping) await playOnce(ctx);
+      });
+    })
   } else {
-    launch(playOnce);          // one-shot
+    launchQueue.push(playOnce)        // one-shot
   }
 };
+
+const launchQueue: Array<(ctx: TimeContext) => Promise<void>> = []
 
 onMounted(async() => {
   try {
@@ -138,6 +143,14 @@ onMounted(async() => {
     appState.drawFunctions.push((p: p5) => {
     })
 
+    launchLoop(async (ctx) => {
+      while (true) {
+        await ctx.wait(1)
+        launchQueue.forEach(cb => cb(ctx))
+        launchQueue.length = 0
+      }
+    })
+
     const passthru = new Passthru({ src: p5Canvas })
     const canvasPaint = new CanvasPaint({ src: passthru })
 
@@ -192,7 +205,7 @@ onUnmounted(() => {
       <h3>Voice {{ idx + 1 }}</h3>
       <textarea
         v-model="voice.sliceText"
-        placeholder="clipName - sliceInd - transpose - speed - quant"
+        placeholder="clipName : sliceInd : transpose : speed : quant"
         rows="10"
       />
       <div class="controls">

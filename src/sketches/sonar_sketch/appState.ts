@@ -14,6 +14,7 @@ export type VoiceState = {
   sliceText: string;
   isLooping: boolean;
   loopHandle: CancelablePromisePoxy<any> | null;
+  queue: Array<(ctx: TimeContext) => Promise<void>>;
 };
 
 export type TemplateAppState = {
@@ -47,6 +48,7 @@ export const appState: TemplateAppState = {
     sliceText: '',
     isLooping: false,
     loopHandle: null,
+    queue: [],
   })),
 } 
 
