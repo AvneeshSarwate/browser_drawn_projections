@@ -12,6 +12,7 @@ import { Scale } from '@/music/scale';
 import { getPiano } from '@/music/synths';
 import { m2f } from '@/music/mpeSynth';
 import { sliceAndTransposeByMarkers, type SliceDefinition } from './clipTransforms';
+import { clipData as staticClipData } from './clipData';
 
 const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
@@ -90,7 +91,7 @@ onMounted(async() => {
   try {
 
     await MIDI_READY
-    await INITIALIZE_ABLETON_CLIPS('src/sketches/sonar_sketch/piano_melodies Project/piano_melodies.als') //todo - reuse
+    await INITIALIZE_ABLETON_CLIPS('src/sketches/sonar_sketch/piano_melodies Project/piano_melodies.als', staticClipData)
 
     let scale = new Scale()
     const cHarmonicMajorScale = new Scale([0, 2, 4, 5, 7, 8, 11, 12], 60)

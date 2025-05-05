@@ -2,6 +2,7 @@ import { XMLParser } from "fast-xml-parser"
 import * as fs from "fs";
 import * as zlib from "zlib";
 import { WebSocket } from 'ws';
+import * as path from "path";
 
 let fileName = "td_ableton/pianos Project/pianos.als";
 fileName = "/Users/avneeshsarwate/Ableton/midi_studies Project/midi_note_metadata_inspect.als"
@@ -108,6 +109,7 @@ const readAndParseFile = (msgType: MsgType = 'clipMap') => {
   const gzipedFile = fs.readFileSync(fileName);
   const xml = zlib.gunzipSync(gzipedFile).toString();
   clipMap = parseXML(xml);
+  writeClipDataTs(fileName, clipMap);
   const clipMapJson = clipMapToJSON(fileName, clipMap, msgType);
   return clipMapJson
 }
@@ -123,3 +125,28 @@ const sendFileUpdate = (msgType: MsgType) => {
 }
 
 let statsWatcher = fs.watchFile(fileName, () => sendFileUpdate("clipMap"))
+
+function writeClipDataTs(alsFilePath: string, clipMap: Map<string, AbletonClip>) {
+  try {
+    // get the Ableton project folder, then its parent "sketch" folder
+    const projectDir = path.dirname(alsFilePath);
+    const sketchDir  = path.dirname(projectDir);
+    const outPath    = path.join(sketchDir, 'clipData.ts');
+
+    const dataObject = Object.fromEntries(clipMap);
+
+    const tsSource =
+`/* AUTO-GENERATED FILE – DO NOT EDIT
+ *
+ * Written by node_src/alsParsing.ts whenever Ableton clips change.
+ */
+import type { AbletonClipRawData } from '@/io/abletonClips';
+
+export const clipData: Record<string, AbletonClipRawData> = ${JSON.stringify(dataObject, null, 2)} as const;
+`;
+    fs.writeFileSync(outPath, tsSource);
+    console.log('Wrote static clip data →', outPath);
+  } catch (err) {
+    console.error('Failed to write clipData.ts', err);
+  }
+}

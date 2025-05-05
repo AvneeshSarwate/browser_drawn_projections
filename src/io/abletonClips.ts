@@ -6,6 +6,20 @@ const ws = new WebSocket('ws://localhost:8080');
 export type AbletonNote = { pitch: number, duration: number, velocity: number, offVelocity: number, probability: number, position: number, isEnabled: boolean } 
 // export type AbletonClip = { name: string, duration: number, notes: AbletonNote[] }
 
+export type AbletonClipRawData = {
+  name: string;
+  duration: number;
+  notes: {
+    pitch: number;
+    duration: number;
+    velocity: number;
+    offVelocity: number;
+    probability: number;
+    position: number;
+    isEnabled: boolean;
+  }[];
+};
+
 
 function positionsToDeltas(positions: number[], totalTime?: number) {
   const deltas: number[] = [];
@@ -146,7 +160,26 @@ ws.onclose = () => {
 };
 
 //requires alsParsing.ts to be running
-export async function INITIALIZE_ABLETON_CLIPS(fileName: string) {
+export async function INITIALIZE_ABLETON_CLIPS(fileName: string, staticClipData?: Record<string, AbletonClipRawData>) {
+
+  // ── Production — use static data and return immediately ──────────────
+  if (import.meta.env.PROD) {
+    if (!staticClipData) {
+      console.warn(
+        'INITIALIZE_ABLETON_CLIPS called in production without static clip data; clipMap left empty.'
+      );
+      return;
+    }
+
+    clipMap.clear();
+    (Object.entries(staticClipData) as [string, AbletonClip][]).forEach(
+      ([key, value]) =>
+        clipMap.set(key, new AbletonClip(value.name, value.duration, value.notes))
+    );
+    console.log('Ableton clips initialised from static data →', clipMap);
+    return;                        // synchronous in prod
+  }
+
 
   const ABLETON_CLIPS_READY = new Promise<void>((resolve) => {
 
@@ -158,7 +191,7 @@ export async function INITIALIZE_ABLETON_CLIPS(fileName: string) {
         Object.entries(mes.data).forEach(([key, value]: [string, AbletonClip]) => {
           const actualClip = new AbletonClip(value.name, value.duration, value.notes);
           console.log("clip updated for", key)
-          clipMap.set(key, actualClip);
+            clipMap.set(key, actualClip);
         });
         console.log('clipMap updated', clipMap);
         if (mes.type === 'fresh_clipMap') resolve()
