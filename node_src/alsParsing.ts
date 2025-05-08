@@ -47,7 +47,7 @@ function parseXML(xml: string): Map<string, AbletonClip> {
     clipSlotList.forEach((slot: any, slot_ind: number) => {
       const clip = slot?.ClipSlot?.Value?.MidiClip;
       if (clip) {
-        console.log("clip", clip);
+        // console.log("clip", clip);
         const keytracks = arrayWrap(clip.Notes.KeyTracks.KeyTrack)
         const notes: AbletonNote[] = []
         const duration = Number(clip.CurrentEnd["@_Value"])
@@ -59,7 +59,7 @@ function parseXML(xml: string): Map<string, AbletonClip> {
 
           xmlNotes.forEach((note: any) => {
             notes.push(parseXmlNote(note, pitchStr))
-            console.log("note", notes[notes.length - 1])
+            // console.log("note", notes[notes.length - 1])
           })
           
         })
@@ -81,6 +81,9 @@ function parseXML(xml: string): Map<string, AbletonClip> {
 let clipMap = parseXML(xml);
 const clipMapToJSON = (fileName: string, clipMap: Map<string, AbletonClip>, msgType: MsgType = 'clipMap') => JSON.stringify({type: msgType, fileName, data: Object.fromEntries(clipMap)});
 
+// Track the last modified time of the file
+let lastModifiedTime = fs.statSync(fileName).mtime.getTime();
+
 const wss = new WebSocket.Server({ port: 8080 });
 
 wss.on('connection', (ws: WebSocket) => {
@@ -95,7 +98,15 @@ wss.on('connection', (ws: WebSocket) => {
       fileName = parsed.fileName
 
       statsWatcher.removeAllListeners()
-      statsWatcher = fs.watchFile(fileName, () => sendFileUpdate("clipMap"))
+      statsWatcher = fs.watchFile(fileName, (curr, prev) => {
+        const currentModTime = curr.mtime.getTime();
+        if (currentModTime !== lastModifiedTime) {
+          lastModifiedTime = currentModTime;
+          sendFileUpdate("clipMap");
+        }
+      });
+      // Update lastModifiedTime for the new file
+      lastModifiedTime = fs.statSync(fileName).mtime.getTime();
       sendFileUpdate("fresh_clipMap")
     }
   });
@@ -124,7 +135,13 @@ const sendFileUpdate = (msgType: MsgType) => {
   });
 }
 
-let statsWatcher = fs.watchFile(fileName, () => sendFileUpdate("clipMap"))
+let statsWatcher = fs.watchFile(fileName, (curr, prev) => {
+  const currentModTime = curr.mtime.getTime();
+  if (currentModTime !== lastModifiedTime) {
+    lastModifiedTime = currentModTime;
+    sendFileUpdate("clipMap");
+  }
+});
 
 function writeClipDataTs(alsFilePath: string, clipMap: Map<string, AbletonClip>) {
   try {

@@ -13,6 +13,7 @@ import { getPiano } from '@/music/synths';
 import { m2f } from '@/music/mpeSynth';
 import { sliceAndTransposeByMarkers, type SliceDefinition } from './clipTransforms';
 import { clipData as staticClipData } from './clipData';
+import type { MIDIValOutput } from '@midival/core';
 
 const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
@@ -38,7 +39,7 @@ const baseScale = new Scale();                 // used for transpositions
 
 // These will be filled once MIDI is ready (inside onMounted)
 const midiOuts: any[] = [];
-let playClipFn: ((clip: AbletonClip, ctx: TimeContext, midiOut: any) => Promise<void>) | null = null;
+let playNote: (pitch: number, velocity: number, ctx?: TimeContext, noteDur?: number, inst?: any) => void = () => {}
 
 // ---------- helpers ----------
 const parseSliceText = (text: string): SliceDefinition[] =>
@@ -58,25 +59,35 @@ const parseSliceText = (text: string): SliceDefinition[] =>
       } as SliceDefinition;
     });
 
-const buildClip = (sliceText: string): AbletonClip | null => {
+const buildClip = (sliceText: string): AbletonClip[] | null => {
   const defs = parseSliceText(sliceText);
   if (defs.length === 0) return null;
   const slices = sliceAndTransposeByMarkers(clipMap, defs, baseScale);
-  return slices.length ? AbletonClip.concat(...slices) : null;
+  return slices.length ? slices : null;
 };
+
+const playClips = async (clips: AbletonClip[], ctx: TimeContext, midiOut: MIDIValOutput, voiceState: VoiceState) => {
+  for (const clip of clips) {
+    let notes = clip.noteBuffer() //todo - reuse
+    for (const [i, nextNote] of notes.entries()) { //todo - reuse
+      await ctx.wait(nextNote.preDelta)
+      playNote(nextNote.note.pitch, nextNote.note.velocity, ctx, nextNote.note.duration, midiOut)
+      if (nextNote.postDelta) await ctx.wait(nextNote.postDelta)
+    }
+  }
+}
 
 const playVoice = (voiceIdx: number) => {
   const v = appState.voices[voiceIdx];
   const srcClip = buildClip(v.sliceText);
-  if (!srcClip || !playClipFn || !midiOuts[voiceIdx]) return;
+  if (!srcClip || !midiOuts[voiceIdx]) return;
 
-  const playOnce = async (ctx: TimeContext) =>
-    await playClipFn!(srcClip.clone(), ctx, midiOuts[voiceIdx]);
+  const playOnce = async (ctx: TimeContext) => await playClips(srcClip, ctx, midiOuts[voiceIdx], v);
 
   if (v.isLooping) {
     v.loopHandle?.cancel(); //todo make sure this cancels the loop
     launchQueue.push(async (ctx) => {
-      v.loopHandle = launch(async (ctx) => {
+      v.loopHandle = ctx.branch(async (ctx) => {
         while (v.isLooping) await playOnce(ctx);
       });
     })
@@ -91,17 +102,12 @@ onMounted(async() => {
   try {
 
     await MIDI_READY
-    await INITIALIZE_ABLETON_CLIPS('src/sketches/sonar_sketch/piano_melodies Project/piano_melodies.als', staticClipData)
-
-    let scale = new Scale()
-    const cHarmonicMajorScale = new Scale([0, 2, 4, 5, 7, 8, 11, 12], 60)
+    await INITIALIZE_ABLETON_CLIPS('src/sketches/sonar_sketch/piano_melodies Project/piano_melodies.als', staticClipData, true)
 
     const iac1 = midiOutputs.get('IAC Driver Bus 1')!!
     const iac2 = midiOutputs.get('IAC Driver Bus 2')!!
     const iac3 = midiOutputs.get('IAC Driver Bus 3')!!
     const iac4 = midiOutputs.get('IAC Driver Bus 3')!!
-
-    const drum0 = () => clipMap.get('drum0')!!.clone()
 
     const playNoteMidi = (pitch: number, velocity: number, ctx?: TimeContext, noteDur?: number, inst = iac1) => {
       inst.sendNoteOn(pitch, velocity)
@@ -115,22 +121,13 @@ onMounted(async() => {
 
     const playNotePiano = (pitch: number, velocity: number, ctx?: TimeContext, noteDur?: number, pianoIndex = 0) => {
       const piano = pianos[mod2(pianoIndex, pianos.length)]
+      //todo - get this to use duration and have midi output signature for consistency
       piano.triggerAttackRelease([m2f(pitch)], '16n', null, velocity)
     }
 
-    const playNote = playNoteMidi
-
-    const playClip= async (clip: AbletonClip, ctx: TimeContext, midiOut = iac1) => {
-      let notes = clip.noteBuffer() //todo - reuse
-      for (const [i, nextNote] of notes.entries()) { //todo - reuse
-        await ctx.wait(nextNote.preDelta)
-        playNote(nextNote.note.pitch, nextNote.note.velocity, ctx, nextNote.note.duration, midiOut)
-        if (nextNote.postDelta) await ctx.wait(nextNote.postDelta)
-      }
-    }
+    playNote = playNoteMidi
 
     midiOuts.push(iac1, iac2, iac3, iac4);
-    playClipFn = playClip;
 
     const p5i = appState.p5Instance!!
     const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement

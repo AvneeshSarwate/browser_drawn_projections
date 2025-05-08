@@ -160,10 +160,10 @@ ws.onclose = () => {
 };
 
 //requires alsParsing.ts to be running
-export async function INITIALIZE_ABLETON_CLIPS(fileName: string, staticClipData?: Record<string, AbletonClipRawData>) {
+export async function INITIALIZE_ABLETON_CLIPS(fileName: string, staticClipData?: Record<string, AbletonClipRawData>, forceJson?: boolean) {
 
   // ── Production — use static data and return immediately ──────────────
-  if (import.meta.env.PROD) {
+  if (import.meta.env.PROD || forceJson) {
     if (!staticClipData) {
       console.warn(
         'INITIALIZE_ABLETON_CLIPS called in production without static clip data; clipMap left empty.'

@@ -8,3 +8,10 @@ prepping ableton-hotreload workflow to automatically set up clip-json for build 
 - in alsParsing.ts, whenever als file is hot reloaded, add function that writes clip-json into sketch directory as a ts file (eg, const clipData = ...)
 - in sketch LivecodeHolder, import clip-json ts
 - in abletonClips.ts in the  INITIALIZE_ABLETON_CLIPS function, add an optional parameter to pass in clip-json ts, and in INITIALIZE_ABLETON_CLIPS use prod build build config return AbletonClip objects hydrated from clip-json ts instead of from websocket (use import.meta.env.PROD to check)
+
+
+
+
+example livecode usage
+
+debug1 : 

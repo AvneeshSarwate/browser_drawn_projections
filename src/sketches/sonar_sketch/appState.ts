@@ -8,12 +8,13 @@ import { defineStore, acceptHMRUpdate } from 'pinia'
 import { ref } from 'vue'
 import type { CancelablePromisePoxy, TimeContext } from '@/channels/channels'
 import type { AbletonClip } from '@/io/abletonClips'
+import type { LoopHandle } from '@/channels/base_time_context'
 
 
 export type VoiceState = {
   sliceText: string;
   isLooping: boolean;
-  loopHandle: CancelablePromisePoxy<any> | null;
+  loopHandle: LoopHandle | null;
   queue: Array<(ctx: TimeContext) => Promise<void>>;
 };
 

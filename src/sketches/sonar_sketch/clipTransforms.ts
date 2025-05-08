@@ -20,12 +20,12 @@ export type MarkerSegmentResult = {
  *   • clippedClip– trims notes so they stop at markerEnd
  *
  * @param clip        original Ableton clip
- * @param eighthNote  length of an ⅛-note (default 0.5 when 1 = quarter-note)
+ * @param startLookback  How much time before the marker to look for notes (in quarter-notes)
  * @param markerPitch pitch value that designates a marker (default 0)
  */
 export function segmentByPitchMarker(
   clip: AbletonClip,
-  eighthNote = 0.5,
+  startLookback = 0.5,
   markerPitch = 0,
 ): MarkerSegmentResult[] {
   const results: MarkerSegmentResult[] = [];
@@ -37,7 +37,7 @@ export function segmentByPitchMarker(
   markers.forEach((marker, idx) => {
     const start = marker.position;
     const end = start + marker.duration;
-    const earliestStart = start - eighthNote;
+    const earliestStart = start - startLookback;
 
     // Collect overlapping, sufficiently-late notes (ignore other disabled notes)
     const overlapping = clip.notes.filter((n) => {
@@ -196,6 +196,53 @@ export function sliceAndTransposeByMarkers(
  * 
  * could then also have algorithms to generate slice definitions (or manual templates of slice definitions)
  */
+
+export function retrogradeClip(clip: AbletonClip): AbletonClip {
+  if (clip.notes.length === 0) {
+    return clip.clone();
+  }
+
+  const newNotes: AbletonNote[] = clip.notes.map(note => ({
+    ...note,
+    position: clip.duration - (note.position + note.duration),
+  }));
+
+  // Ensure notes are sorted by their new positions
+  newNotes.sort((a, b) => a.position - b.position);
+
+  return new AbletonClip(clip.name + "_retrograde", clip.duration, newNotes);
+}
+
+export function invertClip(
+  clip: AbletonClip,
+  scale: Scale,
+  axis?: number // axis is an optional pitch value
+): AbletonClip {
+  if (clip.notes.length < 2) {
+    return clip.clone();
+  }
+
+  const clonedNotes = clip.notes.map(note => ({ ...note }));
+
+  // Use provided axis pitch or default to the first note's pitch
+  const axisPitch = axis !== undefined ? axis : clonedNotes[0].pitch;
+  const axisIndex = scale.getIndFromPitch(axisPitch);
+
+  const invertedNotes = clonedNotes.map(note => {
+    const originalIndex = scale.getIndFromPitch(note.pitch);
+    const invertedIndex = 2 * axisIndex - originalIndex;
+    return {
+      ...note,
+      pitch: scale.getByIndex(invertedIndex),
+    };
+  });
+
+  return new AbletonClip(
+    clip.name + "_inverted",
+    clip.duration,
+    invertedNotes
+  );
+}
 
 
 
