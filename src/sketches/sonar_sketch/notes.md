@@ -13,5 +13,15 @@ prepping ableton-hotreload workflow to automatically set up clip-json for build 
 
 
 example livecode usage
+clipName : index : transpose : speed : quantize
+debug1 : 0 : 0 : 1 : 1
+debug1 : 0 : 1 : 1 : 1
+debug1 : 0 : 2 : 1 : 1
+debug1 : 0 : 3 : 1 : 1
 
-debug1 : 
+
+
+order of refactors
+- create clips on demand for parsed slice definitions
+- refactor slice definitions to allow arbitrary function calling (how deep? allow chaning transforms?)
+- add references in slice definitions to live slider values - figure out whether to have them be dedicated params for functions or standalone vars that are refrenced (and allow them to be scaled in expressions?)

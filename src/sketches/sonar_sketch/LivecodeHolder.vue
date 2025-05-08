@@ -39,6 +39,8 @@ const baseScale = new Scale();                 // used for transpositions
 
 // These will be filled once MIDI is ready (inside onMounted)
 const midiOuts: any[] = [];
+
+//lets you switch between midi and web audio piano
 let playNote: (pitch: number, velocity: number, ctx?: TimeContext, noteDur?: number, inst?: any) => void = () => {}
 
 // ---------- helpers ----------
@@ -59,42 +61,50 @@ const parseSliceText = (text: string): SliceDefinition[] =>
       } as SliceDefinition;
     });
 
-const buildClip = (sliceText: string): AbletonClip[] | null => {
-  const defs = parseSliceText(sliceText);
-  if (defs.length === 0) return null;
-  const slices = sliceAndTransposeByMarkers(clipMap, defs, baseScale);
-  return slices.length ? slices : null;
-};
+const playSlices = async (
+  sliceDefs: SliceDefinition[],
+  ctx: TimeContext,
+  midiOut: MIDIValOutput,
+  voiceState: VoiceState,
+) => {
+  for (const def of sliceDefs) {
+    // Build the slice *now* so any live parameters are captured
+    const slices = sliceAndTransposeByMarkers(clipMap, [def], baseScale);
+    if (!slices.length) continue;
 
-const playClips = async (clips: AbletonClip[], ctx: TimeContext, midiOut: MIDIValOutput, voiceState: VoiceState) => {
-  for (const clip of clips) {
-    let notes = clip.noteBuffer() //todo - reuse
-    for (const [i, nextNote] of notes.entries()) { //todo - reuse
-      await ctx.wait(nextNote.preDelta)
+    const clip = slices[0];
+    const notes = clip.noteBuffer();               // TODO: reuse buffer
+
+    for (const nextNote of notes) {
+      await ctx.wait(nextNote.preDelta);
       playNote(nextNote.note.pitch, nextNote.note.velocity, ctx, nextNote.note.duration, midiOut)
-      if (nextNote.postDelta) await ctx.wait(nextNote.postDelta)
+      if (nextNote.postDelta) await ctx.wait(nextNote.postDelta);
     }
   }
-}
+};
 
+// ... existing code ...
 const playVoice = (voiceIdx: number) => {
   const v = appState.voices[voiceIdx];
-  const srcClip = buildClip(v.sliceText);
-  if (!srcClip || !midiOuts[voiceIdx]) return;
 
-  const playOnce = async (ctx: TimeContext) => await playClips(srcClip, ctx, midiOuts[voiceIdx], v);
+  const playOnce = async (ctx: TimeContext) => {
+    const sliceDefs = parseSliceText(v.sliceText);
+    if (!sliceDefs.length || !midiOuts[voiceIdx]) return;
+    await playSlices(sliceDefs, ctx, midiOuts[voiceIdx], v);
+  };
 
   if (v.isLooping) {
-    v.loopHandle?.cancel(); //todo make sure this cancels the loop
+    v.loopHandle?.cancel();                    // stop previous loop
     launchQueue.push(async (ctx) => {
       v.loopHandle = ctx.branch(async (ctx) => {
         while (v.isLooping) await playOnce(ctx);
       });
-    })
+    });
   } else {
-    launchQueue.push(playOnce)        // one-shot
+    launchQueue.push(playOnce);                // one-shot
   }
 };
+
 
 const launchQueue: Array<(ctx: TimeContext) => Promise<void>> = []
 
