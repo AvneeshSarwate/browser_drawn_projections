@@ -88,6 +88,8 @@ export class CancelablePromisePoxy<T> implements Promise<T> {
   public cancel() {
     this.abortController.abort()
     this.timeContext?.cancel() //todo api - need to detangle relations between promise, context, abort controller
+    //cancel all child contexts
+    // this.timeContext?.childContexts.forEach((ctx) => ctx.cancel()) //todo core - need to cancel child contexts properly
   }
 
   [Symbol.toStringTag]: string = '[object CancelablePromisePoxy]'
@@ -105,7 +107,7 @@ export class CancelablePromisePoxy<T> implements Promise<T> {
     return this.promise!.catch(onrejected)
   }
 
-  //todo bug - does this properly work? can use to to clean up note-offs
+  //todo core - need to cancel child contexts properly
   finally(onfinally?: (() => void) | undefined | null): Promise<T> {
     return this.promise!.finally(onfinally)
   }
@@ -133,12 +135,13 @@ export function createAndLaunchContext<T, C extends TimeContext>(block: (ctx: C)
   }
   const blockPromise = block(newContext)
   promiseProxy.promise = blockPromise
-  const bp = blockPromise.catch((e) => {
-    const err = e as Error
-    console.log('promise catch error', err, err?.message, err?.stack)
-  })
+  const bp = blockPromise
+    .catch((e) => { //todo core - need to cancel child contexts properly
+      const err = e as Error
+      console.log('promise catch error', err, err?.message, err?.stack)
+    })
   if (parentContext) {
-    bp.finally(() => {
+    bp.finally(() => { //todo core - need to cancel child contexts properly
       //todo bug - should be able to always update parent right? why does this only work when both flagged and awaited
       if (updateParent) parentContext.time = Math.max(newContext.time, parentContext.time) 
       parentContext.childContexts.delete(newContext)

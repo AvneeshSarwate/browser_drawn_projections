@@ -13,10 +13,12 @@ import type { LoopHandle } from '@/channels/base_time_context'
 
 export type VoiceState = {
   sliceText: string;
+  isPlaying: boolean;
   isLooping: boolean;
   loopHandle: LoopHandle | null;
   queue: Array<(ctx: TimeContext) => Promise<void>>;
   playingText: string;
+  playingLineIdx: number;
 };
 
 export type TemplateAppState = {
@@ -49,10 +51,15 @@ export const appState: TemplateAppState = {
   drawing: false,
   voices: Array.from({ length: 4 }, (): VoiceState => ({
     sliceText: '',
+    /** true while the voice is actively playing (Play-button ON) */
+    isPlaying: false,
     isLooping: false,
     loopHandle: null,
     queue: [],
+    /** copy of the slice text with resolved slider values */
     playingText: '',
+    /** line index that is currently sounding ( –1  means "none")  */
+    playingLineIdx: -1,
   })),
   sliders: Array.from({ length: 8 }, (): number => 0),
 } 

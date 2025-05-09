@@ -91,46 +91,73 @@ const playClips = async (
   voiceState: VoiceState,
 ) => {
   const displayLines = lines.map(l => l)
+  voiceState.playingText = displayLines.join('\n')
+
   for (const [idx, line] of lines.entries()) {
-    const { clip: curClip, updatedLine } = buildClipFromLine(line);
-    if (!curClip) continue;
+    if (!voiceState.isPlaying) break
+    voiceState.playingLineIdx = idx
+
+    const { clip: curClip, updatedLine } = buildClipFromLine(line)
+    if (!curClip) continue
 
     displayLines[idx] = updatedLine
     voiceState.playingText = displayLines.join('\n')
-    
-    // Optional: you can do something with updatedLine here if needed
-    console.log('Playing:', updatedLine);
-    
-    const notes = curClip.noteBuffer();
 
+    const notes = curClip.noteBuffer()
     for (const nextNote of notes) {
-      await ctx.wait(nextNote.preDelta);
+      await ctx.wait(nextNote.preDelta)
+      if (!voiceState.isPlaying) break
       playNote(nextNote.note.pitch, nextNote.note.velocity, ctx, nextNote.note.duration, midiOut)
-      if (nextNote.postDelta) await ctx.wait(nextNote.postDelta);
+      if (nextNote.postDelta) await ctx.wait(nextNote.postDelta)
     }
+    if (!voiceState.isPlaying) break
   }
-};
+  voiceState.playingLineIdx = -1
+}
 
-const playVoice = (voiceIdx: number) => {
-  const v = appState.voices[voiceIdx];
+const startVoice = (voiceIdx: number) => {
+  const v = appState.voices[voiceIdx]
 
   const playOnce = async (ctx: TimeContext) => {
-    const lines = v.sliceText.split('\n').map((l) => l.trim()).filter(Boolean);
-    if (!lines.length || !midiOuts[voiceIdx]) return;
-    await playClips(lines, ctx, midiOuts[voiceIdx], v);
-  };
+    const lines = v.sliceText.split('\n').map(l => l.trim()).filter(Boolean)
+    if (!lines.length || !midiOuts[voiceIdx]) return
+    await playClips(lines, ctx, midiOuts[voiceIdx], v)
+  }
 
   if (v.isLooping) {
-    v.loopHandle?.cancel();                    // stop previous loop
+    // v.loopHandle?.cancel() - should never be needed?
     launchQueue.push(async (ctx) => {
       v.loopHandle = ctx.branch(async (ctx) => {
-        while (v.isLooping) await playOnce(ctx);
-      });
-    });
+        while (v.isLooping && v.isPlaying) await playOnce(ctx)
+        v.isPlaying = false
+      })
+    })
   } else {
-    launchQueue.push(playOnce);                // one-shot
+    launchQueue.push(async (ctx) => {
+      await playOnce(ctx)
+      v.isPlaying = false
+    })               // one-shot
   }
-};
+}
+
+const stopVoice = (voiceIdx: number) => {
+  const v = appState.voices[voiceIdx]
+  v.isPlaying = false
+  v.loopHandle?.cancel()//todo - check if this is needed - do note play functions end their notes properly?
+  v.loopHandle = null
+  v.playingLineIdx = -1
+  v.playingText = ''
+}
+
+const togglePlay = (voiceIdx: number) => {
+  const v = appState.voices[voiceIdx]
+  if (v.isPlaying) {
+    stopVoice(voiceIdx)
+  } else {
+    v.isPlaying = true
+    startVoice(voiceIdx)
+  }
+}
 
 const launchQueue: Array<(ctx: TimeContext) => Promise<void>> = []
 
@@ -145,17 +172,20 @@ onMounted(async() => {
     const iac3 = midiOutputs.get('IAC Driver Bus 3')!!
     const iac4 = midiOutputs.get('IAC Driver Bus 3')!!
 
-    const playNoteMidi = (pitch: number, velocity: number, ctx?: TimeContext, noteDur?: number, inst = iac1) => {
+    const playNoteMidi = (pitch: number, velocity: number, ctx: TimeContext, noteDur: number, inst = iac1) => {
       inst.sendNoteOn(pitch, velocity)
-      ctx?.branch(async ctx => {
-        await ctx?.wait((noteDur ?? 0.1) * 0.98)
+      ctx.branch(async ctx => {
+        await ctx.wait((noteDur ?? 0.1) * 0.98)
+        inst.sendNoteOff(pitch)
+      }).finally(() => {
+        console.log('loop canclled finally', pitch)
         inst.sendNoteOff(pitch)
       })
     }
 
     const pianos = Array.from({ length: 10 }, (_, i) => getPiano())
 
-    const playNotePiano = (pitch: number, velocity: number, ctx?: TimeContext, noteDur?: number, pianoIndex = 0) => {
+    const playNotePiano = (pitch: number, velocity: number, ctx: TimeContext, noteDur: number, pianoIndex = 0) => {
       const piano = pianos[mod2(pianoIndex, pianos.length)]
       //todo - get this to use duration and have midi output signature for consistency
       piano.triggerAttackRelease([m2f(pitch)], '16n', null, velocity)
@@ -246,18 +276,38 @@ onUnmounted(() => {
       class="voice-column"
     >
       <h3>Voice {{ idx + 1 }}</h3>
-      <textarea
-        v-model="voice.sliceText"
-        placeholder="clipName : seg 1 : s_tr 2 : str 0.5 : q 1"
-        rows="10"
-      />
       <div class="controls">
-        <button @click="playVoice(idx)">Play</button>
+        <button @click="togglePlay(idx)">
+          {{ voice.isPlaying ? 'Stop' : 'Play' }}
+        </button>
         <label>
-          <input type="checkbox" v-model="voice.isLooping" />
+          <input
+            type="checkbox"
+            v-model="voice.isLooping"
+          />
           Loop
         </label>
       </div>
+      <details v-if="!voice.isPlaying" open class="text-display">
+        <summary>Slice Editor</summary>
+        <textarea
+          v-model="voice.sliceText"
+          placeholder="clipName : seg 1 : s_tr 2 : str 0.5 : q 1"
+          rows="10"
+        />
+      </details>
+      <details v-else open class="text-display">
+        <summary>Now Playing</summary>
+        <div class="display-text">
+          <div
+            v-for="(line, lIdx) in voice.playingText.split('\n')"
+            :key="lIdx"
+            :class="{ highlight: lIdx === voice.playingLineIdx }"
+          >
+            {{ line }}
+          </div>
+        </div>
+      </details>
     </div>
   </div>
 </template>
@@ -317,5 +367,9 @@ input[type=range] {
 
 button {
   padding: 0.25rem 0.75rem;
+}
+
+.display-text .highlight {
+  background-color: #fffb90;
 }
 </style>
