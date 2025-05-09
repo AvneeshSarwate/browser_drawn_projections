@@ -11,7 +11,7 @@ import { MIDI_READY, midiOutputs } from '@/io/midi';
 import { Scale } from '@/music/scale';
 import { getPiano } from '@/music/synths';
 import { m2f } from '@/music/mpeSynth';
-import { sliceAndTransposeByMarkers, type SliceDefinition } from './clipTransforms';
+import { TRANSFORM_REGISTRY } from './clipTransforms';
 import { clipData as staticClipData } from './clipData';
 import type { MIDIValOutput } from '@midival/core';
 
@@ -43,37 +43,65 @@ const midiOuts: any[] = [];
 //lets you switch between midi and web audio piano
 let playNote: (pitch: number, velocity: number, ctx?: TimeContext, noteDur?: number, inst?: any) => void = () => {}
 
-// ---------- helpers ----------
-const parseSliceText = (text: string): SliceDefinition[] =>
+
+const buildClipFromLine = (line: string): AbletonClip => {
+  const tokens = line.split(/\s*:\s*/).map((t) => t.trim()).filter(Boolean);
+  if (!tokens.length) return;
+
+  const srcName = tokens[0];
+  const srcClip = clipMap.get(srcName);
+  if (!srcClip) return;
+
+  let curClip = srcClip.clone();
+
+  tokens.slice(1).forEach((cmdToken) => {
+    const parts = cmdToken.split(/\s+/).filter(Boolean);
+    const symbol = parts[0];
+    const params = parts.slice(1).map(Number);
+
+    const tf = TRANSFORM_REGISTRY[symbol as keyof typeof TRANSFORM_REGISTRY];
+    if (tf) curClip = tf(curClip, ...params);
+  });
+
+  return curClip
+}
+
+
+// ─────────────────────────────────────────────
+//  Live-coding helpers
+// ─────────────────────────────────────────────
+/**
+ *  Parses the new "pipeline" text syntax.<br>
+ *  Each line:  clipName : cmd param ... : cmd param ...  
+ *  The first token is the source-clip name, the remaining tokens are the
+ *  transformation commands that will be applied **from left to right**.
+ */
+const buildClipsFromText = (text: string): AbletonClip[] => {
+  const clips: AbletonClip[] = [];
+
   text
     .split('\n')
     .map((l) => l.trim())
     .filter(Boolean)
-    .map((line) => {
-      const [clipName, indStr, degStr, speedStr, quantStr] = line.split(/\s*:\s*/);
-      
-      return {
-        clipName: clipName.trim(),
-        index: Number(indStr),
-        scaleDegree: Number(degStr),
-        speedScaling: Number(speedStr),
-        quantization: Number(quantStr),
-      } as SliceDefinition;
+    .forEach((line) => {
+
+      const curClip = buildClipFromLine(line)
+
+      clips.push(curClip);
     });
 
-const playSlices = async (
-  sliceDefs: SliceDefinition[],
+  return clips;
+};
+
+const playClips = async (
+  lines: string[],
   ctx: TimeContext,
   midiOut: MIDIValOutput,
   voiceState: VoiceState,
 ) => {
-  for (const def of sliceDefs) {
-    // Build the slice *now* so any live parameters are captured
-    const slices = sliceAndTransposeByMarkers(clipMap, [def], baseScale);
-    if (!slices.length) continue;
-
-    const clip = slices[0];
-    const notes = clip.noteBuffer();               // TODO: reuse buffer
+  for (const line of lines) {
+    const curClip = buildClipFromLine(line)
+    const notes = curClip.noteBuffer();
 
     for (const nextNote of notes) {
       await ctx.wait(nextNote.preDelta);
@@ -83,14 +111,13 @@ const playSlices = async (
   }
 };
 
-// ... existing code ...
 const playVoice = (voiceIdx: number) => {
   const v = appState.voices[voiceIdx];
 
   const playOnce = async (ctx: TimeContext) => {
-    const sliceDefs = parseSliceText(v.sliceText);
-    if (!sliceDefs.length || !midiOuts[voiceIdx]) return;
-    await playSlices(sliceDefs, ctx, midiOuts[voiceIdx], v);
+    const lines = v.sliceText.split('\n').map((l) => l.trim()).filter(Boolean);
+    if (!lines.length || !midiOuts[voiceIdx]) return;
+    await playClips(lines, ctx, midiOuts[voiceIdx], v);
   };
 
   if (v.isLooping) {
@@ -104,7 +131,6 @@ const playVoice = (voiceIdx: number) => {
     launchQueue.push(playOnce);                // one-shot
   }
 };
-
 
 const launchQueue: Array<(ctx: TimeContext) => Promise<void>> = []
 
@@ -152,6 +178,7 @@ onMounted(async() => {
     })
 
     launchLoop(async (ctx) => {
+      // eslint-disable-next-line no-constant-condition
       while (true) {
         await ctx.wait(1)
         launchQueue.forEach(cb => cb(ctx))
@@ -213,7 +240,7 @@ onUnmounted(() => {
       <h3>Voice {{ idx + 1 }}</h3>
       <textarea
         v-model="voice.sliceText"
-        placeholder="clipName : sliceInd : transpose : speed : quant"
+        placeholder="clipName : seg 1 : s_tr 2 : str 0.5 : q 1"
         rows="10"
       />
       <div class="controls">
@@ -232,18 +259,21 @@ onUnmounted(() => {
   display: flex;
   gap: 1rem;
   margin-top: 1rem;
+  flex-wrap: wrap;
 }
 
 .voice-column {
-  flex: 1 1 0;
+  flex: 0 0 calc(50% - 0.5rem);
   display: flex;
   flex-direction: column;
+  margin-bottom: 1rem;
 }
 
 .voice-column textarea {
   width: 100%;
   resize: vertical;
   font-family: monospace;
+  min-height: 150px;
 }
 
 .controls {

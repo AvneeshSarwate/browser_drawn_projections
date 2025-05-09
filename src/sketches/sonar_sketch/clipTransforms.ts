@@ -34,6 +34,10 @@ export function segmentByPitchMarker(
     (n) => !n.isEnabled && n.pitch === markerPitch,
   );
 
+  if (markers.length === 0) {
+    return [{ marker: null, fullClip: clip.clone(), clippedClip: clip.clone() }];
+  }
+
   markers.forEach((marker, idx) => {
     const start = marker.position;
     const end = start + marker.duration;
@@ -91,31 +95,6 @@ export function segmentByPitchMarker(
 // ────────────────────────────────────────────────────────────────────────────
 // Helper-driven slicing / transposition
 // ────────────────────────────────────────────────────────────────────────────
-
-/**
- * write me a function that takes an Ableton Clip with segment markers, and then returns a sliced and transposed version of the clip.
- * the slices are defined by indexes of the markers. the transpositions are defined by scale degrees.
- * the start time of the next sub phrase is defined by the end of the previous phrase plus a quantization value.
- * 
- * the input arguments are 
- * 
- * inputClip: AbletonClip,
- * 
- * SliceDefinition:
- * {
- *  index: number,
- *  scaleDegree: number,  
- *  quantization: number,
- *  speedScaling: number,
- * }[], 
- * 
- * inputScale: Scale.
- *  
- * you can assume that the inputClip only contains notes from the scale
- * 
- * the output is a list of AbletonClips, one for each slice.
- */
-
 
 export type SliceDefinition = {
   clipName: string;     // NEW – which clip in the map to slice
@@ -243,6 +222,73 @@ export function invertClip(
     invertedNotes
   );
 }
+
+
+export function timeStretch(clip: AbletonClip, factor: number): AbletonClip {
+  return clip.scale(factor);
+}
+
+
+export function endTimeQuantize(clip: AbletonClip, quantValue: number): AbletonClip {
+  if (quantValue <= 0) return clip.clone();
+  
+  const clone = clip.clone();
+  clone.duration = Math.ceil(clone.duration / quantValue) * quantValue;
+  return clone;
+}
+
+
+export function scaleTranspose(clip: AbletonClip, transpose: number, scale?: Scale): AbletonClip {
+  if(!scale) {
+    scale = new Scale();
+  }
+  return clip.scaleTranspose(transpose, scale);
+}
+
+
+export function sliceClip(clip: AbletonClip, start: number, end: number): AbletonClip {
+  return clip.timeSlice(start, end);
+}
+
+
+export function segment(clip: AbletonClip, index: number): AbletonClip {
+  const segments = segmentByPitchMarker(clip);
+  
+  // If no segments found, return a clone of the original clip
+  if (segments.length === 0) {
+    return clip.clone();
+  }
+  
+  // Wrap index around if needed
+  const wrappedIndex = ((index % segments.length) + segments.length) % segments.length;
+  
+  return segments[wrappedIndex].clippedClip;
+}
+
+// ─────────────────────────────────────────────
+// Symbol  →  Transformation-function registry
+// ─────────────────────────────────────────────
+export type ClipTransform = (clip: AbletonClip, ...params: any[]) => AbletonClip;
+
+/**
+ *  Registry that is used by the live-coding text parser.
+ *  The first argument is **always** the current clip, the rest are the
+ *  parameters parsed from the text (all numbers).
+ */
+export const TRANSFORM_REGISTRY: Record<string, ClipTransform> = {
+  // ── marker-based segment ───────────────────
+  seg: (clip, index = 0) => segment(clip, Number(index)),
+
+  // ── diatonic transpose (scaleTranspose) ────
+  s_tr: (clip, degree = 0, scale: Scale = new Scale()) =>
+    scaleTranspose(clip, Number(degree), scale),
+
+  // ── time stretch ───────────────────────────
+  str: (clip, factor = 1) => timeStretch(clip, Number(factor)),
+
+  // ── end-time quantise ──────────────────────
+  q: (clip, qVal = 1) => endTimeQuantize(clip, Number(qVal)),
+};
 
 
 
