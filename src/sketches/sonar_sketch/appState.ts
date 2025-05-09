@@ -31,6 +31,7 @@ export type TemplateAppState = {
   paused: boolean
   drawing: boolean
   voices: VoiceState[]
+  sliders: number[]
 }
 
 export const appState: TemplateAppState = {
@@ -51,6 +52,7 @@ export const appState: TemplateAppState = {
     loopHandle: null,
     queue: [],
   })),
+  sliders: Array.from({ length: 8 }, (): number => 0),
 } 
 
 export const appStateName = 'templateAppState'

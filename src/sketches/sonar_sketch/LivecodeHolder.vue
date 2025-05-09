@@ -31,11 +31,7 @@ const clearDrawFuncs = () => {
 }
 
 const mod2 = (n: number, m: number) =>  (n % m + m) % m
-
-// ──────────────────────────────────────────────────────────────
-//  Live-coding UI / state
-// ──────────────────────────────────────────────────────────────
-const baseScale = new Scale();                 // used for transpositions
+              // used for transpositions
 
 // These will be filled once MIDI is ready (inside onMounted)
 const midiOuts: any[] = [];
@@ -57,41 +53,28 @@ const buildClipFromLine = (line: string): AbletonClip => {
   tokens.slice(1).forEach((cmdToken) => {
     const parts = cmdToken.split(/\s+/).filter(Boolean);
     const symbol = parts[0];
-    const params = parts.slice(1).map(Number);
+    const params = parts.slice(1);
 
     const tf = TRANSFORM_REGISTRY[symbol as keyof typeof TRANSFORM_REGISTRY];
-    if (tf) curClip = tf(curClip, ...params);
+    const parsedParams = tf.argParser(params);
+
+    //if string arg is s1-s8, replace with the value of the corresponding slider
+    parsedParams.forEach((param, index) => {
+      if (typeof param === 'string' && /s\d+/.test(param)) { //regex to check if the param is a slider reference
+        const sliderIndex = parseInt(param.slice(1)) - 1;
+        if (sliderIndex >= 0 && sliderIndex < appState.sliders.length) {
+          const scaledValue = tf.sliderScale[index](appState.sliders[sliderIndex])
+          parsedParams[index] = scaledValue;
+        }
+      }
+    });
+
+    if (tf) curClip = tf.transform(curClip, ...parsedParams);
   });
 
   return curClip
 }
 
-
-// ─────────────────────────────────────────────
-//  Live-coding helpers
-// ─────────────────────────────────────────────
-/**
- *  Parses the new "pipeline" text syntax.<br>
- *  Each line:  clipName : cmd param ... : cmd param ...  
- *  The first token is the source-clip name, the remaining tokens are the
- *  transformation commands that will be applied **from left to right**.
- */
-const buildClipsFromText = (text: string): AbletonClip[] => {
-  const clips: AbletonClip[] = [];
-
-  text
-    .split('\n')
-    .map((l) => l.trim())
-    .filter(Boolean)
-    .forEach((line) => {
-
-      const curClip = buildClipFromLine(line)
-
-      clips.push(curClip);
-    });
-
-  return clips;
-};
 
 const playClips = async (
   lines: string[],
@@ -231,6 +214,14 @@ onUnmounted(() => {
 </script>
 
 <template>
+  <div class="break-row"></div>
+  <div class="sliders-row">
+    <div class="slider-column" v-for="(slider, idx) in appState.sliders" :key="idx">
+      <div>{{ appState.sliders[idx] }}</div>
+      <input type="range" v-model.number="appState.sliders[idx]" min="0" max="1" step="0.001" />
+      <label>slider {{ idx + 1 }}</label>
+    </div>
+  </div>
   <div class="livecode-container">
     <div
       v-for="(voice, idx) in appState.voices"
@@ -255,6 +246,30 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+
+.sliders-row {
+  display: flex;
+  flex-direction: row;
+  gap: 0.5rem;
+}
+
+.slider-column {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+input[type=range] {
+    writing-mode: vertical-lr;
+    direction: rtl;
+    vertical-align: middle;
+}
+
+.break-row {
+  height: 2rem;
+}
+
 .livecode-container {
   display: flex;
   gap: 1rem;

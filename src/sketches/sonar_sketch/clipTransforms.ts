@@ -268,26 +268,60 @@ export function segment(clip: AbletonClip, index: number): AbletonClip {
 // ─────────────────────────────────────────────
 // Symbol  →  Transformation-function registry
 // ─────────────────────────────────────────────
-export type ClipTransform = (clip: AbletonClip, ...params: any[]) => AbletonClip;
+export type ClipTransform = {
+  name: string;
+  transform: (clip: AbletonClip, ...params: any[]) => AbletonClip;
+  // parses the arguments from the string, converts to numbers and scales them as necessary
+  argParser: (args: string[]) => any[]; 
+  //scales [0-1] slider values to the appropriate range for the transform for each argument
+  sliderScale: ((slider: number) => number)[];
+}
 
+//parse string to number, but if it's not, return base string because it may be a slider reference
+const numParse = (n: string) => {
+  const num = Number(n)
+  if(isNaN(num)) {
+    return n
+  }
+  return num
+}
 /**
  *  Registry that is used by the live-coding text parser.
  *  The first argument is **always** the current clip, the rest are the
- *  parameters parsed from the text (all numbers).
+ *  parameters parsed from the text (numbers or strings, some of which may be references to sliders).
  */
 export const TRANSFORM_REGISTRY: Record<string, ClipTransform> = {
   // ── marker-based segment ───────────────────
-  seg: (clip, index = 0) => segment(clip, Number(index)),
+  seg: {
+    name: 'seg',
+    transform: (clip, index) => segment(clip, index),
+    argParser: (args: string[]) => [numParse(args[0])],
+    sliderScale: [n => Math.floor(n*8)]
+  },
 
   // ── diatonic transpose (scaleTranspose) ────
-  s_tr: (clip, degree = 0, scale: Scale = new Scale()) =>
-    scaleTranspose(clip, Number(degree), scale),
+  s_tr: {
+    name: 's_tr',
+    transform: (clip, degree, scale: Scale = new Scale()) => scaleTranspose(clip, degree, scale),
+    argParser: (args: string[]) => [numParse(args[0])],
+    sliderScale: [n => Math.floor(n*16 - 8)]
+  },
 
   // ── time stretch ───────────────────────────
-  str: (clip, factor = 1) => timeStretch(clip, Number(factor)),
+  str: {
+    name: 'str',
+    transform: (clip, factor) => timeStretch(clip, factor),
+    argParser: (args: string[]) => [numParse(args[0])],
+    sliderScale: [n => n*3]
+  },
 
   // ── end-time quantise ──────────────────────
-  q: (clip, qVal = 1) => endTimeQuantize(clip, Number(qVal)),
+  q: {
+    name: 'q',
+    transform: (clip, qVal) => endTimeQuantize(clip, qVal),
+    argParser: (args: string[]) => [numParse(args[0])],
+    sliderScale: [n => n] //no scaling
+  },
 };
 
 
