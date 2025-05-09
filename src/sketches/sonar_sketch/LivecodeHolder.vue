@@ -40,15 +40,16 @@ const midiOuts: any[] = [];
 let playNote: (pitch: number, velocity: number, ctx?: TimeContext, noteDur?: number, inst?: any) => void = () => {}
 
 
-const buildClipFromLine = (line: string): AbletonClip => {
+const buildClipFromLine = (line: string): { clip: AbletonClip, updatedLine: string } => {
   const tokens = line.split(/\s*:\s*/).map((t) => t.trim()).filter(Boolean);
-  if (!tokens.length) return;
+  if (!tokens.length) return { clip: undefined, updatedLine: line };
 
   const srcName = tokens[0];
   const srcClip = clipMap.get(srcName);
-  if (!srcClip) return;
+  if (!srcClip) return { clip: undefined, updatedLine: line };
 
   let curClip = srcClip.clone();
+  let updatedTokens = [tokens[0]]; // Start with the clip name
 
   tokens.slice(1).forEach((cmdToken) => {
     const parts = cmdToken.split(/\s+/).filter(Boolean);
@@ -57,22 +58,29 @@ const buildClipFromLine = (line: string): AbletonClip => {
 
     const tf = TRANSFORM_REGISTRY[symbol as keyof typeof TRANSFORM_REGISTRY];
     const parsedParams = tf.argParser(params);
+    const updatedParams = [...params]; // Clone params for updating
 
     //if string arg is s1-s8, replace with the value of the corresponding slider
     parsedParams.forEach((param, index) => {
       if (typeof param === 'string' && /s\d+/.test(param)) { //regex to check if the param is a slider reference
         const sliderIndex = parseInt(param.slice(1)) - 1;
         if (sliderIndex >= 0 && sliderIndex < appState.sliders.length) {
-          const scaledValue = tf.sliderScale[index](appState.sliders[sliderIndex])
+          const scaledValue = tf.sliderScale[index](appState.sliders[sliderIndex]);
           parsedParams[index] = scaledValue;
+          updatedParams[index] = scaledValue.toFixed(2); // Format for readability
         }
       }
     });
 
     if (tf) curClip = tf.transform(curClip, ...parsedParams);
+    // Add the updated command token to the updatedTokens array
+    updatedTokens.push(`${symbol} ${updatedParams.join(' ')}`);
   });
 
-  return curClip
+  // Join tokens with " : " to reconstruct the line
+  const updatedLine = updatedTokens.join(' : ');
+  
+  return { clip: curClip, updatedLine };
 }
 
 
@@ -82,8 +90,17 @@ const playClips = async (
   midiOut: MIDIValOutput,
   voiceState: VoiceState,
 ) => {
-  for (const line of lines) {
-    const curClip = buildClipFromLine(line)
+  const displayLines = lines.map(l => l)
+  for (const [idx, line] of lines.entries()) {
+    const { clip: curClip, updatedLine } = buildClipFromLine(line);
+    if (!curClip) continue;
+
+    displayLines[idx] = updatedLine
+    voiceState.playingText = displayLines.join('\n')
+    
+    // Optional: you can do something with updatedLine here if needed
+    console.log('Playing:', updatedLine);
+    
     const notes = curClip.noteBuffer();
 
     for (const nextNote of notes) {

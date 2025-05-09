@@ -16,6 +16,7 @@ export type VoiceState = {
   isLooping: boolean;
   loopHandle: LoopHandle | null;
   queue: Array<(ctx: TimeContext) => Promise<void>>;
+  playingText: string;
 };
 
 export type TemplateAppState = {
@@ -51,6 +52,7 @@ export const appState: TemplateAppState = {
     isLooping: false,
     loopHandle: null,
     queue: [],
+    playingText: '',
   })),
   sliders: Array.from({ length: 8 }, (): number => 0),
 } 
