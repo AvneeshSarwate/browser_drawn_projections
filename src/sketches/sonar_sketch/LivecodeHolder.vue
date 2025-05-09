@@ -1,13 +1,13 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
-import { type TemplateAppState, appStateName, type VoiceState } from './appState';
+import { type SonarAppState, appStateName, type VoiceState } from './appState';
 import { inject, onMounted, onUnmounted, reactive } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
 import { AbletonClip, clipMap, INITIALIZE_ABLETON_CLIPS } from '@/io/abletonClips';
-import { MIDI_READY, midiOutputs } from '@/io/midi';
+import { MIDI_READY, midiInputs, midiOutputs } from '@/io/midi';
 import { Scale } from '@/music/scale';
 import { getPiano } from '@/music/synths';
 import { m2f } from '@/music/mpeSynth';
@@ -15,7 +15,7 @@ import { TRANSFORM_REGISTRY } from './clipTransforms';
 import { clipData as staticClipData } from './clipData';
 import type { MIDIValOutput } from '@midival/core';
 
-const appState = inject<TemplateAppState>(appStateName)!!
+const appState = inject<SonarAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
 let timeLoops: CancelablePromisePoxy<any>[] = []
 
@@ -89,11 +89,15 @@ const playClips = async (
   ctx: TimeContext,
   midiOut: MIDIValOutput,
   voiceState: VoiceState,
+  firstLoop: boolean
 ) => {
   const displayLines = lines.map(l => l)
   voiceState.playingText = displayLines.join('\n')
 
   for (const [idx, line] of lines.entries()) {
+    if (firstLoop && idx < voiceState.startPhraseIdx) continue //note this comes from a v-model.number on a text input, could have wierd edge cases
+
+
     if (!voiceState.isPlaying) break
     voiceState.playingLineIdx = idx
 
@@ -118,23 +122,27 @@ const playClips = async (
 const startVoice = (voiceIdx: number) => {
   const v = appState.voices[voiceIdx]
 
-  const playOnce = async (ctx: TimeContext) => {
+  const playOnce = async (ctx: TimeContext, firstLoop: boolean) => {
     const lines = v.sliceText.split('\n').map(l => l.trim()).filter(Boolean)
     if (!lines.length || !midiOuts[voiceIdx]) return
-    await playClips(lines, ctx, midiOuts[voiceIdx], v)
+    await playClips(lines, ctx, midiOuts[voiceIdx], v, firstLoop)
   }
 
   if (v.isLooping) {
     // v.loopHandle?.cancel() - should never be needed?
     launchQueue.push(async (ctx) => {
       v.loopHandle = ctx.branch(async (ctx) => {
-        while (v.isLooping && v.isPlaying) await playOnce(ctx)
+        let firstLoop = true
+        while (v.isLooping && v.isPlaying) {
+          await playOnce(ctx, firstLoop)
+          firstLoop = false
+        }
         v.isPlaying = false
       })
     })
   } else {
     launchQueue.push(async (ctx) => {
-      await playOnce(ctx)
+      await playOnce(ctx, true)
       v.isPlaying = false
     })               // one-shot
   }
@@ -172,13 +180,23 @@ onMounted(async() => {
     const iac3 = midiOutputs.get('IAC Driver Bus 3')!!
     const iac4 = midiOutputs.get('IAC Driver Bus 3')!!
 
+    const lpd8 = midiInputs.get("LPD8 mk2")
+    const midiNorm = (val: number) => val / 127
+    if (lpd8) {
+      Array.from({ length: 8 }, (_, i) => i).forEach(ind => {
+        lpd8.onControlChange(ind + 70, (msg) => {
+          appState.sliders[ind] = (midiNorm(msg.data2))
+        })
+      })
+    }
+
     const playNoteMidi = (pitch: number, velocity: number, ctx: TimeContext, noteDur: number, inst = iac1) => {
       inst.sendNoteOn(pitch, velocity)
       ctx.branch(async ctx => {
         await ctx.wait((noteDur ?? 0.1) * 0.98)
         inst.sendNoteOff(pitch)
       }).finally(() => {
-        console.log('loop canclled finally', pitch)
+        // console.log('loop canclled finally', pitch) //todo core - need to cancel child contexts properly (this doesn't fire immediately on parent cancel)
         inst.sendNoteOff(pitch)
       })
     }
@@ -281,11 +299,12 @@ onUnmounted(() => {
           {{ voice.isPlaying ? 'Stop' : 'Play' }}
         </button>
         <label>
-          <input
-            type="checkbox"
-            v-model="voice.isLooping"
-          />
+          <input type="checkbox" v-model="voice.isLooping"/>
           Loop
+        </label>
+        <label>
+          <input type="number" class="start-phrase-idx-input" v-model.number="voice.startPhraseIdx"/>
+          Start Phrase Index
         </label>
       </div>
       <details v-if="!voice.isPlaying" open class="text-display">
@@ -325,6 +344,10 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   gap: 0.5rem;
+}
+
+.start-phrase-idx-input {
+  width: 2rem;
 }
 
 input[type=range] {

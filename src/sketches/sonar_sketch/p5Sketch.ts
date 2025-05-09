@@ -1,7 +1,7 @@
-import { type TemplateAppState, resolution } from './appState'
+import { type SonarAppState, resolution } from './appState'
 import p5 from 'p5'
 
-export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => TemplateAppState): p5 {
+export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => SonarAppState): p5 {
 
   const sketch = (p: p5) => {
 

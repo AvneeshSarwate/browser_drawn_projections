@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { createP5Sketch } from './p5Sketch';
-import { appStateName, type TemplateAppState } from './appState';
+import { appStateName, type SonarAppState } from './appState';
 import type p5 from 'p5';
 import * as THREE from 'three';
 import { inject, onMounted, onUnmounted } from 'vue';
@@ -9,7 +9,7 @@ import { inject, onMounted, onUnmounted } from 'vue';
 import Stats from '@/rendering/Stats';
 
 
-const appState = inject<TemplateAppState>(appStateName)!!
+const appState = inject<SonarAppState>(appStateName)!!
 
 const neutralizeSketch = (instance: p5) => {
   instance.noLoop()

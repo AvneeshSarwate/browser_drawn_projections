@@ -1,13 +1,9 @@
 import p5 from 'p5'
 import * as THREE from 'three'
-import { Entity, EntityList } from '@/stores/undoCommands'
 
-
-import { Ramp } from '@/channels/channels'
 import { defineStore, acceptHMRUpdate } from 'pinia'
 import { ref } from 'vue'
-import type { CancelablePromisePoxy, TimeContext } from '@/channels/channels'
-import type { AbletonClip } from '@/io/abletonClips'
+import type { TimeContext } from '@/channels/channels'
 import type { LoopHandle } from '@/channels/base_time_context'
 
 
@@ -19,9 +15,10 @@ export type VoiceState = {
   queue: Array<(ctx: TimeContext) => Promise<void>>;
   playingText: string;
   playingLineIdx: number;
+  startPhraseIdx: number;
 };
 
-export type TemplateAppState = {
+export type SonarAppState = {
   p5Instance: p5 | undefined
   threeRenderer: THREE.WebGLRenderer | undefined
   codeStack: (() => void)[]
@@ -37,7 +34,7 @@ export type TemplateAppState = {
   sliders: number[]
 }
 
-export const appState: TemplateAppState = {
+export const appState: SonarAppState = {
   p5Instance: undefined,
   threeRenderer: undefined,
   codeStack: [],
@@ -60,11 +57,12 @@ export const appState: TemplateAppState = {
     playingText: '',
     /** line index that is currently sounding ( –1  means "none")  */
     playingLineIdx: -1,
+    startPhraseIdx: 0,
   })),
   sliders: Array.from({ length: 8 }, (): number => 0),
 } 
 
-export const appStateName = 'templateAppState'
+export const appStateName = 'sonarAppState'
 
 export const resolution = {
   width: 1000,
