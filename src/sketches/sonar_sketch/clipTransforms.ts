@@ -195,7 +195,7 @@ export function retrogradeClip(clip: AbletonClip): AbletonClip {
 export function invertClip(
   clip: AbletonClip,
   scale: Scale,
-  axis?: number // axis is an optional pitch value
+  axis?: number // optional - deviation of scale degree from the root
 ): AbletonClip {
   if (clip.notes.length < 2) {
     return clip.clone();
@@ -203,9 +203,7 @@ export function invertClip(
 
   const clonedNotes = clip.notes.map(note => ({ ...note }));
 
-  // Use provided axis pitch or default to the first note's pitch
-  const axisPitch = axis !== undefined ? axis : clonedNotes[0].pitch;
-  const axisIndex = scale.getIndFromPitch(axisPitch);
+  const axisIndex = axis ?? scale.getIndFromPitch(clonedNotes[0].pitch) + axis;
 
   const invertedNotes = clonedNotes.map(note => {
     const originalIndex = scale.getIndFromPitch(note.pitch);
@@ -265,6 +263,10 @@ export function segment(clip: AbletonClip, index: number): AbletonClip {
   return segments[wrappedIndex].clippedClip;
 }
 
+export function timeSlice(clip: AbletonClip, start: number, end: number): AbletonClip {
+  return clip.timeSlice(start, end);
+}
+
 // ─────────────────────────────────────────────
 // Symbol  →  Transformation-function registry
 // ─────────────────────────────────────────────
@@ -273,7 +275,7 @@ export type ClipTransform = {
   transform: (clip: AbletonClip, ...params: any[]) => AbletonClip;
   // parses the arguments from the string, converts to numbers and scales them as necessary
   argParser: (args: string[]) => any[]; 
-  //scales [0-1] slider values to the appropriate range for the transform for each argument
+  //scales slider values (which are always [0-1]) to the appropriate range for the transform for each argument
   sliderScale: ((slider: number) => number)[];
 }
 
@@ -291,7 +293,6 @@ const numParse = (n: string) => {
  *  parameters parsed from the text (numbers or strings, some of which may be references to sliders).
  */
 export const TRANSFORM_REGISTRY: Record<string, ClipTransform> = {
-  // ── marker-based segment ───────────────────
   seg: {
     name: 'seg',
     transform: (clip, index) => segment(clip, index),
@@ -299,7 +300,6 @@ export const TRANSFORM_REGISTRY: Record<string, ClipTransform> = {
     sliderScale: [n => Math.floor(n*8)]
   },
 
-  // ── diatonic transpose (scaleTranspose) ────
   s_tr: {
     name: 's_tr',
     transform: (clip, degree, scale: Scale = new Scale()) => scaleTranspose(clip, degree, scale),
@@ -307,7 +307,6 @@ export const TRANSFORM_REGISTRY: Record<string, ClipTransform> = {
     sliderScale: [n => Math.floor(n*16 - 8)]
   },
 
-  // ── time stretch ───────────────────────────
   str: {
     name: 'str',
     transform: (clip, factor) => timeStretch(clip, factor),
@@ -315,13 +314,30 @@ export const TRANSFORM_REGISTRY: Record<string, ClipTransform> = {
     sliderScale: [n => n*3]
   },
 
-  // ── end-time quantise ──────────────────────
   q: {
     name: 'q',
     transform: (clip, qVal) => endTimeQuantize(clip, qVal),
     argParser: (args: string[]) => [numParse(args[0])],
     sliderScale: [n => n] //no scaling
   },
+  sl: {
+    name: 'sl',
+    transform: (clip, start, end) => timeSlice(clip, start, end),
+    argParser: (args: string[]) => [numParse(args[0]), numParse(args[1])],
+    sliderScale: [n => n] //no scaling
+  },
+  rev: {
+    name: 'rev',
+    transform: (clip) => retrogradeClip(clip),
+    argParser: (args: string[]) => [],
+    sliderScale: [n => n] //no scaling
+  },
+  inv: {
+    name: 'inv',
+    transform: (clip, axis) => invertClip(clip, new Scale(), axis),
+    argParser: (args: string[]) => [numParse(args[0])],
+    sliderScale: [n => n*24 - 12] //-12 to 12
+  }
 };
 
 
