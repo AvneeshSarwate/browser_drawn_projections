@@ -16,6 +16,14 @@ export type VoiceState = {
   playingText: string;
   playingLineIdx: number;
   startPhraseIdx: number;
+  fxParams: {
+    distortion: number;
+    chorus: number;
+    filter: number;
+    delayTime: number;
+    delayFeedback: number;
+    reverb: number;
+  };
 };
 
 export type SonarAppState = {
@@ -58,6 +66,14 @@ export const appState: SonarAppState = {
     /** line index that is currently sounding ( –1  means "none")  */
     playingLineIdx: -1,
     startPhraseIdx: 0,
+    fxParams: {
+      distortion: 0.1,
+      chorus: 0.1,
+      filter: 1.0,
+      delayTime: 0.5,
+      delayFeedback: 0.1,
+      reverb: 0.1
+    }
   })),
   sliders: Array.from({ length: 8 }, (): number => 0),
 } 

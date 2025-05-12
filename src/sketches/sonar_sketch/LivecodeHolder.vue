@@ -172,6 +172,20 @@ const launchQueue: Array<(ctx: TimeContext) => Promise<void>> = []
 
 const pianoChains = Array.from({ length: 10 }, (_, i) => getPianoChain())
 
+// Function to update piano FX parameters
+const updatePianoFX = (voiceIdx: number) => {
+  const voice = appState.voices[voiceIdx];
+  const pianoChain = pianoChains[mod2(voiceIdx, pianoChains.length)];
+  
+  // Apply FX parameters
+  pianoChain.paramFuncs.distortion(voice.fxParams.distortion);
+  pianoChain.paramFuncs.chorus(voice.fxParams.chorus);
+  pianoChain.paramFuncs.filter(voice.fxParams.filter);
+  pianoChain.paramFuncs.delayTime(voice.fxParams.delayTime);
+  pianoChain.paramFuncs.delayFeedback(voice.fxParams.delayFeedback);
+  pianoChain.paramFuncs.reverb(voice.fxParams.reverb);
+}
+
 onMounted(async() => {
   try {
 
@@ -179,15 +193,13 @@ onMounted(async() => {
     await INITIALIZE_ABLETON_CLIPS('src/sketches/sonar_sketch/piano_melodies Project/piano_melodies.als', staticClipData, true)
     await TONE_AUDIO_START
 
-    const iac1 = midiOutputs.get('IAC Driver Bus 1')!!
-    const iac2 = midiOutputs.get('IAC Driver Bus 2')!!
-    const iac3 = midiOutputs.get('IAC Driver Bus 3')!!
-    const iac4 = midiOutputs.get('IAC Driver Bus 4')!!;
+    const iac1 = midiOutputs.get('IAC Driver Bus 1')
+    const iac2 = midiOutputs.get('IAC Driver Bus 2')
+    const iac3 = midiOutputs.get('IAC Driver Bus 3')
+    const iac4 = midiOutputs.get('IAC Driver Bus 4')
 
         
-    [iac1, iac2, iac3, iac4].forEach(out => {
-      midiOuts.push(out)
-    })
+    midiOuts.push(iac1, iac2, iac3, iac4)
 
     const lpd8 = midiInputs.get("LPD8 mk2")
     const midiNorm = (val: number) => val / 127
@@ -213,6 +225,9 @@ onMounted(async() => {
 
 
     const playNotePiano = (pitch: number, velocity: number, ctx: TimeContext, noteDur: number, pianoIndex = 0) => {
+      // Update the FX parameters before playing the note
+      updatePianoFX(pianoIndex);
+      
       const piano = pianoChains[mod2(pianoIndex, pianoChains.length)].piano
       //todo - get this to use duration and have midi output signature for consistency
       // const bpm = ctx.bpm
@@ -229,7 +244,8 @@ onMounted(async() => {
 
     playNote = playNotePiano
 
-    midiOuts.push(iac1, iac2, iac3, iac4);
+    // Initialize FX parameters for all voices
+    appState.voices.forEach((_, idx) => updatePianoFX(idx))
 
     const p5i = appState.p5Instance!!
     const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
@@ -345,6 +361,78 @@ onUnmounted(() => {
           </div>
         </div>
       </details>
+      
+      <details open class="fx-controls">
+        <summary>FX Controls</summary>
+        <div class="fx-sliders">
+          <div class="fx-slider">
+            <label>Distortion: {{ voice.fxParams.distortion.toFixed(2) }}</label>
+            <input 
+              type="range" 
+              v-model.number="voice.fxParams.distortion" 
+              min="0" 
+              max="1" 
+              step="0.01" 
+              @input="updatePianoFX(idx)" 
+            />
+          </div>
+          <div class="fx-slider">
+            <label>Chorus: {{ voice.fxParams.chorus.toFixed(2) }}</label>
+            <input 
+              type="range" 
+              v-model.number="voice.fxParams.chorus" 
+              min="0" 
+              max="1" 
+              step="0.01" 
+              @input="updatePianoFX(idx)" 
+            />
+          </div>
+          <div class="fx-slider">
+            <label>Filter: {{ voice.fxParams.filter.toFixed(2) }}</label>
+            <input 
+              type="range" 
+              v-model.number="voice.fxParams.filter" 
+              min="0" 
+              max="1" 
+              step="0.01" 
+              @input="updatePianoFX(idx)" 
+            />
+          </div>
+          <div class="fx-slider">
+            <label>Delay Time: {{ voice.fxParams.delayTime.toFixed(2) }}</label>
+            <input 
+              type="range" 
+              v-model.number="voice.fxParams.delayTime" 
+              min="0" 
+              max="1" 
+              step="0.01" 
+              @input="updatePianoFX(idx)" 
+            />
+          </div>
+          <div class="fx-slider">
+            <label>Delay Feedback: {{ voice.fxParams.delayFeedback.toFixed(2) }}</label>
+            <input 
+              type="range" 
+              v-model.number="voice.fxParams.delayFeedback" 
+              min="0" 
+              max="0.9" 
+              step="0.01" 
+              @input="updatePianoFX(idx)" 
+            />
+          </div>
+          <div class="fx-slider">
+            <label>Reverb: {{ voice.fxParams.reverb.toFixed(2) }}</label>
+            <input 
+              type="range" 
+              v-model.number="voice.fxParams.reverb" 
+              min="0" 
+              max="1" 
+              step="0.01" 
+              @input="updatePianoFX(idx)" 
+            />
+          </div>
+        </div>
+      </details>
     </div>
   </div>
 </template>
@@ -412,5 +500,29 @@ button {
 
 .display-text .highlight {
   background-color: #fffb90;
+}
+
+.fx-controls {
+  margin-top: 1rem;
+}
+
+.fx-sliders {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.fx-slider {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  font-size: 0.9rem;
+}
+
+.fx-slider input[type=range] {
+  writing-mode: horizontal-tb;
+  direction: ltr;
+  width: 100%;
 }
 </style>
