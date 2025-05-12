@@ -78,11 +78,46 @@ export function getPiano() {
   return piano
 }
 
-const audioStart = async () => {
-  await Tone.start()
-  Tone.Transport.start()
-  console.log('audio is ready', Tone.Transport.bpm.value, Tone.context.lookAhead)
-  // setTimeout(testCancel, 50)
-  document.querySelector('body')?.removeEventListener('click', audioStart)
+export function getPianoChain() {
+  const piano = getPiano()
+  const distortion = new Tone.Distortion(0.1)
+  const chorus = new Tone.Chorus(2, 2, 0.1)
+  const filter = new Tone.Filter(20000, 'lowpass')
+  const delay = new Tone.FeedbackDelay(0.5, 0.1)
+  const reverb = new Tone.Freeverb()
+
+  piano.chain(distortion, chorus, filter, delay, reverb)
+  reverb.toDestination()
+
+  return {
+    piano,
+    distortion,
+    chorus,
+    filter,
+    delay,
+    reverb,
+    paramFuncs: {
+      distortion: (val: number) => distortion.distortion = val,
+      chorus: (val: number) => chorus.depth = val,
+      filter: (val: number) => filter.frequency.value = 20000 * val**2,
+      delayTime: (val: number) => delay.delayTime.value = val**2,
+      delayFeedback: (val: number) => delay.feedback.value = val,
+      reverb: (val: number) => reverb.wet.value = val
+    }
+  }
 }
-document.querySelector('body')?.addEventListener('click', audioStart)
+
+
+export const TONE_AUDIO_START = new Promise((resolve) => {
+
+  const audioStart = async () => {
+    await Tone.start()
+    resolve(true)
+    Tone.getTransport().start()
+    console.log('Tone.js audio is ready')
+    document.querySelector('body')?.removeEventListener('click', audioStart)
+  }
+  document.querySelector('body')?.addEventListener('click', audioStart)
+})
+
+

@@ -9,11 +9,12 @@ import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN
 import { AbletonClip, clipMap, INITIALIZE_ABLETON_CLIPS } from '@/io/abletonClips';
 import { MIDI_READY, midiInputs, midiOutputs } from '@/io/midi';
 import { Scale } from '@/music/scale';
-import { getPiano } from '@/music/synths';
+import { getPiano, getPianoChain, TONE_AUDIO_START } from '@/music/synths';
 import { m2f } from '@/music/mpeSynth';
 import { TRANSFORM_REGISTRY } from './clipTransforms';
 import { clipData as staticClipData } from './clipData';
 import type { MIDIValOutput } from '@midival/core';
+import * as Tone from 'tone'
 
 const appState = inject<SonarAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
@@ -34,10 +35,10 @@ const mod2 = (n: number, m: number) =>  (n % m + m) % m
               // used for transpositions
 
 // These will be filled once MIDI is ready (inside onMounted)
-const midiOuts: any[] = [];
+const midiOuts: MIDIValOutput[] = [];
 
 //lets you switch between midi and web audio piano
-let playNote: (pitch: number, velocity: number, ctx?: TimeContext, noteDur?: number, inst?: any) => void = () => {}
+let playNote: (pitch: number, velocity: number, ctx?: TimeContext, noteDur?: number, instInd?: number) => void = () => {}
 
 
 const buildClipFromLine = (line: string): { clip: AbletonClip, updatedLine: string } => {
@@ -87,7 +88,7 @@ const buildClipFromLine = (line: string): { clip: AbletonClip, updatedLine: stri
 const playClips = async (
   lines: string[],
   ctx: TimeContext,
-  midiOut: MIDIValOutput,
+  voiceIdx: number,
   voiceState: VoiceState,
   firstLoop: boolean
 ) => {
@@ -111,7 +112,7 @@ const playClips = async (
     for (const nextNote of notes) {
       await ctx.wait(nextNote.preDelta)
       if (!voiceState.isPlaying) break
-      playNote(nextNote.note.pitch, nextNote.note.velocity, ctx, nextNote.note.duration, midiOut)
+      playNote(nextNote.note.pitch, nextNote.note.velocity, ctx, nextNote.note.duration, voiceIdx)
       if (nextNote.postDelta) await ctx.wait(nextNote.postDelta)
     }
     if (!voiceState.isPlaying) break
@@ -125,7 +126,7 @@ const startVoice = (voiceIdx: number) => {
   const playOnce = async (ctx: TimeContext, firstLoop: boolean) => {
     const lines = v.sliceText.split('\n').map(l => l.trim()).filter(Boolean)
     if (!lines.length || !midiOuts[voiceIdx]) return
-    await playClips(lines, ctx, midiOuts[voiceIdx], v, firstLoop)
+    await playClips(lines, ctx, voiceIdx, v, firstLoop)
   }
 
   if (v.isLooping) {
@@ -169,16 +170,24 @@ const togglePlay = (voiceIdx: number) => {
 
 const launchQueue: Array<(ctx: TimeContext) => Promise<void>> = []
 
+const pianoChains = Array.from({ length: 10 }, (_, i) => getPianoChain())
+
 onMounted(async() => {
   try {
 
     await MIDI_READY
     await INITIALIZE_ABLETON_CLIPS('src/sketches/sonar_sketch/piano_melodies Project/piano_melodies.als', staticClipData, true)
+    await TONE_AUDIO_START
 
     const iac1 = midiOutputs.get('IAC Driver Bus 1')!!
     const iac2 = midiOutputs.get('IAC Driver Bus 2')!!
     const iac3 = midiOutputs.get('IAC Driver Bus 3')!!
-    const iac4 = midiOutputs.get('IAC Driver Bus 3')!!
+    const iac4 = midiOutputs.get('IAC Driver Bus 4')!!;
+
+        
+    [iac1, iac2, iac3, iac4].forEach(out => {
+      midiOuts.push(out)
+    })
 
     const lpd8 = midiInputs.get("LPD8 mk2")
     const midiNorm = (val: number) => val / 127
@@ -190,7 +199,8 @@ onMounted(async() => {
       })
     }
 
-    const playNoteMidi = (pitch: number, velocity: number, ctx: TimeContext, noteDur: number, inst = iac1) => {
+    const playNoteMidi = (pitch: number, velocity: number, ctx: TimeContext, noteDur: number, voiceIdx: number) => {
+      const inst = midiOuts[voiceIdx]
       inst.sendNoteOn(pitch, velocity)
       ctx.branch(async ctx => {
         await ctx.wait((noteDur ?? 0.1) * 0.98)
@@ -201,15 +211,23 @@ onMounted(async() => {
       })
     }
 
-    const pianos = Array.from({ length: 10 }, (_, i) => getPiano())
 
     const playNotePiano = (pitch: number, velocity: number, ctx: TimeContext, noteDur: number, pianoIndex = 0) => {
-      const piano = pianos[mod2(pianoIndex, pianos.length)]
+      const piano = pianoChains[mod2(pianoIndex, pianoChains.length)].piano
       //todo - get this to use duration and have midi output signature for consistency
-      piano.triggerAttackRelease([m2f(pitch)], '16n', null, velocity)
+      // const bpm = ctx.bpm
+      // const dur = noteDur * (60 / bpm)
+      // piano.triggerAttackRelease([m2f(pitch)], dur, null, velocity)
+      piano.triggerAttack([m2f(pitch)], Tone.now(), velocity/127)
+      ctx.branch(async ctx => {
+        await ctx.wait(noteDur)
+        piano.triggerRelease(m2f(pitch))
+      }).finally(() => {
+        piano.triggerRelease(m2f(pitch))
+      })
     }
 
-    playNote = playNoteMidi
+    playNote = playNotePiano
 
     midiOuts.push(iac1, iac2, iac3, iac4);
 
