@@ -16,14 +16,7 @@ export type VoiceState = {
   playingText: string;
   playingLineIdx: number;
   startPhraseIdx: number;
-  fxParams: {
-    distortion: number;
-    chorus: number;
-    filter: number;
-    delayTime: number;
-    delayFeedback: number;
-    reverb: number;
-  };
+  fxParams: Record<string, number>;
 };
 
 export type SonarAppState = {
@@ -68,10 +61,13 @@ export const appState: SonarAppState = {
     startPhraseIdx: 0,
     fxParams: {
       distortion: 0.1,
-      chorus: 0.1,
+      chorusWet: 0.1,
+      chorusDepth: 0.3,
+      chorusRate: 0.2,
       filter: 1.0,
       delayTime: 0.5,
       delayFeedback: 0.1,
+      delayMix: 0.5,
       reverb: 0.1
     }
   })),

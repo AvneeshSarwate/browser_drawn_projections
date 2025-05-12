@@ -1,7 +1,7 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
 import { type SonarAppState, appStateName, type VoiceState } from './appState';
-import { inject, onMounted, onUnmounted, reactive } from 'vue';
+import { inject, onMounted, onUnmounted, reactive, ref, computed } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
@@ -172,23 +172,33 @@ const launchQueue: Array<(ctx: TimeContext) => Promise<void>> = []
 
 const pianoChains = Array.from({ length: 10 }, (_, i) => getPianoChain())
 
+// Get the parameter names for the FX controls
+const parameterNames = ref<string[]>(
+  pianoChains.length > 0 ? pianoChains[0].paramNames || [] : []
+);
+
+// Function to get a readable name for each parameter
+const formatParamName = (paramName: string) => {
+  return paramName
+    .replace(/([A-Z])/g, ' $1') // Add space before capital letters
+    .replace(/^./, str => str.toUpperCase()); // Capitalize first letter
+};
+
 // Function to update piano FX parameters
 const updatePianoFX = (voiceIdx: number) => {
   const voice = appState.voices[voiceIdx];
   const pianoChain = pianoChains[mod2(voiceIdx, pianoChains.length)];
   
   // Apply FX parameters
-  pianoChain.paramFuncs.distortion(voice.fxParams.distortion);
-  pianoChain.paramFuncs.chorus(voice.fxParams.chorus);
-  pianoChain.paramFuncs.filter(voice.fxParams.filter);
-  pianoChain.paramFuncs.delayTime(voice.fxParams.delayTime);
-  pianoChain.paramFuncs.delayFeedback(voice.fxParams.delayFeedback);
-  pianoChain.paramFuncs.reverb(voice.fxParams.reverb);
+  Object.keys(voice.fxParams).forEach(paramName => {
+    if (pianoChain.paramFuncs[paramName]) {
+      pianoChain.paramFuncs[paramName](voice.fxParams[paramName]);
+    }
+  });
 }
 
 onMounted(async() => {
   try {
-
     await MIDI_READY
     await INITIALIZE_ABLETON_CLIPS('src/sketches/sonar_sketch/piano_melodies Project/piano_melodies.als', staticClipData, true)
     await TONE_AUDIO_START
@@ -200,6 +210,18 @@ onMounted(async() => {
 
         
     midiOuts.push(iac1, iac2, iac3, iac4)
+
+    // Initialize any missing FX parameters based on the available parameter names
+    if (pianoChains.length > 0) {
+      const availableParams = pianoChains[0].paramNames || [];
+      appState.voices.forEach(voice => {
+        availableParams.forEach(paramName => {
+          if (voice.fxParams[paramName] === undefined) {
+            voice.fxParams[paramName] = 0.1;
+          }
+        });
+      });
+    }
 
     const lpd8 = midiInputs.get("LPD8 mk2")
     const midiNorm = (val: number) => val / 127
@@ -365,66 +387,15 @@ onUnmounted(() => {
       <details open class="fx-controls">
         <summary>FX Controls</summary>
         <div class="fx-sliders">
-          <div class="fx-slider">
-            <label>Distortion: {{ voice.fxParams.distortion.toFixed(2) }}</label>
+          <div 
+            v-for="paramName in parameterNames" 
+            :key="paramName" 
+            class="fx-slider"
+          >
+            <label>{{ formatParamName(paramName) }}: {{ voice.fxParams[paramName]?.toFixed(2) }}</label>
             <input 
               type="range" 
-              v-model.number="voice.fxParams.distortion" 
-              min="0" 
-              max="1" 
-              step="0.01" 
-              @input="updatePianoFX(idx)" 
-            />
-          </div>
-          <div class="fx-slider">
-            <label>Chorus: {{ voice.fxParams.chorus.toFixed(2) }}</label>
-            <input 
-              type="range" 
-              v-model.number="voice.fxParams.chorus" 
-              min="0" 
-              max="1" 
-              step="0.01" 
-              @input="updatePianoFX(idx)" 
-            />
-          </div>
-          <div class="fx-slider">
-            <label>Filter: {{ voice.fxParams.filter.toFixed(2) }}</label>
-            <input 
-              type="range" 
-              v-model.number="voice.fxParams.filter" 
-              min="0" 
-              max="1" 
-              step="0.01" 
-              @input="updatePianoFX(idx)" 
-            />
-          </div>
-          <div class="fx-slider">
-            <label>Delay Time: {{ voice.fxParams.delayTime.toFixed(2) }}</label>
-            <input 
-              type="range" 
-              v-model.number="voice.fxParams.delayTime" 
-              min="0" 
-              max="1" 
-              step="0.01" 
-              @input="updatePianoFX(idx)" 
-            />
-          </div>
-          <div class="fx-slider">
-            <label>Delay Feedback: {{ voice.fxParams.delayFeedback.toFixed(2) }}</label>
-            <input 
-              type="range" 
-              v-model.number="voice.fxParams.delayFeedback" 
-              min="0" 
-              max="0.9" 
-              step="0.01" 
-              @input="updatePianoFX(idx)" 
-            />
-          </div>
-          <div class="fx-slider">
-            <label>Reverb: {{ voice.fxParams.reverb.toFixed(2) }}</label>
-            <input 
-              type="range" 
-              v-model.number="voice.fxParams.reverb" 
+              v-model.number="voice.fxParams[paramName]" 
               min="0" 
               max="1" 
               step="0.01" 
