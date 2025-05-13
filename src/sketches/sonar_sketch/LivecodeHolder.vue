@@ -190,7 +190,7 @@ const updatePianoFX = (voiceIdx: number) => {
   const pianoChain = pianoChains[mod2(voiceIdx, pianoChains.length)];
   
   // Apply FX parameters
-  Object.keys(voice.fxParams).forEach(paramName => {
+  Object.keys(voice.fxParams).forEach((paramName: string) => {
     if (pianoChain.paramFuncs[paramName]) {
       pianoChain.paramFuncs[paramName](voice.fxParams[paramName]);
     }
@@ -200,7 +200,7 @@ const updatePianoFX = (voiceIdx: number) => {
 onMounted(async() => {
   try {
     await MIDI_READY
-    await INITIALIZE_ABLETON_CLIPS('src/sketches/sonar_sketch/piano_melodies Project/piano_melodies.als', staticClipData, true)
+    await INITIALIZE_ABLETON_CLIPS('src/sketches/sonar_sketch/piano_melodies Project/piano_melodies.als', staticClipData, false)
     await TONE_AUDIO_START
 
     const iac1 = midiOutputs.get('IAC Driver Bus 1')

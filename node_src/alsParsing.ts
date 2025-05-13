@@ -95,7 +95,9 @@ wss.on('connection', (ws: WebSocket) => {
     console.log(`Received message: ${message}`);
     const parsed = JSON.parse(message);
     if (parsed.type === 'file') {
-      fileName = parsed.fileName
+      fileName = path.isAbsolute(parsed.fileName) 
+      ? parsed.fileName 
+      : path.resolve(process.cwd(), parsed.fileName);
 
       statsWatcher.removeAllListeners()
       statsWatcher = fs.watchFile(fileName, (curr, prev) => {
@@ -144,6 +146,7 @@ let statsWatcher = fs.watchFile(fileName, (curr, prev) => {
 });
 
 function writeClipDataTs(alsFilePath: string, clipMap: Map<string, AbletonClip>) {
+  return
   try {
     // get the Ableton project folder, then its parent "sketch" folder
     const projectDir = path.dirname(alsFilePath);

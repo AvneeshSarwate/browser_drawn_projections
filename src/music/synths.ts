@@ -38,7 +38,7 @@ export const sampler = new Tone.Sampler({
   "baseUrl": "salamander/"
 }).toDestination();
 
-export function getPiano() {
+export function getPiano(connectToDestination: boolean = true) {
   const piano = new Tone.Sampler({
     "A0": "A0.[mp3|ogg]",
     "C1": "C1.[mp3|ogg]",
@@ -73,13 +73,17 @@ export function getPiano() {
   }, {
     "release": 1,
     "baseUrl": "salamander/"
-  }).toDestination();
+  })
+
+  if (connectToDestination) {
+    piano.connect(Tone.getDestination())
+  }
 
   return piano
 }
 
 export function getPianoChain() {
-  const piano = getPiano()
+  const piano = getPiano(false)
   const distortion = new Tone.Distortion(0.1)
   const chorus = new Tone.Chorus(2, 2, 0.3)
   const filter = new Tone.Filter(20000, 'lowpass')
@@ -105,7 +109,8 @@ export function getPianoChain() {
     chorusWet: (val: number) => chorus.wet.value = val,
     chorusDepth: (val: number) => chorus.depth = val,
     chorusRate: (val: number) => chorus.delayTime = 2 + val**2 * 20,
-    filter: (val: number) => filter.frequency.value = 20000 * val**2,
+    filterFreq: (val: number) => filter.frequency.value = 20000 * val**2,
+    filterRes: (val: number) => filter.Q.value = val**100,
     delayTime: (val: number) => delay.delayTime.value = val**2,
     delayFeedback: (val: number) => delay.feedback.value = val,
     delayMix: (val: number) => delayCrossfader.fade.value = val,

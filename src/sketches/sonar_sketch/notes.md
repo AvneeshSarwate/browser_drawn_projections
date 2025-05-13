@@ -3,6 +3,14 @@ debug1 : seg 1 : s_tr 2 : str 1 : q 1
 debug1 : seg 1 : s_tr 3 : str 1 : q 1
 
 
+/**
+ * connect functions to their sounded realites 
+ * - reduction - connection to an urgnecy leading somehwere - 
+ * - or additive stuff - 
+ * 
+ * candence or stasis - how do you use this to build to moments 
+ */
+
 is there away to pass in the clip as an argument to slider scaling or arg parsing? e.g, the time scale function or invert, it would be nice to be able to have sliders map to "clip relative" values (eg, for slice, 0-1 is clip duration, or invert, the axis 0-1 is 3x the range of the clip midi (with the middle third being inside the clip))
 
 
