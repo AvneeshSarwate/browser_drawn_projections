@@ -129,6 +129,53 @@ export function getPianoChain() {
 }
 
 
+export function getSynthChain() {
+  const synth = new Tone.Synth()
+  const distortion = new Tone.Distortion(0.1)
+  const chorus = new Tone.Chorus(2, 2, 0.3)
+  const filter = new Tone.Filter(20000, 'lowpass')
+  const delay = new Tone.FeedbackDelay(0.5, 0.1)
+  const delayCrossfader = new Tone.CrossFade(0)
+  const reverb = new Tone.Freeverb()
+
+  synth.connect(distortion)
+  distortion.connect(chorus)
+  chorus.connect(filter)
+  filter.connect(delayCrossfader.a)
+  filter.connect(delay)
+  delay.connect(delayCrossfader.b)
+  delayCrossfader.connect(reverb)
+  reverb.connect(Tone.getDestination())
+
+  // piano.chain(distortion, chorus, filter, delay, reverb, Tone.getDestination())
+  // piano.chain(delay, Tone.getDestination())
+
+
+  const paramFuncs = {
+    distortion: (val: number) => distortion.distortion = val,
+    chorusWet: (val: number) => chorus.wet.value = val,
+    chorusDepth: (val: number) => chorus.depth = val,
+    chorusRate: (val: number) => chorus.delayTime = 2 + val**2 * 20,
+    filterFreq: (val: number) => filter.frequency.value = 20000 * val**2,
+    filterRes: (val: number) => filter.Q.value = val**100,
+    delayTime: (val: number) => delay.delayTime.value = val**2,
+    delayFeedback: (val: number) => delay.feedback.value = val,
+    delayMix: (val: number) => delayCrossfader.fade.value = val,
+    reverb: (val: number) => reverb.wet.value = val
+  }
+  return {
+    synth,
+    distortion,
+    chorus,
+    filter,
+    delay,
+    reverb,
+    paramFuncs,
+    paramNames: Object.keys(paramFuncs)
+  }
+}
+
+
 export const TONE_AUDIO_START = new Promise((resolve) => {
 
   const audioStart = async () => {
