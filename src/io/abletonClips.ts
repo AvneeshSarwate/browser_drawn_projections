@@ -60,7 +60,7 @@ export class AbletonClip {
     const deltas = this.deltas()
     const preDelta = deltas[this.index];
     const postDelta = deltas[this.notes.length];
-    return this.index === this.notes.length - 1 ? { note, preDelta, postDelta } : { note, preDelta };
+    return this.index === this.notes.length - 1 ? { note, preDelta, postDelta } : { note, preDelta, postDelta: 0 };
   }
 
   next(): NoteWithDelta {

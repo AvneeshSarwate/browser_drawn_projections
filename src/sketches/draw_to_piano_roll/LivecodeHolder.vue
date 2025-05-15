@@ -45,7 +45,7 @@ function getNoteRange(pr: PianoRoll<any>) {
 let pianoRoll: PianoRoll<any> = undefined
 let piano: Tone.Sampler = undefined
 
-const launchQueue: ((ctx: TimeContext) => void)[] = []
+const launchQueue: ((ctx: TimeContext) => Promise<any>)[] = []
 let playing = ref(false)
 
 let drawnMelodyCounter = 0
@@ -60,7 +60,7 @@ const pianoRollToClip = (pianoRoll: PianoRoll<any>) => {
 
 const playNote = (note: AbletonNote, ctx: TimeContext) => {
   const {pitch, duration, velocity} = note
-  piano.triggerAttack([m2f(pitch)], Tone.now(), velocity/127)
+  piano.triggerAttack([m2f(pitch)], Tone.now(), velocity)
   ctx.branch(async ctx => {
     await ctx.wait(duration)
     piano.triggerRelease(m2f(pitch))
@@ -70,8 +70,10 @@ const playNote = (note: AbletonNote, ctx: TimeContext) => {
 }
 
 const startPianoRollLoop = () => {
-  playing.value = true
   launchQueue.push(async (ctx: TimeContext) => {
+
+    console.log('piano roll loop started')
+
     let clip = pianoRollToClip(pianoRoll)
     let noteBuffer = clip.noteBuffer()
     let noteBufferInd = 0
@@ -79,9 +81,19 @@ const startPianoRollLoop = () => {
     const pianoRollDuration = clip.duration
     let currentMelodyId = drawnMelodyCounter
 
+    ctx.branch(async ctx => {
+      while(true) {
+        await ctx.wait(0.016)
+        const beats = (ctx.beats - loopStartTime) % pianoRollDuration
+        // console.log('setting cursor pos', beats)
+        pianoRoll.setCursorPos(beats)
+      }
+    })
+
     while(playing.value) {
       //normal looping logic
       const note = noteBuffer[noteBufferInd]
+      // console.log('playing note', drawnMelodyCounter, noteBufferInd, ctx.beats, note)
       await ctx.wait(note.preDelta)
       playNote(note.note, ctx)
       await ctx.wait(note.postDelta)
@@ -118,8 +130,22 @@ const startPianoRollLoop = () => {
   })
 }
 
+const togglePlay = () => {
+  if(playing.value) {
+    console.log('stopping piano roll loop')
+    playing.value = false
+  } else {
+    console.log('starting piano roll loop')
+    playing.value = true
+    startPianoRollLoop()
+  }
+}
+
 onMounted(async () => {
   try {
+
+    pianoRoll = new PianoRoll<any>('pianoRollHolder', () => {}, () => {})
+
     await TONE_AUDIO_START
     piano = getPiano()
 
@@ -127,11 +153,7 @@ onMounted(async () => {
     const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
     const threeCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
 
-    // ----------  Piano roll setup  ----------
-    pianoRoll = new PianoRoll<any>('pianoRollHolder', () => {}, () => {})
 
-    // make the piano roll initially show a sensible viewport
-    // pianoRoll.setViewportToShowAllNotes()
 
     // ----------  Path capture state  ----------
     let drawingPath: { x: number; y: number }[] = []
@@ -375,6 +397,17 @@ onMounted(async () => {
       }
     })
 
+    launchLoop(async (ctx: TimeContext) => {
+      while(true) {
+        await ctx.wait(0.5)
+        launchQueue.forEach(f => {
+          console.log('launching loop')
+          ctx.branch(f)
+        })
+        launchQueue.length = 0
+      }
+    })
+
     const passthru = new Passthru({ src: p5Canvas })
     const canvasPaint = new CanvasPaint({ src: passthru })
 
@@ -402,6 +435,7 @@ onUnmounted(() => {
 </script>
 
 <template>
+  <button @click="togglePlay">{{ playing ? 'Stop' : 'Play' }}</button>
   <div id="pianoRollHolder"></div>
 </template>
 
