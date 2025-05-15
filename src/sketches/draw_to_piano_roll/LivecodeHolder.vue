@@ -3,7 +3,7 @@
 import { type DrawToPianoAppState, appStateName } from './appState';
 import { inject, onMounted, onUnmounted } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
-import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords, mousedragEvent, mouseupEvent } from '@/io/keyboardAndMouse';
+import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords, mouseupEvent } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
 import { PianoRoll, type NoteInfo } from '@/music/pianoRoll'
@@ -54,6 +54,17 @@ onMounted(() => {
     // ----------  Path capture state  ----------
     let drawingPath: { x: number; y: number }[] = []
 
+    // Store the most recent grid for visualization
+    let savedDebugGrid: { 
+      grid: boolean[][],
+      totalPitches: number,
+      totalSixteenths: number, 
+      minPitch: number, 
+      maxPitch: number,
+      startPos: number,
+      endPos: number
+    } | null = null
+
     // Utility to fit an arbitrary MIDI pitch to the nearest note in a scale
     const scale = new Scale(undefined, 60) // C major root by default
     const snapPitchToScale = (pitch: number) => {
@@ -67,65 +78,96 @@ onMounted(() => {
 
       // Get current visible ranges from piano roll
       const { minPitch, maxPitch, startPos, endPos } = getNoteRange(pianoRoll)
-
-      // Determine drawing bounds
-      const xs = drawingPath.map(p => p.x)
-      const ys = drawingPath.map(p => p.y)
-      const minX = Math.min(...xs)
-      const maxX = Math.max(...xs)
-      const minY = Math.min(...ys)
-      const maxY = Math.max(...ys)
-
-      const totalBeats = endPos - startPos
-      const sixteenth = 0.25 // 16th note duration in beats
-      const numNotes = Math.floor(totalBeats / sixteenth)
-      if (numNotes <= 0) return
-
-      // Helper to interpolate Y at a given X along the drawn path
-      const getYforX = (xTarget: number) => {
-        // Find segment where x1<=xTarget<=x2
-        for (let i = 0; i < drawingPath.length - 1; i++) {
-          const p1 = drawingPath[i]
-          const p2 = drawingPath[i + 1]
-          if ((p1.x <= xTarget && xTarget <= p2.x) || (p2.x <= xTarget && xTarget <= p1.x)) {
-            const t = (xTarget - p1.x) / (p2.x - p1.x || 1)
-            return p1.y + t * (p2.y - p1.y)
-          }
-        }
-        // Fallback – nearest point
-        let nearest = drawingPath[0]
-        let minDist = Math.abs(nearest.x - xTarget)
-        for (const p of drawingPath) {
-          const d = Math.abs(p.x - xTarget)
-          if (d < minDist) {
-            nearest = p
-            minDist = d
-          }
-        }
-        return nearest.y
+      
+      // 1. Normalize drawing coordinates to [0-1] range
+      // Find the bounds of the drawing
+      const canvas = { width: p5i.width, height: p5i.height }
+      
+      // 2. Create a boolean grid matching piano roll dimensions
+      const totalSixteenths = Math.ceil((endPos - startPos) * 4) // 4 sixteenths per beat
+      const totalPitches = maxPitch - minPitch + 1
+      
+      // Create a grid[pitch][time] = boolean
+      const grid: boolean[][] = Array(totalPitches)
+        .fill(null)
+        .map(() => Array(totalSixteenths).fill(false))
+      
+      // Keep reference to grid in component scope for drawing
+      const debugGrid = {
+        grid,
+        totalPitches,
+        totalSixteenths,
+        minPitch,
+        maxPitch,
+        startPos,
+        endPos
       }
-
+      
+      // 3. Fill the grid based on drawing points
+      for (const point of drawingPath) {
+        // Normalize coordinates to [0-1]
+        const nx = point.x / canvas.width
+        const ny = point.y / canvas.height
+        
+        // Map to grid coordinates
+        const col = Math.floor(nx * totalSixteenths)
+        // y is inverted (0 at top in canvas, but higher pitches are higher numbers)
+        const row = Math.floor((1 - ny) * totalPitches)
+        
+        // Ensure we're in bounds
+        if (col >= 0 && col < totalSixteenths && row >= 0 && row < totalPitches) {
+          grid[row][col] = true
+        }
+      }
+      
+      // 4. Convert grid to notes, joining horizontally adjacent cells
       const notes: NoteInfo<any>[] = []
-
-      let lastPitch: number | undefined
-      let currentNote: NoteInfo<any> | undefined
-
-      for (let i = 0; i < numNotes; i++) {
-        const notePos = startPos + i * sixteenth
-        const frac = (notePos - startPos) / totalBeats
-        const targetX = minX + frac * (maxX - minX)
-        const yVal = getYforX(targetX)
-
-        const normY = (yVal - minY) / (maxY - minY || 1)
-        const rawPitch = minPitch + (1 - normY) * (maxPitch - minPitch)
-        const pitch = snapPitchToScale(Math.round(rawPitch))
-
-        if (pitch === lastPitch && currentNote) {
-          currentNote.duration += sixteenth
-        } else {
-          currentNote = { pitch, position: notePos, duration: sixteenth, velocity: 0.8 }
-          notes.push(currentNote)
-          lastPitch = pitch
+      
+      // For each pitch row in the grid
+      for (let pitchIdx = 0; pitchIdx < totalPitches; pitchIdx++) {
+        const actualPitch = snapPitchToScale(minPitch + pitchIdx)
+        let noteStart = -1
+        let noteLength = 0
+        
+        // Scan across the row looking for filled cells
+        for (let col = 0; col < totalSixteenths; col++) {
+          if (grid[pitchIdx][col]) {
+            // Found a filled cell
+            if (noteStart === -1) {
+              // Start a new note
+              noteStart = col
+              noteLength = 1
+            } else {
+              // Extend current note
+              noteLength++
+            }
+          } else if (noteStart !== -1) {
+            // Found an empty cell after a note, finalize the note
+            const position = startPos + (noteStart * 0.25) // convert to beats
+            const duration = noteLength * 0.25
+            notes.push({
+              pitch: actualPitch,
+              position,
+              duration,
+              velocity: 0.8
+            })
+            
+            // Reset note tracking
+            noteStart = -1
+            noteLength = 0
+          }
+        }
+        
+        // Finalize any note that goes to the end of the grid
+        if (noteStart !== -1) {
+          const position = startPos + (noteStart * 0.25)
+          const duration = noteLength * 0.25
+          notes.push({
+            pitch: actualPitch,
+            position,
+            duration,
+            velocity: 0.8
+          })
         }
       }
 
@@ -133,7 +175,10 @@ onMounted(() => {
       pianoRoll.setNoteData(notes)
 
       // Clear path so it stops rendering
-      drawingPath = []
+      // drawingPath = []
+
+      // Keep the debug grid for visualization
+      savedDebugGrid = debugGrid
     }
 
     // ----------  Bind mouse events via helper utilities ----------
@@ -145,7 +190,7 @@ onMounted(() => {
       isDrawing = true
     }, threeCanvas)
 
-    mousedragEvent(ev => {
+    mousemoveEvent(ev => {
       if (!isDrawing) return
       const p5xy = targetToP5Coords(ev, p5i, threeCanvas)
       drawingPath.push(p5xy)
@@ -170,10 +215,57 @@ onMounted(() => {
       
       
       appState.drawFunctions.push((p: p5) => {
+        // First draw the debug grid if available
+        if (savedDebugGrid) {
+          const { grid, totalPitches, totalSixteenths } = savedDebugGrid
+          
+          // Calculate cell dimensions
+          const cellWidth = p.width / totalSixteenths
+          const cellHeight = p.height / totalPitches
+          
+          // Draw grid cells as rectangles
+          p.push()
+          p.noStroke()
+          p.fill(0, 100, 200, 80) // Semi-transparent blue
+          
+          for (let row = 0; row < totalPitches; row++) {
+            for (let col = 0; col < totalSixteenths; col++) {
+              if (grid[row][col]) {
+                // Convert from grid to canvas coordinates
+                // Invert y since rows count from top pitch
+                const x = col * cellWidth
+                const y = (1 - (row + 1) / totalPitches) * p.height
+                
+                p.rect(x, y, cellWidth, cellHeight)
+              }
+            }
+          }
+          
+          // Draw grid lines for reference
+          p.stroke(100, 100, 100, 100)
+          p.strokeWeight(0.5)
+          
+          // Vertical (time) lines
+          for (let col = 0; col <= totalSixteenths; col++) {
+            const x = col * cellWidth
+            p.line(x, 0, x, p.height)
+          }
+          
+          // Horizontal (pitch) lines
+          for (let row = 0; row <= totalPitches; row++) {
+            const y = row * cellHeight
+            p.line(0, y, p.width, y)
+          }
+          
+          p.pop()
+        }
+        
+        // Then draw the current path on top
         if (drawingPath.length > 1) {
           p.push()
           p.noFill()
           p.stroke(255, 0, 0)
+          p.strokeWeight(2)
           p.beginShape()
           drawingPath.forEach(pt => p.vertex(pt.x, pt.y))
           p.endShape()

@@ -149,7 +149,19 @@ export class Scale {
     const rootDist = pitch - this.root
     const chroma = mod2(rootDist, Math.max(...this.degrees))
 
-    const chromaDegree = this.degrees.includes(chroma) ? this.degrees.indexOf(chroma) : 0
+    let chromaDegree = this.degrees.includes(chroma) ? this.degrees.indexOf(chroma) : -1
+
+    //if note not in scale, chroma is a fraction where the fractional part represents lerp between 2 closest notes
+    if (chromaDegree === -1) {
+      const chromaticDegree = mod2(pitch - this.root, this.degrees[this.degrees.length - 1])
+      const octaveBelow = pitch - chromaticDegree
+      const pitches = this.degrees.map(d => octaveBelow + d)
+      const noteBelow = Math.max(...pitches.filter(p => p < pitch))
+      const noteAbove = pitches.find(p => p > pitch)
+      const indFrac = (pitch - noteBelow) / (noteAbove - noteBelow)
+      const lowerChroma = pitches.findIndex(d => d === noteBelow)
+      chromaDegree = lowerChroma + indFrac
+    }
     const octaveWidth = this.degrees[this.degrees.length - 1]
     const octaveInd = Math.floor((pitch - this.root) / octaveWidth)
     const ind = octaveInd * (this.degrees.length - 1) + chromaDegree
