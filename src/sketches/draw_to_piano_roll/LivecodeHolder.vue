@@ -120,55 +120,76 @@ onMounted(() => {
         }
       }
       
-      // 4. Convert grid to notes, joining horizontally adjacent cells
-      const notes: NoteInfo<any>[] = []
+      // 4. First, convert grid to individual 16th notes
+      const rawNotes: NoteInfo<any>[] = []
       
-      // For each pitch row in the grid
+      // Generate individual 16th notes from the grid
       for (let pitchIdx = 0; pitchIdx < totalPitches; pitchIdx++) {
-        const actualPitch = snapPitchToScale(minPitch + pitchIdx)
-        let noteStart = -1
-        let noteLength = 0
+        const rawPitch = minPitch + pitchIdx
         
-        // Scan across the row looking for filled cells
         for (let col = 0; col < totalSixteenths; col++) {
           if (grid[pitchIdx][col]) {
-            // Found a filled cell
-            if (noteStart === -1) {
-              // Start a new note
-              noteStart = col
-              noteLength = 1
-            } else {
-              // Extend current note
-              noteLength++
-            }
-          } else if (noteStart !== -1) {
-            // Found an empty cell after a note, finalize the note
-            const position = startPos + (noteStart * 0.25) // convert to beats
-            const duration = noteLength * 0.25
-            notes.push({
+            const position = startPos + (col * 0.25) // convert to beats
+            const duration = 0.25 // 16th note
+            
+            // Apply scale snapping here
+            const actualPitch = snapPitchToScale(rawPitch)
+            
+            rawNotes.push({
               pitch: actualPitch,
               position,
               duration,
               velocity: 0.8
             })
-            
-            // Reset note tracking
-            noteStart = -1
-            noteLength = 0
           }
         }
-        
-        // Finalize any note that goes to the end of the grid
-        if (noteStart !== -1) {
-          const position = startPos + (noteStart * 0.25)
-          const duration = noteLength * 0.25
-          notes.push({
-            pitch: actualPitch,
-            position,
-            duration,
-            velocity: 0.8
-          })
+      }
+      
+      // 5. Consolidate adjacent notes with the same pitch
+      // Group notes by pitch
+      const notesByPitch: Map<number, NoteInfo<any>[]> = new Map()
+      
+      for (const note of rawNotes) {
+        if (!notesByPitch.has(note.pitch)) {
+          notesByPitch.set(note.pitch, [])
         }
+        notesByPitch.get(note.pitch)!.push(note)
+      }
+      
+      // Create final notes array with proper consolidation
+      const notes: NoteInfo<any>[] = []
+
+      const noteTolerance = 0.001 // tolerance for floating comparisons
+
+      for (const [pitch, pitchNotes] of notesByPitch.entries()) {
+        // Sort by start position
+        pitchNotes.sort((a, b) => a.position - b.position)
+
+        // Consolidate sequentially
+        const consolidated: NoteInfo<any>[] = []
+
+        for (const note of pitchNotes) {
+          if (consolidated.length === 0) {
+            consolidated.push({ ...note })
+            continue
+          }
+
+          const last = consolidated[consolidated.length - 1]
+          const lastEnd = last.position + last.duration
+          const noteStart = note.position
+          const noteEnd = note.position + note.duration
+
+          // If the note starts before or at the end of the last note (adjacent or overlapping)
+          if (noteStart - lastEnd <= noteTolerance) {
+            // Extend the last note's duration to cover the new note
+            last.duration = Math.max(lastEnd, noteEnd) - last.position
+          } else {
+            // Non-overlapping, push as a new note
+            consolidated.push({ ...note })
+          }
+        }
+
+        notes.push(...consolidated)
       }
 
       // Update piano roll display
