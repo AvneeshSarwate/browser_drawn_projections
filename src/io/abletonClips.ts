@@ -5,6 +5,9 @@ const ws = new WebSocket('ws://localhost:8080');
 //todo api - consolidate AbletonNote/Clip type def with the one in alsParsing.ts
 export type AbletonNote = { pitch: number, duration: number, velocity: number, offVelocity: number, probability: number, position: number, isEnabled: boolean } 
 // export type AbletonClip = { name: string, duration: number, notes: AbletonNote[] }
+export const quickNote = (pitch: number, duration: number, velocity: number, position: number) => {
+  return { pitch, duration, velocity, offVelocity: velocity, probability: 1, position, isEnabled: true }
+}
 
 export type AbletonClipRawData = {
   name: string;
@@ -122,8 +125,13 @@ export class AbletonClip {
     return clone
   }
 
+  //every note has a preDelta, only last note has a postDelta
   noteBuffer(): NoteWithDelta[] {
-    return this.notes.map(() => this.next())
+    const oldIndex = this.index
+    this.index = 0
+    const retVal = this.notes.map(() => this.next())
+    this.index = oldIndex
+    return retVal
   }
 
   static concat(...clips: AbletonClip[]): AbletonClip {

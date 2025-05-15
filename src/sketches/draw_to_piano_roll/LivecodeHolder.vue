@@ -1,13 +1,17 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
 import { type DrawToPianoAppState, appStateName } from './appState';
-import { inject, onMounted, onUnmounted } from 'vue';
+import { inject, onMounted, onUnmounted, ref } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords, mouseupEvent } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
 import { PianoRoll, type NoteInfo } from '@/music/pianoRoll'
 import { Scale } from '@/music/scale'
+import { AbletonClip, quickNote, type AbletonNote } from '@/io/abletonClips';
+import * as Tone from 'tone';
+import { getPiano, TONE_AUDIO_START } from '@/music/synths';
+import { m2f } from '@/music/clipPlayback';
 
 const appState = inject<DrawToPianoAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
@@ -29,8 +33,8 @@ function getNoteRange(pr: PianoRoll<any>) {
   // Access underlying SVG viewBox
   const vb = (pr as any).svgRoot.viewbox()
 
-  const startPos = vb.x / pr.quarterNoteWidth
-  const endPos = (vb.x + vb.width) / pr.quarterNoteWidth
+  const startPos = vb.x / pr.quarterNoteWidth //in beats
+  const endPos = (vb.x + vb.width) / pr.quarterNoteWidth //in beats
 
   const maxPitch = pr.svgYtoPitch(vb.y)
   const minPitch = pr.svgYtoPitch(vb.y + vb.height)
@@ -38,15 +42,93 @@ function getNoteRange(pr: PianoRoll<any>) {
   return { minPitch, maxPitch, startPos, endPos }
 }
 
-onMounted(() => {
+let pianoRoll: PianoRoll<any> = undefined
+let piano: Tone.Sampler = undefined
+
+const launchQueue: ((ctx: TimeContext) => void)[] = []
+let playing = ref(false)
+
+let drawnMelodyCounter = 0
+const pianoRollToClip = (pianoRoll: PianoRoll<any>) => {
+  const notes = pianoRoll.getNoteData()
+  const { startPos, endPos } = getNoteRange(pianoRoll)
+  const abletonNotes = notes.map(note => {
+    return quickNote(note.pitch, note.duration, note.velocity, note.position)
+  })
+  return new AbletonClip(`pianoRollClip_${drawnMelodyCounter}`, endPos - startPos, abletonNotes)
+}
+
+const playNote = (note: AbletonNote, ctx: TimeContext) => {
+  const {pitch, duration, velocity} = note
+  piano.triggerAttack([m2f(pitch)], Tone.now(), velocity/127)
+  ctx.branch(async ctx => {
+    await ctx.wait(duration)
+    piano.triggerRelease(m2f(pitch))
+  }).finally(() => {
+    piano.triggerRelease(m2f(pitch))
+  })
+}
+
+const startPianoRollLoop = () => {
+  playing.value = true
+  launchQueue.push(async (ctx: TimeContext) => {
+    let clip = pianoRollToClip(pianoRoll)
+    let noteBuffer = clip.noteBuffer()
+    let noteBufferInd = 0
+    const loopStartTime = ctx.beats
+    const pianoRollDuration = clip.duration
+    let currentMelodyId = drawnMelodyCounter
+
+    while(playing.value) {
+      //normal looping logic
+      const note = noteBuffer[noteBufferInd]
+      await ctx.wait(note.preDelta)
+      playNote(note.note, ctx)
+      await ctx.wait(note.postDelta)
+      noteBufferInd = (noteBufferInd + 1) % noteBuffer.length
+
+      //if the melody has changed, we need to reset the note buffer
+      if(currentMelodyId !== drawnMelodyCounter) {
+        clip = pianoRollToClip(pianoRoll)
+        noteBuffer = clip.noteBuffer()
+        currentMelodyId = drawnMelodyCounter
+        const currentLoopTime = ctx.beats - loopStartTime
+
+        //find the first note in the new buffer that is after the current loop time
+        let newNoteBufferInd = noteBuffer.findIndex(note => note.note.position > currentLoopTime)
+
+        //if we're at the end of the new note buffer, we need to wait until the end of the loop time
+        if(newNoteBufferInd === -1) {
+          newNoteBufferInd = 0
+          await ctx.wait(pianoRollDuration - currentLoopTime)
+        } else {
+          noteBufferInd = newNoteBufferInd
+
+          //wait until the next note is ready to play, play it, and then increment index - it's easier
+          //than handling pre-delta logic for the first note of the new buffer
+          const nextNote = noteBuffer[newNoteBufferInd]
+          await ctx.wait(currentLoopTime-nextNote.note.position)
+          playNote(nextNote.note, ctx)
+          await ctx.wait(nextNote.postDelta)
+          noteBufferInd = (noteBufferInd + 1) % noteBuffer.length
+        }
+      }
+
+    }
+  })
+}
+
+onMounted(async () => {
   try {
+    await TONE_AUDIO_START
+    piano = getPiano()
 
     const p5i = appState.p5Instance!!
     const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
     const threeCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
 
     // ----------  Piano roll setup  ----------
-    const pianoRoll = new PianoRoll<any>('pianoRollHolder', () => {}, () => {})
+    pianoRoll = new PianoRoll<any>('pianoRollHolder', () => {}, () => {})
 
     // make the piano roll initially show a sensible viewport
     // pianoRoll.setViewportToShowAllNotes()
@@ -194,6 +276,7 @@ onMounted(() => {
 
       // Update piano roll display
       pianoRoll.setNoteData(notes)
+      drawnMelodyCounter++
 
       // Clear path so it stops rendering
       // drawingPath = []
@@ -231,80 +314,75 @@ onMounted(() => {
       p5Mouse = targetToP5Coords(ev, p5i, threeCanvas)
     }, threeCanvas)
 
-    const code = () => { //todo template - is this code-array pattern really needed in the template?
-      clearDrawFuncs() //todo template - move this to cleanup block?
       
       
-      appState.drawFunctions.push((p: p5) => {
-        // First draw the debug grid if available
-        if (savedDebugGrid) {
-          const { grid, totalPitches, totalSixteenths } = savedDebugGrid
-          
-          // Calculate cell dimensions
-          const cellWidth = p.width / totalSixteenths
-          const cellHeight = p.height / totalPitches
-          
-          // Draw grid cells as rectangles
-          p.push()
-          p.noStroke()
-          p.fill(0, 100, 200, 80) // Semi-transparent blue
-          
-          for (let row = 0; row < totalPitches; row++) {
-            for (let col = 0; col < totalSixteenths; col++) {
-              if (grid[row][col]) {
-                // Convert from grid to canvas coordinates
-                // Invert y since rows count from top pitch
-                const x = col * cellWidth
-                const y = (1 - (row + 1) / totalPitches) * p.height
-                
-                p.rect(x, y, cellWidth, cellHeight)
-              }
+    appState.drawFunctions.push((p: p5) => {
+      // First draw the debug grid if available
+      if (savedDebugGrid) {
+        const { grid, totalPitches, totalSixteenths } = savedDebugGrid
+        
+        // Calculate cell dimensions
+        const cellWidth = p.width / totalSixteenths
+        const cellHeight = p.height / totalPitches
+        
+        // Draw grid cells as rectangles
+        p.push()
+        p.noStroke()
+        p.fill(0, 100, 200, 80) // Semi-transparent blue
+        
+        for (let row = 0; row < totalPitches; row++) {
+          for (let col = 0; col < totalSixteenths; col++) {
+            if (grid[row][col]) {
+              // Convert from grid to canvas coordinates
+              // Invert y since rows count from top pitch
+              const x = col * cellWidth
+              const y = (1 - (row + 1) / totalPitches) * p.height
+              
+              p.rect(x, y, cellWidth, cellHeight)
             }
           }
-          
-          // Draw grid lines for reference
-          p.stroke(100, 100, 100, 100)
-          p.strokeWeight(0.5)
-          
-          // Vertical (time) lines
-          for (let col = 0; col <= totalSixteenths; col++) {
-            const x = col * cellWidth
-            p.line(x, 0, x, p.height)
-          }
-          
-          // Horizontal (pitch) lines
-          for (let row = 0; row <= totalPitches; row++) {
-            const y = row * cellHeight
-            p.line(0, y, p.width, y)
-          }
-          
-          p.pop()
         }
         
-        // Then draw the current path on top
-        if (drawingPath.length > 1) {
-          p.push()
-          p.noFill()
-          p.stroke(255, 0, 0)
-          p.strokeWeight(2)
-          p.beginShape()
-          drawingPath.forEach(pt => p.vertex(pt.x, pt.y))
-          p.endShape()
-          p.pop()
+        // Draw grid lines for reference
+        p.stroke(100, 100, 100, 100)
+        p.strokeWeight(0.5)
+        
+        // Vertical (time) lines
+        for (let col = 0; col <= totalSixteenths; col++) {
+          const x = col * cellWidth
+          p.line(x, 0, x, p.height)
         }
-      })
-
-      const passthru = new Passthru({ src: p5Canvas })
-      const canvasPaint = new CanvasPaint({ src: passthru })
-
-      shaderGraphEndNode = canvasPaint
-      appState.shaderDrawFunc = () => shaderGraphEndNode!!.renderAll(appState.threeRenderer!!)
+        
+        // Horizontal (pitch) lines
+        for (let row = 0; row <= totalPitches; row++) {
+          const y = row * cellHeight
+          p.line(0, y, p.width, y)
+        }
+        
+        p.pop()
+      }
       
-      singleKeydownEvent('p', (ev) => { appState.paused = !appState.paused })
-    }
+      // Then draw the current path on top
+      if (drawingPath.length > 1) {
+        p.push()
+        p.noFill()
+        p.stroke(255, 0, 0)
+        p.strokeWeight(2)
+        p.beginShape()
+        drawingPath.forEach(pt => p.vertex(pt.x, pt.y))
+        p.endShape()
+        p.pop()
+      }
+    })
 
-    appState.codeStack.push(code)
-    code() 
+    const passthru = new Passthru({ src: p5Canvas })
+    const canvasPaint = new CanvasPaint({ src: passthru })
+
+    shaderGraphEndNode = canvasPaint
+    appState.shaderDrawFunc = () => shaderGraphEndNode!!.renderAll(appState.threeRenderer!!)
+    
+    singleKeydownEvent('p', (ev) => { appState.paused = !appState.paused })
+    
   } catch (e) {
     console.warn(e)
   }
@@ -318,6 +396,7 @@ onUnmounted(() => {
   shaderGraphEndNode?.disposeAll()
   clearListeners()
   timeLoops.forEach(tl => tl.cancel())
+  clearDrawFuncs()
 })
 
 </script>
