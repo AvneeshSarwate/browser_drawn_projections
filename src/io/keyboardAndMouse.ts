@@ -79,3 +79,28 @@ export function targetToP5Coords(ev: MouseEvent, p: p5, target: HTMLElement = do
     y: norm.y * p.height
   }
 }
+
+// Similar to mousemoveEvent, but only fires while the mouse button is held down.
+export function mousedragEvent(listener: (ev: MouseEvent) => void, target: HTMLElement = document.body) {
+  let isDown = false
+
+  const downHandler = () => {
+    isDown = true
+  }
+
+  const upHandler = () => {
+    isDown = false
+  }
+
+  const moveHandler = (ev: MouseEvent) => {
+    if (isDown) listener(ev)
+  }
+
+  eventListeners.push({ type: "mousedown", cb: downHandler, target })
+  eventListeners.push({ type: "mouseup", cb: upHandler, target })
+  eventListeners.push({ type: "mousemove", cb: moveHandler, target })
+
+  target.addEventListener("mousedown", downHandler)
+  target.addEventListener("mouseup", upHandler)
+  target.addEventListener("mousemove", moveHandler)
+}

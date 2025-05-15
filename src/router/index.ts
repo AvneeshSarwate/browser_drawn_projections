@@ -39,7 +39,8 @@ export const sketchNames = [
   'scTimeTest',
   'faustSynthTest',
   'mutek_playground',
-  'sonar_sketch'
+  'sonar_sketch',
+  'draw_to_piano_roll'
 ]
 
 const sketchRoutes = sketchNames.map(name => {
