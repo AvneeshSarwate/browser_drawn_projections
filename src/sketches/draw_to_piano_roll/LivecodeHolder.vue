@@ -51,6 +51,7 @@ let playing = ref(false)
 let drawnMelodyCounter = 0
 const pianoRollToClip = (pianoRoll: PianoRoll<any>) => {
   const notes = pianoRoll.getNoteData()
+  notes.sort((a, b) => a.position - b.position)
   const { startPos, endPos } = getNoteRange(pianoRoll)
   const abletonNotes = notes.map(note => {
     return quickNote(note.pitch, note.duration, note.velocity, note.position)
