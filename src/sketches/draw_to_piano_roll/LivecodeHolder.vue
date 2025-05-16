@@ -135,14 +135,15 @@ const startPianoRollLoop = () => {
 
           //if we're at the end of the new note buffer, we need to wait until the end of the loop time
           if(newNoteBufferInd === -1) {
-            newNoteBufferInd = 0
+            noteBufferInd = 0
             await ctx.wait(pianoRollDuration - currentLoopTime)
+            console.log('waiting until end of loop time')
           } else {
             noteBufferInd = newNoteBufferInd
 
             //wait until the next note is ready to play, play it, and then increment index - it's easier
             //than handling pre-delta logic for the first note of the new buffer
-            const nextNote = noteBuffer[newNoteBufferInd]
+            const nextNote = noteBuffer[noteBufferInd]
             await ctx.wait(nextNote.note.position - currentLoopTime)
             playNote(nextNote.note, ctx)
             await ctx.wait(nextNote.postDelta)
