@@ -1,4 +1,6 @@
-function getBBox(region: {x: number, y: number}[]): {minX: number, maxX: number, minY: number, maxY: number} {
+type Point = { x: number; y: number };
+
+export function getBBox(region: Point[]): {minX: number, maxX: number, minY: number, maxY: number} {
   let maxX = -Infinity, maxY = -Infinity, minX = Infinity, minY = Infinity;
   region.forEach(p => {
       if(p.x > maxX) maxX = p.x;
@@ -11,7 +13,7 @@ function getBBox(region: {x: number, y: number}[]): {minX: number, maxX: number,
 
 const mixn = (n1: number, n2: number, a: number) => n1*(1-a) + n2*a;
 
-function segment_intersection(ray1: {x: number, y: number}[], ray2: {x: number, y: number}[]) {
+export function segment_intersection(ray1: Point[], ray2: Point[]) {
   const x1 = ray1[0].x,
       y1 = ray1[0].y,
       x2 = ray1[1].x,
@@ -55,7 +57,7 @@ function segment_intersection(ray1: {x: number, y: number}[], ray2: {x: number, 
   return {x: x, y: y, valid: true};
 }
 
-export function directionSweep(cellPoints: {x: number, y: number}[], frac: number, direction: 'top' | 'bottom' | 'left' | 'right'){
+export function directionSweep(cellPoints:Point[], frac: number, direction: 'top' | 'bottom' | 'left' | 'right'){
   const cellBbox = getBBox(cellPoints);
   const isHorizontal = ['left', 'right'].includes(direction);
   if(['bottom', 'right'].includes(direction)) frac = 1 - frac;
@@ -69,7 +71,7 @@ export function directionSweep(cellPoints: {x: number, y: number}[], frac: numbe
   });
   const intersections = lineSegments.map(s => segment_intersection(s, fracLine)).filter(i => i.valid);
 
-  let allPoints: {x: number, y: number}[] = []; 
+  let allPoints:Point[] = []; 
   if     (direction === 'top') allPoints = cellPoints.filter(p => p.y <= fracVal);
   else if(direction === 'bottom') allPoints = cellPoints.filter(p => p.y >= fracVal);
   else if(direction === 'left') allPoints = cellPoints.filter(p => p.x <= fracVal);
@@ -88,4 +90,56 @@ export function directionSweep(cellPoints: {x: number, y: number}[], frac: numbe
 
   const polygon = pointsTheta.sort((p1, p2) => p2.theta - p1.theta);
   return {polygon, line: fracLine};
+}
+
+
+export const lineToPointDistance = (p1: Point, p2: Point, point: Point): number => {
+  const a = p2.y - p1.y
+  const b = p1.x - p2.x
+  const c = p1.y * p2.x - p1.x * p2.y
+  const distance = (a * point.x + b * point.y + c) / Math.sqrt(a * a + b * b)
+  return Math.abs(distance)
+}
+
+
+type Polygon = {
+  points: Point[]
+}
+//assumes polygons are closed, have at least 3 points
+export function findClosestPolygonLineAtPoint(polygons: Polygon[], point: Point): ({polygonIndex: number, lineIndex: number, distance: number}) {
+  let closestPolygonIndex = -1
+  let closestLineIndex = -1
+  let closestDistance = Infinity
+  for(let i = 0; i < polygons.length; i++) {
+    const polygon = polygons[i]
+    for(let j = 0; j < polygon.points.length; j++) {
+      const p1 = polygon.points[j]
+      const p2 = polygon.points[(j+1)%polygon.points.length]
+      const distance = lineToPointDistance(p1, p2, point)
+      if(distance < closestDistance) {
+        closestDistance = distance
+        closestPolygonIndex = i
+        closestLineIndex = j
+      }
+    }
+  }
+  return {polygonIndex: closestPolygonIndex, lineIndex: closestLineIndex, distance: closestDistance}
+}
+
+export function isPointInPolygon(polygon: Polygon, point: Point): boolean {
+  let inside = false;
+  const { points } = polygon;
+  const n = points.length;
+  // Iterate over each edge (points[j] -> points[i])
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const xi = points[i].x, yi = points[i].y;
+    const xj = points[j].x, yj = points[j].y;
+    // Check if the horizontal ray intersects this edge
+    const intersects = ((yi > point.y) !== (yj > point.y))
+      && (point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi);
+    if (intersects) {
+      inside = !inside;
+    }
+  }
+  return inside;
 }
