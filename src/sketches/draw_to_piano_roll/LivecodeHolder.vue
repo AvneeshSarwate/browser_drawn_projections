@@ -248,7 +248,7 @@ const updatePianoRollNotes = () => {
 onMounted(async () => {
   try {
 
-    pianoRoll = new PianoRoll<any>('pianoRollHolder', () => {}, () => {})
+    pianoRoll = new PianoRoll<any>('pianoRollHolder', () => {}, () => {}, true)
 
     await TONE_AUDIO_START
     piano = getPiano()

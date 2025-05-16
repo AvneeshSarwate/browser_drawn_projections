@@ -603,8 +603,10 @@ export class PianoRoll<T> {
   private debugCircle1: Circle
   scrollPos = 0
   scrollCallback = (x: number) => {}
-
-  constructor(containerElementId: string, playHandler: (pitch: number) => void, noteOnOffHandler: (pitch: number, onOff: ('on' | 'off')) => void){
+  private interactionDisabled: boolean;
+  
+  constructor(containerElementId: string, playHandler: (pitch: number) => void, noteOnOffHandler: (pitch: number, onOff: ('on' | 'off')) => void, interactionDisabled: boolean = false){
+    this.interactionDisabled = interactionDisabled;
     this.svgRoot; //the svg root element
 
     /* a dictionary that, upon the start of a group drag/resize event, stores the 
@@ -720,20 +722,17 @@ export class PianoRoll<T> {
     // attach the interaction handlers not related to individual notes
     this.attachHandlersOnBackground(this.backgroundElements, this.svgRoot);
 
-    // this.addNote(55, 0, 1, false);
-    // this.addNote(60, 0, 1, false);
-
-
     //set the view-area so we aren't looking at the whole 127 note 100 measure piano roll
     this.svgRoot.viewbox(0, 55 * this.noteHeight, this.viewportWidth*1.5, this.viewportHeight*1.5);
-    this.debugCircle0 = this.svgRoot.circle(10).move(0, 0).fill('#f00');
-    this.debugCircle1 = this.svgRoot.circle(10).move(0, 0).fill('#0f0');
 
-    this.containerElement!!.addEventListener('keydown', event => this.keydownHandler(event));
-    this.containerElement!!.addEventListener('keyup', event => this.keyupHandler(event));
-    this.containerElement!!.addEventListener('mousemove', event => {
+    // Only attach keyboard and mouse move handlers if interaction is not disabled
+    if (!this.interactionDisabled) {
+      this.containerElement!!.addEventListener('keydown', event => this.keydownHandler(event));
+      this.containerElement!!.addEventListener('keyup', event => this.keyupHandler(event));
+      this.containerElement!!.addEventListener('mousemove', event => {
         this.mousePosition = this.svgMouseCoord(event);
       });
+    }
   }
 
   drawBackgroundAndCursor() {
@@ -1348,6 +1347,8 @@ export class PianoRoll<T> {
   // start a multi-select gesture (and later draw mode)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   private attachHandlersOnBackground(backgroundElements_: Set<Element>, _: Svg){ 
+    if (this.interactionDisabled) return;
+    
     // need to listen on window so select gesture ends even if released outside the 
     // bounds of the root svg element or browser
     window.addEventListener('mouseup', () => {
@@ -1471,15 +1472,12 @@ export class PianoRoll<T> {
 
   // sets event handlers on each note element for position/resize multi-select changes
   private attachHandlersOnNote(note: Note<T>, svgParentObj: Svg){
+    if (this.interactionDisabled) return;
     
-    /* Performs the same drag deviation done on the clicked element to 
-     * the other selected elements
-     */
-
     const noteElement = note.elem;
-
+    
     noteElement.on('point', (event)=>{ console.log('select', event)});
-
+    
     noteElement.on('mousedown', (event) => {
       if (!this.mouseScrollActive && !this.mouseZoomActive) {
         this.resetMouseMoveRoot(event as MouseEvent);

@@ -12,9 +12,7 @@ const resRef = ref(resolution)
     <canvas id="threeCanvas" :width="resRef.width" :height="resRef.height" abitrary-prop="somethi"></canvas>
   </div>
   <div id="description">
-    <p>Press D to enter draw mode</p>
-    <p>Press S to add a circle</p>
-    <p>Press F to animate the circle arrangement</p>
+    <p>Draw notes in the canvas to create melodies in the piano roll</p>
   </div>
   <div id="debugInfo"></div>
 </template>
