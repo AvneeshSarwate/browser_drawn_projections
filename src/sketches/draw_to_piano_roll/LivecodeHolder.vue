@@ -52,6 +52,8 @@ let loopPhase = ref(0)
 let nextNotePosition = ref(0)
 let hotSwapNoteWait = ref(0)
 
+const drawDebugGrid = ref(false)
+
 let drawnMelodyCounter = 0
 const pianoRollToClip = (pianoRoll: PianoRoll<any>) => {
   const notes = pianoRoll.getNoteData()
@@ -194,7 +196,11 @@ type DebugGridInfo = {
 
 // one entry per completed stroke
 const savedDebugGrids: DebugGridInfo[] = []
-const drawNotesList: NoteInfo<any>[][] = []
+const drawNotesLists: NoteInfo<any>[][] = []
+// Store paths for visualization
+type DrawPath = { x: number; y: number }[]
+const savedDrawPaths: DrawPath[] = []
+const showPaths = ref(true)
 
 // Consolidate adjacent or overlapping notes across all strokes
 const consolidateNotes = (input: NoteInfo<any>[]): NoteInfo<any>[] => {
@@ -234,7 +240,7 @@ const consolidateNotes = (input: NoteInfo<any>[]): NoteInfo<any>[] => {
 }
 
 const updatePianoRollNotes = () => {
-  const allNotes = drawNotesList.flat()
+  const allNotes = drawNotesLists.flat()
   const consolidated = consolidateNotes(allNotes)
   pianoRoll.setNoteData(consolidated)
 }
@@ -255,17 +261,6 @@ onMounted(async () => {
 
     // ----------  Path capture state  ----------
     let drawingPath: { x: number; y: number }[] = []
-
-    // Store the most recent grid for visualization
-    let savedDebugGrid: { 
-      grid: boolean[][],
-      totalPitches: number,
-      totalSixteenths: number, 
-      minPitch: number, 
-      maxPitch: number,
-      startPos: number,
-      endPos: number
-    } | null = null
 
     // Utility to fit an arbitrary MIDI pitch to the nearest note in a scale
     const scale = new Scale(undefined, 60) // C major root by default
@@ -348,55 +343,14 @@ onMounted(async () => {
       }
       
       // 5. Consolidate adjacent notes with the same pitch
-      // Group notes by pitch
-      const notesByPitch: Map<number, NoteInfo<any>[]> = new Map()
-      
-      for (const note of rawNotes) {
-        if (!notesByPitch.has(note.pitch)) {
-          notesByPitch.set(note.pitch, [])
-        }
-        notesByPitch.get(note.pitch)!.push(note)
-      }
-      
-      // Create final notes array with proper consolidation
-      const notes: NoteInfo<any>[] = []
-
-      const noteTolerance = 0.001 // tolerance for floating comparisons
-
-      for (const [pitch, pitchNotes] of notesByPitch.entries()) {
-        // Sort by start position
-        pitchNotes.sort((a, b) => a.position - b.position)
-
-        // Consolidate sequentially
-        const consolidated: NoteInfo<any>[] = []
-
-        for (const note of pitchNotes) {
-          if (consolidated.length === 0) {
-            consolidated.push({ ...note })
-            continue
-          }
-
-          const last = consolidated[consolidated.length - 1]
-          const lastEnd = last.position + last.duration
-          const noteStart = note.position
-          const noteEnd = note.position + note.duration
-
-          // If the note starts before or at the end of the last note (adjacent or overlapping)
-          if (noteStart - lastEnd <= noteTolerance) {
-            // Extend the last note's duration to cover the new note
-            last.duration = Math.max(lastEnd, noteEnd) - last.position
-          } else {
-            // Non-overlapping, push as a new note
-            consolidated.push({ ...note })
-          }
-        }
-
-        notes.push(...consolidated)
-      }
+      // Use the same consolidation logic used for all notes
+      const notes = consolidateNotes(rawNotes)
 
       // Save this stroke and update roll (consolidation happens inside helper)
       savedDebugGrids.push(debugGrid)
-      drawNotesList.push(notes)
+      drawNotesLists.push(notes)
+      // Save the path for visualization
+      savedDrawPaths.push([...drawingPath])
       updatePianoRollNotes()
       drawnMelodyCounter++
 
@@ -437,7 +391,7 @@ onMounted(async () => {
       
     appState.drawFunctions.push((p: p5) => {
       // First draw the debug grid if available
-      if (savedDebugGrids.length > 0) {
+      if (savedDebugGrids.length > 0 && drawDebugGrid.value) {
         savedDebugGrids.forEach(({ grid, totalPitches, totalSixteenths }) => {
           const cellWidth = p.width / totalSixteenths
           const cellHeight = p.height / totalPitches
@@ -465,6 +419,24 @@ onMounted(async () => {
           }
           p.pop()
         })
+      }
+      
+      // Draw all saved paths
+      if (savedDrawPaths.length > 0 && showPaths.value) {
+        p.push()
+        p.noFill()
+        p.stroke(255, 0, 0)
+        p.strokeWeight(2)
+        
+        savedDrawPaths.forEach(path => {
+          if (path.length > 1) {
+            p.beginShape()
+            path.forEach(pt => p.vertex(pt.x, pt.y))
+            p.endShape()
+          }
+        })
+        
+        p.pop()
       }
       
       // Then draw the current path on top
@@ -519,7 +491,8 @@ onUnmounted(() => {
 const undoDraw = () => {
   if (savedDebugGrids.length === 0) return
   savedDebugGrids.pop()
-  drawNotesList.pop()
+  drawNotesLists.pop()
+  savedDrawPaths.pop()
   updatePianoRollNotes()
   drawnMelodyCounter++
 }
@@ -527,7 +500,8 @@ const undoDraw = () => {
 const clearDraws = () => {
   if (savedDebugGrids.length === 0) return
   savedDebugGrids.length = 0
-  drawNotesList.length = 0
+  drawNotesLists.length = 0
+  savedDrawPaths.length = 0
   updatePianoRollNotes()
   drawnMelodyCounter++
   if (playing.value) togglePlay()
@@ -537,11 +511,19 @@ const clearDraws = () => {
 </script>
 
 <template>
-  <div id="debugDiv">
+  <!-- <div id="debugDiv">
     <div>loop phase: {{ loopPhase }}</div>
     <div>next note position: {{ nextNotePosition }}</div>
     <div>hot swap note wait: {{ hotSwapNoteWait }}</div>
-  </div>
+  </div> -->
+  <label>
+    <input type="checkbox" v-model="drawDebugGrid" />
+    Draw debug grid
+  </label>
+  <label>
+    <input type="checkbox" v-model="showPaths" />
+    Show paths
+  </label>
   <button @click="togglePlay">{{ playing ? 'Stop' : 'Play' }}</button>
   <button @click="undoDraw">Undo</button>
   <button @click="clearDraws">Clear</button>
