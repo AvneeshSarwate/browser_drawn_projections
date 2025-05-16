@@ -179,6 +179,27 @@ const togglePlay = () => {
   }
 }
 
+//  NEW: multi-stroke bookkeeping and helpers
+
+type DebugGridInfo = {
+  grid: boolean[][]
+  totalPitches: number
+  totalSixteenths: number
+  minPitch: number
+  maxPitch: number
+  startPos: number
+  endPos: number
+}
+
+// one entry per completed stroke
+const savedDebugGrids: DebugGridInfo[] = []
+const drawNotesList: NoteInfo<any>[][] = []
+
+const updatePianoRollNotes = () => {
+  const allNotes = drawNotesList.flat()
+  pianoRoll.setNoteData(allNotes)
+}
+
 onMounted(async () => {
   try {
 
@@ -338,11 +359,13 @@ onMounted(async () => {
       pianoRoll.setNoteData(notes)
       drawnMelodyCounter++
 
-      // Clear path so it stops rendering
-      // drawingPath = []
+      // Save this stroke and update roll
+      savedDebugGrids.push(debugGrid)
+      drawNotesList.push(notes)
+      updatePianoRollNotes()
 
-      // Keep the debug grid for visualization
-      savedDebugGrid = debugGrid
+      // Clear path to start new stroke
+      drawingPath = []
     }
 
     // ----------  Bind mouse events via helper utilities ----------
@@ -378,48 +401,34 @@ onMounted(async () => {
       
     appState.drawFunctions.push((p: p5) => {
       // First draw the debug grid if available
-      if (savedDebugGrid) {
-        const { grid, totalPitches, totalSixteenths } = savedDebugGrid
-        
-        // Calculate cell dimensions
-        const cellWidth = p.width / totalSixteenths
-        const cellHeight = p.height / totalPitches
-        
-        // Draw grid cells as rectangles
-        p.push()
-        p.noStroke()
-        p.fill(0, 100, 200, 80) // Semi-transparent blue
-        
-        for (let row = 0; row < totalPitches; row++) {
-          for (let col = 0; col < totalSixteenths; col++) {
-            if (grid[row][col]) {
-              // Convert from grid to canvas coordinates
-              // Invert y since rows count from top pitch
-              const x = col * cellWidth
-              const y = (1 - (row + 1) / totalPitches) * p.height
-              
-              p.rect(x, y, cellWidth, cellHeight)
+      if (savedDebugGrids.length > 0) {
+        savedDebugGrids.forEach(({ grid, totalPitches, totalSixteenths }) => {
+          const cellWidth = p.width / totalSixteenths
+          const cellHeight = p.height / totalPitches
+          p.push()
+          p.noStroke()
+          p.fill(0, 100, 200, 80)
+          for (let row = 0; row < totalPitches; row++) {
+            for (let col = 0; col < totalSixteenths; col++) {
+              if (grid[row][col]) {
+                const x = col * cellWidth
+                const y = (1 - (row + 1) / totalPitches) * p.height
+                p.rect(x, y, cellWidth, cellHeight)
+              }
             }
           }
-        }
-        
-        // Draw grid lines for reference
-        p.stroke(100, 100, 100, 100)
-        p.strokeWeight(0.5)
-        
-        // Vertical (time) lines
-        for (let col = 0; col <= totalSixteenths; col++) {
-          const x = col * cellWidth
-          p.line(x, 0, x, p.height)
-        }
-        
-        // Horizontal (pitch) lines
-        for (let row = 0; row <= totalPitches; row++) {
-          const y = row * cellHeight
-          p.line(0, y, p.width, y)
-        }
-        
-        p.pop()
+          p.stroke(100, 100, 100, 100)
+          p.strokeWeight(0.5)
+          for (let col = 0; col <= totalSixteenths; col++) {
+            const x = col * cellWidth
+            p.line(x, 0, x, p.height)
+          }
+          for (let row = 0; row <= totalPitches; row++) {
+            const y = row * cellHeight
+            p.line(0, y, p.width, y)
+          }
+          p.pop()
+        })
       }
       
       // Then draw the current path on top
@@ -470,6 +479,25 @@ onUnmounted(() => {
   clearDrawFuncs()
 })
 
+// Add Undo / Clear helpers
+const undoDraw = () => {
+  if (savedDebugGrids.length === 0) return
+  savedDebugGrids.pop()
+  drawNotesList.pop()
+  updatePianoRollNotes()
+  drawnMelodyCounter++
+}
+
+const clearDraws = () => {
+  if (savedDebugGrids.length === 0) return
+  savedDebugGrids.length = 0
+  drawNotesList.length = 0
+  updatePianoRollNotes()
+  drawnMelodyCounter++
+  if (playing.value) togglePlay()
+  turnOffNotes()
+}
+
 </script>
 
 <template>
@@ -479,6 +507,8 @@ onUnmounted(() => {
     <div>hot swap note wait: {{ hotSwapNoteWait }}</div>
   </div>
   <button @click="togglePlay">{{ playing ? 'Stop' : 'Play' }}</button>
+  <button @click="undoDraw">Undo</button>
+  <button @click="clearDraws">Clear</button>
   <div id="pianoRollHolder"></div>
 </template>
 
