@@ -48,6 +48,10 @@ let piano: Tone.Sampler = undefined
 const launchQueue: ((ctx: TimeContext) => Promise<any>)[] = []
 let playing = ref(false)
 
+let loopPhase = ref(0)
+let nextNotePosition = ref(0)
+let hotSwapNoteWait = ref(0)
+
 let drawnMelodyCounter = 0
 const pianoRollToClip = (pianoRoll: PianoRoll<any>) => {
   const notes = pianoRoll.getNoteData()
@@ -59,14 +63,26 @@ const pianoRollToClip = (pianoRoll: PianoRoll<any>) => {
   return new AbletonClip(`pianoRollClip_${drawnMelodyCounter}`, endPos - startPos, abletonNotes)
 }
 
+
+const onNotes = new Set<number>()
+
+const turnOffNotes = () => {
+  for(const pitch of onNotes) {
+    piano.triggerRelease(m2f(pitch))
+  }
+  onNotes.clear()
+}
+
 const playNote = (note: AbletonNote, ctx: TimeContext) => {
   const {pitch, duration, velocity} = note
   piano.triggerAttack([m2f(pitch)], Tone.now(), velocity)
   ctx.branch(async ctx => {
     await ctx.wait(duration)
     piano.triggerRelease(m2f(pitch))
+    onNotes.add(pitch)
   }).finally(() => {
     piano.triggerRelease(m2f(pitch))
+    onNotes.delete(pitch)
   })
 }
 
@@ -91,42 +107,62 @@ const startPianoRollLoop = () => {
       }
     })
 
-    while(playing.value) {
-      //normal looping logic
-      const note = noteBuffer[noteBufferInd]
-      // console.log('playing note', drawnMelodyCounter, noteBufferInd, ctx.beats, note)
-      await ctx.wait(note.preDelta)
-      playNote(note.note, ctx)
-      await ctx.wait(note.postDelta)
-      noteBufferInd = (noteBufferInd + 1) % noteBuffer.length
-
-      //if the melody has changed, we need to reset the note buffer
-      if(currentMelodyId !== drawnMelodyCounter) {
-        clip = pianoRollToClip(pianoRoll)
-        noteBuffer = clip.noteBuffer()
-        currentMelodyId = drawnMelodyCounter
-        const currentLoopTime = ctx.beats - loopStartTime
-
-        //find the first note in the new buffer that is after the current loop time
-        let newNoteBufferInd = noteBuffer.findIndex(note => note.note.position > currentLoopTime)
-
-        //if we're at the end of the new note buffer, we need to wait until the end of the loop time
-        if(newNoteBufferInd === -1) {
-          newNoteBufferInd = 0
-          await ctx.wait(pianoRollDuration - currentLoopTime)
-        } else {
-          noteBufferInd = newNoteBufferInd
-
-          //wait until the next note is ready to play, play it, and then increment index - it's easier
-          //than handling pre-delta logic for the first note of the new buffer
-          const nextNote = noteBuffer[newNoteBufferInd]
-          await ctx.wait(currentLoopTime-nextNote.note.position)
-          playNote(nextNote.note, ctx)
-          await ctx.wait(nextNote.postDelta)
-          noteBufferInd = (noteBufferInd + 1) % noteBuffer.length
-        }
+    let playNoteLoop = ctx.branch(async ctx => {
+      while(playing.value) {
+        const note = noteBuffer[noteBufferInd]
+        if(!note) debugger
+        // console.log('playing note', drawnMelodyCounter, noteBufferInd, ctx.beats, note)
+        await ctx.wait(note.preDelta)
+        playNote(note.note, ctx)
+        await ctx.wait(note.postDelta)
+        noteBufferInd = (noteBufferInd + 1) % noteBuffer.length
       }
+    })
 
+    while(playing.value) {
+      await ctx.wait(0.25)
+      if(currentMelodyId !== drawnMelodyCounter) {
+        playNoteLoop.cancel()
+        turnOffNotes()
+        playNoteLoop = ctx.branch(async ctx => {
+          clip = pianoRollToClip(pianoRoll)
+          noteBuffer = clip.noteBuffer()
+          
+          currentMelodyId = drawnMelodyCounter
+          const currentLoopTime = (ctx.beats - loopStartTime) % pianoRollDuration
+          
+          let newNoteBufferInd = noteBuffer.findIndex(note => note.note.position > currentLoopTime)
+
+          //if we're at the end of the new note buffer, we need to wait until the end of the loop time
+          if(newNoteBufferInd === -1) {
+            newNoteBufferInd = 0
+            await ctx.wait(pianoRollDuration - currentLoopTime)
+          } else {
+            noteBufferInd = newNoteBufferInd
+
+            //wait until the next note is ready to play, play it, and then increment index - it's easier
+            //than handling pre-delta logic for the first note of the new buffer
+            const nextNote = noteBuffer[newNoteBufferInd]
+            await ctx.wait(nextNote.note.position - currentLoopTime)
+            playNote(nextNote.note, ctx)
+            await ctx.wait(nextNote.postDelta)
+            noteBufferInd = (noteBufferInd + 1) % noteBuffer.length
+          }
+
+          playNoteLoop = ctx.branch(async ctx => {
+            while(playing.value) {
+              const note = noteBuffer[noteBufferInd]
+              if(!note) debugger
+              // console.log('playing note', drawnMelodyCounter, noteBufferInd, ctx.beats, note)
+              await ctx.wait(note.preDelta)
+              playNote(note.note, ctx)
+              await ctx.wait(note.postDelta)
+              noteBufferInd = (noteBufferInd + 1) % noteBuffer.length
+            }
+          })
+          
+        })
+      }
     }
   })
 }
@@ -436,6 +472,11 @@ onUnmounted(() => {
 </script>
 
 <template>
+  <div id="debugDiv">
+    <div>loop phase: {{ loopPhase }}</div>
+    <div>next note position: {{ nextNotePosition }}</div>
+    <div>hot swap note wait: {{ hotSwapNoteWait }}</div>
+  </div>
   <button @click="togglePlay">{{ playing ? 'Stop' : 'Play' }}</button>
   <div id="pianoRollHolder"></div>
 </template>
