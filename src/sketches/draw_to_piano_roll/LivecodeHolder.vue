@@ -99,12 +99,13 @@ const startPianoRollLoop = () => {
     let currentMelodyId = drawnMelodyCounter
 
     ctx.branch(async ctx => {
-      while(true) {
+      while(playing.value) {
         await ctx.wait(0.016)
         const beats = (ctx.beats - loopStartTime) % pianoRollDuration
         // console.log('setting cursor pos', beats)
         pianoRoll.setCursorPos(beats)
       }
+      pianoRoll.setCursorPos(0)
     })
 
     let playNoteLoop = ctx.branch(async ctx => {
@@ -195,9 +196,47 @@ type DebugGridInfo = {
 const savedDebugGrids: DebugGridInfo[] = []
 const drawNotesList: NoteInfo<any>[][] = []
 
+// Consolidate adjacent or overlapping notes across all strokes
+const consolidateNotes = (input: NoteInfo<any>[]): NoteInfo<any>[] => {
+  // Group by pitch first
+  const byPitch: Map<number, NoteInfo<any>[]> = new Map()
+  input.forEach(note => {
+    if (!byPitch.has(note.pitch)) byPitch.set(note.pitch, [])
+    byPitch.get(note.pitch)!.push({ ...note }) // copy to avoid mutation side-effects
+  })
+
+  const output: NoteInfo<any>[] = []
+  const tolerance = 0.001
+
+  for (const [pitch, arr] of byPitch.entries()) {
+    // sort by start position
+    arr.sort((a, b) => a.position - b.position)
+
+    for (const note of arr) {
+      if (output.length === 0 || output[output.length - 1].pitch !== pitch) {
+        output.push({ ...note })
+        continue
+      }
+
+      const last = output[output.length - 1]
+      const lastEnd = last.position + last.duration
+      if (note.position - lastEnd <= tolerance) {
+        // merge/extend
+        last.duration = Math.max(lastEnd, note.position + note.duration) - last.position
+      } else {
+        output.push({ ...note })
+      }
+    }
+  }
+  // keep overall order by start time
+  output.sort((a, b) => a.position - b.position)
+  return output
+}
+
 const updatePianoRollNotes = () => {
   const allNotes = drawNotesList.flat()
-  pianoRoll.setNoteData(allNotes)
+  const consolidated = consolidateNotes(allNotes)
+  pianoRoll.setNoteData(consolidated)
 }
 
 onMounted(async () => {
@@ -355,14 +394,11 @@ onMounted(async () => {
         notes.push(...consolidated)
       }
 
-      // Update piano roll display
-      pianoRoll.setNoteData(notes)
-      drawnMelodyCounter++
-
-      // Save this stroke and update roll
+      // Save this stroke and update roll (consolidation happens inside helper)
       savedDebugGrids.push(debugGrid)
       drawNotesList.push(notes)
       updatePianoRollNotes()
+      drawnMelodyCounter++
 
       // Clear path to start new stroke
       drawingPath = []
