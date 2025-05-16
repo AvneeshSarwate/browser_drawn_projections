@@ -40,7 +40,8 @@ export const sketchNames = [
   'faustSynthTest',
   'mutek_playground',
   'sonar_sketch',
-  'draw_to_piano_roll'
+  'draw_to_piano_roll',
+  'polygonFill'
 ]
 
 const sketchRoutes = sketchNames.map(name => {
