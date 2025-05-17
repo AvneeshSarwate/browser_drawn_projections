@@ -9,10 +9,15 @@ import { ref } from 'vue'
 
 
 
-type Polygon = {
+export type Polygon = {
   points: { x: number, y: number }[]
   id: string
   selected: boolean
+}
+
+type OrderedDrawFunc = {
+  func: (p5: p5) => void
+  sortKey: number
 }
 
 
@@ -30,6 +35,7 @@ export type PolygonFillAppState = {
   drawing: boolean
   polygons: Polygon[]
   polygonHistory: Polygon[][]
+  orderedDrawFuncs: Map<string, OrderedDrawFunc>
 }
 
 export const appState: PolygonFillAppState = {
@@ -46,6 +52,7 @@ export const appState: PolygonFillAppState = {
   drawing: false,
   polygons: [],
   polygonHistory: [],
+  orderedDrawFuncs: new Map<string, OrderedDrawFunc>()
 } 
 
 export const appStateName = 'polygonFillAppState'

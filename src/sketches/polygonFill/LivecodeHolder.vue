@@ -1,16 +1,24 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
-import { type PolygonFillAppState, appStateName } from './appState';
+import { type Polygon, type PolygonFillAppState, appStateName } from './appState';
 import { inject, onMounted, onUnmounted, ref, type Ref, watch } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords, mouseupEvent } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
 import { findClosestPolygonLineAtPoint, lineToPointDistance, isPointInPolygon } from '@/creativeAlgs/shapeHelpers';
+import { INITIALIZE_ABLETON_CLIPS, type AbletonClip } from '@/io/abletonClips';
+import { m2f } from '@/music/mpeSynth';
+import * as Tone from 'tone'
+import { getPianoChain, TONE_AUDIO_START } from '@/music/synths';
+import { MIDI_READY, midiOutputs } from '@/io/midi';
+import type { MIDIValOutput } from '@midival/core';
 
 const appState = inject<PolygonFillAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
 let timeLoops: CancelablePromisePoxy<any>[] = []
+
+const mod2 = (n: number, m: number) =>  (n % m + m) % m
 
 const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromisePoxy<any> => {
   const loop = launch(block)
@@ -23,9 +31,73 @@ const clearDrawFuncs = () => {
   appState.drawFuncMap = new Map()
 }
 
+let playNote: (pitch: number, velocity: number, ctx: TimeContext, noteDur: number, voiceIdx: number) => void
+
 type CursorState = 'drawNewPolygon' | 'addPointToPolygon' | 'selectPoint'| 'selectPolygon' 
+type SweepDir = 'top' | 'bottom' | 'left' | 'right'
 const cursorState: Ref<CursorState> = ref('drawNewPolygon')
 let isMouseDown = false
+
+const leftmostPointSortKey = (polygon: Polygon) => {
+  return polygon.points.reduce((min, p) => p.x < min.x ? p : min, polygon.points[0]).x
+}
+const rightmostPointSortKey = (polygon: Polygon) => {
+  return polygon.points.reduce((max, p) => p.x > max.x ? p : max, polygon.points[0]).x
+}
+const topmostPointSortKey = (polygon: Polygon) => {
+  return polygon.points.reduce((max, p) => p.y < max.y ? p : max, polygon.points[0]).y
+}
+const bottommostPointSortKey = (polygon: Polygon) => {
+  return polygon.points.reduce((min, p) => p.y > min.y ? p : min, polygon.points[0]).y
+}
+const sortFuncs = {
+  'left': leftmostPointSortKey,
+  'right': rightmostPointSortKey,
+  'top': topmostPointSortKey,
+  'bottom': bottommostPointSortKey
+}
+const sortPolygonsByDirection = (polygons: Polygon[], direction: SweepDir) => {
+  const sortFunc = sortFuncs[direction]
+  return polygons.sort((a, b) => sortFunc(a) - sortFunc(b))
+}
+
+
+type Color = {r: number, g: number, b: number, a: number}
+const playAndAnimateClip = async (launchId: string, clip: AbletonClip, color: Color, direction: SweepDir, ctx: TimeContext, p5i: p5, voiceIdx: number) => {
+
+  //todo - need to figure out how this behaves when cancelled 
+  // - individual "is running" flags since cancellation doesn't run heirarically?
+  // - or can just cancel, because only "deep" branches are 1 level down note play and node animation progress ramp, which self clean up?
+
+  const sortedPolygons = sortPolygonsByDirection(appState.polygons, direction)
+  const playStartTime = parseFloat(ctx.beats.toFixed(3))
+  
+  const buffer = clip.noteBuffer()
+  for(const [idx, note] of buffer.entries()) {
+    //if not playFlag, break?
+    await ctx.wait(note.preDelta)
+    playNote(note.note.pitch, note.note.velocity, ctx, note.note.duration, voiceIdx)
+    let sweepProgress = 0
+    const noteDrawKey = `${launchId}-${voiceIdx}-${idx}`
+    const sortKey = parseFloat(ctx.beats.toFixed(3)) + playStartTime * 0.0001 //sort by note time, tie break by playStartTime
+
+    //add a draw func to the orderedDrawFuncs map
+
+    ctx.branch(async ctx => {
+      const startBeats = ctx.beats
+      while(ctx.beats - startBeats < note.note.duration) {
+        const progress = (ctx.beats - startBeats) / note.note.duration
+        await ctx.wait(0.016)
+      }
+      //remove the draw func from the orderedDrawFuncs map
+    })
+  }
+
+  //remove all draw funcs with key starting with launchId (if break in loop using playFlag)
+}
+
+const pianoChains = Array.from({ length: 10 }, (_, i) => getPianoChain())
+const midiOuts: MIDIValOutput[] = [];
 
 
 const edittingDrawFunc = (p: p5) => {
@@ -71,6 +143,13 @@ const edittingDrawFunc = (p: p5) => {
       p.ellipse(point.x, point.y, 10, 10);
     });
   }
+}
+
+const animatingDrawFunc = (p: p5) => {
+  const sortedDrawFuncs = Array.from(appState.orderedDrawFuncs.values()).sort((a, b) => a.sortKey - b.sortKey)
+  sortedDrawFuncs.forEach(drawFunc => {
+    drawFunc.func(p)
+  })
 }
 
 /*
@@ -168,12 +247,69 @@ watch(cursorState, (newMode, oldMode) => {
   }
 });
 
-onMounted(() => {
+const launchQueue: ((ctx: TimeContext) => Promise<any>)[] = []
+
+onMounted(async () => {
   try {
+
+    await MIDI_READY
+    // await INITIALIZE_ABLETON_CLIPS('src/sketches/sonar_sketch/piano_melodies Project/piano_melodies.als', staticClipData, false)
+    await TONE_AUDIO_START
+
+    const iac1 = midiOutputs.get('IAC Driver Bus 1')
+    const iac2 = midiOutputs.get('IAC Driver Bus 2')
+    const iac3 = midiOutputs.get('IAC Driver Bus 3')
+    const iac4 = midiOutputs.get('IAC Driver Bus 4')
+
+    midiOuts.push(iac1, iac2, iac3, iac4)
 
     const p5i = appState.p5Instance!!
     const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
     const threeCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
+
+
+    launchLoop(async (ctx) => {
+      while(true) {
+        launchQueue.forEach(async (func) => {
+          ctx.branch(func)
+        })
+        launchQueue.length = 0
+        await ctx.wait(0.25)
+      }
+    })
+
+
+    const playNoteMidi = (pitch: number, velocity: number, ctx: TimeContext, noteDur: number, voiceIdx: number) => {
+      const inst = midiOuts[voiceIdx]
+      inst.sendNoteOn(pitch, velocity)
+      ctx.branch(async ctx => {
+        await ctx.wait((noteDur ?? 0.1) * 0.98)
+        inst.sendNoteOff(pitch)
+      }).finally(() => {
+        // console.log('loop canclled finally', pitch) //todo core - need to cancel child contexts properly (this doesn't fire immediately on parent cancel)
+        inst.sendNoteOff(pitch)
+      })
+    }
+
+
+    const playNotePiano = (pitch: number, velocity: number, ctx: TimeContext, noteDur: number, pianoIndex = 0) => {
+      // Update the FX parameters before playing the note
+      
+      const piano = pianoChains[mod2(pianoIndex, pianoChains.length)].piano
+      // const bpm = ctx.bpm
+      // const dur = noteDur * (60 / bpm)
+      // piano.triggerAttackRelease([m2f(pitch)], dur, null, velocity)
+      piano.triggerAttack([m2f(pitch)], Tone.now(), velocity/127)
+      ctx.branch(async ctx => {
+        await ctx.wait(noteDur)
+        piano.triggerRelease(m2f(pitch))
+      }).finally(() => {
+        piano.triggerRelease(m2f(pitch))
+      })
+    }
+
+    playNote = playNotePiano
+
 
 
     let p5Mouse = { x: 0, y: 0 }
