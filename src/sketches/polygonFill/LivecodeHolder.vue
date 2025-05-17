@@ -1,7 +1,7 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
 import { type PolygonFillAppState, appStateName } from './appState';
-import { inject, onMounted, onUnmounted, ref, type Ref } from 'vue';
+import { inject, onMounted, onUnmounted, ref, type Ref, watch } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords, mouseupEvent } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
@@ -26,6 +26,52 @@ const clearDrawFuncs = () => {
 type CursorState = 'drawNewPolygon' | 'addPointToPolygon' | 'selectPoint'| 'selectPolygon' 
 const cursorState: Ref<CursorState> = ref('drawNewPolygon')
 let isMouseDown = false
+
+
+const edittingDrawFunc = (p: p5) => {
+  appState.polygons.forEach(polygon => {
+    const points = polygon.points;
+    
+    // Draw polygon outline
+    p.stroke(polygon.selected ? '#00FF00' : '#FFFFFF');
+    p.noFill();
+    p.beginShape();
+    points.forEach(point => {
+      p.vertex(point.x, point.y);
+    });
+    p.endShape(p.CLOSE);
+    
+    // Draw polygon points
+    p.noStroke();
+    points.forEach((point, idx) => {
+      // Highlight the selected point in green
+      if (polygon.selected && idx === selectedPointIndex) {
+        p.fill('#00FF00');
+      } else {
+        p.fill('#AAAAAA');
+      }
+      p.ellipse(point.x, point.y, 10, 10);
+    });
+  });
+  
+  // Draw active polygon being created
+  if (activePolygon.length > 0) {
+    p.stroke('#FFFFFF');
+    p.noFill();
+    p.beginShape();
+    activePolygon.forEach(point => {
+      p.vertex(point.x, point.y);
+    });
+    p.endShape();
+    
+    // Draw points of active polygon
+    p.noStroke();
+    p.fill('#AAAAAA');
+    activePolygon.forEach(point => {
+      p.ellipse(point.x, point.y, 10, 10);
+    });
+  }
+}
 
 /*
 
@@ -96,6 +142,31 @@ function findClosestPoint(points: {x: number, y: number}[], point: {x: number, y
   
   return closestIndex;
 }
+
+// Function to finalize the active polygon if it has enough points
+function finalizeActivePolygon() {
+  if (activePolygon.length >= 3) {
+    // Add the polygon to the app state
+    appState.polygons.push({
+      points: [...activePolygon],
+      id: generateId(),
+      selected: false
+    });
+    
+    // Save to history
+    savePolygonHistory();
+  }
+  
+  // Reset the active polygon
+  activePolygon = [];
+}
+
+// Watch for mode changes
+watch(cursorState, (newMode, oldMode) => {
+  if (oldMode === 'drawNewPolygon' && newMode !== 'drawNewPolygon') {
+    finalizeActivePolygon();
+  }
+});
 
 onMounted(() => {
   try {
@@ -247,15 +318,8 @@ onMounted(() => {
         case 'selectPolygon':
           // Find the polygon that contains the click point
           let containingPolyIdx = -1;
+  
           
-          for (let i = 0; i < appState.polygons.length; i++) {
-            if (isPointInPolygon({ points: appState.polygons[i].points }, p5Mouse)) {
-              containingPolyIdx = i;
-              break;
-            }
-          }
-          
-          // If no polygon contains the point, find closest polygon
           if (containingPolyIdx < 0) {
             const result = findClosestPolygonLineAtPoint(
               appState.polygons.map(p => ({ points: p.points })),
@@ -319,51 +383,16 @@ onMounted(() => {
       cursorState.value = 'selectPolygon';
       selectedPointIndex = -1;
     });
+
+    singleKeydownEvent('Escape', () => {
+      if (cursorState.value === 'drawNewPolygon') {
+        finalizeActivePolygon();
+      }
+    });
     
     appState.drawFunctions.push((p: p5) => {
       // Draw completed polygons
-      appState.polygons.forEach(polygon => {
-        const points = polygon.points;
-        
-        // Draw polygon outline
-        p.stroke(polygon.selected ? '#00FF00' : '#FFFFFF');
-        p.noFill();
-        p.beginShape();
-        points.forEach(point => {
-          p.vertex(point.x, point.y);
-        });
-        p.endShape(p.CLOSE);
-        
-        // Draw polygon points
-        p.noStroke();
-        points.forEach((point, idx) => {
-          // Highlight the selected point in green
-          if (polygon.selected && idx === selectedPointIndex) {
-            p.fill('#00FF00');
-          } else {
-            p.fill('#AAAAAA');
-          }
-          p.ellipse(point.x, point.y, 10, 10);
-        });
-      });
-      
-      // Draw active polygon being created
-      if (activePolygon.length > 0) {
-        p.stroke('#FFFFFF');
-        p.noFill();
-        p.beginShape();
-        activePolygon.forEach(point => {
-          p.vertex(point.x, point.y);
-        });
-        p.endShape();
-        
-        // Draw points of active polygon
-        p.noStroke();
-        p.fill('#AAAAAA');
-        activePolygon.forEach(point => {
-          p.ellipse(point.x, point.y, 10, 10);
-        });
-      }
+      edittingDrawFunc(p)
     });
 
     const passthru = new Passthru({ src: p5Canvas })
