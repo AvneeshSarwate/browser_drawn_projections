@@ -27,6 +27,16 @@ export function keyupEvent(listener: (ev: KeyboardEvent) => void, target: HTMLEl
   target.addEventListener("keyup", listener)
 }
 
+export function singleKeyupEvent(key: string, listener: (ev: KeyboardEvent) => void, target: HTMLElement = document.body) {
+  const cb = (ev: KeyboardEvent) => {
+    if (ev.key === key) {
+      listener(ev)
+    }
+  }
+  eventListeners.push({ type: "keyup", cb, target })
+  target.addEventListener("keyup", cb)
+}
+
 export function mousemoveEvent(listener: (ev: MouseEvent) => void, target: HTMLElement = document.body) {
   eventListeners.push({ type: "mousemove", cb: listener, target })
   target.addEventListener("mousemove", listener)

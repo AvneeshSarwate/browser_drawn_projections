@@ -3,22 +3,26 @@
 import { type Polygon, type PolygonFillAppState, appStateName } from './appState';
 import { inject, onMounted, onUnmounted, ref, type Ref, watch } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
-import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords, mouseupEvent } from '@/io/keyboardAndMouse';
+import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords, mouseupEvent, singleKeyupEvent, keydownEvent, keyupEvent } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
-import { findClosestPolygonLineAtPoint, lineToPointDistance, isPointInPolygon } from '@/creativeAlgs/shapeHelpers';
-import { INITIALIZE_ABLETON_CLIPS, type AbletonClip } from '@/io/abletonClips';
+import { findClosestPolygonLineAtPoint, lineToPointDistance, isPointInPolygon, directionSweep } from '@/creativeAlgs/shapeHelpers';
+import { clipMap, INITIALIZE_ABLETON_CLIPS, type AbletonClip } from '@/io/abletonClips';
 import { m2f } from '@/music/mpeSynth';
 import * as Tone from 'tone'
 import { getPianoChain, TONE_AUDIO_START } from '@/music/synths';
 import { MIDI_READY, midiOutputs } from '@/io/midi';
 import type { MIDIValOutput } from '@midival/core';
+import type { LoopHandle } from '@/channels/base_time_context';
 
 const appState = inject<PolygonFillAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
 let timeLoops: CancelablePromisePoxy<any>[] = []
 
 const mod2 = (n: number, m: number) =>  (n % m + m) % m
+
+type DisplayMode = 'editting' | 'playing'
+const displayMode: Ref<DisplayMode> = ref('editting')
 
 const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromisePoxy<any> => {
   const loop = launch(block)
@@ -61,9 +65,49 @@ const sortPolygonsByDirection = (polygons: Polygon[], direction: SweepDir) => {
   return polygons.sort((a, b) => sortFunc(a) - sortFunc(b))
 }
 
+const keyToClipNameMap = new Map<string, string>()
+keyToClipNameMap.set('Q', 'left_to_right')
+keyToClipNameMap.set('W', 'right_to_left')
+keyToClipNameMap.set('E', 'top_to_bottom')
+keyToClipNameMap.set('R', 'bottom_to_top')
+
+const keyToColorMap = new Map<string, Color>()
+keyToColorMap.set('Q', {r: 255, g: 0, b: 0, a: 1})
+keyToColorMap.set('W', {r: 0, g: 255, b: 0, a: 1})
+keyToColorMap.set('E', {r: 0, g: 0, b: 255, a: 1})
+keyToColorMap.set('R', {r: 255, g: 255, b: 0, a: 1})
+
+const keyToPlayInstanceMap = new Map<string, LoopHandle>()
+
+const launchLoopForKey = (key: string, p5i: p5) => {
+  const clipName = keyToClipNameMap.get(key)
+  if (!clipName) return
+
+  const clip = clipMap.get(clipName)
+  if (!clip) return
+
+  const launchId = generateId()
+
+  const direction = clipName.split('_')[0] as SweepDir
+
+  launchQueue.push(async (ctx) => {
+    const playInstance = ctx.branch(async (ctx) => {
+      playAndAnimateClip(launchId, clip, keyToColorMap.get(key)!!, direction, ctx, p5i, 0)
+    })
+    keyToPlayInstanceMap.set(key, playInstance)
+  })
+}
+
+const stopLoopForKey = (key: string) => {
+  const playInstance = keyToPlayInstanceMap.get(key)
+  if (playInstance) {
+    playInstance.cancel()
+    keyToPlayInstanceMap.delete(key)
+  }
+}
 
 type Color = {r: number, g: number, b: number, a: number}
-const playAndAnimateClip = async (launchId: string, clip: AbletonClip, color: Color, direction: SweepDir, ctx: TimeContext, p5i: p5, voiceIdx: number) => {
+async function playAndAnimateClip(launchId: string, clip: AbletonClip, color: Color, direction: SweepDir, ctx: TimeContext, p5i: p5, voiceIdx: number)  {
 
   //todo - need to figure out how this behaves when cancelled 
   // - individual "is running" flags since cancellation doesn't run heirarically?
@@ -81,15 +125,33 @@ const playAndAnimateClip = async (launchId: string, clip: AbletonClip, color: Co
     const noteDrawKey = `${launchId}-${voiceIdx}-${idx}`
     const sortKey = parseFloat(ctx.beats.toFixed(3)) + playStartTime * 0.0001 //sort by note time, tie break by playStartTime
 
+    const polygonForNote = sortedPolygons[mod2(idx, sortedPolygons.length)]
     //add a draw func to the orderedDrawFuncs map
+    const drawFunc = (p5i: p5) => {
+      p5i.push()
+
+      const sweptPolygon = directionSweep(polygonForNote.points, sweepProgress, direction)
+
+      p5i.stroke(color.r, color.g, color.b, color.a)
+      p5i.fill(color.r, color.g, color.b, color.a)
+      p5i.beginShape()
+      sweptPolygon.polygon.forEach(p => p5i.vertex(p.x, p.y))
+      p5i.endShape(p5i.CLOSE)
+      
+      p5i.pop()
+    }
+
+    appState.orderedDrawFuncs.set(noteDrawKey, {func: drawFunc, sortKey})
 
     ctx.branch(async ctx => {
       const startBeats = ctx.beats
       while(ctx.beats - startBeats < note.note.duration) {
-        const progress = (ctx.beats - startBeats) / note.note.duration
+        sweepProgress = (ctx.beats - startBeats) / note.note.duration
         await ctx.wait(0.016)
       }
+
       //remove the draw func from the orderedDrawFuncs map
+      appState.orderedDrawFuncs.delete(noteDrawKey)
     })
   }
 
@@ -145,7 +207,7 @@ const edittingDrawFunc = (p: p5) => {
   }
 }
 
-const animatingDrawFunc = (p: p5) => {
+const playingDrawFunc = (p: p5) => {
   const sortedDrawFuncs = Array.from(appState.orderedDrawFuncs.values()).sort((a, b) => a.sortKey - b.sortKey)
   sortedDrawFuncs.forEach(drawFunc => {
     drawFunc.func(p)
@@ -253,7 +315,8 @@ onMounted(async () => {
   try {
 
     await MIDI_READY
-    // await INITIALIZE_ABLETON_CLIPS('src/sketches/sonar_sketch/piano_melodies Project/piano_melodies.als', staticClipData, false)
+    //todo - add static data eventually
+    await INITIALIZE_ABLETON_CLIPS('src/sketches/polygonFill/piano_melodies Project/piano_melodies.als', null, false)
     await TONE_AUDIO_START
 
     const iac1 = midiOutputs.get('IAC Driver Bus 1')
@@ -525,10 +588,18 @@ onMounted(async () => {
         finalizeActivePolygon();
       }
     });
+
+    keydownEvent((ev) => {
+      launchLoopForKey(ev.key, p5i)
+    })
+
+    keyupEvent((ev) => {
+      stopLoopForKey(ev.key)
+    })
     
     appState.drawFunctions.push((p: p5) => {
       // Draw completed polygons
-      edittingDrawFunc(p)
+      displayMode.value === 'editting' ? edittingDrawFunc(p) : playingDrawFunc(p)
     });
 
     const passthru = new Passthru({ src: p5Canvas })
@@ -564,6 +635,11 @@ onUnmounted(() => {
     <option value="addPointToPolygon">Add Point To Polygon</option>
     <option value="selectPoint">Select Point</option>
     <option value="selectPolygon">Select Polygon</option>
+  </select>
+  <label>Display Mode</label>
+  <select v-model="displayMode">
+    <option value="editting">Editting</option>
+    <option value="playing">Playing</option>
   </select>
 </template>
 

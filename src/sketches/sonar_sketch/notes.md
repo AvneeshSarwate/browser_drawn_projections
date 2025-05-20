@@ -3,6 +3,11 @@ debug1 : seg 1 : s_tr 2 : str 1 : q 1
 debug1 : seg 1 : s_tr 3 : str 1 : q 1
 
 
+
+each "scene" is sequencing text - parameters explicit for happy path - but user can take over (optional slider takeovers defined)
+different base-clips/functions/parameters in each scene (sliders get re-mapped)
+scenes have a cannonical order but listener can take over and move how they want
+
 /**
  * connect functions to their sounded realites 
  * - reduction - connection to an urgnecy leading somehwere - 
