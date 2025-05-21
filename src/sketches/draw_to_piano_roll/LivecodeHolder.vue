@@ -6,6 +6,7 @@ import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords, mouseupEvent } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
+import type { LoopHandle } from '@/channels/base_time_context';
 import { PianoRoll, type NoteInfo } from '@/music/pianoRoll'
 import { Scale } from '@/music/scale'
 import { AbletonClip, quickNote, type AbletonNote } from '@/io/abletonClips';
@@ -28,10 +29,14 @@ const clearDrawFuncs = () => {
   appState.drawFuncMap = new Map()
 }
 
+// ---- Multi-voice / colour configuration ----
+const voiceColors = ['#ff5555', '#55ff55', '#5555ff']
+const selectedColorIndex = ref(0)
+
 // Returns visible pitch and time span of the piano roll in MIDI notes & beats
-function getNoteRange(pr: PianoRoll<any>) {
+function getNoteRange(pr: PianoRoll<{voiceIndex: number}>) {
   // Access underlying SVG viewBox
-  const vb = (pr as any).svgRoot.viewbox()
+  const vb = pr.svgRoot.viewbox()
 
   const startPos = vb.x / pr.quarterNoteWidth //in beats
   const endPos = (vb.x + vb.width) / pr.quarterNoteWidth //in beats
@@ -42,8 +47,9 @@ function getNoteRange(pr: PianoRoll<any>) {
   return { minPitch, maxPitch, startPos, endPos }
 }
 
-let pianoRoll: PianoRoll<any> = undefined
-let piano: Tone.Sampler = undefined
+let pianoRoll: PianoRoll<{voiceIndex: number}> = undefined
+let pianoInstances: Tone.Sampler[] = []
+let onNotes: Set<number>[] = []
 
 const launchQueue: ((ctx: TimeContext) => Promise<any>)[] = []
 let playing = ref(false)
@@ -55,36 +61,37 @@ let hotSwapNoteWait = ref(0)
 const drawDebugGrid = ref(false)
 
 let drawnMelodyCounter = 0
-const pianoRollToClip = (pianoRoll: PianoRoll<any>) => {
-  const notes = pianoRoll.getNoteData()
+const pianoRollToClip = (pianoRoll: PianoRoll<{voiceIndex: number}>, voiceIdx?: number) => {
+  let notes = pianoRoll.getNoteData()
+  if(typeof voiceIdx === 'number') {
+    notes = notes.filter(n => n.metadata.voiceIndex === voiceIdx)
+  }
   notes.sort((a, b) => a.position - b.position)
   const { startPos, endPos } = getNoteRange(pianoRoll)
-  const abletonNotes = notes.map(note => {
-    return quickNote(note.pitch, note.duration, note.velocity, note.position)
-  })
-  return new AbletonClip(`pianoRollClip_${drawnMelodyCounter}`, endPos - startPos, abletonNotes)
+  const abletonNotes = notes.map(note => quickNote(note.pitch, note.duration, note.velocity, note.position, note.metadata))
+  return new AbletonClip(`pianoRollClip_${voiceIdx ?? 'all'}_${drawnMelodyCounter}`, endPos - startPos, abletonNotes)
 }
-
-
-const onNotes = new Set<number>()
 
 const turnOffNotes = () => {
-  for(const pitch of onNotes) {
-    piano.triggerRelease(m2f(pitch))
-  }
-  onNotes.clear()
+  onNotes.forEach((set, vIdx) => {
+    const piano = pianoInstances[vIdx]
+    set.forEach(pitch => piano.triggerRelease(m2f(pitch)))
+    set.clear()
+  })
 }
 
-const playNote = (note: AbletonNote, ctx: TimeContext) => {
+const playNoteForVoice = (note: AbletonNote, voiceIdx: number, ctx: TimeContext) => {
+  const piano = pianoInstances[voiceIdx]
+  const noteSet = onNotes[voiceIdx]
   const {pitch, duration, velocity} = note
   piano.triggerAttack([m2f(pitch)], Tone.now(), velocity)
   ctx.branch(async ctx => {
     await ctx.wait(duration)
     piano.triggerRelease(m2f(pitch))
-    onNotes.add(pitch)
+    noteSet.add(pitch)
   }).finally(() => {
     piano.triggerRelease(m2f(pitch))
-    onNotes.delete(pitch)
+    noteSet.delete(pitch)
   })
 }
 
@@ -111,16 +118,17 @@ const startPianoRollLoop = () => {
     })
 
     let playNoteLoop = ctx.branch(async ctx => {
-      while(playing.value) {
+        while(playing.value) {
         const note = noteBuffer[noteBufferInd]
+        const voiceIdx = note.note.metadata.voiceIndex
         if(!note) debugger
         // console.log('playing note', drawnMelodyCounter, noteBufferInd, ctx.beats, note)
         await ctx.wait(note.preDelta)
-        playNote(note.note, ctx)
+        playNoteForVoice(note.note, voiceIdx, ctx)
         await ctx.wait(note.postDelta)
         noteBufferInd = (noteBufferInd + 1) % noteBuffer.length
-      }
-    })
+        }
+      })
 
     while(playing.value) {
       await ctx.wait(0.25)
@@ -131,7 +139,7 @@ const startPianoRollLoop = () => {
           clip = pianoRollToClip(pianoRoll)
           noteBuffer = clip.noteBuffer()
           
-          currentMelodyId = drawnMelodyCounter
+        currentMelodyId = drawnMelodyCounter
           const currentLoopTime = (ctx.beats - loopStartTime) % pianoRollDuration
           
           let newNoteBufferInd = noteBuffer.findIndex(note => note.note.position > currentLoopTime)
@@ -147,8 +155,9 @@ const startPianoRollLoop = () => {
             //wait until the next note is ready to play, play it, and then increment index - it's easier
             //than handling pre-delta logic for the first note of the new buffer
             const nextNote = noteBuffer[noteBufferInd]
+            const voiceIdx = nextNote.note.metadata.voiceIndex
             await ctx.wait(nextNote.note.position - currentLoopTime)
-            playNote(nextNote.note, ctx)
+            playNoteForVoice(nextNote.note, voiceIdx, ctx)
             await ctx.wait(nextNote.postDelta)
             noteBufferInd = (noteBufferInd + 1) % noteBuffer.length
           }
@@ -156,10 +165,11 @@ const startPianoRollLoop = () => {
           playNoteLoop = ctx.branch(async ctx => {
             while(playing.value) {
               const note = noteBuffer[noteBufferInd]
+              const voiceIdx = note.note.metadata.voiceIndex
               if(!note) debugger
               // console.log('playing note', drawnMelodyCounter, noteBufferInd, ctx.beats, note)
               await ctx.wait(note.preDelta)
-              playNote(note.note, ctx)
+              playNoteForVoice(note.note, voiceIdx, ctx)
               await ctx.wait(note.postDelta)
               noteBufferInd = (noteBufferInd + 1) % noteBuffer.length
             }
@@ -196,30 +206,33 @@ type DebugGridInfo = {
 
 // one entry per completed stroke
 const savedDebugGrids: DebugGridInfo[] = []
-const drawNotesLists: NoteInfo<any>[][] = []
-// Store paths for visualization
+const drawNotesLists: NoteInfo<{voiceIndex: number}>[][] = []
+// Store paths for visualization, keeping colour/voice mapping
 type DrawPath = { x: number; y: number }[]
-const savedDrawPaths: DrawPath[] = []
+type SavedDraw = { points: DrawPath; colorIndex: number }
+const savedDrawPaths: SavedDraw[] = []
 const showPaths = ref(true)
 
 // Consolidate adjacent or overlapping notes across all strokes
-const consolidateNotes = (input: NoteInfo<any>[]): NoteInfo<any>[] => {
-  // Group by pitch first
-  const byPitch: Map<number, NoteInfo<any>[]> = new Map()
+const consolidateNotes = (input: NoteInfo<{voiceIndex: number}>[]): NoteInfo<{voiceIndex: number}>[] => {
+  // Group by pitch AND voiceIndex first
+  const byKey: Map<string, NoteInfo<{voiceIndex: number}>[]> = new Map()
   input.forEach(note => {
-    if (!byPitch.has(note.pitch)) byPitch.set(note.pitch, [])
-    byPitch.get(note.pitch)!.push({ ...note }) // copy to avoid mutation side-effects
+    const vIdx = note.metadata.voiceIndex
+    const key = `${vIdx}-${note.pitch}`
+    if (!byKey.has(key)) byKey.set(key, [])
+    byKey.get(key)!.push({ ...note })
   })
 
-  const output: NoteInfo<any>[] = []
+  const output: NoteInfo<{voiceIndex: number}>[] = []
   const tolerance = 0.001
 
-  for (const [pitch, arr] of byPitch.entries()) {
+  for (const [_key, arr] of byKey.entries()) {
     // sort by start position
     arr.sort((a, b) => a.position - b.position)
 
     for (const note of arr) {
-      if (output.length === 0 || output[output.length - 1].pitch !== pitch) {
+      if (output.length === 0 || output[output.length - 1].pitch !== note.pitch) {
         output.push({ ...note })
         continue
       }
@@ -248,10 +261,13 @@ const updatePianoRollNotes = () => {
 onMounted(async () => {
   try {
 
-    pianoRoll = new PianoRoll<any>('pianoRollHolder', () => {}, () => {}, true)
+    pianoRoll = new PianoRoll<{voiceIndex: number}>('pianoRollHolder', () => {}, () => {}, true)
 
     await TONE_AUDIO_START
-    piano = getPiano()
+
+    // initialise per-voice piano samplers once audio context is ready
+    pianoInstances = Array.from({length: voiceColors.length}, () => getPiano())
+    onNotes = pianoInstances.map(() => new Set<number>())
 
     const p5i = appState.p5Instance!!
     const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
@@ -318,7 +334,7 @@ onMounted(async () => {
       }
       
       // 4. First, convert grid to individual 16th notes
-      const rawNotes: NoteInfo<any>[] = []
+      const rawNotes: NoteInfo<{voiceIndex: number}>[] = []
       
       // Generate individual 16th notes from the grid
       for (let pitchIdx = 0; pitchIdx < totalPitches; pitchIdx++) {
@@ -336,7 +352,8 @@ onMounted(async () => {
               pitch: actualPitch,
               position,
               duration,
-              velocity: 0.8
+              velocity: 0.8,
+              metadata: { voiceIndex: selectedColorIndex.value }
             })
           }
         }
@@ -350,7 +367,7 @@ onMounted(async () => {
       savedDebugGrids.push(debugGrid)
       drawNotesLists.push(notes)
       // Save the path for visualization
-      savedDrawPaths.push([...drawingPath])
+      savedDrawPaths.push({ points: [...drawingPath], colorIndex: selectedColorIndex.value })
       updatePianoRollNotes()
       drawnMelodyCounter++
 
@@ -425,17 +442,17 @@ onMounted(async () => {
       if (savedDrawPaths.length > 0 && showPaths.value) {
         p.push()
         p.noFill()
-        p.stroke(255, 0, 0)
         p.strokeWeight(2)
-        
-        savedDrawPaths.forEach(path => {
-          if (path.length > 1) {
+        savedDrawPaths.forEach(saved => {
+          if (saved.points.length > 1) {
+            const col = voiceColors[saved.colorIndex % voiceColors.length]
+            const c = p.color(col)
+            p.stroke(c)
             p.beginShape()
-            path.forEach(pt => p.vertex(pt.x, pt.y))
+            saved.points.forEach(pt => p.vertex(pt.x, pt.y))
             p.endShape()
           }
         })
-        
         p.pop()
       }
       
@@ -443,7 +460,7 @@ onMounted(async () => {
       if (drawingPath.length > 1) {
         p.push()
         p.noFill()
-        p.stroke(255, 0, 0)
+        p.stroke(voiceColors[selectedColorIndex.value])
         p.strokeWeight(2)
         p.beginShape()
         drawingPath.forEach(pt => p.vertex(pt.x, pt.y))
@@ -524,6 +541,10 @@ const clearDraws = () => {
     <input type="checkbox" v-model="showPaths" />
     Show paths
   </label>
+  <label>Voice / Colour</label>
+  <select v-model="selectedColorIndex">
+    <option v-for="(c,idx) in voiceColors" :key="idx" :value="idx">{{ idx+1 }}</option>
+  </select>
   <button @click="togglePlay">{{ playing ? 'Stop' : 'Play' }}</button>
   <button @click="undoDraw">Undo</button>
   <button @click="clearDraws">Clear</button>

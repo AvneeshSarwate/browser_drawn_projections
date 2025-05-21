@@ -536,7 +536,7 @@ type Box = {
 }
 
 export class PianoRoll<T> {
-  private svgRoot!: Svg;
+  svgRoot!: Svg;
   noteModStartReference: { [key: string]: { x: number, y: number, width: number, height: number } };
   private notes: {[key: string]: Note<T>};
   private spatialNoteTracker: {[key: string]: Note<T>[]};
@@ -604,6 +604,7 @@ export class PianoRoll<T> {
   scrollPos = 0
   scrollCallback = (x: number) => {}
   private interactionDisabled: boolean;
+  voiceColors: string[] = ['#ff5555', '#55ff55', '#5555ff']
   
   constructor(containerElementId: string, playHandler: (pitch: number) => void, noteOnOffHandler: (pitch: number, onOff: ('on' | 'off')) => void, interactionDisabled: boolean = false){
     this.interactionDisabled = interactionDisabled;
@@ -772,23 +773,28 @@ export class PianoRoll<T> {
 
   //duration is number of quarter notes, pitch is 0-indexed MIDI
   //todo pianoRoll - refactor this to use groups
-  addNote(pitch: number, position: number, duration: number, avoidHistoryManipulation: boolean = false) {
+  addNote(pitch: number, position: number, duration: number, metadataOrAvoid?: T | boolean, avoidHistoryManipulation: boolean = false) {
+    let metadata: T | undefined = undefined
+    if(typeof metadataOrAvoid === 'boolean') {
+      avoidHistoryManipulation = metadataOrAvoid
+    } else {
+      metadata = metadataOrAvoid as T
+    }
     const xPos = position * this.quarterNoteWidth
     const yPos = (127 - pitch) * this.noteHeight
     const width = duration * this.quarterNoteWidth
-    const rect = this.svgRoot.rect(width, this.noteHeight).move(xPos, yPos).fill(this.noteColor);
+    const fillCol = this.getFillColorForMetadata(metadata)
+    const rect = this.svgRoot.rect(width, this.noteHeight).move(xPos, yPos).fill(fillCol);
     rect.id(this.noteCount.toString());
     this.rawSVGElementToWrapper[rect.id()] = rect;
-    // rect.selectize({rotationPoint: false, points:['r', 'l']}).resize();
     const text = this.svgRoot.text(this.svgYToPitchString(rect.y().valueOf() as number))
-      .font({size: 14})
-      .move(xPos + this.textDev, (127-pitch)*this.noteHeight)
-      // .style('pointer-events', 'none');
+        .font({size: 14})
+        .move(xPos + this.textDev, (127-pitch)*this.noteHeight)
     const startHandle = this.svgRoot.circle(this.handleRad).move(xPos - this.handleRad/2, yPos + (this.noteHeight-this.handleRad)/2).fill('#000');
     const endHandle = this.svgRoot.circle(this.handleRad).move(xPos + width - this.handleRad / 2, yPos + (this.noteHeight - this.handleRad) / 2).fill('#000');
     const newNote: Note<T> = {
-      elem: rect, 
-      info: {pitch, position, duration, velocity: 0.5},
+      elem: rect,
+      info: {pitch, position, duration, velocity: 0.5, metadata},
       label: text,
       handles: {start: startHandle, end: endHandle}
     }
@@ -798,9 +804,7 @@ export class PianoRoll<T> {
     if (!avoidHistoryManipulation){
       this.snapshotNoteState();
     }
-
     this.playHandler(pitch);
-
     return rect.id();
   }
 
@@ -834,6 +838,7 @@ export class PianoRoll<T> {
         noteInfo.pitch,
         noteInfo.position,
         noteInfo.duration,
+        noteInfo.metadata,
         true
       );
     });
@@ -1584,10 +1589,10 @@ export class PianoRoll<T> {
   }
 
   private deselectNote(noteElem: Rect){
-    if (this.selectedElements.has(noteElem)) {
-      this.selectedElements.delete(noteElem);
-      noteElem.fill(this.noteColor);
-    }
+    this.selectedElements.delete(noteElem);
+    const note = this.notes[noteElem.id()];
+    const fillCol = this.getFillColorForMetadata(note.info.metadata);
+    noteElem.fill(fillCol);
   }
 
   // calculates if a note intersects with the mouse-multiselect rectangle
@@ -1619,5 +1624,13 @@ export class PianoRoll<T> {
 
   clearNoteSelection(){
     this.selectedElements.forEach(noteElem => this.deselectNote(noteElem));
+  }
+
+  getFillColorForMetadata(meta?: any): string {
+    if(meta && typeof meta === 'object' && typeof (meta as any).voiceIndex === 'number') {
+      const idx = (meta as any).voiceIndex % this.voiceColors.length
+      return this.voiceColors[idx]
+    }
+    return this.noteColor
   }
 }

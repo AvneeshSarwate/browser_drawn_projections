@@ -3,10 +3,19 @@ import type { Scale } from "@/music/scale";
 const ws = new WebSocket('ws://localhost:8080');
 
 //todo api - consolidate AbletonNote/Clip type def with the one in alsParsing.ts
-export type AbletonNote = { pitch: number, duration: number, velocity: number, offVelocity: number, probability: number, position: number, isEnabled: boolean } 
+export type AbletonNote<T = any> = { 
+  pitch: number,
+  duration: number,
+  velocity: number,
+  offVelocity: number,
+  probability: number,
+  position: number,
+  isEnabled: boolean,
+  metadata?: T
+}
 // export type AbletonClip = { name: string, duration: number, notes: AbletonNote[] }
-export const quickNote = (pitch: number, duration: number, velocity: number, position: number) => {
-  return { pitch, duration, velocity, offVelocity: velocity, probability: 1, position, isEnabled: true }
+export const quickNote = <T = any>(pitch: number, duration: number, velocity: number, position: number, metadata?: T): AbletonNote<T> => {
+  return { pitch, duration, velocity, offVelocity: velocity, probability: 1, position, isEnabled: true, metadata }
 }
 
 export type AbletonClipRawData = {
