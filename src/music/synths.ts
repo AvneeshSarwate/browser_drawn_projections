@@ -100,6 +100,12 @@ export function getPianoChain() {
   delayCrossfader.connect(reverb)
   reverb.connect(Tone.getDestination())
 
+  // const delayTimeSignal = new Tone.Signal(0.5)
+  // const delayTimeSmoothingFilter = new Tone.Filter(100, 'lowpass')
+  // delayTimeSignal.chain(delayTimeSmoothingFilter, delay.delayTime)
+  // const delayFeedbackSignal = new Tone.Signal(0.5)
+  // delayFeedbackSignal.connect(delay.feedback)
+
   // piano.chain(distortion, chorus, filter, delay, reverb, Tone.getDestination())
   // piano.chain(delay, Tone.getDestination())
 
@@ -111,7 +117,7 @@ export function getPianoChain() {
     chorusRate: (val: number) => chorus.delayTime = 2 + val**2 * 20,
     filterFreq: (val: number) => filter.frequency.value = 20000 * val**2,
     filterRes: (val: number) => filter.Q.value = val**100,
-    delayTime: (val: number) => delay.delayTime.value = val**2,
+    delayTime: (val: number) => delay.delayTime.rampTo(val**2, 0.01),
     delayFeedback: (val: number) => delay.feedback.value = val,
     delayMix: (val: number) => delayCrossfader.fade.value = val,
     reverb: (val: number) => reverb.wet.value = val
@@ -129,8 +135,10 @@ export function getPianoChain() {
 }
 
 
+
+
 export function getSynthChain() {
-  const synth = new Tone.Synth()
+  const synth = new Tone.PolySynth(Tone.Synth)
   const distortion = new Tone.Distortion(0.1)
   const chorus = new Tone.Chorus(2, 2, 0.3)
   const filter = new Tone.Filter(20000, 'lowpass')

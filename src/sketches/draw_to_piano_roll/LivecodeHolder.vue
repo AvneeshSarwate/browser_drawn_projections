@@ -11,7 +11,7 @@ import { PianoRoll, type NoteInfo } from '@/music/pianoRoll'
 import { Scale } from '@/music/scale'
 import { AbletonClip, quickNote, type AbletonNote } from '@/io/abletonClips';
 import * as Tone from 'tone';
-import { getPiano, TONE_AUDIO_START } from '@/music/synths';
+import { getPiano, getPianoChain, getSynthChain, TONE_AUDIO_START } from '@/music/synths';
 import { m2f } from '@/music/clipPlayback';
 
 const appState = inject<DrawToPianoAppState>(appStateName)!!
@@ -48,7 +48,8 @@ function getNoteRange(pr: PianoRoll<{voiceIndex: number}>) {
 }
 
 let pianoRoll: PianoRoll<{voiceIndex: number}> = undefined
-let pianoInstances: Tone.Sampler[] = []
+type SynthInstance = Tone.Sampler | Tone.PolySynth<Tone.Synth>
+let synthInstances: SynthInstance[] = []
 let onNotes: Set<number>[] = []
 
 const launchQueue: ((ctx: TimeContext) => Promise<any>)[] = []
@@ -74,14 +75,14 @@ const pianoRollToClip = (pianoRoll: PianoRoll<{voiceIndex: number}>, voiceIdx?: 
 
 const turnOffNotes = () => {
   onNotes.forEach((set, vIdx) => {
-    const piano = pianoInstances[vIdx]
+    const piano = synthInstances[vIdx]
     set.forEach(pitch => piano.triggerRelease(m2f(pitch)))
     set.clear()
   })
 }
 
 const playNoteForVoice = (note: AbletonNote, voiceIdx: number, ctx: TimeContext) => {
-  const piano = pianoInstances[voiceIdx]
+  const piano = synthInstances[voiceIdx]
   const noteSet = onNotes[voiceIdx]
   const {pitch, duration, velocity} = note
   piano.triggerAttack([m2f(pitch)], Tone.now(), velocity)
@@ -266,8 +267,14 @@ onMounted(async () => {
     await TONE_AUDIO_START
 
     // initialise per-voice piano samplers once audio context is ready
-    pianoInstances = Array.from({length: voiceColors.length}, () => getPiano())
-    onNotes = pianoInstances.map(() => new Set<number>())
+    const pianoChain = getPianoChain()
+    pianoChain.paramFuncs.delayMix(0.3)
+    pianoChain.paramFuncs.delayTime(0.45)
+    pianoChain.paramFuncs.delayFeedback(0.65)
+    pianoChain.paramFuncs.filterFreq(0.15)
+    const synthChain = getSynthChain()
+    synthInstances = [getPiano(), pianoChain.piano, synthChain.synth]
+    onNotes = synthInstances.map(() => new Set<number>())
 
     const p5i = appState.p5Instance!!
     const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement

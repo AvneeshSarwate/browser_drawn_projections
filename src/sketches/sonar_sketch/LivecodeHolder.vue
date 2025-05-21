@@ -339,7 +339,7 @@ onUnmounted(() => {
   <div class="sliders-row">
     <div class="slider-column" v-for="(slider, idx) in appState.sliders" :key="idx">
       <div>{{ appState.sliders[idx] }}</div>
-      <input type="range" v-model.number="appState.sliders[idx]" min="0" max="1" step="0.001" />
+      <input type="range" v-model.number="appState.sliders[idx]" min="0" max="1" step="0.0001" />
       <label>slider {{ idx + 1 }}</label>
     </div>
   </div>
@@ -398,7 +398,7 @@ onUnmounted(() => {
               v-model.number="voice.fxParams[paramName]" 
               min="0" 
               max="1" 
-              step="0.01" 
+              step="0.001" 
               @input="updatePianoFX(idx)" 
             />
           </div>
