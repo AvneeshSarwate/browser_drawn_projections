@@ -10,7 +10,8 @@
     "build-only": "vite build",
     "type-check": "vue-tsc --noEmit -p tsconfig.app.json --composite false",
     "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix --ignore-path .gitignore",
-    "format": "prettier --write src/"
+    "format": "prettier --write src/",
+    "alsParsing": "npx ts-node node_src/alsParsing.ts"
   },
   "dependencies": {
     "@elemaudio/core": "^3.2.1",

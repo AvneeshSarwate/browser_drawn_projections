@@ -66,16 +66,16 @@ const sortPolygonsByDirection = (polygons: Polygon[], direction: SweepDir) => {
 }
 
 const keyToClipNameMap = new Map<string, string>()
-keyToClipNameMap.set('Q', 'left_to_right')
-keyToClipNameMap.set('W', 'right_to_left')
-keyToClipNameMap.set('E', 'top_to_bottom')
-keyToClipNameMap.set('R', 'bottom_to_top')
+keyToClipNameMap.set('q', 'left_to_right')
+keyToClipNameMap.set('w', 'right_to_left')
+keyToClipNameMap.set('e', 'top_to_bottom')
+keyToClipNameMap.set('r', 'bottom_to_top')
 
 const keyToColorMap = new Map<string, Color>()
-keyToColorMap.set('Q', {r: 255, g: 0, b: 0, a: 1})
-keyToColorMap.set('W', {r: 0, g: 255, b: 0, a: 1})
-keyToColorMap.set('E', {r: 0, g: 0, b: 255, a: 1})
-keyToColorMap.set('R', {r: 255, g: 255, b: 0, a: 1})
+keyToColorMap.set('q', {r: 255, g: 0, b: 0, a: 255})
+keyToColorMap.set('w', {r: 0, g: 255, b: 0, a: 255})
+keyToColorMap.set('e', {r: 0, g: 0, b: 255, a: 255})
+keyToColorMap.set('r', {r: 255, g: 255, b: 0, a: 255})
 
 const keyToPlayInstanceMap = new Map<string, LoopHandle>()
 
@@ -92,7 +92,17 @@ const launchLoopForKey = (key: string, p5i: p5) => {
 
   launchQueue.push(async (ctx) => {
     const playInstance = ctx.branch(async (ctx) => {
-      playAndAnimateClip(launchId, clip, keyToColorMap.get(key)!!, direction, ctx, p5i, 0)
+      await playAndAnimateClip(launchId, clip, keyToColorMap.get(key)!!, direction, ctx, p5i, 0)
+    })
+    
+    playInstance.finally(() => {
+      //remove the draw funcs for this launchId if crashed
+      console.log('playInstance finally')
+      appState.orderedDrawFuncs.forEach((drawFunc, key) => {
+        if (key.startsWith(launchId)) {
+          // appState.orderedDrawFuncs.delete(key)
+        }
+      })
     })
     keyToPlayInstanceMap.set(key, playInstance)
   })
@@ -123,6 +133,7 @@ async function playAndAnimateClip(launchId: string, clip: AbletonClip, color: Co
     playNote(note.note.pitch, note.note.velocity, ctx, note.note.duration, voiceIdx)
     let sweepProgress = 0
     const noteDrawKey = `${launchId}-${voiceIdx}-${idx}`
+    console.log('noteDrawKey', noteDrawKey)
     const sortKey = parseFloat(ctx.beats.toFixed(3)) + playStartTime * 0.0001 //sort by note time, tie break by playStartTime
 
     const polygonForNote = sortedPolygons[mod2(idx, sortedPolygons.length)]
@@ -138,6 +149,14 @@ async function playAndAnimateClip(launchId: string, clip: AbletonClip, color: Co
       sweptPolygon.polygon.forEach(p => p5i.vertex(p.x, p.y))
       p5i.endShape(p5i.CLOSE)
       
+      p5i.pop()
+
+      p5i.push()
+      p5i.stroke(color.r, color.g, color.b, color.a)
+      p5i.noFill()
+      p5i.beginShape()
+      polygonForNote.points.forEach(p => p5i.vertex(p.x, p.y))
+      p5i.endShape(p5i.CLOSE)
       p5i.pop()
     }
 
@@ -590,16 +609,21 @@ onMounted(async () => {
     });
 
     keydownEvent((ev) => {
+      console.log('keydown', ev.key)
       launchLoopForKey(ev.key, p5i)
     })
 
-    keyupEvent((ev) => {
-      stopLoopForKey(ev.key)
-    })
+    // keyupEvent((ev) => {
+    //   stopLoopForKey(ev.key)
+    // })
     
     appState.drawFunctions.push((p: p5) => {
       // Draw completed polygons
-      displayMode.value === 'editting' ? edittingDrawFunc(p) : playingDrawFunc(p)
+      // displayMode.value === 'editting' ? edittingDrawFunc(p) : playingDrawFunc(p)
+      edittingDrawFunc(p)
+      if (displayMode.value === 'playing') {
+        playingDrawFunc(p)
+      }
     });
 
     const passthru = new Passthru({ src: p5Canvas })
