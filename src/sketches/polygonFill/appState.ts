@@ -64,8 +64,8 @@ export const appState: PolygonFillAppState = {
 export const appStateName = 'polygonFillAppState'
 
 export const resolution = {
-  width: 1000,
-  height: 500
+  width: 1280,
+  height: 720
 }
 
 //todo api - add caching/rehydrating of appState from local storage
