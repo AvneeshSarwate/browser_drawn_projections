@@ -37,6 +37,8 @@ export type PolygonFillAppState = {
   polygonHistory: Polygon[][]
   orderedDrawFuncs: Map<string, OrderedDrawFunc>
   voiceStepIndexes: number[]
+  canvasInPopup: boolean
+  popupWindow: Window | null
 }
 
 export const appState: PolygonFillAppState = {
@@ -54,7 +56,9 @@ export const appState: PolygonFillAppState = {
   polygons: [],
   polygonHistory: [],
   orderedDrawFuncs: new Map<string, OrderedDrawFunc>(),
-  voiceStepIndexes: [0,0,0,0,0,0,0,0]
+  voiceStepIndexes: [0,0,0,0,0,0,0,0],
+  canvasInPopup: false,
+  popupWindow: null
 } 
 
 export const appStateName = 'polygonFillAppState'

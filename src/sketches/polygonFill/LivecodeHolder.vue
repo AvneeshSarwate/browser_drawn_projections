@@ -1,6 +1,6 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
-import { type Polygon, type PolygonFillAppState, appStateName } from './appState';
+import { type Polygon, type PolygonFillAppState, appStateName, resolution } from './appState';
 import { inject, onMounted, onUnmounted, ref, type Ref, watch } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords, mouseupEvent, singleKeyupEvent, keydownEvent, keyupEvent } from '@/io/keyboardAndMouse';
@@ -340,6 +340,16 @@ watch(cursorState, (newMode, oldMode) => {
 
 const launchQueue: ((ctx: TimeContext) => Promise<any>)[] = []
 
+let checkPopupState = 0; 
+let currentEventListeners: {
+  target: HTMLCanvasElement | Document,
+  events: { type: string, handler: EventListener }[]
+} | null = null
+let currentKeyboardListeners: {
+  target: Window | Document,
+  events: { type: string, handler: EventListener, key?: string }[]
+} | null = null
+
 onMounted(async () => {
   try {
 
@@ -359,54 +369,78 @@ onMounted(async () => {
     const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
     const threeCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
 
-
-    launchLoop(async (ctx) => {
-      while(true) {
-        launchQueue.forEach(async (func) => {
-          ctx.branch(func)
-        })
-        launchQueue.length = 0
-        await ctx.wait(0.25)
+    // Helper function to get the correct target for events
+    const getEventTarget = (): HTMLCanvasElement | null => {
+      if (appState.canvasInPopup && appState.popupWindow) {
+        const popupCanvas = appState.popupWindow.document.getElementById('threeCanvas') as HTMLCanvasElement
+        return popupCanvas || null
       }
-    })
-
-
-    const playNoteMidi = (pitch: number, velocity: number, ctx: TimeContext, noteDur: number, voiceIdx: number) => {
-      const inst = midiOuts[voiceIdx]
-      inst.sendNoteOn(pitch, velocity)
-      ctx.branch(async ctx => {
-        await ctx.wait((noteDur ?? 0.1) * 0.98)
-        inst.sendNoteOff(pitch)
-      }).finally(() => {
-        // console.log('loop canclled finally', pitch) //todo core - need to cancel child contexts properly (this doesn't fire immediately on parent cancel)
-        inst.sendNoteOff(pitch)
-      })
+      return threeCanvas
     }
 
-
-    const playNotePiano = (pitch: number, velocity: number, ctx: TimeContext, noteDur: number, pianoIndex = 0) => {
-      // Update the FX parameters before playing the note
+    // Enhanced coordinate calculation that handles all scenarios
+    const getP5Coords = (ev: MouseEvent, logCoords: boolean = false) => {
+      const target = getEventTarget()
+      if (!target) return { x: 0, y: 0 }
       
-      const piano = pianoChains[mod2(pianoIndex, pianoChains.length)].piano
-      // const bpm = ctx.bpm
-      // const dur = noteDur * (60 / bpm)
-      // piano.triggerAttackRelease([m2f(pitch)], dur, null, velocity)
-      piano.triggerAttack([m2f(pitch)], Tone.now(), velocity/127)
-      ctx.branch(async ctx => {
-        await ctx.wait(noteDur)
-        piano.triggerRelease(m2f(pitch))
-      }).finally(() => {
-        piano.triggerRelease(m2f(pitch))
-      })
+      // Check if we're in fullscreen mode
+      let isFullscreen = false
+      if (appState.canvasInPopup && appState.popupWindow) {
+        isFullscreen = !!(appState.popupWindow.document.fullscreenElement || 
+                         (appState.popupWindow.document as any).webkitFullscreenElement || 
+                         (appState.popupWindow.document as any).mozFullScreenElement || 
+                         (appState.popupWindow.document as any).msFullscreenElement)
+      } else {
+        isFullscreen = !!(document.fullscreenElement || 
+                         (document as any).webkitFullscreenElement || 
+                         (document as any).mozFullScreenElement || 
+                         (document as any).msFullscreenElement)
+      }
+      
+      if (isFullscreen) {
+        // In fullscreen, we need to map from screen space to canvas space
+        const rect = target.getBoundingClientRect()
+        
+        // Use the resolution from appState which should match p5 canvas
+        const canvasWidth = resolution.width
+        const canvasHeight = resolution.height
+        
+        // Calculate the scale factors
+        const scaleX = canvasWidth / rect.width
+        const scaleY = canvasHeight / rect.height
+        
+        const x = (ev.clientX - rect.left) * scaleX
+        const y = (ev.clientY - rect.top) * scaleY
+        
+        if (logCoords) {
+          console.log('Fullscreen coords:', {
+            clientX: ev.clientX,
+            clientY: ev.clientY,
+            rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+            canvas: { width: canvasWidth, height: canvasHeight },
+            scale: { x: scaleX, y: scaleY },
+            result: { x, y }
+          })
+        }
+        
+        return { x, y }
+      } else {
+        // Use the existing function for non-fullscreen
+        return targetToP5Coords(ev, p5i, target)
+      }
     }
-
-    playNote = playNotePiano
-
-
 
     let p5Mouse = { x: 0, y: 0 }
-    mousemoveEvent((ev) => {
-      p5Mouse = targetToP5Coords(ev, p5i, threeCanvas)
+    
+    // Use a wrapper function that can handle both main page and popup events
+    const handleMouseMove = (ev: MouseEvent) => {
+      // Also check for ignored elements on mouse move
+      const target = ev.target as HTMLElement;
+      if (target && (target.hasAttribute('data-ignore-click') || target.tagName === 'BUTTON')) {
+        return;
+      }
+      
+      p5Mouse = getP5Coords(ev, false) // Don't log on mouse move
       
       // Handle drag behavior for selected point or polygon
       if (isMouseDown) {
@@ -425,10 +459,17 @@ onMounted(async () => {
           }));
         }
       }
-    }, threeCanvas)
+    }
 
-    mousedownEvent((ev) => {
-      p5Mouse = targetToP5Coords(ev, p5i, threeCanvas)
+    const handleMouseDown = (ev: MouseEvent) => {
+      // Check if the click is on the fullscreen button or any element that should be ignored
+      const target = ev.target as HTMLElement;
+      if (target && (target.hasAttribute('data-ignore-click') || target.tagName === 'BUTTON')) {
+        console.log('Ignoring click on UI element');
+        return;
+      }
+      
+      p5Mouse = getP5Coords(ev, true) // Log coordinates on click
       
       switch (cursorState.value) {
         case 'drawNewPolygon':
@@ -577,56 +618,229 @@ onMounted(async () => {
           break;
       }
       isMouseDown = true;
-    }, threeCanvas)
+    }
 
-    mouseupEvent((ev) => {
+    const handleMouseUp = (ev: MouseEvent) => {
       isMouseDown = false;
       
       // Save the current state to history when we complete an action
       savePolygonHistory();
-    }, threeCanvas)
+    }
 
-    // Handle keyboard shortcuts for mode switching
-    singleKeydownEvent('1', () => {
-      cursorState.value = 'drawNewPolygon';
-      // Reset active selections when switching modes
-      selectedPolygonIndex = -1;
-      selectedPointIndex = -1;
-      appState.polygons.forEach(p => p.selected = false);
-    });
-    
-    singleKeydownEvent('2', () => {
-      cursorState.value = 'addPointToPolygon';
-      selectedPointIndex = -1;
-    });
-    
-    singleKeydownEvent('3', () => {
-      cursorState.value = 'selectPoint';
-      selectedPolygonIndex = -1;
-      selectedPointIndex = -1;
-      appState.polygons.forEach(p => p.selected = false);
-    });
-    
-    singleKeydownEvent('4', () => {
-      cursorState.value = 'selectPolygon';
-      selectedPointIndex = -1;
-    });
-
-    singleKeydownEvent('Escape', () => {
-      if (cursorState.value === 'drawNewPolygon') {
-        finalizeActivePolygon();
+    // Store keyboard event handlers for reuse
+    const keyboardHandlers = {
+      mode1: () => {
+        cursorState.value = 'drawNewPolygon';
+        selectedPolygonIndex = -1;
+        selectedPointIndex = -1;
+        appState.polygons.forEach(p => p.selected = false);
+      },
+      mode2: () => {
+        cursorState.value = 'addPointToPolygon';
+        selectedPointIndex = -1;
+      },
+      mode3: () => {
+        cursorState.value = 'selectPoint';
+        selectedPolygonIndex = -1;
+        selectedPointIndex = -1;
+        appState.polygons.forEach(p => p.selected = false);
+      },
+      mode4: () => {
+        cursorState.value = 'selectPolygon';
+        selectedPointIndex = -1;
+      },
+      backtick: () => {
+        if (cursorState.value === 'drawNewPolygon') {
+          finalizeActivePolygon();
+        }
+      },
+      pause: () => {
+        appState.paused = !appState.paused;
+      },
+      keydown: (ev: KeyboardEvent) => {
+        console.log('keydown', ev.key)
+        launchLoopForKey(ev.key, p5i)
       }
-    });
+    }
 
-    keydownEvent((ev) => {
-      console.log('keydown', ev.key)
-      launchLoopForKey(ev.key, p5i)
+    // Set up keyboard listeners that work for both main page and popup
+    const setupKeyboardListeners = () => {
+      // Remove existing keyboard listeners
+      if (currentKeyboardListeners) {
+        currentKeyboardListeners.events.forEach(({ type, handler }) => {
+          currentKeyboardListeners!.target.removeEventListener(type, handler)
+        })
+        currentKeyboardListeners = null
+      }
+
+      let keyboardTarget: Window | Document
+      
+      if (appState.canvasInPopup && appState.popupWindow) {
+        // Add listeners to popup window
+        keyboardTarget = appState.popupWindow
+        // Focus the popup window to ensure it receives keyboard events
+        appState.popupWindow.focus()
+      } else {
+        // Add listeners to main window
+        keyboardTarget = window
+      }
+
+      // Create keyboard event handlers
+      const handleKeydown = (ev: KeyboardEvent) => {
+        switch(ev.key) {
+          case '1':
+            keyboardHandlers.mode1()
+            break
+          case '2':
+            keyboardHandlers.mode2()
+            break
+          case '3':
+            keyboardHandlers.mode3()
+            break
+          case '4':
+            keyboardHandlers.mode4()
+            break
+          case '`':
+            keyboardHandlers.backtick()
+            break
+          case 'p':
+            keyboardHandlers.pause()
+            break
+          default:
+            keyboardHandlers.keydown(ev)
+            break
+        }
+      }
+
+      const events = [
+        { type: 'keydown', handler: handleKeydown }
+      ]
+
+      // Add the event listeners
+      events.forEach(({ type, handler }) => {
+        keyboardTarget.addEventListener(type, handler)
+      })
+
+      // Store reference for cleanup
+      currentKeyboardListeners = { target: keyboardTarget, events }
+      
+      console.log('Keyboard listeners set up for:', appState.canvasInPopup ? 'popup' : 'main window')
+    }
+
+    // Modified setupEventListeners to also handle keyboard
+    const setupAllEventListeners = () => {
+      // Setup mouse events
+      // Remove existing listeners first
+      if (currentEventListeners) {
+        currentEventListeners.events.forEach(({ type, handler }) => {
+          currentEventListeners!.target.removeEventListener(type, handler)
+        })
+        currentEventListeners = null
+      }
+
+      const target = getEventTarget()
+      if (!target) {
+        console.log('No target available for event listeners')
+        return
+      }
+
+      let eventTarget: HTMLCanvasElement | Document
+      let events: { type: string, handler: EventListener }[]
+
+      if (appState.canvasInPopup && appState.popupWindow) {
+        // Add listeners to popup window document for better event capture
+        eventTarget = appState.popupWindow.document
+        events = [
+          { type: 'mousemove', handler: handleMouseMove },
+          { type: 'mousedown', handler: handleMouseDown },
+          { type: 'mouseup', handler: handleMouseUp }
+        ]
+      } else {
+        // Add listeners to the canvas element
+        eventTarget = target
+        events = [
+          { type: 'mousemove', handler: handleMouseMove },
+          { type: 'mousedown', handler: handleMouseDown },
+          { type: 'mouseup', handler: handleMouseUp }
+        ]
+      }
+
+      // Add the event listeners
+      events.forEach(({ type, handler }) => {
+        eventTarget.addEventListener(type, handler)
+      })
+
+      // Store reference for cleanup
+      currentEventListeners = { target: eventTarget, events }
+      
+      console.log('Mouse listeners set up for:', appState.canvasInPopup ? 'popup' : 'main page')
+
+      // Setup keyboard events
+      setupKeyboardListeners()
+    }
+
+    // Initial setup
+    setupAllEventListeners()
+
+    // Watch for popup state changes and re-setup listeners
+    checkPopupState = setInterval(() => {
+      const target = getEventTarget()
+      const needsMouseResetup = appState.canvasInPopup ? 
+        (target && currentEventListeners?.target !== appState.popupWindow?.document) :
+        (currentEventListeners?.target !== threeCanvas)
+      
+      const needsKeyboardResetup = appState.canvasInPopup ?
+        (currentKeyboardListeners?.target !== appState.popupWindow) :
+        (currentKeyboardListeners?.target !== window)
+      
+      if (needsMouseResetup || needsKeyboardResetup) {
+        console.log('Event state changed, resetting all listeners')
+        setupAllEventListeners()
+      }
+    }, 500)
+
+    launchLoop(async (ctx) => {
+      while(true) {
+        launchQueue.forEach(async (func) => {
+          ctx.branch(func)
+        })
+        launchQueue.length = 0
+        await ctx.wait(0.25)
+      }
     })
 
-    // keyupEvent((ev) => {
-    //   stopLoopForKey(ev.key)
-    // })
-    
+
+    const playNoteMidi = (pitch: number, velocity: number, ctx: TimeContext, noteDur: number, voiceIdx: number) => {
+      const inst = midiOuts[voiceIdx]
+      inst.sendNoteOn(pitch, velocity)
+      ctx.branch(async ctx => {
+        await ctx.wait((noteDur ?? 0.1) * 0.98)
+        inst.sendNoteOff(pitch)
+      }).finally(() => {
+        // console.log('loop canclled finally', pitch) //todo core - need to cancel child contexts properly (this doesn't fire immediately on parent cancel)
+        inst.sendNoteOff(pitch)
+      })
+    }
+
+
+    const playNotePiano = (pitch: number, velocity: number, ctx: TimeContext, noteDur: number, pianoIndex = 0) => {
+      // Update the FX parameters before playing the note
+      
+      const piano = pianoChains[mod2(pianoIndex, pianoChains.length)].piano
+      // const bpm = ctx.bpm
+      // const dur = noteDur * (60 / bpm)
+      // piano.triggerAttackRelease([m2f(pitch)], dur, null, velocity)
+      piano.triggerAttack([m2f(pitch)], Tone.now(), velocity/127)
+      ctx.branch(async ctx => {
+        await ctx.wait(noteDur)
+        piano.triggerRelease(m2f(pitch))
+      }).finally(() => {
+        piano.triggerRelease(m2f(pitch))
+      })
+    }
+
+    playNote = playNotePiano
+
     appState.drawFunctions.push((p: p5) => {
       // Draw completed polygons
       // displayMode.value === 'editting' ? edittingDrawFunc(p) : playingDrawFunc(p)
@@ -654,10 +868,26 @@ onMounted(async () => {
 
 onUnmounted(() => {
   console.log("disposing livecoded resources")
+  
+  // Clean up mouse event listeners
+  if (currentEventListeners) {
+    currentEventListeners.events.forEach(({ type, handler }) => {
+      currentEventListeners!.target.removeEventListener(type, handler)
+    })
+  }
+  
+  // Clean up keyboard event listeners
+  if (currentKeyboardListeners) {
+    currentKeyboardListeners.events.forEach(({ type, handler }) => {
+      currentKeyboardListeners!.target.removeEventListener(type, handler)
+    })
+  }
+  
   shaderGraphEndNode?.disposeAll()
   clearListeners()
   clearDrawFuncs()
   timeLoops.forEach(tl => tl.cancel())
+  clearInterval(checkPopupState)
 })
 
 </script>
