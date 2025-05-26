@@ -77,6 +77,12 @@ keyToColorMap.set('w', {r: 0, g: 255, b: 0, a: 255})
 keyToColorMap.set('e', {r: 0, g: 0, b: 255, a: 255})
 keyToColorMap.set('r', {r: 255, g: 255, b: 0, a: 255})
 
+const keyToUseStatefulIdxMap = new Map<string, boolean>()
+keyToUseStatefulIdxMap.set('q', false)
+keyToUseStatefulIdxMap.set('w', true)
+keyToUseStatefulIdxMap.set('e', true)
+keyToUseStatefulIdxMap.set('r', true)
+
 const keyToPlayInstanceMap = new Map<string, LoopHandle>()
 
 const launchLoopForKey = (key: string, p5i: p5) => {
@@ -87,12 +93,12 @@ const launchLoopForKey = (key: string, p5i: p5) => {
   if (!clip) return
 
   const launchId = generateId()
-
   const direction = clipName.split('_')[0] as SweepDir
+  const useStatefulIdx = keyToUseStatefulIdxMap.get(key)!!
 
   launchQueue.push(async (ctx) => {
     const playInstance = ctx.branch(async (ctx) => {
-      await playAndAnimateClip(launchId, clip, keyToColorMap.get(key)!!, direction, ctx, p5i, 0)
+      await playAndAnimateClip(launchId, clip, keyToColorMap.get(key)!!, direction, ctx, p5i, 0, useStatefulIdx)
     })
     
     playInstance.finally(() => {
@@ -117,7 +123,7 @@ const stopLoopForKey = (key: string) => {
 }
 
 type Color = {r: number, g: number, b: number, a: number}
-async function playAndAnimateClip(launchId: string, clip: AbletonClip, color: Color, direction: SweepDir, ctx: TimeContext, p5i: p5, voiceIdx: number)  {
+async function playAndAnimateClip(launchId: string, clip: AbletonClip, color: Color, direction: SweepDir, ctx: TimeContext, p5i: p5, voiceIdx: number, useStatefulIdx: boolean)  {
 
   //todo - need to figure out how this behaves when cancelled 
   // - individual "is running" flags since cancellation doesn't run heirarically?
@@ -136,7 +142,11 @@ async function playAndAnimateClip(launchId: string, clip: AbletonClip, color: Co
     console.log('noteDrawKey', noteDrawKey)
     const sortKey = parseFloat(ctx.beats.toFixed(3)) + playStartTime * 0.0001 //sort by note time, tie break by playStartTime
 
-    const polygonForNote = sortedPolygons[mod2(idx, sortedPolygons.length)]
+    const statefulIdx = appState.voiceStepIndexes[voiceIdx]
+    appState.voiceStepIndexes[voiceIdx] = (statefulIdx + 1) % sortedPolygons.length
+    const polygonIdx = useStatefulIdx ? statefulIdx : mod2(idx, sortedPolygons.length)
+
+    const polygonForNote = sortedPolygons[polygonIdx]
     //add a draw func to the orderedDrawFuncs map
     const drawFunc = (p5i: p5) => {
       p5i.push()
