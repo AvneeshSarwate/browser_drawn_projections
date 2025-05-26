@@ -850,8 +850,8 @@ onMounted(async () => {
       }
     });
 
-    const passthru = new Passthru({ src: p5Canvas })
-    const canvasPaint = new CanvasPaint({ src: passthru })
+    const passthru = new Passthru({ src: p5Canvas }, 2560, 1440)
+    const canvasPaint = new CanvasPaint({ src: passthru }, 2560, 1440)
 
     shaderGraphEndNode = canvasPaint
     appState.shaderDrawFunc = () => shaderGraphEndNode!!.renderAll(appState.threeRenderer!!)
