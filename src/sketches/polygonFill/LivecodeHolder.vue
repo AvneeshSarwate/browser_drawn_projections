@@ -657,6 +657,15 @@ onMounted(async () => {
       pause: () => {
         appState.paused = !appState.paused;
       },
+      save: () => {
+        savePolygonsToFile();
+      },
+      load: () => {
+        loadPolygonsFromFile();
+      },
+      clear: () => {
+        clearAllPolygons();
+      },
       keydown: (ev: KeyboardEvent) => {
         console.log('keydown', ev.key)
         launchLoopForKey(ev.key, p5i)
@@ -705,6 +714,24 @@ onMounted(async () => {
             break
           case 'p':
             keyboardHandlers.pause()
+            break
+          case 's':
+            if (ev.ctrlKey || ev.metaKey) {
+              ev.preventDefault()
+              keyboardHandlers.save()
+            }
+            break
+          case 'o':
+            if (ev.ctrlKey || ev.metaKey) {
+              ev.preventDefault()
+              keyboardHandlers.load()
+            }
+            break
+          case 'Delete':
+          case 'Backspace':
+            if (ev.shiftKey) {
+              keyboardHandlers.clear()
+            }
             break
           default:
             keyboardHandlers.keydown(ev)
@@ -839,7 +866,7 @@ onMounted(async () => {
       })
     }
 
-    playNote = playNotePiano
+    playNote = playNoteMidi
 
     appState.drawFunctions.push((p: p5) => {
       // Draw completed polygons
@@ -890,21 +917,131 @@ onUnmounted(() => {
   clearInterval(checkPopupState)
 })
 
+// Function to save polygons to JSON file
+function savePolygonsToFile() {
+  const polygonData = {
+    polygons: appState.polygons.map(polygon => ({
+      id: polygon.id,
+      selected: polygon.selected,
+      points: polygon.points.map(p => ({ x: p.x, y: p.y }))
+    })),
+    timestamp: new Date().toISOString(),
+    version: "1.0"
+  };
+
+  const dataStr = JSON.stringify(polygonData, null, 2);
+  const dataBlob = new Blob([dataStr], { type: 'application/json' });
+  
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(dataBlob);
+  link.download = `polygons_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
+  link.click();
+  
+  // Clean up
+  URL.revokeObjectURL(link.href);
+}
+
+// Function to load polygons from JSON file
+function loadPolygonsFromFile() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json';
+  
+  input.onchange = (event) => {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const jsonData = JSON.parse(e.target?.result as string);
+        
+        // Validate the JSON structure
+        if (!jsonData.polygons || !Array.isArray(jsonData.polygons)) {
+          throw new Error('Invalid polygon data format');
+        }
+        
+        // Clear existing polygons and reset selection state
+        appState.polygons = [];
+        selectedPolygonIndex = -1;
+        selectedPointIndex = -1;
+        activePolygon = [];
+        
+        // Load the polygons
+        jsonData.polygons.forEach((polygonData: any) => {
+          if (polygonData.points && Array.isArray(polygonData.points)) {
+            appState.polygons.push({
+              id: polygonData.id || generateId(),
+              selected: false, // Reset selection state
+              points: polygonData.points.map((p: any) => ({ x: p.x || 0, y: p.y || 0 }))
+            });
+          }
+        });
+        
+        // Save to history
+        savePolygonHistory();
+        
+        console.log(`Loaded ${appState.polygons.length} polygons from file`);
+      } catch (error) {
+        console.error('Error loading polygon file:', error);
+        alert('Error loading polygon file. Please check the file format.');
+      }
+    };
+    
+    reader.readAsText(file);
+  };
+  
+  input.click();
+}
+
+// Function to clear all polygons
+function clearAllPolygons() {
+  if (appState.polygons.length === 0) return;
+  
+  if (confirm('Are you sure you want to clear all polygons? This action cannot be undone.')) {
+    appState.polygons = [];
+    selectedPolygonIndex = -1;
+    selectedPointIndex = -1;
+    activePolygon = [];
+    savePolygonHistory();
+  }
+}
+
 </script>
 
 <template>
-  <label>Cursor State</label>
-  <select v-model="cursorState">
-    <option value="drawNewPolygon">Draw New Polygon</option>
-    <option value="addPointToPolygon">Add Point To Polygon</option>
-    <option value="selectPoint">Select Point</option>
-    <option value="selectPolygon">Select Polygon</option>
-  </select>
-  <label>Display Mode</label>
-  <select v-model="displayMode">
-    <option value="editting">Editting</option>
-    <option value="playing">Playing</option>
-  </select>
+  <div>
+    <div style="margin-bottom: 10px;">
+      <label>Cursor State</label>
+      <select v-model="cursorState">
+        <option value="drawNewPolygon">Draw New Polygon</option>
+        <option value="addPointToPolygon">Add Point To Polygon</option>
+        <option value="selectPoint">Select Point</option>
+        <option value="selectPolygon">Select Polygon</option>
+      </select>
+      
+      <label style="margin-left: 20px;">Display Mode</label>
+      <select v-model="displayMode">
+        <option value="editting">Editting</option>
+        <option value="playing">Playing</option>
+      </select>
+    </div>
+    
+    <div style="margin-bottom: 10px;">
+      <button @click="savePolygonsToFile" data-ignore-click>
+        Save Polygons (Ctrl+S)
+      </button>
+      <button @click="loadPolygonsFromFile" data-ignore-click style="margin-left: 10px;">
+        Load Polygons (Ctrl+O)
+      </button>
+      <button @click="clearAllPolygons" data-ignore-click style="margin-left: 10px; background-color: #ff4444;">
+        Clear All (Shift+Delete)
+      </button>
+      <span style="margin-left: 20px; color: #888;">
+        Polygons: {{ appState.polygons.length }}
+      </span>
+    </div>
+  </div>
 </template>
 
 <style scoped></style>
