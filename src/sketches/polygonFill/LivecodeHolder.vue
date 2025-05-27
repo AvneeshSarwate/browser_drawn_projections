@@ -1,7 +1,7 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
 import { type Polygon, type PolygonFillAppState, appStateName, resolution } from './appState';
-import { inject, onMounted, onUnmounted, ref, type Ref, watch } from 'vue';
+import { inject, onMounted, onUnmounted, ref, type Ref, watch, reactive } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords, mouseupEvent, singleKeyupEvent, keydownEvent, keyupEvent } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
@@ -84,6 +84,12 @@ keyToUseStatefulIdxMap.set('e', true)
 keyToUseStatefulIdxMap.set('r', true)
 
 const keyToPlayInstanceMap = new Map<string, LoopHandle>()
+const keyToToggleStateMap = reactive(new Map<string, boolean>())
+// Initialize toggle states
+keyToToggleStateMap.set('q', false)
+keyToToggleStateMap.set('w', false)
+keyToToggleStateMap.set('e', false)
+keyToToggleStateMap.set('r', false)
 
 const launchLoopForKey = (key: string, p5i: p5) => {
   const clipName = keyToClipNameMap.get(key)
@@ -92,23 +98,48 @@ const launchLoopForKey = (key: string, p5i: p5) => {
   const clip = clipMap.get(clipName)
   if (!clip) return
 
+  // Check if this key is already playing
+  const isCurrentlyPlaying = keyToToggleStateMap.get(key)
+  
+  if (isCurrentlyPlaying) {
+    // Stop the current loop
+    stopLoopForKey(key)
+    keyToToggleStateMap.set(key, false)
+    return
+  }
+
+  // Start a new loop
+  keyToToggleStateMap.set(key, true)
   const launchId = generateId()
   const direction = clipName.split('_')[0] as SweepDir
   const useStatefulIdx = keyToUseStatefulIdxMap.get(key)!!
 
+  const cleanUpDrawFuncs = () => {
+    console.log('playInstance cleanup for key:', key)
+    keyToToggleStateMap.set(key, false)
+    // Clean up draw funcs for this key
+    const keysToDelete: string[] = []
+    appState.orderedDrawFuncs.forEach((drawFunc, drawKey) => {
+      if (drawKey.includes(launchId)) {
+        keysToDelete.push(drawKey)
+      }
+    })
+    keysToDelete.forEach(drawKey => {
+      appState.orderedDrawFuncs.delete(drawKey)
+    })
+  }
+
   launchQueue.push(async (ctx) => {
     const playInstance = ctx.branch(async (ctx) => {
-      await playAndAnimateClip(launchId, clip, keyToColorMap.get(key)!!, direction, ctx, p5i, 0, useStatefulIdx)
+      // Loop continuously until cancelled
+      while (keyToToggleStateMap.get(key)) {
+        await playAndAnimateClip(launchId, clip, keyToColorMap.get(key)!!, direction, ctx, p5i, 0, useStatefulIdx)
+      }
+      cleanUpDrawFuncs()
     })
     
     playInstance.finally(() => {
-      //remove the draw funcs for this launchId if crashed
-      console.log('playInstance finally')
-      appState.orderedDrawFuncs.forEach((drawFunc, key) => {
-        if (key.startsWith(launchId)) {
-          // appState.orderedDrawFuncs.delete(key)
-        }
-      })
+      cleanUpDrawFuncs()
     })
     keyToPlayInstanceMap.set(key, playInstance)
   })
@@ -120,6 +151,7 @@ const stopLoopForKey = (key: string) => {
     playInstance.cancel()
     keyToPlayInstanceMap.delete(key)
   }
+  keyToToggleStateMap.set(key, false)
 }
 
 type Color = {r: number, g: number, b: number, a: number}
@@ -668,7 +700,10 @@ onMounted(async () => {
       },
       keydown: (ev: KeyboardEvent) => {
         console.log('keydown', ev.key)
-        launchLoopForKey(ev.key, p5i)
+        // Only handle Q, W, E, R keys for toggle functionality
+        if (['q', 'w', 'e', 'r'].includes(ev.key.toLowerCase())) {
+          launchLoopForKey(ev.key.toLowerCase(), p5i)
+        }
       }
     }
 
@@ -1007,6 +1042,22 @@ function clearAllPolygons() {
   }
 }
 
+// Helper functions for template
+const getLoopBackgroundColor = (key: string): string => {
+  if (keyToToggleStateMap.get(key)) {
+    const color = keyToColorMap.get(key)
+    if (color) {
+      return `rgba(${color.r}, ${color.g}, ${color.b}, 0.3)`
+    }
+    return '#90EE90'
+  }
+  return '#f0f0f0'
+}
+
+const getClipDisplayName = (key: string): string => {
+  return keyToClipNameMap.get(key)?.replace(/_/g, ' ') || ''
+}
+
 </script>
 
 <template>
@@ -1025,6 +1076,29 @@ function clearAllPolygons() {
         <option value="editting">Editting</option>
         <option value="playing">Playing</option>
       </select>
+    </div>
+    
+    <!-- Loop Status Indicators -->
+    <div style="margin-bottom: 10px; padding: 10px; border: 1px solid #ccc; border-radius: 5px;">
+      <label style="font-weight: bold; margin-right: 15px;">Loop Status:</label>
+      <span 
+        v-for="key in ['q', 'w', 'e', 'r']" 
+        :key="key"
+        :style="{
+          display: 'inline-block',
+          margin: '0 10px',
+          padding: '5px 10px',
+          borderRadius: '3px',
+          backgroundColor: getLoopBackgroundColor(key),
+          border: keyToToggleStateMap.get(key) ? '2px solid #4CAF50' : '1px solid #ccc',
+          color: keyToToggleStateMap.get(key) ? '#000' : '#666',
+          fontWeight: keyToToggleStateMap.get(key) ? 'bold' : 'normal'
+        }"
+      >
+        {{ key.toUpperCase() }}: {{ getClipDisplayName(key) }}
+        <span v-if="keyToToggleStateMap.get(key)" style="color: #4CAF50; margin-left: 5px;">●</span>
+        <span v-else style="color: #ccc; margin-left: 5px;">○</span>
+      </span>
     </div>
     
     <div style="margin-bottom: 10px;">
