@@ -535,27 +535,284 @@ const clearDraws = () => {
 </script>
 
 <template>
-  <!-- <div id="debugDiv">
-    <div>loop phase: {{ loopPhase }}</div>
-    <div>next note position: {{ nextNotePosition }}</div>
-    <div>hot swap note wait: {{ hotSwapNoteWait }}</div>
-  </div> -->
-  <label>
-    <input type="checkbox" v-model="drawDebugGrid" />
-    Draw debug grid
-  </label>
-  <label>
-    <input type="checkbox" v-model="showPaths" />
-    Show paths
-  </label>
-  <label>Voice / Colour</label>
-  <select v-model="selectedColorIndex">
-    <option v-for="(c,idx) in voiceColors" :key="idx" :value="idx">{{ idx+1 }}</option>
-  </select>
-  <button @click="togglePlay">{{ playing ? 'Stop' : 'Play' }}</button>
-  <button @click="undoDraw">Undo</button>
-  <button @click="clearDraws">Clear</button>
-  <div id="pianoRollHolder"></div>
+  <div class="controls-container">
+    <div class="checkbox-group">
+      <label class="checkbox-label">
+        <input type="checkbox" v-model="drawDebugGrid" class="checkbox" />
+        <span class="checkmark"></span>
+        Draw debug grid
+      </label>
+      <label class="checkbox-label">
+        <input type="checkbox" v-model="showPaths" class="checkbox" />
+        <span class="checkmark"></span>
+        Show paths
+      </label>
+    </div>
+    
+    <div class="voice-selector">
+      <label class="select-label">Voice / Colour</label>
+      <div class="select-wrapper">
+        <select v-model="selectedColorIndex" class="voice-select">
+          <option v-for="(c,idx) in voiceColors" :key="idx" :value="idx">
+            Voice {{ idx+1 }}
+          </option>
+        </select>
+        <div class="color-indicator" :style="{ backgroundColor: voiceColors[selectedColorIndex] }"></div>
+      </div>
+    </div>
+    
+    <div class="button-group">
+      <button @click="togglePlay" class="btn btn-primary">
+        <span class="btn-icon">{{ playing ? '⏹' : '▶' }}</span>
+        {{ playing ? 'Stop' : 'Play' }}
+      </button>
+      <button @click="undoDraw" class="btn btn-secondary">
+        <span class="btn-icon">↶</span>
+        Undo
+      </button>
+      <button @click="clearDraws" class="btn btn-danger">
+        <span class="btn-icon">🗑</span>
+        Clear
+      </button>
+    </div>
+  </div>
+  
+  <div id="pianoRollHolder" class="piano-roll-container"></div>
 </template>
 
-<style scoped></style>
+<style scoped>
+.controls-container {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  padding: 0.5rem 0;
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.checkbox-group {
+  display: flex;
+  gap: 1rem;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #000000;
+  font-size: 0.9rem;
+  cursor: pointer;
+  position: relative;
+  user-select: none;
+}
+
+.checkbox {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border: 2px solid #4a5568;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.checkbox:checked {
+  background: linear-gradient(45deg, #667eea 0%, #764ba2 100%);
+  border-color: #667eea;
+}
+
+.checkmark {
+  position: absolute;
+  left: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 10px;
+  height: 10px;
+  pointer-events: none;
+}
+
+.checkbox:checked + .checkmark::after {
+  content: '✓';
+  color: white;
+  font-size: 12px;
+  font-weight: bold;
+  position: absolute;
+  left: -1px;
+  top: -2px;
+}
+
+.voice-selector {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.select-label {
+  color: #000000;
+  font-size: 0.9rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.select-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.voice-select {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  color: #000000;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 120px;
+}
+
+.voice-select:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.voice-select:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+}
+
+.color-indicator {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  transition: all 0.2s ease;
+}
+
+.button-group {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s ease;
+}
+
+.btn:hover::before {
+  left: 100%;
+}
+
+.btn-icon {
+  font-size: 0.9rem;
+}
+
+.btn-primary {
+  background: linear-gradient(45deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.btn-secondary {
+  background: linear-gradient(45deg, #4a5568 0%, #2d3748 100%);
+  color: #e0e0e0;
+  box-shadow: 0 2px 8px rgba(74, 85, 104, 0.3);
+}
+
+.btn-secondary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(74, 85, 104, 0.4);
+  background: linear-gradient(45deg, #5a6578 0%, #3d4758 100%);
+}
+
+.btn-danger {
+  background: linear-gradient(45deg, #e53e3e 0%, #c53030 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(229, 62, 62, 0.3);
+}
+
+.btn-danger:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(229, 62, 62, 0.4);
+}
+
+.btn:active {
+  transform: translateY(0);
+}
+
+.piano-roll-container {
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .controls-container {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+  
+  .checkbox-group {
+    gap: 0.5rem;
+  }
+  
+  .voice-selector {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
+  
+  .button-group {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .btn {
+    flex: 1;
+    min-width: 0;
+    justify-content: center;
+  }
+}
+
+/* Dark theme adjustments */
+@media (prefers-color-scheme: dark) {
+  .voice-select option {
+    background: #2d3748;
+    color: #e0e0e0;
+  }
+}
+</style>
