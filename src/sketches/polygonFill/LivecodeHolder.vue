@@ -1073,6 +1073,40 @@ const getClipDisplayName = (key: string): string => {
   return keyToClipNameMap.get(key)?.replace(/_/g, ' ') || ''
 }
 
+const getStatusDotColor = (key: string): string => {
+  const color = keyToColorMap.get(key)
+  if (color) {
+    return `rgb(${color.r}, ${color.g}, ${color.b})`
+  }
+  return '#dee2e6'
+}
+
+const getLoopIndicatorStyle = (key: string) => {
+  if (keyToToggleStateMap.get(key)) {
+    const color = keyToColorMap.get(key)
+    if (color) {
+      return {
+        borderColor: `rgb(${color.r}, ${color.g}, ${color.b})`,
+        background: `rgba(${color.r}, ${color.g}, ${color.b}, 0.1)`,
+        boxShadow: `0 1px 2px rgba(${color.r}, ${color.g}, ${color.b}, 0.2)`
+      }
+    }
+  }
+  return {}
+}
+
+const getLoopKeyStyle = (key: string) => {
+  if (keyToToggleStateMap.get(key)) {
+    const color = keyToColorMap.get(key)
+    if (color) {
+      return {
+        background: `rgb(${color.r}, ${color.g}, ${color.b})`
+      }
+    }
+  }
+  return {}
+}
+
 </script>
 
 <template>
@@ -1109,13 +1143,21 @@ const getClipDisplayName = (key: string): string => {
           :key="key"
           class="loop-indicator"
           :class="{ 'active': keyToToggleStateMap.get(key) }"
+          :style="getLoopIndicatorStyle(key)"
         >
-          <div class="loop-key">{{ key.toUpperCase() }}</div>
+          <div 
+            class="loop-key"
+            :style="getLoopKeyStyle(key)"
+          >{{ key.toUpperCase() }}</div>
           <div class="loop-name">{{ getClipDisplayName(key) }}</div>
           <div class="loop-status">
             <span 
               class="status-dot"
               :class="{ 'playing': keyToToggleStateMap.get(key) }"
+              :style="{ 
+                backgroundColor: getStatusDotColor(key),
+                boxShadow: keyToToggleStateMap.get(key) ? `0 0 4px ${getStatusDotColor(key)}` : 'none'
+              }"
             ></span>
           </div>
         </div>
@@ -1255,6 +1297,7 @@ const getClipDisplayName = (key: string): string => {
   border-radius: 3px;
   font-weight: bold;
   font-size: 12px;
+  transition: all 0.2s ease;
 }
 
 .loop-indicator.active .loop-key {
@@ -1279,12 +1322,10 @@ const getClipDisplayName = (key: string): string => {
   height: 8px;
   border-radius: 50%;
   background: #dee2e6;
-  transition: background-color 0.2s ease;
+  transition: all 0.2s ease;
 }
 
 .status-dot.playing {
-  background: #28a745;
-  box-shadow: 0 0 4px rgba(40, 167, 69, 0.6);
   animation: pulse 2s infinite;
 }
 
