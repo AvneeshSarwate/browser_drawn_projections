@@ -154,28 +154,58 @@ const popupCanvas = () => {
 </script>
 
 <template>
-  <div id="canvasContainer" :style="{width: resRef.width + 'px', height: resRef.height + 'px'}">
-    <canvas id="p5Canvas" :width="resRef.width" :height="resRef.height" abitrary-prop="somethi"></canvas>
-    <canvas id="threeCanvas" :width="resRef.width" :height="resRef.height" abitrary-prop="somethi"></canvas>
+  <div class="sketch-container">
+    <div id="canvasContainer" :style="{width: resRef.width + 'px', height: resRef.height + 'px'}">
+      <canvas id="p5Canvas" :width="resRef.width" :height="resRef.height" abitrary-prop="somethi"></canvas>
+      <canvas id="threeCanvas" :width="resRef.width" :height="resRef.height" abitrary-prop="somethi"></canvas>
+    </div>
+    
+    <div class="controls-section">
+      <div class="instructions">
+        <div class="instruction-item">
+          <span class="key-combo">1-4</span>
+          <span class="description">Change cursor mode</span>
+        </div>
+        <div class="instruction-item">
+          <span class="key-combo">`</span>
+          <span class="description">Finalize polygon</span>
+        </div>
+        <div class="instruction-item">
+          <span class="key-combo">P</span>
+          <span class="description">Pause</span>
+        </div>
+        <div class="instruction-item">
+          <span class="key-combo">Q/W/E/R</span>
+          <span class="description">Play sequences</span>
+        </div>
+      </div>
+      
+      <button @click="popupCanvas" class="popup-btn">
+        <span class="btn-icon">🪟</span>
+        Popup Canvas
+      </button>
+    </div>
+    
+    <div id="debugInfo" class="debug-info"></div>
   </div>
-  <div id="description">
-    <p>1-4: Change cursor mode</p>
-    <p>` (backtick): Finalize polygon</p>
-    <p>P: Pause | Q/W/E/R: Play sequences</p>
-  </div>
-  <button @click="popupCanvas">Popup canvas</button>
-  <div id="debugInfo"></div>
 </template>
 
-
 <style scoped>
+.sketch-container {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: #333;
+}
+
 #canvasContainer {
   background-color: black;
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  margin-bottom: 12px;
 }
 
 #p5Canvas {
-  border: 1px solid black;
-  /* position: absolute; */
+  border: none;
   top: 0;
   left: 0;
   z-index: -1;
@@ -183,10 +213,138 @@ const popupCanvas = () => {
 }
 
 #threeCanvas {
-  border: 1px solid black;
+  border: none;
   position: absolute;
   top: 0;
   left: 0;
   visibility: visible;
+}
+
+.controls-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 4px;
+  padding: 8px;
+  margin-bottom: 8px;
+}
+
+.instructions {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.instruction-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.key-combo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 20px;
+  background: #6c757d;
+  color: white;
+  border-radius: 3px;
+  font-weight: bold;
+  font-size: 11px;
+  padding: 0 4px;
+  white-space: nowrap;
+}
+
+.description {
+  color: #495057;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.popup-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: #007bff;
+  color: white;
+}
+
+.popup-btn:hover {
+  background: #0056b3;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+.popup-btn:active {
+  transform: translateY(0);
+}
+
+.btn-icon {
+  font-size: 14px;
+}
+
+.debug-info {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 4px;
+  padding: 8px;
+  font-size: 12px;
+  color: #6c757d;
+  min-height: 20px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+}
+
+.debug-info:empty {
+  display: none;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .controls-section {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  
+  .instructions {
+    justify-content: center;
+    gap: 12px;
+  }
+  
+  .instruction-item {
+    flex-direction: column;
+    gap: 2px;
+    text-align: center;
+  }
+  
+  .popup-btn {
+    align-self: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .instructions {
+    flex-direction: column;
+    gap: 6px;
+  }
+  
+  .instruction-item {
+    flex-direction: row;
+    gap: 6px;
+  }
 }
 </style>
