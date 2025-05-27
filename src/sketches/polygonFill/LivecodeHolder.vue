@@ -55,14 +55,15 @@ const bottommostPointSortKey = (polygon: Polygon) => {
   return polygon.points.reduce((min, p) => p.y > min.y ? p : min, polygon.points[0]).y
 }
 const sortFuncs = {
-  'left': leftmostPointSortKey,
-  'right': rightmostPointSortKey,
-  'top': topmostPointSortKey,
-  'bottom': bottommostPointSortKey
+  'left': (p: Polygon[]) => p.sort((a, b) => leftmostPointSortKey(a) - leftmostPointSortKey(b)),
+  'right': (p: Polygon[]) => p.sort((a, b) => rightmostPointSortKey(a) - rightmostPointSortKey(b)).reverse(),
+  'top': (p: Polygon[]) => p.sort((a, b) => topmostPointSortKey(a) - topmostPointSortKey(b)),
+  'bottom': (p: Polygon[]) => p.sort((a, b) => bottommostPointSortKey(a) - bottommostPointSortKey(b)).reverse()
 }
 const sortPolygonsByDirection = (polygons: Polygon[], direction: SweepDir) => {
+  console.log('sortPolygonsByDirection', direction)
   const sortFunc = sortFuncs[direction]
-  return polygons.sort((a, b) => sortFunc(a) - sortFunc(b))
+  return sortFunc(polygons)
 }
 
 const keyToClipNameMap = new Map<string, string>()
@@ -129,11 +130,13 @@ const launchLoopForKey = (key: string, p5i: p5) => {
     })
   }
 
+  const voiceIdx = ['q', 'w', 'e', 'r'].indexOf(key)
+
   launchQueue.push(async (ctx) => {
     const playInstance = ctx.branch(async (ctx) => {
       // Loop continuously until cancelled
       while (keyToToggleStateMap.get(key)) {
-        await playAndAnimateClip(launchId, clip, keyToColorMap.get(key)!!, direction, ctx, p5i, 0, useStatefulIdx)
+        await playAndAnimateClip(launchId, clip, keyToColorMap.get(key)!!, direction, ctx, p5i, voiceIdx, useStatefulIdx)
       }
       cleanUpDrawFuncs()
     })
@@ -169,9 +172,10 @@ async function playAndAnimateClip(launchId: string, clip: AbletonClip, color: Co
     //if not playFlag, break?
     await ctx.wait(note.preDelta)
     playNote(note.note.pitch, note.note.velocity, ctx, note.note.duration, voiceIdx)
+
     let sweepProgress = 0
     const noteDrawKey = `${launchId}-${voiceIdx}-${idx}`
-    console.log('noteDrawKey', noteDrawKey)
+    // console.log('noteDrawKey', noteDrawKey)
     const sortKey = parseFloat(ctx.beats.toFixed(3)) + playStartTime * 0.0001 //sort by note time, tie break by playStartTime
 
     const statefulIdx = appState.voiceStepIndexes[voiceIdx]
@@ -214,9 +218,20 @@ async function playAndAnimateClip(launchId: string, clip: AbletonClip, color: Co
       //remove the draw func from the orderedDrawFuncs map
       appState.orderedDrawFuncs.delete(noteDrawKey)
     })
+
+    await ctx.wait(note.postDelta)
   }
 
   //remove all draw funcs with key starting with launchId (if break in loop using playFlag)
+  const keysToDelete: string[] = []
+  appState.orderedDrawFuncs.forEach((drawFunc, drawKey) => {
+    if (drawKey.includes(launchId)) {
+      keysToDelete.push(drawKey)
+    }
+  })
+  keysToDelete.forEach(drawKey => {
+    appState.orderedDrawFuncs.delete(drawKey)
+  })
 }
 
 const pianoChains = Array.from({ length: 10 }, (_, i) => getPianoChain())
@@ -1061,61 +1076,356 @@ const getClipDisplayName = (key: string): string => {
 </script>
 
 <template>
-  <div>
-    <div style="margin-bottom: 10px;">
-      <label>Cursor State</label>
-      <select v-model="cursorState">
-        <option value="drawNewPolygon">Draw New Polygon</option>
-        <option value="addPointToPolygon">Add Point To Polygon</option>
-        <option value="selectPoint">Select Point</option>
-        <option value="selectPolygon">Select Polygon</option>
-      </select>
+  <div class="livecode-container">
+    <!-- Control Panel -->
+    <div class="control-panel">
+      <div class="control-row">
+        <div class="control-group">
+          <label class="control-label">Cursor State</label>
+          <select v-model="cursorState" class="control-select">
+            <option value="drawNewPolygon">Draw New Polygon</option>
+            <option value="addPointToPolygon">Add Point To Polygon</option>
+            <option value="selectPoint">Select Point</option>
+            <option value="selectPolygon">Select Polygon</option>
+          </select>
+        </div>
+        
+        <div class="control-group">
+          <label class="control-label">Display Mode</label>
+          <select v-model="displayMode" class="control-select">
+            <option value="editting">Editing</option>
+            <option value="playing">Playing</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Loop Status Panel -->
+    <div class="status-panel">
+      <h3 class="panel-title">Loop Status</h3>
+      <div class="loop-indicators">
+        <div 
+          v-for="key in ['q', 'w', 'e', 'r']" 
+          :key="key"
+          class="loop-indicator"
+          :class="{ 'active': keyToToggleStateMap.get(key) }"
+        >
+          <div class="loop-key">{{ key.toUpperCase() }}</div>
+          <div class="loop-name">{{ getClipDisplayName(key) }}</div>
+          <div class="loop-status">
+            <span 
+              class="status-dot"
+              :class="{ 'playing': keyToToggleStateMap.get(key) }"
+            ></span>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Action Panel -->
+    <div class="action-panel">
+      <div class="action-buttons">
+        <button @click="savePolygonsToFile" data-ignore-click class="btn btn-primary">
+          <span class="btn-icon">💾</span>
+          Save
+          <span class="btn-shortcut">Ctrl+S</span>
+        </button>
+        <button @click="loadPolygonsFromFile" data-ignore-click class="btn btn-secondary">
+          <span class="btn-icon">📁</span>
+          Load
+          <span class="btn-shortcut">Ctrl+O</span>
+        </button>
+        <button @click="clearAllPolygons" data-ignore-click class="btn btn-danger">
+          <span class="btn-icon">🗑️</span>
+          Clear
+          <span class="btn-shortcut">Shift+Del</span>
+        </button>
+      </div>
       
-      <label style="margin-left: 20px;">Display Mode</label>
-      <select v-model="displayMode">
-        <option value="editting">Editting</option>
-        <option value="playing">Playing</option>
-      </select>
-    </div>
-    
-    <!-- Loop Status Indicators -->
-    <div style="margin-bottom: 10px; padding: 10px; border: 1px solid #ccc; border-radius: 5px;">
-      <label style="font-weight: bold; margin-right: 15px;">Loop Status:</label>
-      <span 
-        v-for="key in ['q', 'w', 'e', 'r']" 
-        :key="key"
-        :style="{
-          display: 'inline-block',
-          margin: '0 10px',
-          padding: '5px 10px',
-          borderRadius: '3px',
-          backgroundColor: getLoopBackgroundColor(key),
-          border: keyToToggleStateMap.get(key) ? '2px solid #4CAF50' : '1px solid #ccc',
-          color: keyToToggleStateMap.get(key) ? '#000' : '#666',
-          fontWeight: keyToToggleStateMap.get(key) ? 'bold' : 'normal'
-        }"
-      >
-        {{ key.toUpperCase() }}: {{ getClipDisplayName(key) }}
-        <span v-if="keyToToggleStateMap.get(key)" style="color: #4CAF50; margin-left: 5px;">●</span>
-        <span v-else style="color: #ccc; margin-left: 5px;">○</span>
-      </span>
-    </div>
-    
-    <div style="margin-bottom: 10px;">
-      <button @click="savePolygonsToFile" data-ignore-click>
-        Save Polygons (Ctrl+S)
-      </button>
-      <button @click="loadPolygonsFromFile" data-ignore-click style="margin-left: 10px;">
-        Load Polygons (Ctrl+O)
-      </button>
-      <button @click="clearAllPolygons" data-ignore-click style="margin-left: 10px; background-color: #ff4444;">
-        Clear All (Shift+Delete)
-      </button>
-      <span style="margin-left: 20px; color: #888;">
-        Polygons: {{ appState.polygons.length }}
-      </span>
+      <div class="stats">
+        <div class="stat-item">
+          <span class="stat-label">Polygons:</span>
+          <span class="stat-value">{{ appState.polygons.length }}</span>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
-<style scoped></style>
+<style scoped>
+.livecode-container {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: #333;
+  background: #f8f9fa;
+  border-radius: 4px;
+  padding: 8px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+  margin-bottom: 8px;
+}
+
+/* Control Panel */
+.control-panel {
+  margin-bottom: 8px;
+}
+
+.control-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.control-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.control-label {
+  font-weight: 600;
+  font-size: 13px;
+  color: #495057;
+  white-space: nowrap;
+}
+
+.control-select {
+  padding: 4px 8px;
+  border: 1px solid #ced4da;
+  border-radius: 3px;
+  background: white;
+  font-size: 13px;
+  color: #495057;
+  min-width: 140px;
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.control-select:focus {
+  outline: none;
+  border-color: #80bdff;
+  box-shadow: 0 0 0 1px rgba(0, 123, 255, 0.25);
+}
+
+/* Status Panel */
+.status-panel {
+  background: white;
+  border: 1px solid #e9ecef;
+  border-radius: 4px;
+  padding: 8px;
+  margin-bottom: 8px;
+}
+
+.panel-title {
+  margin: 0 0 6px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #495057;
+}
+
+.loop-indicators {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 6px;
+}
+
+.loop-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid #e9ecef;
+  border-radius: 3px;
+  background: #f8f9fa;
+  transition: all 0.2s ease;
+}
+
+.loop-indicator.active {
+  border-color: #28a745;
+  background: rgba(40, 167, 69, 0.1);
+  box-shadow: 0 1px 2px rgba(40, 167, 69, 0.2);
+}
+
+.loop-key {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: #6c757d;
+  color: white;
+  border-radius: 3px;
+  font-weight: bold;
+  font-size: 12px;
+}
+
+.loop-indicator.active .loop-key {
+  background: #28a745;
+}
+
+.loop-name {
+  flex: 1;
+  font-weight: 500;
+  color: #495057;
+  text-transform: capitalize;
+  font-size: 13px;
+}
+
+.loop-status {
+  display: flex;
+  align-items: center;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #dee2e6;
+  transition: background-color 0.2s ease;
+}
+
+.status-dot.playing {
+  background: #28a745;
+  box-shadow: 0 0 4px rgba(40, 167, 69, 0.6);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.7; }
+  100% { opacity: 1; }
+}
+
+/* Action Panel */
+.action-panel {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 3px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  position: relative;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+.btn:active {
+  transform: translateY(0);
+}
+
+.btn-primary {
+  background: #007bff;
+  color: white;
+}
+
+.btn-primary:hover {
+  background: #0056b3;
+}
+
+.btn-secondary {
+  background: #6c757d;
+  color: white;
+}
+
+.btn-secondary:hover {
+  background: #545b62;
+}
+
+.btn-danger {
+  background: #dc3545;
+  color: white;
+}
+
+.btn-danger:hover {
+  background: #c82333;
+}
+
+.btn-icon {
+  font-size: 12px;
+}
+
+.btn-shortcut {
+  font-size: 10px;
+  opacity: 0.8;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 1px 4px;
+  border-radius: 2px;
+  margin-left: 2px;
+}
+
+/* Stats */
+.stats {
+  display: flex;
+  gap: 8px;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: white;
+  border: 1px solid #e9ecef;
+  border-radius: 3px;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: #6c757d;
+  font-weight: 500;
+}
+
+.stat-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: #495057;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .control-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+  
+  .control-group {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+  }
+  
+  .loop-indicators {
+    grid-template-columns: 1fr;
+  }
+  
+  .action-panel {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .action-buttons {
+    justify-content: center;
+  }
+}
+</style>
