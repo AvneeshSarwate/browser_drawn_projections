@@ -409,91 +409,357 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-
 .sliders-row {
   display: flex;
   flex-direction: row;
-  gap: 0.5rem;
+  justify-content: center;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+  padding: 0.5rem;
+  background: #1a1a1a;
+  border-radius: 4px;
+  border: 1px solid #444;
 }
 
 .slider-column {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.1rem;
+  font-size: 0.8rem;
+  color: #e0e0e0;
+}
+
+.slider-column div {
+  font-family: monospace;
+  font-size: 0.7rem;
+  min-height: 1rem;
+  color: #f0f0f0;
+}
+
+.slider-column label {
+  color: #d0d0d0;
+  font-size: 0.7rem;
 }
 
 .start-phrase-idx-input {
   width: 2rem;
+  padding: 0.1rem;
+  font-size: 0.8rem;
+  background: #2a2a2a;
+  border: 1px solid #555;
+  color: #e0e0e0;
+  border-radius: 2px;
 }
 
+/* Custom vertical slider styling for general sliders */
 input[type=range] {
-    writing-mode: vertical-lr;
-    direction: rtl;
-    vertical-align: middle;
+  writing-mode: vertical-lr;
+  direction: rtl;
+  vertical-align: middle;
+  height: 100px;
+  width: 4px;
+  background: #888; /* Fallback background */
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 10px;
+}
+
+/* WebKit browsers (Chrome, Safari, Edge) */
+input[type=range]::-webkit-slider-track {
+  width: 60px; /* Note: for vertical sliders, width becomes height */
+  height: 2px; /* Made narrower: was 4px, now 2px */
+  background: linear-gradient(to bottom, #bbb 0%, #999 100%);
+  border-radius: 1px;
+  border: none;
+}
+
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 14px; /* Slightly smaller to match thinner track */
+  width: 14px;
+  border-radius: 50%;
+  background: #6a9bd1;
+  cursor: pointer;
+  border: 2px solid #4a7ba7;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+input[type=range]::-webkit-slider-thumb:hover {
+  background: #7ba9d9;
+  box-shadow: 0 3px 6px rgba(0,0,0,0.4);
+}
+
+/* Firefox */
+input[type=range]::-moz-range-track {
+  width: 60px;
+  height: 2px; /* Made narrower: was 4px, now 2px */
+  background: linear-gradient(to bottom, #bbb 0%, #999 100%);
+  border-radius: 1px;
+  border: none;
+}
+
+input[type=range]::-moz-range-thumb {
+  height: 14px; /* Slightly smaller to match thinner track */
+  width: 14px;
+  border-radius: 50%;
+  background: #6a9bd1;
+  cursor: pointer;
+  border: 2px solid #4a7ba7;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+input[type=range]::-moz-range-thumb:hover {
+  background: #7ba9d9;
 }
 
 .break-row {
-  height: 2rem;
+  height: 0.5rem;
 }
 
 .livecode-container {
   display: flex;
-  gap: 1rem;
-  margin-top: 1rem;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
   flex-wrap: wrap;
 }
 
 .voice-column {
-  flex: 0 0 calc(50% - 0.5rem);
+  flex: 0 0 calc(50% - 0.25rem);
   display: flex;
   flex-direction: column;
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
+  border: 1px solid #555;
+  padding: 0.5rem;
+  border-radius: 4px;
+  background: #1e1e1e;
+}
+
+.voice-column h3 {
+  margin: 0 0 0.25rem 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #f0f0f0;
 }
 
 .voice-column textarea {
   width: 100%;
   resize: vertical;
   font-family: monospace;
-  min-height: 150px;
+  min-height: 120px;
+  font-size: 0.85rem;
+  padding: 0.25rem;
+  border: 1px solid #555;
+  border-radius: 2px;
+  background: #2a2a2a;
+  color: #e0e0e0;
+}
+
+.voice-column textarea::placeholder {
+  color: #888;
 }
 
 .controls {
-  margin-top: 0.5rem;
+  margin: 0.25rem 0;
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.controls label {
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: #e0e0e0;
 }
 
 button {
-  padding: 0.25rem 0.75rem;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.85rem;
+  border: 1px solid #555;
+  border-radius: 2px;
+  background: #333;
+  color: #e0e0e0;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+button:hover {
+  background: #444;
+}
+
+.text-display {
+  margin: 0.25rem 0;
+}
+
+.text-display summary {
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  margin-bottom: 0.25rem;
+  color: #f0f0f0;
+}
+
+.display-text {
+  font-family: monospace;
+  font-size: 0.8rem;
+  line-height: 1.2;
+  background: #2a2a2a;
+  color: #e0e0e0;
+  padding: 0.25rem;
+  border-radius: 2px;
+  max-height: 150px;
+  overflow-y: auto;
 }
 
 .display-text .highlight {
-  background-color: #fffb90;
+  background-color: #4a5c2a;
+  color: #f0f0f0;
+  padding: 0 0.1rem;
 }
 
 .fx-controls {
-  margin-top: 1rem;
+  margin-top: 0.25rem;
+}
+
+.fx-controls summary {
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  margin-bottom: 0.25rem;
+  color: #f0f0f0;
 }
 
 .fx-sliders {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 0.5rem;
-  margin-top: 0.5rem;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
 }
 
 .fx-slider {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
 }
 
+.fx-slider label {
+  margin-bottom: 0.1rem;
+  font-size: 0.75rem;
+  color: #d0d0d0;
+}
+
+/* Horizontal slider styling for FX controls */
 .fx-slider input[type=range] {
   writing-mode: horizontal-tb;
   direction: ltr;
   width: 100%;
+  height: 4px;
+  background: #888; /* Fallback background */
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 10px;
+}
+
+.fx-slider input[type=range]::-webkit-slider-track {
+  width: 100%;
+  height: 2px; /* Made narrower: was 4px, now 2px */
+  background: linear-gradient(to right, #bbb 0%, #999 100%);
+  border-radius: 1px;
+  border: none;
+}
+
+.fx-slider input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 14px; /* Slightly smaller to match thinner track */
+  width: 14px;
+  border-radius: 50%;
+  background: #6a9bd1;
+  cursor: pointer;
+  border: 2px solid #4a7ba7;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+.fx-slider input[type=range]::-webkit-slider-thumb:hover {
+  background: #7ba9d9;
+  box-shadow: 0 3px 6px rgba(0,0,0,0.4);
+}
+
+.fx-slider input[type=range]::-moz-range-track {
+  width: 100%;
+  height: 2px; /* Made narrower: was 4px, now 2px */
+  background: linear-gradient(to right, #bbb 0%, #999 100%);
+  border-radius: 1px;
+  border: none;
+}
+
+.fx-slider input[type=range]::-moz-range-thumb {
+  height: 14px; /* Slightly smaller to match thinner track */
+  width: 14px;
+  border-radius: 50%;
+  background: #6a9bd1;
+  cursor: pointer;
+  border: 2px solid #4a7ba7;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+.fx-slider input[type=range]::-moz-range-thumb:hover {
+  background: #7ba9d9;
+}
+
+/* Global input styling */
+input[type=checkbox] {
+  margin: 0;
+  accent-color: #6a9bd1;
+}
+
+input[type=number] {
+  border: 1px solid #555;
+  border-radius: 2px;
+  padding: 0.1rem;
+  background: #2a2a2a;
+  color: #e0e0e0;
+}
+
+details {
+  border: 1px solid #555;
+  border-radius: 2px;
+  padding: 0.25rem;
+  margin: 0.1rem 0;
+  background: #252525;
+}
+
+details[open] {
+  background: #2a2a2a;
+}
+
+details summary {
+  color: #f0f0f0;
+}
+
+/* Scrollbar styling for dark theme */
+.display-text::-webkit-scrollbar {
+  width: 6px;
+}
+
+.display-text::-webkit-scrollbar-track {
+  background: #333;
+  border-radius: 3px;
+}
+
+.display-text::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 3px;
+}
+
+.display-text::-webkit-scrollbar-thumb:hover {
+  background: #666;
 }
 </style>
