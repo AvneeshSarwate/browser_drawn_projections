@@ -535,59 +535,76 @@ const clearDraws = () => {
 </script>
 
 <template>
-  <div class="controls-container">
-    <div class="checkbox-group">
-      <label class="checkbox-label">
-        <input type="checkbox" v-model="drawDebugGrid" class="checkbox" />
-        <span class="checkmark"></span>
-        Draw debug grid
-      </label>
-      <label class="checkbox-label">
-        <input type="checkbox" v-model="showPaths" class="checkbox" />
-        <span class="checkmark"></span>
-        Show paths
-      </label>
-    </div>
-    
-    <div class="voice-selector">
-      <label class="select-label">Voice / Colour</label>
-      <div class="select-wrapper">
-        <select v-model="selectedColorIndex" class="voice-select">
-          <option v-for="(c,idx) in voiceColors" :key="idx" :value="idx">
-            Voice {{ idx+1 }}
-          </option>
-        </select>
-        <div class="color-indicator" :style="{ backgroundColor: voiceColors[selectedColorIndex] }"></div>
+  <div class="livecode-container">
+    <div class="controls-container">
+      <div class="checkbox-group">
+        <label class="checkbox-label">
+          <input type="checkbox" v-model="drawDebugGrid" class="checkbox" />
+          <span class="checkmark"></span>
+          Draw debug grid
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" v-model="showPaths" class="checkbox" />
+          <span class="checkmark"></span>
+          Show paths
+        </label>
+      </div>
+      
+      <div class="voice-selector">
+        <label class="select-label">Voice / Colour</label>
+        <div class="select-wrapper">
+          <select v-model="selectedColorIndex" class="voice-select">
+            <option v-for="(c,idx) in voiceColors" :key="idx" :value="idx">
+              Voice {{ idx+1 }}
+            </option>
+          </select>
+          <div class="color-indicator" :style="{ backgroundColor: voiceColors[selectedColorIndex] }"></div>
+        </div>
+      </div>
+      
+      <div class="button-group">
+        <button @click="togglePlay" class="btn btn-primary">
+          <span class="btn-icon">{{ playing ? '⏹' : '▶' }}</span>
+          {{ playing ? 'Stop' : 'Play' }}
+        </button>
+        <button @click="undoDraw" class="btn btn-secondary">
+          <span class="btn-icon">↶</span>
+          Undo
+        </button>
+        <button @click="clearDraws" class="btn btn-danger">
+          <span class="btn-icon">🗑</span>
+          Clear
+        </button>
       </div>
     </div>
     
-    <div class="button-group">
-      <button @click="togglePlay" class="btn btn-primary">
-        <span class="btn-icon">{{ playing ? '⏹' : '▶' }}</span>
-        {{ playing ? 'Stop' : 'Play' }}
-      </button>
-      <button @click="undoDraw" class="btn btn-secondary">
-        <span class="btn-icon">↶</span>
-        Undo
-      </button>
-      <button @click="clearDraws" class="btn btn-danger">
-        <span class="btn-icon">🗑</span>
-        Clear
-      </button>
+    <div class="piano-roll-wrapper">
+      <div id="pianoRollHolder" class="piano-roll-container"></div>
     </div>
   </div>
-  
-  <div id="pianoRollHolder" class="piano-roll-container"></div>
 </template>
 
 <style scoped>
+.livecode-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
 .controls-container {
   display: flex;
   align-items: center;
   gap: 2rem;
-  padding: 0.5rem 0;
-  margin-bottom: 0.5rem;
+  padding: 0;
   flex-wrap: wrap;
+  justify-content: center;
+}
+
+.piano-roll-wrapper {
+  display: flex;
+  justify-content: center;
+  width: 100%;
 }
 
 .checkbox-group {
@@ -599,19 +616,20 @@ const clearDraws = () => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: #000000;
-  font-size: 0.9rem;
+  color: #2d3748;
+  font-size: 0.85rem;
   cursor: pointer;
   position: relative;
   user-select: none;
+  font-weight: 500;
 }
 
 .checkbox {
   appearance: none;
-  width: 18px;
-  height: 18px;
-  border: 2px solid #4a5568;
-  border-radius: 4px;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #cbd5e0;
+  border-radius: 3px;
   background: transparent;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -624,7 +642,7 @@ const clearDraws = () => {
 
 .checkmark {
   position: absolute;
-  left: 4px;
+  left: 3px;
   top: 50%;
   transform: translateY(-50%);
   width: 10px;
@@ -635,7 +653,7 @@ const clearDraws = () => {
 .checkbox:checked + .checkmark::after {
   content: '✓';
   color: white;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: bold;
   position: absolute;
   left: -1px;
@@ -649,8 +667,8 @@ const clearDraws = () => {
 }
 
 .select-label {
-  color: #000000;
-  font-size: 0.9rem;
+  color: #2d3748;
+  font-size: 0.85rem;
   font-weight: 500;
   white-space: nowrap;
 }
@@ -663,20 +681,20 @@ const clearDraws = () => {
 }
 
 .voice-select {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 6px;
-  color: #000000;
-  padding: 0.4rem 0.6rem;
-  font-size: 0.9rem;
+  background: #f7fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  color: #2d3748;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.85rem;
   cursor: pointer;
   transition: all 0.2s ease;
-  min-width: 120px;
+  min-width: 100px;
 }
 
 .voice-select:hover {
-  background: rgba(255, 255, 255, 0.15);
-  border-color: rgba(255, 255, 255, 0.3);
+  background: #edf2f7;
+  border-color: #cbd5e0;
 }
 
 .voice-select:focus {
@@ -686,26 +704,27 @@ const clearDraws = () => {
 }
 
 .color-indicator {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.3);
+  border: 2px solid #e2e8f0;
   transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .button-group {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.4rem;
 }
 
 .btn {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.5rem 1rem;
+  gap: 0.3rem;
+  padding: 0.4rem 0.8rem;
   border: none;
-  border-radius: 6px;
-  font-size: 0.85rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -731,41 +750,41 @@ const clearDraws = () => {
 }
 
 .btn-icon {
-  font-size: 0.9rem;
+  font-size: 0.8rem;
 }
 
 .btn-primary {
   background: linear-gradient(45deg, #667eea 0%, #764ba2 100%);
   color: white;
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 2px 6px rgba(102, 126, 234, 0.3);
 }
 
 .btn-primary:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 3px 8px rgba(102, 126, 234, 0.4);
 }
 
 .btn-secondary {
   background: linear-gradient(45deg, #4a5568 0%, #2d3748 100%);
   color: #e0e0e0;
-  box-shadow: 0 2px 8px rgba(74, 85, 104, 0.3);
+  box-shadow: 0 2px 6px rgba(74, 85, 104, 0.3);
 }
 
 .btn-secondary:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(74, 85, 104, 0.4);
+  box-shadow: 0 3px 8px rgba(74, 85, 104, 0.4);
   background: linear-gradient(45deg, #5a6578 0%, #3d4758 100%);
 }
 
 .btn-danger {
   background: linear-gradient(45deg, #e53e3e 0%, #c53030 100%);
   color: white;
-  box-shadow: 0 2px 8px rgba(229, 62, 62, 0.3);
+  box-shadow: 0 2px 6px rgba(229, 62, 62, 0.3);
 }
 
 .btn-danger:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(229, 62, 62, 0.4);
+  box-shadow: 0 3px 8px rgba(229, 62, 62, 0.4);
 }
 
 .btn:active {
@@ -773,17 +792,22 @@ const clearDraws = () => {
 }
 
 .piano-roll-container {
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #f8fafc;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
   overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  min-height: 250px;
+  width: fit-content;
+  max-width: 100%;
 }
 
 /* Responsive design */
 @media (max-width: 768px) {
   .controls-container {
     flex-direction: column;
-    align-items: flex-start;
-    gap: 0.75rem;
+    align-items: center;
+    gap: 0.5rem;
   }
   
   .checkbox-group {
@@ -792,12 +816,11 @@ const clearDraws = () => {
   
   .voice-selector {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: center;
     gap: 0.25rem;
   }
   
   .button-group {
-    width: 100%;
     justify-content: center;
   }
   
