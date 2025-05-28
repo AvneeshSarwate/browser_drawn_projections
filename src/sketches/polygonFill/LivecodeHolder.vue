@@ -72,11 +72,16 @@ keyToClipNameMap.set('w', 'right_to_left')
 keyToClipNameMap.set('e', 'top_to_bottom')
 keyToClipNameMap.set('r', 'bottom_to_top')
 
+const deepOrange = {r: 205, g: 77, b: 51, a: 255}
+const deepGreen = {r: 0, g: 255, b: 0, a: 255}
+const deepYellow = {r: 255, g: 255, b: 34, a: 255}
+const deepBlue = {r: 0, g: 0, b: 255, a: 255}
+
 const keyToColorMap = new Map<string, Color>()
-keyToColorMap.set('q', {r: 255, g: 0, b: 0, a: 255})
-keyToColorMap.set('w', {r: 0, g: 255, b: 0, a: 255})
-keyToColorMap.set('e', {r: 0, g: 0, b: 255, a: 255})
-keyToColorMap.set('r', {r: 255, g: 255, b: 0, a: 255})
+keyToColorMap.set('q', deepOrange)
+keyToColorMap.set('w', deepGreen)
+keyToColorMap.set('e', deepYellow)
+keyToColorMap.set('r', deepBlue)
 
 const keyToUseStatefulIdxMap = new Map<string, boolean>()
 keyToUseStatefulIdxMap.set('q', false)

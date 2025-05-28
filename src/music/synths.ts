@@ -139,9 +139,14 @@ export function getPianoChain() {
 
 export function getSynthChain() {
   const synth = new Tone.PolySynth(Tone.Synth)
+  synth.set({
+    oscillator: {
+      type: 'fatsawtooth'
+    }
+  })
   const distortion = new Tone.Distortion(0.1)
   const chorus = new Tone.Chorus(2, 2, 0.3)
-  const filter = new Tone.Filter(20000, 'lowpass')
+  const filter = new Tone.Filter(1000, 'lowpass')
   const delay = new Tone.FeedbackDelay(0.5, 0.1)
   const delayCrossfader = new Tone.CrossFade(0)
   const reverb = new Tone.Freeverb()
