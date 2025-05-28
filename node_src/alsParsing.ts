@@ -5,7 +5,7 @@ import { WebSocket } from 'ws';
 import * as path from "path";
 
 let fileName = "td_ableton/pianos Project/pianos.als";
-fileName = "/Users/avneeshsarwate/Ableton/midi_studies Project/midi_note_metadata_inspect.als"
+fileName = "src/sketches/sonar_sketch/piano_melodies Project/piano_melodies_demo.als"
 
 const gzipedFile = fs.readFileSync(fileName);
 const xml = zlib.gunzipSync(gzipedFile).toString();
