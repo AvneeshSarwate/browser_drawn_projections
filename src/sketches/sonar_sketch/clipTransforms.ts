@@ -307,6 +307,13 @@ export const TRANSFORM_REGISTRY: Record<string, ClipTransform> = {
     sliderScale: [n => Math.floor(n*16 - 8)]
   },
 
+  transpose: {
+    name: 'transpose',
+    transform: (clip, degree, scale: Scale = new Scale()) => scaleTranspose(clip, degree, scale),
+    argParser: (args: string[]) => [numParse(args[0])],
+    sliderScale: [n => Math.floor(n*16 - 8)]
+  },
+
   str: {
     name: 'str',
     transform: (clip, factor) => timeStretch(clip, factor),

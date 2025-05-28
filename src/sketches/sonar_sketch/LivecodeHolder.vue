@@ -200,7 +200,7 @@ const updatePianoFX = (voiceIdx: number) => {
 onMounted(async() => {
   try {
     await MIDI_READY
-    await INITIALIZE_ABLETON_CLIPS('src/sketches/sonar_sketch/piano_melodies Project/piano_melodies.als', staticClipData, false)
+    await INITIALIZE_ABLETON_CLIPS('src/sketches/sonar_sketch/piano_melodies Project/piano_melodies_demo.als', staticClipData, false)
     await TONE_AUDIO_START
 
     const iac1 = midiOutputs.get('IAC Driver Bus 1')

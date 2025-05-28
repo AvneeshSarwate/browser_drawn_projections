@@ -3,6 +3,10 @@ debug1 : seg 1 : s_tr 2 : str 1 : q 1
 debug1 : seg 1 : s_tr 3 : str 1 : q 1
 
 
+melody2 : transpose 1 
+melody3 : transpose s1 
+
+
 
 each "scene" is sequencing text - parameters explicit for happy path - but user can take over (optional slider takeovers defined)
 different base-clips/functions/parameters in each scene (sliders get re-mapped)
