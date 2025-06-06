@@ -120,14 +120,15 @@ const startPianoRollLoop = () => {
 
     let playNoteLoop = ctx.branch(async ctx => {
         while(playing.value) {
-        const note = noteBuffer[noteBufferInd]
-        const voiceIdx = note.note.metadata.voiceIndex
-        if(!note) debugger
-        // console.log('playing note', drawnMelodyCounter, noteBufferInd, ctx.beats, note)
-        await ctx.wait(note.preDelta)
-        playNoteForVoice(note.note, voiceIdx, ctx)
-        await ctx.wait(note.postDelta)
-        noteBufferInd = (noteBufferInd + 1) % noteBuffer.length
+          const note = noteBuffer[noteBufferInd]
+          const voiceIdx = note.note.metadata.voiceIndex
+          if(!note) debugger
+          // console.log('playing note', drawnMelodyCounter, noteBufferInd, ctx.beats, note)
+          await ctx.wait(note.preDelta)
+          if(!playing.value) break
+          playNoteForVoice(note.note, voiceIdx, ctx)
+          await ctx.wait(note.postDelta)
+          noteBufferInd = (noteBufferInd + 1) % noteBuffer.length
         }
       })
 
