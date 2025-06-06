@@ -6,7 +6,7 @@ import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
-import { AbletonClip, clipMap, INITIALIZE_ABLETON_CLIPS } from '@/io/abletonClips';
+import { AbletonClip, clipMap, INITIALIZE_ABLETON_CLIPS, type AbletonNote, quickNote } from '@/io/abletonClips';
 import { MIDI_READY, midiInputs, midiOutputs } from '@/io/midi';
 import { Scale } from '@/music/scale';
 import { getPiano, getPianoChain, TONE_AUDIO_START } from '@/music/synths';
@@ -14,6 +14,7 @@ import { m2f } from '@/music/mpeSynth';
 import { TRANSFORM_REGISTRY } from './clipTransforms';
 import { clipData as staticClipData } from './clipData';
 import type { MIDIValOutput } from '@midival/core';
+import { PianoRoll, type NoteInfo } from '@/music/pianoRoll'
 import * as Tone from 'tone'
 
 const appState = inject<SonarAppState>(appStateName)!!
@@ -82,6 +83,23 @@ const buildClipFromLine = (line: string): { clip: AbletonClip, updatedLine: stri
   const updatedLine = updatedTokens.join(' : ');
   
   return { clip: curClip, updatedLine };
+}
+
+const testTransform = () => {
+  const { clip } = buildClipFromLine(testTransformInput.value)
+  if (!clip || !testPianoRoll) return
+
+  // Convert AbletonClip to PianoRoll NoteInfo format
+  const noteInfos: NoteInfo<{}>[] = clip.notes.map(note => ({
+    pitch: note.pitch,
+    position: note.position,
+    duration: note.duration,
+    velocity: note.velocity,
+    metadata: {}
+  }))
+
+  testPianoRoll.setNoteData(noteInfos)
+  testPianoRoll.setViewportToShowAllNotes()
 }
 
 
@@ -177,6 +195,10 @@ const parameterNames = ref<string[]>(
   pianoChains.length > 0 ? pianoChains[0].paramNames || [] : []
 );
 
+// Piano roll test section state
+const testTransformInput = ref('clip1 : arp up 0.25 0.9 0 1')
+let testPianoRoll: PianoRoll<{}> | undefined = undefined
+
 // Function to get a readable name for each parameter
 const formatParamName = (paramName: string) => {
   return paramName
@@ -199,8 +221,11 @@ const updatePianoFX = (voiceIdx: number) => {
 
 onMounted(async() => {
   try {
+    // Initialize test piano roll
+    testPianoRoll = new PianoRoll<{}>('testPianoRollHolder', () => {}, () => {}, true)
+    
     await MIDI_READY
-    await INITIALIZE_ABLETON_CLIPS('src/sketches/sonar_sketch/piano_melodies Project/piano_melodies_demo.als', staticClipData, false)
+    await INITIALIZE_ABLETON_CLIPS('src/sketches/sonar_sketch/piano_melodies Project/piano_melodies.als', staticClipData, false)
     await TONE_AUDIO_START
 
     const iac1 = midiOutputs.get('IAC Driver Bus 1')
@@ -336,6 +361,24 @@ onUnmounted(() => {
 
 <template>
   <div class="break-row"></div>
+  
+  <!-- Transform Test Section -->
+  <div class="test-section">
+    <h3>Transform Test</h3>
+    <div class="test-controls">
+      <input 
+        type="text" 
+        v-model="testTransformInput" 
+        placeholder="clipName : transform args"
+        class="test-input"
+      />
+      <button @click="testTransform" class="test-button">Test Transform</button>
+    </div>
+    <div class="test-piano-roll">
+      <div id="testPianoRollHolder"></div>
+    </div>
+  </div>
+  
   <div class="sliders-row">
     <div class="slider-column" v-for="(slider, idx) in appState.sliders" :key="idx">
       <div>{{ appState.sliders[idx] }}</div>
@@ -742,6 +785,67 @@ details[open] {
 
 details summary {
   color: #f0f0f0;
+}
+
+/* Test Section Styles */
+.test-section {
+  margin: 0.5rem 0;
+  padding: 0.5rem;
+  background: #1a1a1a;
+  border-radius: 4px;
+  border: 1px solid #444;
+}
+
+.test-section h3 {
+  margin: 0 0 0.5rem 0;
+  color: #f0f0f0;
+  font-size: 1rem;
+}
+
+.test-controls {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  align-items: center;
+}
+
+.test-input {
+  flex: 1;
+  padding: 0.3rem;
+  background: #2a2a2a;
+  border: 1px solid #555;
+  color: #e0e0e0;
+  border-radius: 2px;
+  font-family: monospace;
+  font-size: 0.85rem;
+}
+
+.test-input:focus {
+  outline: none;
+  border-color: #6a9bd1;
+}
+
+.test-button {
+  padding: 0.3rem 0.6rem;
+  background: #333;
+  border: 1px solid #555;
+  color: #e0e0e0;
+  border-radius: 2px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: background 0.2s;
+}
+
+.test-button:hover {
+  background: #444;
+}
+
+.test-piano-roll {
+  min-height: 200px;
+  background: #f8fafc;
+  border-radius: 4px;
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
 }
 
 /* Scrollbar styling for dark theme */

@@ -243,6 +243,137 @@ export function scaleTranspose(clip: AbletonClip, transpose: number, scale?: Sca
   return clip.scaleTranspose(transpose, scale);
 }
 
+export function arpeggiateClip(
+  clip: AbletonClip,
+  pattern: string = 'up',
+  rate: number = 0.25,
+  gate: number = 0.9,
+  distance: number = 0,
+  steps: number = 1
+): AbletonClip {
+  if (clip.notes.length === 0) {
+    return clip.clone();
+  }
+
+  // Group notes by their start position to find chords
+  const noteGroups = new Map<number, AbletonNote[]>();
+  clip.notes.forEach(note => {
+    if (!noteGroups.has(note.position)) {
+      noteGroups.set(note.position, []);
+    }
+    noteGroups.get(note.position)!.push({ ...note });
+  });
+
+  const arpeggiatedNotes: AbletonNote[] = [];
+  
+  noteGroups.forEach((notes, position) => {
+    if (notes.length === 0) return;
+    
+    // Sort notes by pitch for consistent ordering
+    const sortedNotes = notes.sort((a, b) => a.pitch - b.pitch);
+    
+    // Generate arpeggio pattern
+    const patternNotes = generateArpeggioPattern(sortedNotes, pattern);
+    
+    // Apply transposition steps
+    const allStepNotes: AbletonNote[] = [];
+    for (let step = 0; step < steps; step++) {
+      const stepTranspose = step * distance;
+      patternNotes.forEach(note => {
+        allStepNotes.push({
+          ...note,
+          pitch: note.pitch + stepTranspose
+        });
+      });
+    }
+    
+    // Create the arpeggiated sequence
+    allStepNotes.forEach((note, index) => {
+      const noteStart = position + (index * rate);
+      const noteDuration = rate * gate;
+      
+      arpeggiatedNotes.push({
+        ...note,
+        position: noteStart,
+        duration: noteDuration
+      });
+    });
+  });
+
+  // Calculate new clip duration
+  const lastNoteEnd = arpeggiatedNotes.reduce((max, note) => 
+    Math.max(max, note.position + note.duration), 0);
+  const newDuration = Math.max(clip.duration, lastNoteEnd);
+
+  return new AbletonClip(
+    clip.name + "_arp",
+    newDuration,
+    arpeggiatedNotes
+  );
+}
+
+const arpPatterns = ['up', 'down', 'updown', 'downup', 'converge', 'diverge', 'random', 'chord']
+function generateArpeggioPattern(notes: AbletonNote[], patternInput: string|number): AbletonNote[] {
+  const sorted = [...notes].sort((a, b) => a.pitch - b.pitch);
+  
+  const pattern = typeof patternInput === 'string' ? patternInput : arpPatterns[patternInput % arpPatterns.length];
+
+  switch (pattern.toLowerCase()) {
+    case 'up':
+      return sorted;
+    
+    case 'down':
+      return sorted.reverse();
+    
+    case 'updown':
+      return [...sorted, ...sorted.slice(1, -1).reverse()];
+    
+    case 'downup': {
+      const reversed = sorted.reverse();
+      return [...reversed, ...reversed.slice(1, -1).reverse()];
+    }
+    
+    case 'converge': {
+      const converged = [];
+      let low = 0, high = sorted.length - 1;
+      while (low <= high) {
+        converged.push(sorted[low++]);
+        if (low <= high) converged.push(sorted[high--]);
+      }
+      return converged;
+    }
+    
+    case 'diverge': {
+      const diverged = [];
+      const mid = Math.floor(sorted.length / 2);
+      let left = mid, right = mid + 1;
+      if (sorted.length % 2 === 1) {
+        diverged.push(sorted[mid]);
+      }
+      while (left >= 0 || right < sorted.length) {
+        if (left >= 0) diverged.push(sorted[left--]);
+        if (right < sorted.length) diverged.push(sorted[right++]);
+      }
+      return diverged;
+    }
+    
+    case 'random': {
+      const shuffled = [...sorted];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      return shuffled;
+    }
+    
+    case 'chord':
+      return notes; // return all notes as they are for chord trigger
+    
+    default:
+      return sorted; // default to up
+  }
+}
+
 
 export function sliceClip(clip: AbletonClip, start: number, end: number): AbletonClip {
   return clip.timeSlice(start, end);
@@ -344,6 +475,26 @@ export const TRANSFORM_REGISTRY: Record<string, ClipTransform> = {
     transform: (clip, axis) => invertClip(clip, new Scale(), axis),
     argParser: (args: string[]) => [numParse(args[0])],
     sliderScale: [n => n*24 - 12] //-12 to 12
+  },
+
+  arp: {
+    name: 'arp',
+    transform: (clip, pattern = 'up', rate = 0.25, gate = 0.9, distance = 0, steps = 1) => 
+      arpeggiateClip(clip, pattern, rate, gate, distance, steps),
+    argParser: (args: string[]) => [
+      args[0] || 'up',
+      numParse(args[1]) || 0.25,
+      numParse(args[2]) || 0.9,
+      numParse(args[3]) || 0,
+      numParse(args[4]) || 1
+    ],
+    sliderScale: [
+      n => Math.floor(n * arpPatterns.length), // pattern: 0 to 7
+      n => n * 0.5, // rate: 0 to 0.5 quarter notes
+      n => n, // gate: 0 to 1
+      n => Math.floor(n * 24 - 12), // distance: -12 to 12 semitones
+      n => Math.floor(n * 4) + 1 // steps: 1 to 4
+    ]
   }
 };
 
