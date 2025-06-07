@@ -51,6 +51,7 @@ const buildClipFromLine = (line: string): { clip: AbletonClip, updatedLine: stri
   if (!srcClip) return { clip: undefined, updatedLine: line };
 
   let curClip = srcClip.clone();
+  const origClip = srcClip.clone();
   let updatedTokens = [tokens[0]]; // Start with the clip name
 
   tokens.slice(1).forEach((cmdToken) => {
@@ -67,7 +68,7 @@ const buildClipFromLine = (line: string): { clip: AbletonClip, updatedLine: stri
       if (typeof param === 'string' && /s\d+/.test(param)) { //regex to check if the param is a slider reference
         const sliderIndex = parseInt(param.slice(1)) - 1;
         if (sliderIndex >= 0 && sliderIndex < appState.sliders.length) {
-          const scaledValue = tf.sliderScale[index](appState.sliders[sliderIndex]);
+          const scaledValue = tf.sliderScale[index](appState.sliders[sliderIndex], origClip);
           parsedParams[index] = scaledValue;
           updatedParams[index] = scaledValue.toFixed(2); // Format for readability
         }

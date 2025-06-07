@@ -221,11 +221,59 @@ export function invertClip(
   );
 }
 
+export function accentClip(
+  clip: AbletonClip,
+  noteInd?: number,
+  velocityMultiplier: number = 1.5,
+  durationMultiplier: number = 2,
+): AbletonClip {
+  const newClip = clip.clone();
+
+  if (newClip.notes.length === 0) {
+    return newClip;
+  }
+
+  newClip.notes.sort((a, b) => a.position - b.position);
+
+  let targetIndex = noteInd;
+  if (noteInd === undefined) {
+    targetIndex = newClip.notes.length - 1;
+  } else if (noteInd < 0) {
+    targetIndex = newClip.notes.length + noteInd;
+  }
+
+  if (targetIndex < 0 || targetIndex >= newClip.notes.length) {
+    return clip.clone();
+  }
+
+  const accentedNote = newClip.notes[targetIndex];
+  const originalDuration = accentedNote.duration;
+  const durationIncrease = originalDuration * (durationMultiplier - 1);
+
+  if (durationIncrease === 0 && velocityMultiplier === 1) {
+    return newClip;
+  }
+
+  newClip.name = clip.name + "_accented";
+
+  accentedNote.velocity = Math.min(127, Math.round(accentedNote.velocity * velocityMultiplier));
+  accentedNote.duration *= durationMultiplier;
+
+  for (let i = targetIndex + 1; i < newClip.notes.length; i++) {
+    newClip.notes[i].position += durationIncrease;
+  }
+
+  newClip.duration = newClip.notes.reduce(
+    (maxEnd, note) => Math.max(maxEnd, note.position + note.duration),
+    0,
+  );
+
+  return newClip;
+}
 
 export function timeStretch(clip: AbletonClip, factor: number): AbletonClip {
   return clip.scale(factor);
 }
-
 
 export function endTimeQuantize(clip: AbletonClip, quantValue: number): AbletonClip {
   if (quantValue <= 0) return clip.clone();
@@ -235,14 +283,12 @@ export function endTimeQuantize(clip: AbletonClip, quantValue: number): AbletonC
   return clone;
 }
 
-
 export function scaleTranspose(clip: AbletonClip, transpose: number, scale?: Scale): AbletonClip {
   if(!scale) {
     scale = new Scale();
   }
   return clip.scaleTranspose(transpose, scale);
 }
-
 
 //note - input clips need to have exactly blocked chords. no slight start time deviation allowed
 //"chords" are grouped by start time, and last as long as the longest note in the group
@@ -405,11 +451,9 @@ function generateArpeggioIndices(n: number, pattern: string): number[] {
   }
 }
 
-
 export function sliceClip(clip: AbletonClip, start: number, end: number): AbletonClip {
   return clip.timeSlice(start, end);
 }
-
 
 export function segment(clip: AbletonClip, index: number): AbletonClip {
   const segments = segmentByPitchMarker(clip);
@@ -438,7 +482,7 @@ export type ClipTransform = {
   // parses the arguments from the string, converts to numbers and scales them as necessary
   argParser: (args: string[]) => any[]; 
   //scales slider values (which are always [0-1]) to the appropriate range for the transform for each argument
-  sliderScale: ((slider: number) => number)[];
+  sliderScale: ((slider: number, origClip?: AbletonClip) => number)[];
 }
 
 //parse string to number, but if it's not, return base string because it may be a slider reference
@@ -513,6 +557,21 @@ export const TRANSFORM_REGISTRY: Record<string, ClipTransform> = {
     transform: (clip, axis) => invertClip(clip, new Scale(), axis),
     argParser: (args: string[]) => [numParse(args[0])],
     sliderScale: [n => n*24 - 12] //-12 to 12
+  },
+
+  acc: {
+    name: 'acc',
+    transform: (clip, noteInd, velMult, durMult) => accentClip(clip, noteInd, velMult, durMult),
+    argParser: (args: string[]) => [
+      args[0] ? numParse(args[0]) : undefined,
+      args[1] ? numParse(args[1]) : undefined,
+      args[2] ? numParse(args[2]) : undefined,
+    ],
+    sliderScale: [
+      (n, clip) => Math.round(n * (clip.notes.length - 1)), // 0-31, for clips up to 32 notes
+      n => 1 + n * 3, // 1-4
+      n => 1 + n * 3, // 1-4
+    ]
   },
 
   arp: {
