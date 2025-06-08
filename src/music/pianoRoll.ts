@@ -849,11 +849,11 @@ export class PianoRoll<T> {
     const noteData = Object.values(this.notes).map(note => note.info);
     const minNoteStartPos = Math.min(...noteData.map(info => info.position));
     const maxNoteEndPos = Math.max(...noteData.map(info => info.position + info.duration));
-    const notePosRange = maxNoteEndPos - minNoteStartPos;
+    const notePosRange = (maxNoteEndPos - minNoteStartPos) + 1;
 
     const minNoteStartPitch = Math.min(...noteData.map(info => info.pitch));
     const maxNoteEndPitch = Math.max(...noteData.map(info => info.pitch + 1));
-    const notePitchRange = maxNoteEndPitch - minNoteStartPitch;
+    const notePitchRange = (maxNoteEndPitch - minNoteStartPitch) + 1;
 
     const vbX = minNoteStartPos * this.quarterNoteWidth;
     const vbY = (127 - maxNoteEndPitch) * this.noteHeight;

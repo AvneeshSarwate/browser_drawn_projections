@@ -82,6 +82,20 @@ export function getPiano(connectToDestination: boolean = true) {
   return piano
 }
 
+// Separate scaling functions that can be reused for both setting and display
+export const paramScaling = {
+  distortion: (val: number) => val,
+  chorusWet: (val: number) => val,
+  chorusDepth: (val: number) => val,
+  chorusRate: (val: number) => 2 + val ** 2 * 20,
+  filterFreq: (val: number) => 20000 * val ** 2,
+  filterRes: (val: number) => val ** 100,
+  delayTime: (val: number) => val ** 2,
+  delayFeedback: (val: number) => val,
+  delayMix: (val: number) => val,
+  reverb: (val: number) => val
+}
+
 export function getPianoChain() {
   const piano = getPiano(false)
   const distortion = new Tone.Distortion(0.1)
@@ -104,28 +118,20 @@ export function getPianoChain() {
   delayCrossfader.connect(reverb)
   reverb.connect(Tone.getDestination())
 
-  // const delayTimeSignal = new Tone.Signal(0.5)
-  // const delayTimeSmoothingFilter = new Tone.Filter(100, 'lowpass')
-  // delayTimeSignal.chain(delayTimeSmoothingFilter, delay.delayTime)
-  // const delayFeedbackSignal = new Tone.Signal(0.5)
-  // delayFeedbackSignal.connect(delay.feedback)
-
-  // piano.chain(distortion, chorus, filter, delay, reverb, Tone.getDestination())
-  // piano.chain(delay, Tone.getDestination())
-
-
+  // Use the scaling functions in paramFuncs to ensure consistency
   const paramFuncs = {
-    distortion: (val: number) => distortion.distortion = val,
-    chorusWet: (val: number) => chorus.wet.value = val,
-    chorusDepth: (val: number) => chorus.depth = val,
-    chorusRate: (val: number) => chorus.delayTime = 2 + val ** 2 * 20,
-    filterFreq: (val: number) => filter.frequency.value = 20000 * val**2,
-    filterRes: (val: number) => filter.Q.value = val**100,
-    delayTime: (val: number) => delay.delayTime.rampTo(val**2, 0.01),
-    delayFeedback: (val: number) => delay.feedback.value = val,
-    delayMix: (val: number) => delayCrossfader.fade.value = val,
-    reverb: (val: number) => reverb.wet.value = val
+    distortion: (val: number) => distortion.distortion = paramScaling.distortion(val),
+    chorusWet: (val: number) => chorus.wet.value = paramScaling.chorusWet(val),
+    chorusDepth: (val: number) => chorus.depth = paramScaling.chorusDepth(val),
+    chorusRate: (val: number) => chorus.delayTime = paramScaling.chorusRate(val),
+    filterFreq: (val: number) => filter.frequency.value = paramScaling.filterFreq(val),
+    filterRes: (val: number) => filter.Q.value = paramScaling.filterRes(val),
+    delayTime: (val: number) => delay.delayTime.rampTo(paramScaling.delayTime(val), 0.01),
+    delayFeedback: (val: number) => delay.feedback.value = paramScaling.delayFeedback(val),
+    delayMix: (val: number) => delayCrossfader.fade.value = paramScaling.delayMix(val),
+    reverb: (val: number) => reverb.wet.value = paramScaling.reverb(val)
   }
+  
   return {
     piano,
     distortion,

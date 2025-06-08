@@ -451,6 +451,38 @@ function generateArpeggioIndices(n: number, pattern: string): number[] {
   }
 }
 
+export function harmonizeClip(
+  clip: AbletonClip,
+  degree1?: number,
+  degree2?: number,
+  degree3?: number,
+  degree4?: number,
+  scale: Scale = new Scale()
+): AbletonClip {
+  if (clip.notes.length === 0) {
+    return clip.clone();
+  }
+
+  // Start with the original clip
+  const harmonizedNotes: AbletonNote[] = [...clip.notes.map(n => ({ ...n }))];
+
+  // Add harmonized voices for each provided degree
+  const degrees = [degree1, degree2, degree3, degree4].filter(d => d !== undefined && d !== 0);
+  
+  degrees.forEach(degree => {
+    const harmonizedClip = scaleTranspose(clip, degree, scale);
+    harmonizedNotes.push(...harmonizedClip.notes.map(n => ({ ...n })));
+  });
+
+  harmonizedNotes.sort((a, b) => a.position - b.position);
+
+  return new AbletonClip(
+    clip.name + "_harmonized",
+    clip.duration,
+    harmonizedNotes
+  );
+}
+
 export function sliceClip(clip: AbletonClip, start: number, end: number): AbletonClip {
   return clip.timeSlice(start, end);
 }
@@ -591,6 +623,24 @@ export const TRANSFORM_REGISTRY: Record<string, ClipTransform> = {
       n => n, // gate: 0 to 1
       n => Math.floor(n * 24 - 12), // distance: -12 to 12 semitones
       n => Math.floor(n * 4) + 1 // steps: 1 to 4
+    ]
+  },
+
+  harm: {
+    name: 'harm',
+    transform: (clip, degree1, degree2, degree3, degree4, scale: Scale = new Scale()) => 
+      harmonizeClip(clip, degree1, degree2, degree3, degree4, scale),
+    argParser: (args: string[]) => [
+      args[0] ? numParse(args[0]) : undefined,
+      args[1] ? numParse(args[1]) : undefined,
+      args[2] ? numParse(args[2]) : undefined,
+      args[3] ? numParse(args[3]) : undefined,
+    ],
+    sliderScale: [
+      n => Math.floor(n*24 - 12), // -12 to 12 scale degrees
+      n => Math.floor(n*24 - 12), // -12 to 12 scale degrees
+      n => Math.floor(n*24 - 12), // -12 to 12 scale degrees
+      n => Math.floor(n*24 - 12), // -12 to 12 scale degrees
     ]
   }
 };

@@ -9,7 +9,7 @@ import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN
 import { AbletonClip, clipMap, INITIALIZE_ABLETON_CLIPS, type AbletonNote, quickNote } from '@/io/abletonClips';
 import { MIDI_READY, midiInputs, midiOutputs } from '@/io/midi';
 import { Scale } from '@/music/scale';
-import { getPiano, getPianoChain, TONE_AUDIO_START } from '@/music/synths';
+import { getPiano, getPianoChain, TONE_AUDIO_START, paramScaling } from '@/music/synths';
 import { m2f } from '@/music/mpeSynth';
 import { TRANSFORM_REGISTRY } from './clipTransforms';
 import { clipData as staticClipData } from './clipData';
@@ -222,6 +222,11 @@ const formatParamName = (paramName: string) => {
     .replace(/([A-Z])/g, ' $1') // Add space before capital letters
     .replace(/^./, str => str.toUpperCase()); // Capitalize first letter
 };
+
+// Function to get scaled parameter value using the modular scaling functions
+const getScaledParamValue = (paramName: string, normalizedValue: number): number => {
+  return paramScaling[paramName as keyof typeof paramScaling]?.(normalizedValue) ?? normalizedValue;
+}
 
 // Function to update piano FX parameters
 const updatePianoFX = (voiceIdx: number) => {
@@ -460,7 +465,7 @@ onUnmounted(() => {
             :key="paramName" 
             class="fx-slider"
           >
-            <label>{{ formatParamName(paramName) }}: {{ voice.fxParams[paramName]?.toFixed(2) }}</label>
+            <label>{{ formatParamName(paramName) }}: {{ getScaledParamValue(paramName, voice.fxParams[paramName]).toFixed(3) }}</label>
             <input 
               type="range" 
               v-model.number="voice.fxParams[paramName]" 

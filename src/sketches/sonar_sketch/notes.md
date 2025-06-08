@@ -1,3 +1,5 @@
+# notes
+
 debug1 : seg 1 : s_tr 1 : str 1 : q 1
 debug1 : seg 1 : s_tr 2 : str 1 : q 1
 debug1 : seg 1 : s_tr 3 : str 1 : q 1
@@ -68,6 +70,29 @@ is there away to pass in the clip as an argument to slider scaling or arg parsin
 
 
 
+
+
+
+## using javascript instead of custom scripting
+
+define a javascript function that returns a string of tracker lines
+
+write scripts that get wrapped in a new Function() call and then evaluated.
+if you want to use slider values for logic, use sliders[n] - this will be passed into the function args.
+also provides a line() function that can be used to add lines to the tracker output.
+
+example 
+
+if(sliders[0] > 0.5) {
+ await line("seg 1 : s_tr 1 : str 1 : q 1")
+} else {
+ await line("seg 1 : s_tr 1 : str 2 : q 1")
+}
+
+if you have an await, then this is an actual playback function, and you kind of lose the ability to forward render the score.
+- you could try to realtime render the conditionals (wrap conditionals in some function and eval it and replace with the value?)
+
+if you don't have an await, then you can forward render the score, but then it's tricky to determine realtime playhead position with conditionals
 
 
 
