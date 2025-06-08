@@ -7,6 +7,50 @@ melody2 : transpose 1
 melody3 : transpose s1 
 
 
+==============
+voice 1
+debug1 : seg s3 : transpose 1 : transpose 12 : str s4
+debug1 : seg s3 : transpose s1 : transpose 12 : str s5
+debug1 : seg s3 : transpose 2 : transpose 12 : str s4
+debug1 : seg s3 : transpose s1 : transpose 12 : str s5
+
+
+voice 2
+debug1 : seg 0 : str s2 : transpose 1 : transpose -12
+debug1 : seg 0 : str 1.1 : transpose s1 : transpose -12
+debug1 : seg 0 : str s2 : transpose 2 : transpose -12
+debug1 : seg 0 : str 1.1 : transpose s1 : transpose -12
+==============
+
+voice 1
+debug1 : seg 1 : acc 0 
+debug1 : seg 1 : acc 1
+debug1 : seg 1 : acc 2
+debug1 : seg 1 : acc 3
+
+debug1 : seg 1 : acc 0 : tr -12
+debug1 : seg 1 : acc 0 : tr -12 : rev : str 2 : s_tr 1 
+debug1 : seg 1 : acc 1 : tr -12
+debug1 : seg 1 : acc 1 : tr -12 : rev : str 2 : s_tr 1 
+debug1 : seg 1 : acc 2 : tr -12
+debug1 : seg 1 : acc 2 : tr -12 : rev : str 2 : s_tr 1 
+debug1 : seg 1 : acc 3 : tr -12
+debug1 : seg 1 : acc 3 : tr -12 : rev : str 2 : s_tr 1 
+
+voice 2
+debug1 : seg 1 : acc 3 : s_tr 2
+debug1 : seg 1 : acc 0 : s_tr 2
+debug1 : seg 1 : acc 1 : s_tr 2
+debug1 : seg 1 : acc 2 : s_tr 2
+
+debug1 : seg 1 : acc 3 : s_tr 2 : str 0.5
+debug1 : seg 1 : acc 0 : s_tr 3 : str 0.5
+debug1 : seg 1 : acc 1 : s_tr 4 : str 0.5
+debug1 : seg 1 : acc 2 : s_tr 5 : str 0.5
+
+==============
+
+
 
 each "scene" is sequencing text - parameters explicit for happy path - but user can take over (optional slider takeovers defined)
 different base-clips/functions/parameters in each scene (sliders get re-mapped)

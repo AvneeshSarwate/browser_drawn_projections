@@ -187,6 +187,22 @@ const togglePlay = (voiceIdx: number) => {
   }
 }
 
+const playCued = () => {
+  appState.voices.forEach((voice, idx) => {
+    if (voice.isCued && !voice.isPlaying) {
+      togglePlay(idx)
+    }
+  })
+}
+
+const stopAll = () => {
+  appState.voices.forEach((voice, idx) => {
+    if (voice.isPlaying) {
+      stopVoice(idx)
+    }
+  })
+}
+
 const launchQueue: Array<(ctx: TimeContext) => Promise<void>> = []
 
 const pianoChains = Array.from({ length: 10 }, (_, i) => getPianoChain())
@@ -388,6 +404,10 @@ onUnmounted(() => {
     </div>
   </div>
   <div class="livecode-container">
+    <div class="global-controls">
+      <button @click="playCued">Play Cued</button>
+      <button @click="stopAll">Stop All</button>
+    </div>
     <div
       v-for="(voice, idx) in appState.voices"
       :key="idx"
@@ -401,6 +421,10 @@ onUnmounted(() => {
         <label>
           <input type="checkbox" v-model="voice.isLooping"/>
           Loop
+        </label>
+        <label>
+          <input type="checkbox" v-model="voice.isCued"/>
+          Cue
         </label>
         <label>
           <input type="number" class="start-phrase-idx-input" v-model.number="voice.startPhraseIdx"/>
@@ -568,6 +592,13 @@ input[type=range]::-moz-range-thumb:hover {
   gap: 0.5rem;
   margin-top: 0.5rem;
   flex-wrap: wrap;
+}
+
+.global-controls {
+  width: 100%;
+  margin-bottom: 0.5rem;
+  display: flex;
+  gap: 0.5rem;
 }
 
 .voice-column {

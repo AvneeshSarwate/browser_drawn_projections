@@ -91,6 +91,10 @@ export function getPianoChain() {
   const delayCrossfader = new Tone.CrossFade(0)
   const reverb = new Tone.Freeverb()
 
+  chorus.spread = 90
+  chorus.frequency.value = 2
+  chorus.feedback.value = 0.8
+
   piano.connect(distortion)
   distortion.connect(chorus)
   chorus.connect(filter)
@@ -114,7 +118,7 @@ export function getPianoChain() {
     distortion: (val: number) => distortion.distortion = val,
     chorusWet: (val: number) => chorus.wet.value = val,
     chorusDepth: (val: number) => chorus.depth = val,
-    chorusRate: (val: number) => chorus.delayTime = 2 + val**2 * 20,
+    chorusRate: (val: number) => chorus.delayTime = 2 + val ** 2 * 20,
     filterFreq: (val: number) => filter.frequency.value = 20000 * val**2,
     filterRes: (val: number) => filter.Q.value = val**100,
     delayTime: (val: number) => delay.delayTime.rampTo(val**2, 0.01),
