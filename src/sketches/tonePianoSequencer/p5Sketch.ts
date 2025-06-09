@@ -8,13 +8,15 @@ export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => ToneSe
     p.setup = () => {
       p.createCanvas(1280, 720, canvas)
       p.noSmooth()
+      p.background(0, 0.278, 0.733)
       // p.noLoop()
     }
 
     p.draw = () => {
       appState().stats.begin()
       if (!appState().paused) {
-        p.clear(0, 0, 0, 0)
+        p.clear(0, 0.278, 0.733, 0)
+        p.background(0, 0.278, 0.733)
 
         appState().drawFunctions.forEach(d => d(p))
         appState().oneTimeDrawFuncs.forEach(d => d(p))
