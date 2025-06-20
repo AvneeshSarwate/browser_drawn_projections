@@ -131,16 +131,29 @@ export function getPianoChain() {
     delayMix: (val: number) => delayCrossfader.fade.value = paramScaling.delayMix(val),
     reverb: (val: number) => reverb.wet.value = paramScaling.reverb(val)
   }
+
+  const defaultParams = {
+    distortion: 0.1,
+    chorusWet: 0.1,
+    chorusDepth: 0.3,
+    chorusRate: 0.2,
+    filter: 1.0,
+    delayTime: 0.5,
+    delayFeedback: 0.1,
+    delayMix: 0,
+    reverb: 0.1
+  }
   
   return {
-    piano,
+    instrument: piano,
     distortion,
     chorus,
     filter,
     delay,
     reverb,
     paramFuncs,
-    paramNames: Object.keys(paramFuncs)
+    paramNames: Object.keys(paramFuncs),
+    defaultParams
   }
 }
 
@@ -175,6 +188,22 @@ export function getSynthChain() {
 
 
   const paramFuncs = {
+    attack: (val: number) => {
+      synth.set({ envelope: { attack: val**2 } })
+      return val**2
+    },
+    decay: (val: number) => {
+      synth.set({envelope: {decay: val**2}})
+      return val
+    },
+    sustain: (val: number) => {
+      synth.set({envelope: {sustain: val}})
+      return val
+    },
+    release: (val: number) => {
+      synth.set({envelope: {release: (val**2)*5}})
+      return (val**2)*5
+    },
     distortion: (val: number) => distortion.distortion = val,
     chorusWet: (val: number) => chorus.wet.value = val,
     chorusDepth: (val: number) => chorus.depth = val,
@@ -186,15 +215,33 @@ export function getSynthChain() {
     delayMix: (val: number) => delayCrossfader.fade.value = val,
     reverb: (val: number) => reverb.wet.value = val
   }
+
+
+  const defaultParams = {
+    attack: 0.1,
+    decay: 0.1,
+    sustain: 0.1,
+    release: 0.1,
+    distortion: 0.1,
+    chorusWet: 0.1,
+    chorusDepth: 0.3,
+    chorusRate: 0.2,
+    filter: 1.0,
+    delayTime: 0.5,
+    delayFeedback: 0.1,
+    delayMix: 0.0,
+    reverb: 0.1
+  }
   return {
-    synth,
+    instrument: synth,
     distortion,
     chorus,
     filter,
     delay,
     reverb,
     paramFuncs,
-    paramNames: Object.keys(paramFuncs)
+    paramNames: Object.keys(paramFuncs),
+    defaultParams
   }
 }
 

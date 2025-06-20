@@ -9,7 +9,7 @@ import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN
 import { AbletonClip, clipMap, INITIALIZE_ABLETON_CLIPS, type AbletonNote, quickNote } from '@/io/abletonClips';
 import { MIDI_READY, midiInputs, midiOutputs } from '@/io/midi';
 import { Scale } from '@/music/scale';
-import { getPiano, getPianoChain, TONE_AUDIO_START, paramScaling } from '@/music/synths';
+import { getPiano, getPianoChain, TONE_AUDIO_START, paramScaling, getSynthChain } from '@/music/synths';
 import { m2f } from '@/music/mpeSynth';
 import { TRANSFORM_REGISTRY } from './clipTransforms';
 import { clipData as staticClipData } from './clipData';
@@ -205,11 +205,11 @@ const stopAll = () => {
 
 const launchQueue: Array<(ctx: TimeContext) => Promise<void>> = []
 
-const pianoChains = Array.from({ length: 10 }, (_, i) => getPianoChain())
+const instrumentChains = [getPianoChain(), getPianoChain(), getSynthChain(), getSynthChain()]
 
 // Get the parameter names for the FX controls
 const parameterNames = ref<string[]>(
-  pianoChains.length > 0 ? pianoChains[0].paramNames || [] : []
+  instrumentChains.length > 0 ? instrumentChains[0].paramNames || [] : []
 );
 
 // Piano roll test section state
@@ -231,7 +231,7 @@ const getScaledParamValue = (paramName: string, normalizedValue: number): number
 // Function to update piano FX parameters
 const updatePianoFX = (voiceIdx: number) => {
   const voice = appState.voices[voiceIdx];
-  const pianoChain = pianoChains[mod2(voiceIdx, pianoChains.length)];
+  const pianoChain = instrumentChains[mod2(voiceIdx, instrumentChains.length)];
   
   // Apply FX parameters
   Object.keys(voice.fxParams).forEach((paramName: string) => {
@@ -259,12 +259,13 @@ onMounted(async() => {
     midiOuts.push(iac1, iac2, iac3, iac4)
 
     // Initialize any missing FX parameters based on the available parameter names
-    if (pianoChains.length > 0) {
-      const availableParams = pianoChains[0].paramNames || [];
-      appState.voices.forEach(voice => {
+    if (instrumentChains.length > 0) {
+      
+      appState.voices.forEach((voice, i) => {
+        const availableParams = instrumentChains[i].paramNames
         availableParams.forEach(paramName => {
           if (voice.fxParams[paramName] === undefined) {
-            voice.fxParams[paramName] = 0.1;
+            voice.fxParams[paramName] = instrumentChains[i].defaultParams[paramName];
           }
         });
       });
@@ -297,7 +298,7 @@ onMounted(async() => {
       // Update the FX parameters before playing the note
       updatePianoFX(pianoIndex);
       
-      const piano = pianoChains[mod2(pianoIndex, pianoChains.length)].piano
+      const piano = instrumentChains[mod2(pianoIndex, instrumentChains.length)].instrument
       //todo - get this to use duration and have midi output signature for consistency
       // const bpm = ctx.bpm
       // const dur = noteDur * (60 / bpm)

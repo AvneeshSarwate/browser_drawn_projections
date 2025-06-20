@@ -61,17 +61,7 @@ export const appState: SonarAppState = {
     /** line index that is currently sounding ( –1  means "none")  */
     playingLineIdx: -1,
     startPhraseIdx: 0,
-    fxParams: {
-      distortion: 0.1,
-      chorusWet: 0.1,
-      chorusDepth: 0.3,
-      chorusRate: 0.2,
-      filter: 1.0,
-      delayTime: 0.5,
-      delayFeedback: 0.1,
-      delayMix: 0.5,
-      reverb: 0.1
-    }
+    fxParams: {}
   })),
   sliders: Array.from({ length: 8 }, (): number => 0),
 } 
