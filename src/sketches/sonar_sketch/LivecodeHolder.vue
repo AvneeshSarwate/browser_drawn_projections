@@ -1,3 +1,4 @@
+<!-- eslint-disable no-debugger -->
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
 import { type SonarAppState, appStateName, type VoiceState } from './appState';
@@ -266,8 +267,13 @@ onMounted(async() => {
     testPianoRoll = new PianoRoll<{}>('testPianoRollHolder', () => {}, () => {}, true)
     
     await MIDI_READY
+    console.log('midi ready')
     await INITIALIZE_ABLETON_CLIPS('src/sketches/sonar_sketch/piano_melodies Project/piano_melodies.als', staticClipData, false)
+    console.log('clips ready')
     await TONE_AUDIO_START
+    console.log('tone ready')
+    
+    console.log('midi, clips, tone ready')
 
     const iac1 = midiOutputs.get('IAC Driver Bus 1')
     const iac2 = midiOutputs.get('IAC Driver Bus 2')
@@ -314,8 +320,8 @@ onMounted(async() => {
 
 
     const playNotePiano = (pitch: number, velocity: number, ctx: TimeContext, noteDur: number, pianoIndex = 0) => {
-      // Update the FX parameters before playing the note
-      updatePianoFX(pianoIndex);
+      // // Update the FX parameters before playing the note
+      // updatePianoFX(pianoIndex);
       
       const piano = instrumentChains[mod2(pianoIndex, instrumentChains.length)].instrument
       //todo - get this to use duration and have midi output signature for consistency
@@ -334,7 +340,7 @@ onMounted(async() => {
     playNote = playNotePiano
 
     // Initialize FX parameters for all voices
-    appState.voices.forEach((_, idx) => updatePianoFX(idx))
+    // appState.voices.forEach((_, idx) => updatePianoFX(idx))
 
     const p5i = appState.p5Instance!!
     const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
@@ -348,9 +354,15 @@ onMounted(async() => {
     appState.drawFunctions.push((p: p5) => {
     })
 
+    console.log('pre launch loop')
+
     launchLoop(async (ctx) => {
+
+      console.log('launch loop')
+
       // eslint-disable-next-line no-constant-condition
       while (true) {
+        console.log('launchQueue', launchQueue.length)
         await ctx.wait(1)
         launchQueue.forEach(cb => cb(ctx))
         launchQueue.length = 0
