@@ -9,7 +9,7 @@ import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN
 import { AbletonClip, clipMap, INITIALIZE_ABLETON_CLIPS, type AbletonNote, quickNote } from '@/io/abletonClips';
 import { MIDI_READY, midiInputs, midiOutputs } from '@/io/midi';
 import { Scale } from '@/music/scale';
-import { getPiano, getPianoChain, TONE_AUDIO_START, paramScaling, getSynthChain } from '@/music/synths';
+import { getPiano, getPianoChain, TONE_AUDIO_START, getSynthChain } from '@/music/synths';
 import { m2f } from '@/music/mpeSynth';
 import { TRANSFORM_REGISTRY } from './clipTransforms';
 import { clipData as staticClipData } from './clipData';
@@ -41,6 +41,22 @@ const midiOuts: MIDIValOutput[] = [];
 //lets you switch between midi and web audio piano
 let playNote: (pitch: number, velocity: number, ctx?: TimeContext, noteDur?: number, instInd?: number) => void = () => {}
 
+
+const saveSnapshot = () => {
+  appState.snapshots.push({
+    sliders: appState.sliders,
+    voices: appState.voices.map(v => structuredClone(v.saveable))
+  })
+}
+
+//does not manage any playing state - only "safe" to load when not playing
+const loadSnapshotStateOnly = (ind: number) => {
+  if (ind < 0 || ind >= appState.snapshots.length) return
+  appState.sliders = appState.snapshots[ind].sliders
+  appState.voices.forEach((v, i) => {
+    v.saveable = appState.snapshots[ind].voices[i]
+  })
+}
 
 const buildClipFromLine = (line: string): { clip: AbletonClip, updatedLine: string } => {
   const tokens = line.split(/\s*:\s*/).map((t) => t.trim()).filter(Boolean);
@@ -115,7 +131,7 @@ const playClips = async (
   voiceState.playingText = displayLines.join('\n')
 
   for (const [idx, line] of lines.entries()) {
-    if (firstLoop && idx < voiceState.startPhraseIdx) continue //note this comes from a v-model.number on a text input, could have wierd edge cases
+    if (firstLoop && idx < voiceState.saveable.startPhraseIdx) continue //note this comes from a v-model.number on a text input, could have wierd edge cases
 
 
     if (!voiceState.isPlaying) break
@@ -143,7 +159,7 @@ const startVoice = (voiceIdx: number) => {
   const v = appState.voices[voiceIdx]
 
   const playOnce = async (ctx: TimeContext, firstLoop: boolean) => {
-    const lines = v.sliceText.split('\n').map(l => l.trim()).filter(Boolean)
+    const lines = v.saveable.sliceText.split('\n').map(l => l.trim()).filter(Boolean)
     if (!lines.length || !midiOuts[voiceIdx]) return
     await playClips(lines, ctx, voiceIdx, v, firstLoop)
   }
@@ -207,11 +223,6 @@ const launchQueue: Array<(ctx: TimeContext) => Promise<void>> = []
 
 const instrumentChains = [getPianoChain(), getPianoChain(), getSynthChain(), getSynthChain()]
 
-// Get the parameter names for the FX controls
-const parameterNames = ref<string[]>(
-  instrumentChains.length > 0 ? instrumentChains[0].paramNames || [] : []
-);
-
 // Piano roll test section state
 const testTransformInput = ref('clip1 : arp up 0.25 0.9 0 1')
 let testPianoRoll: PianoRoll<{}> | undefined = undefined
@@ -224,21 +235,29 @@ const formatParamName = (paramName: string) => {
 };
 
 // Function to get scaled parameter value using the modular scaling functions
-const getScaledParamValue = (paramName: string, normalizedValue: number): number => {
-  return paramScaling[paramName as keyof typeof paramScaling]?.(normalizedValue) ?? normalizedValue;
+const getScaledParamValue = (paramName, paramScaling: Record<string, (val: number) => number>, normalizedValue: number): number => {
+  const val = paramScaling[paramName]?.(normalizedValue) ?? normalizedValue;
+  if (val === undefined) debugger;
+  return val
 }
 
 // Function to update piano FX parameters
-const updatePianoFX = (voiceIdx: number) => {
+const updatePianoFX = (voiceIdx: number, paramName?: string) => {
   const voice = appState.voices[voiceIdx];
   const pianoChain = instrumentChains[mod2(voiceIdx, instrumentChains.length)];
-  
-  // Apply FX parameters
-  Object.keys(voice.fxParams).forEach((paramName: string) => {
+
+  if (paramName) {
     if (pianoChain.paramFuncs[paramName]) {
-      pianoChain.paramFuncs[paramName](voice.fxParams[paramName]);
+      pianoChain.paramFuncs[paramName](voice.saveable.fxParams[paramName]);
     }
-  });
+  } else {
+    // Apply FX parameters
+    Object.keys(voice.saveable.fxParams).forEach((paramName: string) => {
+      if (pianoChain.paramFuncs[paramName]) {
+        pianoChain.paramFuncs[paramName](voice.saveable.fxParams[paramName]);
+      }
+    });
+  }
 }
 
 onMounted(async() => {
@@ -264,8 +283,8 @@ onMounted(async() => {
       appState.voices.forEach((voice, i) => {
         const availableParams = instrumentChains[i].paramNames
         availableParams.forEach(paramName => {
-          if (voice.fxParams[paramName] === undefined) {
-            voice.fxParams[paramName] = instrumentChains[i].defaultParams[paramName];
+          if (voice.saveable.fxParams[paramName] === undefined) {
+            voice.saveable.fxParams[paramName] = instrumentChains[i].defaultParams[paramName];
           }
         });
       });
@@ -433,14 +452,14 @@ onUnmounted(() => {
           Cue
         </label>
         <label>
-          <input type="number" class="start-phrase-idx-input" v-model.number="voice.startPhraseIdx"/>
+          <input type="number" class="start-phrase-idx-input" v-model.number="voice.saveable.startPhraseIdx"/>
           Start Phrase Index
         </label>
       </div>
       <details v-if="!voice.isPlaying" open class="text-display">
         <summary>Slice Editor</summary>
         <textarea
-          v-model="voice.sliceText"
+          v-model="voice.saveable.sliceText"
           placeholder="clipName : seg 1 : s_tr 2 : str 0.5 : q 1"
           rows="10"
         />
@@ -462,18 +481,18 @@ onUnmounted(() => {
         <summary>FX Controls</summary>
         <div class="fx-sliders">
           <div 
-            v-for="paramName in parameterNames" 
+            v-for="paramName in instrumentChains[idx].paramNames" 
             :key="paramName" 
             class="fx-slider"
           >
-            <label>{{ formatParamName(paramName) }}: {{ getScaledParamValue(paramName, voice.fxParams[paramName]).toFixed(3) }}</label>
+            <label>{{ formatParamName(paramName) }}: {{ getScaledParamValue(paramName, instrumentChains[idx].paramScaling, voice.saveable.fxParams[paramName] ?? 0).toFixed(3) }}</label>
             <input 
               type="range" 
-              v-model.number="voice.fxParams[paramName]" 
+              v-model.number="voice.saveable.fxParams[paramName]" 
               min="0" 
               max="1" 
               step="0.001" 
-              @input="updatePianoFX(idx)" 
+              @input="updatePianoFX(idx, paramName)" 
             />
           </div>
         </div>

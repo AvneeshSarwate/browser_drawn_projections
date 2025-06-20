@@ -83,18 +83,6 @@ export function getPiano(connectToDestination: boolean = true) {
 }
 
 // Separate scaling functions that can be reused for both setting and display
-export const paramScaling = {
-  distortion: (val: number) => val,
-  chorusWet: (val: number) => val,
-  chorusDepth: (val: number) => val,
-  chorusRate: (val: number) => 2 + val ** 2 * 20,
-  filterFreq: (val: number) => 20000 * val ** 2,
-  filterRes: (val: number) => val ** 100,
-  delayTime: (val: number) => val ** 2,
-  delayFeedback: (val: number) => val,
-  delayMix: (val: number) => val,
-  reverb: (val: number) => val
-}
 
 export function getPianoChain() {
   const piano = getPiano(false)
@@ -118,6 +106,18 @@ export function getPianoChain() {
   delayCrossfader.connect(reverb)
   reverb.connect(Tone.getDestination())
 
+  const paramScaling = {
+    distortion: (val: number) => val,
+    chorusWet: (val: number) => val,
+    chorusDepth: (val: number) => val,
+    chorusRate: (val: number) => 2 + val ** 2 * 20,
+    filterFreq: (val: number) => 20000 * val ** 2,
+    filterRes: (val: number) => val ** 100,
+    delayTime: (val: number) => val ** 2,
+    delayFeedback: (val: number) => val,
+    delayMix: (val: number) => val,
+    reverb: (val: number) => val
+  }
   // Use the scaling functions in paramFuncs to ensure consistency
   const paramFuncs = {
     distortion: (val: number) => distortion.distortion = paramScaling.distortion(val),
@@ -153,7 +153,8 @@ export function getPianoChain() {
     reverb,
     paramFuncs,
     paramNames: Object.keys(paramFuncs),
-    defaultParams
+    defaultParams,
+    paramScaling
   }
 }
 
@@ -187,33 +188,50 @@ export function getSynthChain() {
   // piano.chain(delay, Tone.getDestination())
 
 
+  const paramScaling = {
+    attack: (val: number) => val**2,
+    decay: (val: number) => val**2,
+    sustain: (val: number) => val,
+    release: (val: number) => (val**2)*5,
+    distortion: (val: number) => val,
+    chorusWet: (val: number) => val,
+    chorusDepth: (val: number) => val,
+    chorusRate: (val: number) => 2 + val ** 2 * 20,
+    filterFreq: (val: number) => 20000 * val ** 2,
+    filterRes: (val: number) => val ** 100,
+    delayTime: (val: number) => val ** 2,
+    delayFeedback: (val: number) => val,
+    delayMix: (val: number) => val,
+    reverb: (val: number) => val
+  }
+
   const paramFuncs = {
     attack: (val: number) => {
-      synth.set({ envelope: { attack: val**2 } })
-      return val**2
+      synth.set({ envelope: { attack: paramScaling.attack(val) } })
+      return paramScaling.attack(val)
     },
     decay: (val: number) => {
-      synth.set({envelope: {decay: val**2}})
-      return val
+      synth.set({envelope: {decay: paramScaling.decay(val)}})
+      return paramScaling.decay(val)
     },
     sustain: (val: number) => {
-      synth.set({envelope: {sustain: val}})
+      synth.set({envelope: {sustain: paramScaling.sustain(val)}})
       return val
     },
     release: (val: number) => {
-      synth.set({envelope: {release: (val**2)*5}})
-      return (val**2)*5
+      synth.set({envelope: {release: paramScaling.release(val)}})
+      return paramScaling.release(val)
     },
-    distortion: (val: number) => distortion.distortion = val,
-    chorusWet: (val: number) => chorus.wet.value = val,
-    chorusDepth: (val: number) => chorus.depth = val,
-    chorusRate: (val: number) => chorus.delayTime = 2 + val**2 * 20,
-    filterFreq: (val: number) => filter.frequency.value = 20000 * val**2,
-    filterRes: (val: number) => filter.Q.value = val**100,
-    delayTime: (val: number) => delay.delayTime.value = val**2,
-    delayFeedback: (val: number) => delay.feedback.value = val,
-    delayMix: (val: number) => delayCrossfader.fade.value = val,
-    reverb: (val: number) => reverb.wet.value = val
+    distortion: (val: number) => distortion.distortion = paramScaling.distortion(val),
+    chorusWet: (val: number) => chorus.wet.value = paramScaling.chorusWet(val),
+    chorusDepth: (val: number) => chorus.depth = paramScaling.chorusDepth(val),
+    chorusRate: (val: number) => chorus.delayTime = paramScaling.chorusRate(val),
+    filterFreq: (val: number) => filter.frequency.value = paramScaling.filterFreq(val),
+    filterRes: (val: number) => filter.Q.value = paramScaling.filterRes(val),
+    delayTime: (val: number) => delay.delayTime.value = paramScaling.delayTime(val),
+    delayFeedback: (val: number) => delay.feedback.value = paramScaling.delayFeedback(val),
+    delayMix: (val: number) => delayCrossfader.fade.value = paramScaling.delayMix(val),
+    reverb: (val: number) => reverb.wet.value = paramScaling.reverb(val)
   }
 
 
@@ -241,7 +259,8 @@ export function getSynthChain() {
     reverb,
     paramFuncs,
     paramNames: Object.keys(paramFuncs),
-    defaultParams
+    defaultParams,
+    paramScaling
   }
 }
 

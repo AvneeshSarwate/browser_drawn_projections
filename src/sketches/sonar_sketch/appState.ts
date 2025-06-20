@@ -6,9 +6,14 @@ import { ref } from 'vue'
 import type { TimeContext } from '@/channels/channels'
 import type { LoopHandle } from '@/channels/base_time_context'
 
+type SaveableProperties = {
+  sliceText: string;
+  startPhraseIdx: number;
+  fxParams: Record<string, number>;
+}
 
 export type VoiceState = {
-  sliceText: string;
+  saveable: SaveableProperties
   isPlaying: boolean;
   isLooping: boolean;
   isCued: boolean;
@@ -16,8 +21,6 @@ export type VoiceState = {
   queue: Array<(ctx: TimeContext) => Promise<void>>;
   playingText: string;
   playingLineIdx: number;
-  startPhraseIdx: number;
-  fxParams: Record<string, number>;
 };
 
 export type SonarAppState = {
@@ -34,6 +37,10 @@ export type SonarAppState = {
   drawing: boolean
   voices: VoiceState[]
   sliders: number[]
+  snapshots: Array<{
+    sliders: number[]
+    voices: SaveableProperties[]
+  }>
 }
 
 export const appState: SonarAppState = {
@@ -49,7 +56,11 @@ export const appState: SonarAppState = {
   paused: false,
   drawing: false,
   voices: Array.from({ length: 4 }, (): VoiceState => ({
-    sliceText: '',
+    saveable: {
+      sliceText: '',
+      startPhraseIdx: 0,
+      fxParams: {},
+    },
     /** true while the voice is actively playing (Play-button ON) */
     isPlaying: false,
     isLooping: false,
@@ -60,10 +71,10 @@ export const appState: SonarAppState = {
     playingText: '',
     /** line index that is currently sounding ( –1  means "none")  */
     playingLineIdx: -1,
-    startPhraseIdx: 0,
-    fxParams: {}
+    
   })),
   sliders: Array.from({ length: 8 }, (): number => 0),
+  snapshots: [],
 } 
 
 export const appStateName = 'sonarAppState'
