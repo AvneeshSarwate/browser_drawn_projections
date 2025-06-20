@@ -502,7 +502,13 @@ export function segment(clip: AbletonClip, index: number): AbletonClip {
 }
 
 export function timeSlice(clip: AbletonClip, start: number, end: number): AbletonClip {
-  return clip.timeSlice(start, end);
+  const actualStart = start > 0 ? start : 0;
+  const actualEnd = end > 0 ? end : clip.duration
+  return clip.timeSlice(actualStart, actualEnd);
+}
+
+export function durSlice(clip: AbletonClip, start: number, duration: number) {
+  return clip.timeSlice(start, start + duration)
 }
 
 // ─────────────────────────────────────────────
@@ -576,7 +582,13 @@ export const TRANSFORM_REGISTRY: Record<string, ClipTransform> = {
     name: 'sl',
     transform: (clip, start, end) => timeSlice(clip, start, end),
     argParser: (args: string[]) => [numParse(args[0]), numParse(args[1])],
-    sliderScale: [n => n] //no scaling
+    sliderScale: [(n, c) => n * c.duration, (n, c) => n * c.duration] 
+  },
+  dsl: {
+    name: 'dsl',
+    transform: (clip, start, duration) => durSlice(clip, start, duration),
+    argParser: (args: string[]) => [numParse(args[0]), numParse(args[1])],
+    sliderScale: [(n, c) => n * c.duration, (n, c) => n * c.duration]
   },
   rev: {
     name: 'rev',
