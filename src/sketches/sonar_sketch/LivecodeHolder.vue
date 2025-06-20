@@ -266,6 +266,75 @@ const updatePianoFX = (voiceIdx: number, paramName?: string) => {
   }
 }
 
+const saveSnapshotsToFile = () => {
+  const dataStr = JSON.stringify(appState.snapshots, null, 2)
+  const dataBlob = new Blob([dataStr], { type: 'application/json' })
+  
+  const link = document.createElement('a')
+  link.href = URL.createObjectURL(dataBlob)
+  link.download = `sonar_snapshots_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(link.href)
+  
+  console.log('Snapshots saved to file')
+}
+
+const loadSnapshotsFromFile = () => {
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = '.json'
+  
+  input.onchange = (event) => {
+    const file = (event.target as HTMLInputElement).files?.[0]
+    if (!file) return
+    
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      try {
+        const result = e.target?.result as string
+        const loadedSnapshots = JSON.parse(result)
+        
+        // Validate structure
+        if (!Array.isArray(loadedSnapshots)) {
+          throw new Error('Invalid file format: expected array of snapshots')
+        }
+        
+        // Basic validation of snapshot structure
+        for (const snapshot of loadedSnapshots) {
+          if (!snapshot.sliders || !Array.isArray(snapshot.sliders)) {
+            throw new Error('Invalid snapshot format: missing or invalid sliders array')
+          }
+          if (!snapshot.voices || !Array.isArray(snapshot.voices)) {
+            throw new Error('Invalid snapshot format: missing or invalid voices array')
+          }
+          // Validate each voice has required properties
+          for (const voice of snapshot.voices) {
+            if (typeof voice.sliceText !== 'string' || 
+                typeof voice.startPhraseIdx !== 'number' ||
+                typeof voice.fxParams !== 'object') {
+              throw new Error('Invalid voice format in snapshot')
+            }
+          }
+        }
+        
+        appState.snapshots = loadedSnapshots
+        selectedSnapshot.value = -1 // Reset selection
+        console.log(`Loaded ${loadedSnapshots.length} snapshots from file`)
+        
+      } catch (error) {
+        console.error('Error loading snapshots:', error)
+        alert(`Error loading snapshots: ${error.message}`)
+      }
+    }
+    
+    reader.readAsText(file)
+  }
+  
+  input.click()
+}
+
 onMounted(async() => {
   try {
     // Initialize test piano roll
@@ -457,6 +526,8 @@ onUnmounted(() => {
             Snapshot {{ idx + 1 }}
           </option>
         </select>
+        <button @click="saveSnapshotsToFile" :disabled="appState.snapshots.length === 0">Export to File</button>
+        <button @click="loadSnapshotsFromFile">Import from File</button>
       </div>
     </div>
     <div
@@ -657,6 +728,17 @@ input[type=range]::-moz-range-thumb:hover {
   display: flex;
   gap: 0.5rem;
   align-items: center;
+  flex-wrap: wrap;
+}
+
+.snapshot-controls button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: #2a2a2a;
+}
+
+.snapshot-controls button:disabled:hover {
+  background: #2a2a2a;
 }
 
 .snapshot-controls select {
