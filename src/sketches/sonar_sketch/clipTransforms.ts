@@ -535,7 +535,7 @@ export const TRANSFORM_REGISTRY: Record<string, ClipTransform> = {
     name: 'seg',
     transform: (clip, index) => segment(clip, index),
     argParser: (args: string[]) => [numParse(args[0])],
-    sliderScale: [n => Math.floor(n*8)]
+    sliderScale: [(n, c) => Math.floor(n * segmentByPitchMarker(c).length)]
   },
 
   s_tr: {
