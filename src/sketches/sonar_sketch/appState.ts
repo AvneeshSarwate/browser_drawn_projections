@@ -6,7 +6,7 @@ import { ref } from 'vue'
 import type { TimeContext } from '@/channels/channels'
 import type { LoopHandle } from '@/channels/base_time_context'
 
-type SaveableProperties = {
+export type SaveableProperties = {
   sliceText: string;
   startPhraseIdx: number;
   fxParams: Record<string, number>;

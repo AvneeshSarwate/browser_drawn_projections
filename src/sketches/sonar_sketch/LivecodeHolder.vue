@@ -1,7 +1,7 @@
 <!-- eslint-disable no-debugger -->
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
-import { type SonarAppState, appStateName, type VoiceState } from './appState';
+import { type SonarAppState, appStateName, type VoiceState, globalStore, type SaveableProperties } from './appState';
 import { inject, onMounted, onUnmounted, reactive, ref, computed } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
@@ -45,9 +45,11 @@ let playNote: (pitch: number, velocity: number, ctx?: TimeContext, noteDur?: num
 
 const saveSnapshot = () => {
   appState.snapshots.push({
-    sliders: appState.sliders,
-    voices: appState.voices.map(v => structuredClone(v.saveable))
+    sliders: [...appState.sliders],
+    //todo - need to keep an eye on how snapshots are formatted to avoid having to write manual cloning logic
+    voices: appState.voices.map(v => JSON.parse(JSON.stringify(v.saveable)) as SaveableProperties)
   })
+  console.log('Snapshot saved. Total snapshots:', appState.snapshots.length)
 }
 
 //does not manage any playing state - only "safe" to load when not playing
@@ -228,6 +230,9 @@ const instrumentChains = [getPianoChain(), getPianoChain(), getSynthChain(), get
 const testTransformInput = ref('clip1 : arp up 0.25 0.9 0 1')
 let testPianoRoll: PianoRoll<{}> | undefined = undefined
 
+// Snapshot selection state
+const selectedSnapshot = ref(-1)
+
 // Function to get a readable name for each parameter
 const formatParamName = (paramName: string) => {
   return paramName
@@ -272,7 +277,7 @@ onMounted(async() => {
     console.log('clips ready')
     await TONE_AUDIO_START
     console.log('tone ready')
-    
+
     console.log('midi, clips, tone ready')
 
     const iac1 = midiOutputs.get('IAC Driver Bus 1')
@@ -444,6 +449,15 @@ onUnmounted(() => {
     <div class="global-controls">
       <button @click="playCued">Play Cued</button>
       <button @click="stopAll">Stop All</button>
+      <div class="snapshot-controls">
+        <button @click="saveSnapshot">Save Snapshot</button>
+        <select v-model="selectedSnapshot" @change="() => loadSnapshotStateOnly(parseInt(selectedSnapshot.toString()))">
+          <option value="-1">Select Snapshot</option>
+          <option v-for="(snapshot, idx) in appState.snapshots" :key="idx" :value="idx">
+            Snapshot {{ idx + 1 }}
+          </option>
+        </select>
+      </div>
     </div>
     <div
       v-for="(voice, idx) in appState.voices"
@@ -636,6 +650,28 @@ input[type=range]::-moz-range-thumb:hover {
   margin-bottom: 0.5rem;
   display: flex;
   gap: 0.5rem;
+  align-items: center;
+}
+
+.snapshot-controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.snapshot-controls select {
+  padding: 0.2rem 0.3rem;
+  background: #2a2a2a;
+  border: 1px solid #555;
+  color: #e0e0e0;
+  border-radius: 2px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.snapshot-controls select:focus {
+  outline: none;
+  border-color: #6a9bd1;
 }
 
 .voice-column {
