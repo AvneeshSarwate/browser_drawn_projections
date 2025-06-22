@@ -371,7 +371,7 @@ onMounted(async() => {
     }
 
     const lpd8 = midiInputs.get("LPD8 mk2")
-    const midiNorm = (val: number) => val / 127
+    const midiNorm = (val: number) => Math.floor(val / 127 * 1000) / 1000
     if (lpd8) {
       Array.from({ length: 8 }, (_, i) => i).forEach(ind => {
         lpd8.onControlChange(ind + 70, (msg) => {
@@ -404,7 +404,7 @@ onMounted(async() => {
       // piano.triggerAttackRelease([m2f(pitch)], dur, null, velocity)
       piano.triggerAttack([m2f(pitch)], Tone.now(), velocity/127)
       ctx.branch(async ctx => {
-        await ctx.wait(noteDur)
+        await ctx.wait(noteDur * 0.98)
         piano.triggerRelease(m2f(pitch))
       }).finally(() => {
         piano.triggerRelease(m2f(pitch))

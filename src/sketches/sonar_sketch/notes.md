@@ -25,10 +25,10 @@ debug1 : seg 0 : str 1.1 : transpose s1 : transpose -12
 ==============
 
 voice 1
-debug1 : seg 1 : acc 0 
-debug1 : seg 1 : acc 1
-debug1 : seg 1 : acc 2
-debug1 : seg 1 : acc 3
+debug1 : seg 1 : acc 0 : s_tr s1
+debug1 : seg 1 : acc 1 : s_tr s1
+debug1 : seg 1 : acc 2 : s_tr s1
+debug1 : seg 1 : acc 3 : s_tr s1
 
 debug1 : seg 1 : acc 0 : tr -12
 debug1 : seg 1 : acc 0 : tr -12 : rev : str 2 : s_tr 1 
@@ -40,10 +40,10 @@ debug1 : seg 1 : acc 3 : tr -12
 debug1 : seg 1 : acc 3 : tr -12 : rev : str 2 : s_tr 1 
 
 voice 2
-debug1 : seg 1 : acc 3 : s_tr 2
-debug1 : seg 1 : acc 0 : s_tr 2
-debug1 : seg 1 : acc 1 : s_tr 2
-debug1 : seg 1 : acc 2 : s_tr 2
+debug1 : seg 1 : acc 3 : s_tr 2 : s_tr s2
+debug1 : seg 1 : acc 0 : s_tr 2 : s_tr s2
+debug1 : seg 1 : acc 1 : s_tr 2 : s_tr s2
+debug1 : seg 1 : acc 2 : s_tr 2 : s_tr s2
 
 debug1 : seg 1 : acc 3 : s_tr 2 : str 0.5
 debug1 : seg 1 : acc 0 : s_tr 3 : str 0.5
