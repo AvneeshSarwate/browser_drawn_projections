@@ -41,6 +41,7 @@ export type SonarAppState = {
     sliders: number[]
     voices: SaveableProperties[]
   }>
+  autoSaveInterval?: number
 }
 
 export const appState: SonarAppState = {

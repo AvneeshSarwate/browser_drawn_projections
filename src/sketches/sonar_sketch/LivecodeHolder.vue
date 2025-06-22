@@ -281,6 +281,31 @@ const saveSnapshotsToFile = () => {
   console.log('Snapshots saved to file')
 }
 
+// Shared validation function for snapshots
+const validateSnapshots = (snapshots: any, source: string) => {
+  if (!Array.isArray(snapshots)) {
+    throw new Error(`Invalid ${source} format: expected array of snapshots`)
+  }
+  
+  // Basic validation of snapshot structure
+  for (const snapshot of snapshots) {
+    if (!snapshot.sliders || !Array.isArray(snapshot.sliders)) {
+      throw new Error('Invalid snapshot format: missing or invalid sliders array')
+    }
+    if (!snapshot.voices || !Array.isArray(snapshot.voices)) {
+      throw new Error('Invalid snapshot format: missing or invalid voices array')
+    }
+    // Validate each voice has required properties
+    for (const voice of snapshot.voices) {
+      if (typeof voice.sliceText !== 'string' || 
+          typeof voice.startPhraseIdx !== 'number' ||
+          typeof voice.fxParams !== 'object') {
+        throw new Error('Invalid voice format in snapshot')
+      }
+    }
+  }
+}
+
 const loadSnapshotsFromFile = () => {
   const input = document.createElement('input')
   input.type = 'file'
@@ -296,28 +321,8 @@ const loadSnapshotsFromFile = () => {
         const result = e.target?.result as string
         const loadedSnapshots = JSON.parse(result)
         
-        // Validate structure
-        if (!Array.isArray(loadedSnapshots)) {
-          throw new Error('Invalid file format: expected array of snapshots')
-        }
-        
-        // Basic validation of snapshot structure
-        for (const snapshot of loadedSnapshots) {
-          if (!snapshot.sliders || !Array.isArray(snapshot.sliders)) {
-            throw new Error('Invalid snapshot format: missing or invalid sliders array')
-          }
-          if (!snapshot.voices || !Array.isArray(snapshot.voices)) {
-            throw new Error('Invalid snapshot format: missing or invalid voices array')
-          }
-          // Validate each voice has required properties
-          for (const voice of snapshot.voices) {
-            if (typeof voice.sliceText !== 'string' || 
-                typeof voice.startPhraseIdx !== 'number' ||
-                typeof voice.fxParams !== 'object') {
-              throw new Error('Invalid voice format in snapshot')
-            }
-          }
-        }
+        // Use shared validation
+        validateSnapshots(loadedSnapshots, 'file')
         
         appState.snapshots = loadedSnapshots
         selectedSnapshot.value = -1 // Reset selection
@@ -335,8 +340,76 @@ const loadSnapshotsFromFile = () => {
   input.click()
 }
 
+// Add localStorage functions for both snapshots and current live state
+const saveToLocalStorage = () => {
+  try {
+    // Save snapshots
+    const snapshotsStr = JSON.stringify(appState.snapshots)
+    localStorage.setItem('sonar_snapshots', snapshotsStr)
+    
+    // Save current live state
+    const currentState = {
+      sliders: [...appState.sliders],
+      voices: appState.voices.map(v => JSON.parse(JSON.stringify(v.saveable)) as SaveableProperties)
+    }
+    const currentStateStr = JSON.stringify(currentState)
+    localStorage.setItem('sonar_current_state', currentStateStr)
+    
+    console.log('State auto-saved to localStorage (snapshots + current state)')
+  } catch (error) {
+    console.error('Error saving to localStorage:', error)
+  }
+}
+
+const loadFromLocalStorage = () => {
+  try {
+    // Load snapshots
+    const savedSnapshots = localStorage.getItem('sonar_snapshots')
+    if (savedSnapshots) {
+      const loadedSnapshots = JSON.parse(savedSnapshots)
+      validateSnapshots(loadedSnapshots, 'localStorage')
+      appState.snapshots = loadedSnapshots
+      console.log(`Loaded ${loadedSnapshots.length} snapshots from localStorage`)
+    }
+    
+    // Load current live state
+    const savedCurrentState = localStorage.getItem('sonar_current_state')
+    if (savedCurrentState) {
+      const currentState = JSON.parse(savedCurrentState)
+      
+      // Validate current state structure
+      if (currentState.sliders && Array.isArray(currentState.sliders)) {
+        appState.sliders = [...currentState.sliders]
+        console.log('Loaded sliders from localStorage')
+      }
+      
+      if (currentState.voices && Array.isArray(currentState.voices)) {
+        // Validate voice structure and apply to existing voices
+        currentState.voices.forEach((savedVoice: SaveableProperties, index: number) => {
+          if (index < appState.voices.length && 
+              typeof savedVoice.sliceText === 'string' && 
+              typeof savedVoice.startPhraseIdx === 'number' &&
+              typeof savedVoice.fxParams === 'object') {
+            appState.voices[index].saveable = savedVoice
+          }
+        })
+        console.log('Loaded voice states from localStorage')
+      }
+    } else {
+      console.log('No saved current state found in localStorage')
+    }
+    
+  } catch (error) {
+    console.error('Error loading from localStorage:', error)
+    // Don't throw - just continue with default state
+  }
+}
+
 onMounted(async() => {
   try {
+    // Load from localStorage first (both snapshots and current state)
+    loadFromLocalStorage()
+    
     // Initialize test piano roll
     testPianoRoll = new PianoRoll<{}>('testPianoRollHolder', () => {}, () => {}, true)
     
@@ -359,7 +432,6 @@ onMounted(async() => {
 
     // Initialize any missing FX parameters based on the available parameter names
     if (instrumentChains.length > 0) {
-      
       appState.voices.forEach((voice, i) => {
         const availableParams = instrumentChains[i].paramNames
         availableParams.forEach(paramName => {
@@ -451,6 +523,11 @@ onMounted(async() => {
     
     singleKeydownEvent('p', (ev) => { appState.paused = !appState.paused })
  
+    // Set up auto-save interval (2 seconds) - now saves both snapshots and current state
+    const autoSaveInterval = setInterval(saveToLocalStorage, 2000)
+    
+    // Store interval ID for cleanup
+    appState.autoSaveInterval = autoSaveInterval
   } catch (e) {
     console.warn(e)
   }
@@ -479,6 +556,12 @@ the quantForNextSlice is the quantization value for the end of the slice.
 
 onUnmounted(() => {
   console.log("disposing livecoded resources")
+  
+  // Clean up auto-save interval
+  if (appState.autoSaveInterval) {
+    clearInterval(appState.autoSaveInterval)
+  }
+  
   shaderGraphEndNode?.disposeAll()
   clearListeners()
   clearDrawFuncs()

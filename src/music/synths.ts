@@ -92,6 +92,8 @@ export function getPianoChain() {
   const delay = new Tone.FeedbackDelay(0.5, 0.1)
   const delayCrossfader = new Tone.CrossFade(0)
   const reverb = new Tone.Freeverb()
+  const gain = new Tone.Gain(1)
+  const panner = new Tone.Panner(0)
 
   chorus.spread = 90
   chorus.frequency.value = 2
@@ -104,7 +106,9 @@ export function getPianoChain() {
   filter.connect(delay)
   delay.connect(delayCrossfader.b)
   delayCrossfader.connect(reverb)
-  reverb.connect(Tone.getDestination())
+  reverb.connect(gain)
+  gain.connect(panner)
+  panner.connect(Tone.getDestination())
 
   const paramScaling = {
     distortion: (val: number) => val,
@@ -116,7 +120,9 @@ export function getPianoChain() {
     delayTime: (val: number) => val ** 2,
     delayFeedback: (val: number) => val,
     delayMix: (val: number) => val,
-    reverb: (val: number) => val
+    reverb: (val: number) => val,
+    gain: (val: number) => val * 5, //map 1 to 5
+    pan: (val: number) => (val - 0.5) * 2 // Map 0-1 to -1 to 1
   }
   // Use the scaling functions in paramFuncs to ensure consistency
   const paramFuncs = {
@@ -129,19 +135,23 @@ export function getPianoChain() {
     delayTime: (val: number) => delay.delayTime.rampTo(paramScaling.delayTime(val), 0.01),
     delayFeedback: (val: number) => delay.feedback.value = paramScaling.delayFeedback(val),
     delayMix: (val: number) => delayCrossfader.fade.value = paramScaling.delayMix(val),
-    reverb: (val: number) => reverb.wet.value = paramScaling.reverb(val)
+    reverb: (val: number) => reverb.wet.value = paramScaling.reverb(val),
+    gain: (val: number) => gain.gain.value = paramScaling.gain(val),
+    pan: (val: number) => panner.pan.value = paramScaling.pan(val)
   }
 
   const defaultParams = {
-    distortion: 0.1,
-    chorusWet: 0.1,
+    distortion: 0,
+    chorusWet: 0,
     chorusDepth: 0.3,
     chorusRate: 0.2,
     filter: 1.0,
     delayTime: 0.5,
     delayFeedback: 0.1,
     delayMix: 0,
-    reverb: 0.1
+    reverb: 0,
+    gain: 0.2,
+    pan: 0.5
   }
   
   return {
@@ -151,6 +161,8 @@ export function getPianoChain() {
     filter,
     delay,
     reverb,
+    gain,
+    panner,
     paramFuncs,
     paramNames: Object.keys(paramFuncs),
     defaultParams,
@@ -174,6 +186,8 @@ export function getSynthChain() {
   const delay = new Tone.FeedbackDelay(0.5, 0.1)
   const delayCrossfader = new Tone.CrossFade(0)
   const reverb = new Tone.Freeverb()
+  const gain = new Tone.Gain(1)
+  const panner = new Tone.Panner(0)
 
   synth.connect(distortion)
   distortion.connect(chorus)
@@ -182,7 +196,9 @@ export function getSynthChain() {
   filter.connect(delay)
   delay.connect(delayCrossfader.b)
   delayCrossfader.connect(reverb)
-  reverb.connect(Tone.getDestination())
+  reverb.connect(gain)
+  gain.connect(panner)
+  panner.connect(Tone.getDestination())
 
   // piano.chain(distortion, chorus, filter, delay, reverb, Tone.getDestination())
   // piano.chain(delay, Tone.getDestination())
@@ -202,7 +218,9 @@ export function getSynthChain() {
     delayTime: (val: number) => val ** 2,
     delayFeedback: (val: number) => val,
     delayMix: (val: number) => val,
-    reverb: (val: number) => val
+    reverb: (val: number) => val,
+    gain: (val: number) => val * 5, //map 1 to 5
+    pan: (val: number) => (val - 0.5) * 2 // Map 0-1 to -1 to 1
   }
 
   const paramFuncs = {
@@ -231,7 +249,9 @@ export function getSynthChain() {
     delayTime: (val: number) => delay.delayTime.value = paramScaling.delayTime(val),
     delayFeedback: (val: number) => delay.feedback.value = paramScaling.delayFeedback(val),
     delayMix: (val: number) => delayCrossfader.fade.value = paramScaling.delayMix(val),
-    reverb: (val: number) => reverb.wet.value = paramScaling.reverb(val)
+    reverb: (val: number) => reverb.wet.value = paramScaling.reverb(val),
+    gain: (val: number) => gain.gain.value = paramScaling.gain(val),
+    pan: (val: number) => panner.pan.value = paramScaling.pan(val)
   }
 
 
@@ -248,7 +268,9 @@ export function getSynthChain() {
     delayTime: 0.5,
     delayFeedback: 0.1,
     delayMix: 0.0,
-    reverb: 0.1
+    reverb: 0.1,
+    gain: 0.2,
+    pan: 0.5
   }
   return {
     instrument: synth,
@@ -257,6 +279,8 @@ export function getSynthChain() {
     filter,
     delay,
     reverb,
+    gain,
+    panner,
     paramFuncs,
     paramNames: Object.keys(paramFuncs),
     defaultParams,
