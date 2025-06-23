@@ -10,6 +10,7 @@ export type SaveableProperties = {
   sliceText: string;
   startPhraseIdx: number;
   fxParams: Record<string, number>;
+  fxBanks: Record<string, number>[]; // 8 banks of FX parameters for this voice
 }
 
 export type VoiceState = {
@@ -21,7 +22,12 @@ export type VoiceState = {
   queue: Array<(ctx: TimeContext) => Promise<void>>;
   playingText: string;
   playingLineIdx: number;
+  currentFxBank: number; // current active FX bank for this voice
 };
+
+export type SliderBanks = {
+  topLevel: number[][]; // 8 banks of 8 sliders each
+}
 
 export type SonarAppState = {
   p5Instance: p5 | undefined
@@ -37,9 +43,12 @@ export type SonarAppState = {
   drawing: boolean
   voices: VoiceState[]
   sliders: number[]
+  sliderBanks: SliderBanks
+  currentTopLevelBank: number
   snapshots: Array<{
     sliders: number[]
     voices: SaveableProperties[]
+    sliderBanks: SliderBanks
   }>
   autoSaveInterval?: number
 }
@@ -61,6 +70,7 @@ export const appState: SonarAppState = {
       sliceText: '',
       startPhraseIdx: 0,
       fxParams: {},
+      fxBanks: Array.from({ length: 8 }, () => ({} as Record<string, number>))
     },
     /** true while the voice is actively playing (Play-button ON) */
     isPlaying: false,
@@ -72,9 +82,13 @@ export const appState: SonarAppState = {
     playingText: '',
     /** line index that is currently sounding ( –1  means "none")  */
     playingLineIdx: -1,
-    
+    currentFxBank: 0,
   })),
   sliders: Array.from({ length: 8 }, (): number => 0),
+  sliderBanks: {
+    topLevel: Array.from({ length: 8 }, () => Array.from({ length: 8 }, () => 0)),
+  },
+  currentTopLevelBank: 0,
   snapshots: [],
 } 
 

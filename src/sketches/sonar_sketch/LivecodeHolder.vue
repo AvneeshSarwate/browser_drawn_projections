@@ -43,11 +43,71 @@ const midiOuts: MIDIValOutput[] = [];
 let playNote: (pitch: number, velocity: number, ctx?: TimeContext, noteDur?: number, instInd?: number) => void = () => {}
 
 
+// Slider bank management functions
+const saveTopLevelSliderBank = (bankIndex: number) => {
+  if (bankIndex < 0 || bankIndex >= 8) return
+  appState.sliderBanks.topLevel[bankIndex] = [...appState.sliders]
+  console.log(`Top-level slider bank ${bankIndex + 1} saved`)
+}
+
+const loadTopLevelSliderBank = (bankIndex: number) => {
+  if (bankIndex < 0 || bankIndex >= 8) return
+  appState.sliders = [...appState.sliderBanks.topLevel[bankIndex]]
+  appState.currentTopLevelBank = bankIndex
+  console.log(`Top-level slider bank ${bankIndex + 1} loaded`)
+}
+
+const saveFxSliderBank = (voiceIndex: number, bankIndex: number) => {
+  if (voiceIndex < 0 || voiceIndex >= appState.voices.length) return
+  if (bankIndex < 0 || bankIndex >= 8) return
+  
+  const voice = appState.voices[voiceIndex]
+  voice.saveable.fxBanks[bankIndex] = JSON.parse(JSON.stringify(voice.saveable.fxParams))
+  console.log(`Voice ${voiceIndex + 1} FX bank ${bankIndex + 1} saved`)
+}
+
+const loadFxSliderBank = (voiceIndex: number, bankIndex: number) => {
+  if (voiceIndex < 0 || voiceIndex >= appState.voices.length) return
+  if (bankIndex < 0 || bankIndex >= 8) return
+  
+  const voice = appState.voices[voiceIndex]
+  voice.saveable.fxParams = JSON.parse(JSON.stringify(voice.saveable.fxBanks[bankIndex]))
+  voice.currentFxBank = bankIndex
+  // Update FX parameters for this voice
+  updatePianoFX(voiceIndex)
+  console.log(`Voice ${voiceIndex + 1} FX bank ${bankIndex + 1} loaded`)
+}
+
+const handleFxBankClick = (voiceIndex: number, bankIndex: number, event: MouseEvent) => {
+  if (event.shiftKey) {
+    // Shift+Click: Save to bank and select it
+    saveFxSliderBank(voiceIndex, bankIndex)
+    appState.voices[voiceIndex].currentFxBank = bankIndex
+  } else {
+    // Regular click: Load from bank
+    loadFxSliderBank(voiceIndex, bankIndex)
+  }
+}
+
+const handleTopLevelBankClick = (bankIndex: number, event: MouseEvent) => {
+  if (event.shiftKey) {
+    // Shift+Click: Save to bank and select it
+    saveTopLevelSliderBank(bankIndex)
+    appState.currentTopLevelBank = bankIndex
+  } else {
+    // Regular click: Load from bank
+    loadTopLevelSliderBank(bankIndex)
+  }
+}
+
 const saveSnapshot = () => {
   appState.snapshots.push({
     sliders: [...appState.sliders],
     //todo - need to keep an eye on how snapshots are formatted to avoid having to write manual cloning logic
-    voices: appState.voices.map(v => JSON.parse(JSON.stringify(v.saveable)) as SaveableProperties)
+    voices: appState.voices.map(v => JSON.parse(JSON.stringify(v.saveable)) as SaveableProperties),
+    sliderBanks: {
+      topLevel: appState.sliderBanks.topLevel.map(bank => [...bank])
+    }
   })
   console.log('Snapshot saved. Total snapshots:', appState.snapshots.length)
 }
@@ -55,10 +115,22 @@ const saveSnapshot = () => {
 //does not manage any playing state - only "safe" to load when not playing
 const loadSnapshotStateOnly = (ind: number) => {
   if (ind < 0 || ind >= appState.snapshots.length) return
-  appState.sliders = appState.snapshots[ind].sliders
+  const snapshot = appState.snapshots[ind]
+  
+  appState.sliders = [...snapshot.sliders]
   appState.voices.forEach((v, i) => {
-    v.saveable = appState.snapshots[ind].voices[i]
+    v.saveable = JSON.parse(JSON.stringify(snapshot.voices[i]))
   })
+  
+  // Load slider banks if they exist in the snapshot
+  if (snapshot.sliderBanks) {
+    appState.sliderBanks = {
+      topLevel: snapshot.sliderBanks.topLevel.map(bank => [...bank])
+    }
+  }
+  
+  // Update FX parameters for all voices
+  appState.voices.forEach((_, idx) => updatePianoFX(idx))
 }
 
 const buildClipFromLine = (line: string): { clip: AbletonClip, updatedLine: string } => {
@@ -302,6 +374,17 @@ const validateSnapshots = (snapshots: any, source: string) => {
           typeof voice.fxParams !== 'object') {
         throw new Error('Invalid voice format in snapshot')
       }
+      // Validate FX banks if present (optional for backwards compatibility)
+      if (voice.fxBanks && !Array.isArray(voice.fxBanks)) {
+        throw new Error('Invalid voice format: invalid fxBanks array')
+      }
+    }
+    
+    // Validate slider banks if present (optional for backwards compatibility)
+    if (snapshot.sliderBanks) {
+      if (!snapshot.sliderBanks.topLevel || !Array.isArray(snapshot.sliderBanks.topLevel)) {
+        throw new Error('Invalid snapshot format: invalid topLevel slider banks')
+      }
     }
   }
 }
@@ -350,7 +433,11 @@ const saveToLocalStorage = () => {
     // Save current live state
     const currentState = {
       sliders: [...appState.sliders],
-      voices: appState.voices.map(v => JSON.parse(JSON.stringify(v.saveable)) as SaveableProperties)
+      voices: appState.voices.map(v => JSON.parse(JSON.stringify(v.saveable)) as SaveableProperties),
+      sliderBanks: {
+        topLevel: appState.sliderBanks.topLevel.map(bank => [...bank])
+      },
+      currentTopLevelBank: appState.currentTopLevelBank
     }
     const currentStateStr = JSON.stringify(currentState)
     localStorage.setItem('sonar_current_state', currentStateStr)
@@ -395,6 +482,19 @@ const loadFromLocalStorage = () => {
         })
         console.log('Loaded voice states from localStorage')
       }
+      
+      // Load slider banks
+      if (currentState.sliderBanks) {
+        if (currentState.sliderBanks.topLevel && Array.isArray(currentState.sliderBanks.topLevel)) {
+          appState.sliderBanks.topLevel = currentState.sliderBanks.topLevel.map(bank => [...bank])
+          console.log('Loaded top-level slider banks from localStorage')
+        }
+      }
+      
+      // Load current bank indices
+      if (typeof currentState.currentTopLevelBank === 'number') {
+        appState.currentTopLevelBank = currentState.currentTopLevelBank
+      }
     } else {
       console.log('No saved current state found in localStorage')
     }
@@ -408,7 +508,7 @@ const loadFromLocalStorage = () => {
 onMounted(async() => {
   try {
     // Load from localStorage first (both snapshots and current state)
-    loadFromLocalStorage()
+    // loadFromLocalStorage()
     
     // Initialize test piano roll
     testPianoRoll = new PianoRoll<{}>('testPianoRollHolder', () => {}, () => {}, true)
@@ -440,9 +540,24 @@ onMounted(async() => {
           }
         });
       });
+      
+      // Initialize FX banks for each voice with proper parameter structure
+      appState.voices.forEach((voice, voiceIndex) => {
+        if (voiceIndex < instrumentChains.length) {
+          const availableParams = instrumentChains[voiceIndex].paramNames
+          voice.saveable.fxBanks.forEach((bank) => {
+            availableParams.forEach(paramName => {
+              if (bank[paramName] === undefined) {
+                bank[paramName] = instrumentChains[voiceIndex].defaultParams[paramName];
+              }
+            });
+          });
+        }
+      });
     }
 
     const lpd8 = midiInputs.get("LPD8 mk2")
+    const lpdButtonMap = [40, 41, 42, 43, 36, 37, 38, 49]
     const midiNorm = (val: number) => Math.floor(val / 127 * 1000) / 1000
     if (lpd8) {
       Array.from({ length: 8 }, (_, i) => i).forEach(ind => {
@@ -590,6 +705,21 @@ onUnmounted(() => {
     </div>
   </div>
   
+  <!-- Top Level Slider Banks -->
+  <div class="slider-banks-section">
+    <h4>Top Level Slider Banks (Click: Load, Shift+Click: Save)</h4>
+    <div class="top-level-bank-buttons">
+      <button 
+        v-for="bankIdx in 8" 
+        :key="bankIdx"
+        :class="{ 'active': appState.currentTopLevelBank === bankIdx - 1 }"
+        @click="handleTopLevelBankClick(bankIdx - 1, $event)"
+      >
+        {{ bankIdx }}
+      </button>
+    </div>
+  </div>
+  
   <div class="sliders-row">
     <div class="slider-column" v-for="(slider, idx) in appState.sliders" :key="idx">
       <div>{{ appState.sliders[idx] }}</div>
@@ -597,6 +727,8 @@ onUnmounted(() => {
       <label>slider {{ idx + 1 }}</label>
     </div>
   </div>
+  
+
   <div class="livecode-container">
     <div class="global-controls">
       <button @click="playCued">Play Cued</button>
@@ -675,6 +807,20 @@ onUnmounted(() => {
               @input="updatePianoFX(idx, paramName)" 
             />
           </div>
+        </div>
+      </details>
+      
+      <details open class="fx-banks">
+        <summary>FX Banks (Click: Load, Shift+Click: Save)</summary>
+        <div class="fx-bank-buttons">
+          <button 
+            v-for="bankIdx in 8" 
+            :key="bankIdx"
+            :class="{ 'active': voice.currentFxBank === bankIdx - 1 }"
+            @click="handleFxBankClick(idx, bankIdx - 1, $event)"
+          >
+            {{ bankIdx }}
+          </button>
         </div>
       </details>
     </div>
@@ -1027,6 +1173,58 @@ button:hover {
   background: #7ba9d9;
 }
 
+/* FX Banks */
+.fx-banks {
+  margin-top: 0.25rem;
+}
+
+.fx-banks summary {
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  margin-bottom: 0.25rem;
+  color: #f0f0f0;
+}
+
+.fx-bank-buttons {
+  display: flex;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
+  flex-wrap: wrap;
+}
+
+.fx-bank-buttons button {
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: 1px solid #555;
+  border-radius: 4px;
+  background: #333;
+  color: #e0e0e0;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fx-bank-buttons button:hover {
+  background: #444;
+  border-color: #666;
+}
+
+.fx-bank-buttons button.active {
+  background: #6a9bd1;
+  border-color: #4a7ba7;
+  color: #fff;
+}
+
+.fx-bank-buttons button.active:hover {
+  background: #7ba9d9;
+}
+
 /* Global input styling */
 input[type=checkbox] {
   margin: 0;
@@ -1116,6 +1314,115 @@ details summary {
   border-radius: 4px;
   border: 1px solid #e2e8f0;
   overflow: hidden;
+}
+
+/* Slider Banks Sections */
+.slider-banks-section {
+  margin: 0.5rem 0;
+  padding: 0.5rem;
+  background: #1a1a1a;
+  border-radius: 4px;
+  border: 1px solid #444;
+}
+
+.slider-banks-section h4 {
+  margin: 0 0 0.5rem 0;
+  color: #f0f0f0;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.bank-controls {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.bank-selector {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.bank-selector label {
+  font-size: 0.85rem;
+  color: #d0d0d0;
+}
+
+.bank-selector select {
+  padding: 0.2rem 0.3rem;
+  background: #2a2a2a;
+  border: 1px solid #555;
+  color: #e0e0e0;
+  border-radius: 2px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.bank-selector select:focus {
+  outline: none;
+  border-color: #6a9bd1;
+}
+
+.bank-buttons {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.bank-buttons button {
+  padding: 0.2rem 0.4rem;
+  font-size: 0.8rem;
+  border: 1px solid #555;
+  border-radius: 2px;
+  background: #333;
+  color: #e0e0e0;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.bank-buttons button:hover {
+  background: #444;
+}
+
+/* Top Level Bank Buttons */
+.top-level-bank-buttons {
+  display: flex;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
+  flex-wrap: wrap;
+}
+
+.top-level-bank-buttons button {
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: 1px solid #555;
+  border-radius: 4px;
+  background: #333;
+  color: #e0e0e0;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.top-level-bank-buttons button:hover {
+  background: #444;
+  border-color: #666;
+}
+
+.top-level-bank-buttons button.active {
+  background: #6a9bd1;
+  border-color: #4a7ba7;
+  color: #fff;
+}
+
+.top-level-bank-buttons button.active:hover {
+  background: #7ba9d9;
 }
 
 /* Scrollbar styling for dark theme */
