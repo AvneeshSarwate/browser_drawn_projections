@@ -45,70 +45,52 @@ let playNote: (pitch: number, velocity: number, ctx?: TimeContext, noteDur?: num
 
 // Slider bank management functions
 const saveTopLevelSliderBank = (bankIndex: number) => {
-  if (bankIndex < 0 || bankIndex >= 8) return
-  appState.sliderBanks.topLevel[bankIndex] = [...appState.sliders]
+  saveBank(appState.sliderBanks.topLevel, bankIndex, [...appState.sliders])
   console.log(`Top-level slider bank ${bankIndex + 1} saved`)
 }
 
 const loadTopLevelSliderBank = (bankIndex: number) => {
-  if (bankIndex < 0 || bankIndex >= 8) return
-  appState.sliders = [...appState.sliderBanks.topLevel[bankIndex]]
+  const bank = loadBank(appState.sliderBanks.topLevel, bankIndex)
+  if (!bank) return
+  appState.sliders = [...bank]
   appState.currentTopLevelBank = bankIndex
   console.log(`Top-level slider bank ${bankIndex + 1} loaded`)
 }
 
 const saveFxSliderBank = (voiceIndex: number, bankIndex: number) => {
   if (voiceIndex < 0 || voiceIndex >= appState.voices.length) return
-  if (bankIndex < 0 || bankIndex >= 8) return
-  
   const voice = appState.voices[voiceIndex]
-  voice.saveable.fxBanks[bankIndex] = JSON.parse(JSON.stringify(voice.saveable.fxParams))
+  saveBank(voice.saveable.fxBanks, bankIndex, voice.saveable.fxParams)
   console.log(`Voice ${voiceIndex + 1} FX bank ${bankIndex + 1} saved`)
 }
 
 const loadFxSliderBank = (voiceIndex: number, bankIndex: number) => {
   if (voiceIndex < 0 || voiceIndex >= appState.voices.length) return
-  if (bankIndex < 0 || bankIndex >= 8) return
-  
   const voice = appState.voices[voiceIndex]
-  voice.saveable.fxParams = JSON.parse(JSON.stringify(voice.saveable.fxBanks[bankIndex]))
+  const params = loadBank(voice.saveable.fxBanks, bankIndex)
+  if (!params) return
+  voice.saveable.fxParams = params
   voice.currentFxBank = bankIndex
-  // Update FX parameters for this voice
   updatePianoFX(voiceIndex)
   console.log(`Voice ${voiceIndex + 1} FX bank ${bankIndex + 1} loaded`)
 }
 
 const handleFxBankClick = (voiceIndex: number, bankIndex: number, event: MouseEvent) => {
-  if (event.shiftKey) {
-    // Shift+Click: Save to bank and select it
-    saveFxSliderBank(voiceIndex, bankIndex)
-    appState.voices[voiceIndex].currentFxBank = bankIndex
-  } else {
-    // Regular click: Load from bank
-    loadFxSliderBank(voiceIndex, bankIndex)
-  }
+  makeBankClickHandler(
+    (idx) => saveFxSliderBank(voiceIndex, idx),
+    (idx) => loadFxSliderBank(voiceIndex, idx),
+    (idx) => appState.voices[voiceIndex].currentFxBank = idx,
+  )(bankIndex, event)
 }
 
-const handleTopLevelBankClick = (bankIndex: number, event: MouseEvent) => {
-  if (event.shiftKey) {
-    // Shift+Click: Save to bank and select it
-    saveTopLevelSliderBank(bankIndex)
-    appState.currentTopLevelBank = bankIndex
-  } else {
-    // Regular click: Load from bank
-    loadTopLevelSliderBank(bankIndex)
-  }
-}
+const handleTopLevelBankClick = makeBankClickHandler(
+  saveTopLevelSliderBank,
+  loadTopLevelSliderBank,
+  (idx) => appState.currentTopLevelBank = idx,
+)
 
 const saveSnapshot = () => {
-  appState.snapshots.push({
-    sliders: [...appState.sliders],
-    //todo - need to keep an eye on how snapshots are formatted to avoid having to write manual cloning logic
-    voices: appState.voices.map(v => JSON.parse(JSON.stringify(v.saveable)) as SaveableProperties),
-    sliderBanks: {
-      topLevel: appState.sliderBanks.topLevel.map(bank => [...bank])
-    }
-  })
+  appState.snapshots.push(buildCurrentLiveState())
   console.log('Snapshot saved. Total snapshots:', appState.snapshots.length)
 }
 
@@ -339,7 +321,7 @@ const updatePianoFX = (voiceIdx: number, paramName?: string) => {
 }
 
 const saveSnapshotsToFile = () => {
-  const dataStr = JSON.stringify(appState.snapshots, null, 2)
+  const dataStr = serialize(appState.snapshots)
   const dataBlob = new Blob([dataStr], { type: 'application/json' })
   
   const link = document.createElement('a')
@@ -424,84 +406,44 @@ const loadSnapshotsFromFile = () => {
 }
 
 // Add localStorage functions for both snapshots and current live state
+const LOCAL_SNAP_KEY = 'sonar_snapshots'
+const LOCAL_STATE_KEY = 'sonar_current_state'
+
 const saveToLocalStorage = () => {
   try {
-    // Save snapshots
-    const snapshotsStr = JSON.stringify(appState.snapshots)
-    localStorage.setItem('sonar_snapshots', snapshotsStr)
-    
-    // Save current live state
-    const currentState = {
-      sliders: [...appState.sliders],
-      voices: appState.voices.map(v => JSON.parse(JSON.stringify(v.saveable)) as SaveableProperties),
-      sliderBanks: {
-        topLevel: appState.sliderBanks.topLevel.map(bank => [...bank])
-      },
-      currentTopLevelBank: appState.currentTopLevelBank
-    }
-    const currentStateStr = JSON.stringify(currentState)
-    localStorage.setItem('sonar_current_state', currentStateStr)
-    
-    console.log('State auto-saved to localStorage (snapshots + current state)')
-  } catch (error) {
-    console.error('Error saving to localStorage:', error)
+    localStorage.setItem(LOCAL_SNAP_KEY, serialize(appState.snapshots))
+    localStorage.setItem(LOCAL_STATE_KEY, serialize(buildCurrentLiveState()))
+    // console.log('State auto-saved to localStorage (snapshots + current state)')
+  } catch (err) {
+    console.error('Error saving to localStorage:', err)
   }
 }
 
 const loadFromLocalStorage = () => {
   try {
-    // Load snapshots
-    const savedSnapshots = localStorage.getItem('sonar_snapshots')
+    const savedSnapshots = localStorage.getItem(LOCAL_SNAP_KEY)
     if (savedSnapshots) {
-      const loadedSnapshots = JSON.parse(savedSnapshots)
-      validateSnapshots(loadedSnapshots, 'localStorage')
-      appState.snapshots = loadedSnapshots
-      console.log(`Loaded ${loadedSnapshots.length} snapshots from localStorage`)
+      const loaded = JSON.parse(savedSnapshots)
+      validateSnapshots(loaded, 'localStorage')
+      appState.snapshots = loaded
+      console.log(`Loaded ${loaded.length} snapshots from localStorage`)
     }
-    
-    // Load current live state
-    const savedCurrentState = localStorage.getItem('sonar_current_state')
-    if (savedCurrentState) {
-      const currentState = JSON.parse(savedCurrentState)
-      
-      // Validate current state structure
-      if (currentState.sliders && Array.isArray(currentState.sliders)) {
-        appState.sliders = [...currentState.sliders]
-        console.log('Loaded sliders from localStorage')
-      }
-      
-      if (currentState.voices && Array.isArray(currentState.voices)) {
-        // Validate voice structure and apply to existing voices
-        currentState.voices.forEach((savedVoice: SaveableProperties, index: number) => {
-          if (index < appState.voices.length && 
-              typeof savedVoice.sliceText === 'string' && 
-              typeof savedVoice.startPhraseIdx === 'number' &&
-              typeof savedVoice.fxParams === 'object') {
-            appState.voices[index].saveable = savedVoice
-          }
+
+    const savedState = localStorage.getItem(LOCAL_STATE_KEY)
+    if (savedState) {
+      const state = JSON.parse(savedState)
+      if (Array.isArray(state.sliders)) appState.sliders = [...state.sliders]
+      if (Array.isArray(state.voices)) {
+        state.voices.forEach((sv: SaveableProperties, i: number) => {
+          if (i < appState.voices.length) appState.voices[i].saveable = sv
         })
-        console.log('Loaded voice states from localStorage')
       }
-      
-      // Load slider banks
-      if (currentState.sliderBanks) {
-        if (currentState.sliderBanks.topLevel && Array.isArray(currentState.sliderBanks.topLevel)) {
-          appState.sliderBanks.topLevel = currentState.sliderBanks.topLevel.map(bank => [...bank])
-          console.log('Loaded top-level slider banks from localStorage')
-        }
-      }
-      
-      // Load current bank indices
-      if (typeof currentState.currentTopLevelBank === 'number') {
-        appState.currentTopLevelBank = currentState.currentTopLevelBank
-      }
-    } else {
-      console.log('No saved current state found in localStorage')
+      if (state.sliderBanks?.topLevel) appState.sliderBanks.topLevel = state.sliderBanks.topLevel.map((b: number[]) => [...b])
+      if (typeof state.currentTopLevelBank === 'number') appState.currentTopLevelBank = state.currentTopLevelBank
+      console.log('Loaded current live state from localStorage')
     }
-    
-  } catch (error) {
-    console.error('Error loading from localStorage:', error)
-    // Don't throw - just continue with default state
+  } catch (err) {
+    console.error('Error loading from localStorage:', err)
   }
 }
 
@@ -623,7 +565,7 @@ onMounted(async() => {
 
       // eslint-disable-next-line no-constant-condition
       while (true) {
-        console.log('launchQueue', launchQueue.length)
+        // console.log('launchQueue', launchQueue.length)
         await ctx.wait(1)
         launchQueue.forEach(cb => cb(ctx))
         launchQueue.length = 0
@@ -683,6 +625,49 @@ onUnmounted(() => {
   timeLoops.forEach(tl => tl.cancel())
 })
 
+
+// Generic bank helpers
+const deepClone = <T,>(obj: T): T => JSON.parse(JSON.stringify(obj))
+function saveBank<T>(bankArr: T[], bankIdx: number, data: T): void {
+  if (bankIdx < 0 || bankIdx >= bankArr.length) return
+  bankArr[bankIdx] = deepClone(data)
+}
+
+function loadBank<T>(bankArr: T[], bankIdx: number): T | undefined {
+  if (bankIdx < 0 || bankIdx >= bankArr.length) return
+  return deepClone(bankArr[bankIdx])
+}
+
+// Generic click-handler factory – hoisted because it is a function decl.
+function makeBankClickHandler(
+  saveFn: (idx: number) => void,
+  loadFn: (idx: number) => void,
+  selectFn?: (idx: number) => void
+) {
+  return (idx: number, ev: MouseEvent) => {
+    if (ev.shiftKey) {
+      saveFn(idx)
+      selectFn?.(idx)
+    } else {
+      loadFn(idx)
+    }
+  }
+}
+
+// JSON helper
+const serialize = (data: any) => JSON.stringify(data, null, 2)
+
+// Build a snapshot of the current editable state (sliders + voices + banks)
+function buildCurrentLiveState() {
+  return {
+    sliders: [...appState.sliders],
+    voices: appState.voices.map(v => deepClone(v.saveable) as SaveableProperties),
+    sliderBanks: {
+      topLevel: appState.sliderBanks.topLevel.map(bank => [...bank])
+    },
+    currentTopLevelBank: appState.currentTopLevelBank
+  }
+}
 </script>
 
 <template>

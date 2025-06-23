@@ -145,7 +145,8 @@ export function getPianoChain() {
     chorusWet: 0,
     chorusDepth: 0.3,
     chorusRate: 0.2,
-    filter: 1.0,
+    filterFreq: 1.0,
+    filterRes: 0.5,
     delayTime: 0.5,
     delayFeedback: 0.1,
     delayMix: 0,
@@ -153,6 +154,11 @@ export function getPianoChain() {
     gain: 0.2,
     pan: 0.5
   }
+
+  //INITIALIZE FX TO DEFAULT VALUES
+  Object.keys(defaultParams).forEach(param => {
+    paramFuncs[param as keyof typeof paramFuncs](defaultParams[param as keyof typeof defaultParams])
+  })
   
   return {
     instrument: piano,
@@ -264,7 +270,8 @@ export function getSynthChain() {
     chorusWet: 0.1,
     chorusDepth: 0.3,
     chorusRate: 0.2,
-    filter: 1.0,
+    filterFreq: 1.0,
+    filterRes: 0.5,
     delayTime: 0.5,
     delayFeedback: 0.1,
     delayMix: 0.0,
@@ -272,6 +279,13 @@ export function getSynthChain() {
     gain: 0.2,
     pan: 0.5
   }
+
+  //INITIALIZE FX TO DEFAULT VALUES
+  Object.keys(defaultParams).forEach(param => {
+    paramFuncs[param as keyof typeof paramFuncs](defaultParams[param as keyof typeof defaultParams])
+  })
+
+
   return {
     instrument: synth,
     distortion,

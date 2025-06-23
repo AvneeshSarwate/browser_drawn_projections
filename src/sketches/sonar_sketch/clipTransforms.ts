@@ -508,7 +508,18 @@ export function timeSlice(clip: AbletonClip, start: number, end: number): Ableto
 }
 
 export function durSlice(clip: AbletonClip, start: number, duration: number) {
-  return clip.timeSlice(start, start + duration)
+  //if duration > clip.duration, loop the clip
+  let newClip = clip.clone()
+  if (duration >= clip.duration) {
+    const numLoops = Math.ceil(duration / clip.duration) + 1
+    newClip = clip.loop(numLoops)
+    console.log("duration is greater than clip duration, looping", numLoops, "times")
+  } else {
+    console.log("duration is less than clip duration, not looping")
+  }
+
+  newClip = newClip.timeSlice(start, start + duration)
+  return newClip
 }
 
 // ─────────────────────────────────────────────
