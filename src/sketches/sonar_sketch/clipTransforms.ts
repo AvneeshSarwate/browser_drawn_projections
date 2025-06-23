@@ -272,7 +272,7 @@ export function accentClip(
 }
 
 export function timeStretch(clip: AbletonClip, factor: number): AbletonClip {
-  return clip.scale(factor);
+  return clip.scale(Math.max(0.01, factor));
 }
 
 export function endTimeQuantize(clip: AbletonClip, quantValue: number): AbletonClip {
