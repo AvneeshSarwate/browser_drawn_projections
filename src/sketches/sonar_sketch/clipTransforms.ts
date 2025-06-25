@@ -522,6 +522,15 @@ export function durSlice(clip: AbletonClip, start: number, duration: number) {
   return newClip
 }
 
+export function stacatto(clip: AbletonClip, duration: number): AbletonClip {
+  duration = Math.min(1, duration)
+  const newClip = clip.clone()
+  newClip.notes.forEach(note => {
+    note.duration = duration * note.duration
+  })
+  return newClip
+}
+
 // ─────────────────────────────────────────────
 // Symbol  →  Transformation-function registry
 // ─────────────────────────────────────────────
@@ -581,6 +590,13 @@ export const TRANSFORM_REGISTRY: Record<string, ClipTransform> = {
     transform: (clip, factor) => timeStretch(clip, factor),
     argParser: (args: string[]) => [numParse(args[0])],
     sliderScale: [n => n*3]
+  },
+
+  stac: {
+    name: 'stac',
+    transform: (clip, duration) => stacatto(clip, duration),
+    argParser: (args: string[]) => [numParse(args[0])],
+    sliderScale: [n => n]
   },
 
   q: {

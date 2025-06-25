@@ -54,6 +54,8 @@ debug1 : seg 1 : acc 2 : s_tr 5 : str 0.5
 
 
 
+
+## idea for a general format for combining linear + interactive composition
 each "scene" is sequencing text - parameters explicit for happy path - but user can take over (optional slider takeovers defined)
 different base-clips/functions/parameters in each scene (sliders get re-mapped)
 scenes have a cannonical order but listener can take over and move how they want

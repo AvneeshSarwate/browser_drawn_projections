@@ -450,7 +450,7 @@ const loadFromLocalStorage = () => {
 onMounted(async() => {
   try {
     // Load from localStorage first (both snapshots and current state)
-    // loadFromLocalStorage()
+    loadFromLocalStorage()
     
     // Initialize test piano roll
     testPianoRoll = new PianoRoll<{}>('testPianoRollHolder', () => {}, () => {}, true)
@@ -540,7 +540,7 @@ onMounted(async() => {
       })
     }
 
-    playNote = playNotePiano
+    playNote = playNoteMidi
 
     // Initialize FX parameters for all voices
     // appState.voices.forEach((_, idx) => updatePianoFX(idx))

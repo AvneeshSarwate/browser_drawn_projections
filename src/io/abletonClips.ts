@@ -130,6 +130,10 @@ export class AbletonClip {
     clone.notes.filter(note => note.position < start).forEach(note => note.position = start)
 
     clone.notes.forEach(note => note.position -= start)
+
+    //filter out notes with duration <= 0
+    clone.notes = clone.notes.filter(note => note.duration > 0)
+
     clone.duration = end - start
     return clone
   }
