@@ -1,7 +1,7 @@
 <!-- eslint-disable no-debugger -->
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
-import { type SonarAppState, appStateName, type VoiceState, globalStore, type SaveableProperties } from './appState';
+import { type SonarAppState, appStateName, type VoiceState, globalStore, type SaveableProperties, oscWebSocket } from './appState';
 import { inject, onMounted, onUnmounted, reactive, ref, computed } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
@@ -21,6 +21,12 @@ import * as Tone from 'tone'
 const appState = inject<SonarAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
 let timeLoops: CancelablePromisePoxy<any>[] = []
+
+const OSC_CLIENT_PORT = 6543
+oscWebSocket.send(JSON.stringify({ type: 'new_osc_client', port: OSC_CLIENT_PORT }))
+// oscWebSocket.send(JSON.stringify({ type: 'synth_param_osc', instrumentPath: '/drift1', voiceInd: 0, paramInd: 0, value: 0.5, portNum: OSC_CLIENT_PORT }))
+//todo wrap synth_param_osc in a function that also sends it out to window.max object 
+//in the case that the page is bundled in max - https://docs.cycling74.com/userguide/web_browser/#sending-messages
 
 const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromisePoxy<any> => {
   const loop = launch(block)
