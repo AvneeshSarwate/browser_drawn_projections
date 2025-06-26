@@ -317,7 +317,12 @@ export const TONE_AUDIO_START = new Promise((resolve) => {
 
 export const oscWebSocket = new WebSocket('ws://localhost:57130')
 const OSC_CLIENT_PORT = 6543
-oscWebSocket.send(JSON.stringify({ type: 'new_osc_client', port: OSC_CLIENT_PORT }))
+
+
+oscWebSocket.onopen = () => {
+  oscWebSocket.send(JSON.stringify({ type: 'new_osc_client', host: 'localhost', port: OSC_CLIENT_PORT }))
+}
+
 // oscWebSocket.send(JSON.stringify({ type: 'synth_param_osc', instrumentPath: '/drift1', voiceInd: 0, paramInd: 0, value: 0.5, portNum: OSC_CLIENT_PORT }))
 //todo wrap synth_param_osc in a function that also sends it out to window.max object 
 //in the case that the page is bundled in max - https://docs.cycling74.com/userguide/web_browser/#sending-messages

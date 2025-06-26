@@ -23,11 +23,11 @@ wss.on('connection', (ws) => {
     }
 
     if (data.type === 'new_osc_client') {
-      if (oscClientMap.has(data.id)) {
-        console.log('osc client already exists', data.id)
+      if (oscClientMap.has(data.port)) {
+        console.log('osc client already exists', data.port)
       } else {
         const client = new Client(data.host, data.port)
-        oscClientMap.set(data.id, client)
+        oscClientMap.set(data.port, client)
       }
     }
 

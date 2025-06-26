@@ -279,7 +279,7 @@ const stopAll = () => {
 
 const launchQueue: Array<(ctx: TimeContext) => Promise<void>> = []
 
-const instrumentChains = [getPianoChain(), getSynthChain(), getDriftChain(0)]
+const instrumentChains = [getPianoChain(), getSynthChain(), getDriftChain(1), getDriftChain(2)]
 
 // Piano roll test section state
 const testTransformInput = ref('clip1 : arp up 0.25 0.9 0 1')
