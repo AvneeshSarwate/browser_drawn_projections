@@ -1,7 +1,7 @@
 <!-- eslint-disable no-debugger -->
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
-import { type SonarAppState, appStateName, type VoiceState, globalStore, type SaveableProperties, oscWebSocket } from './appState';
+import { type SonarAppState, appStateName, type VoiceState, globalStore, type SaveableProperties } from './appState';
 import { inject, onMounted, onUnmounted, reactive, ref, computed } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
@@ -10,7 +10,7 @@ import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN
 import { AbletonClip, clipMap, INITIALIZE_ABLETON_CLIPS, type AbletonNote, quickNote } from '@/io/abletonClips';
 import { MIDI_READY, midiInputs, midiOutputs } from '@/io/midi';
 import { Scale } from '@/music/scale';
-import { getPiano, getPianoChain, TONE_AUDIO_START, getSynthChain } from '@/music/synths';
+import { getPiano, getPianoChain, TONE_AUDIO_START, getSynthChain, getDriftChain } from '@/music/synths';
 import { m2f } from '@/music/mpeSynth';
 import { TRANSFORM_REGISTRY } from './clipTransforms';
 import { clipData as staticClipData } from './clipData';
@@ -22,11 +22,6 @@ const appState = inject<SonarAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
 let timeLoops: CancelablePromisePoxy<any>[] = []
 
-const OSC_CLIENT_PORT = 6543
-oscWebSocket.send(JSON.stringify({ type: 'new_osc_client', port: OSC_CLIENT_PORT }))
-// oscWebSocket.send(JSON.stringify({ type: 'synth_param_osc', instrumentPath: '/drift1', voiceInd: 0, paramInd: 0, value: 0.5, portNum: OSC_CLIENT_PORT }))
-//todo wrap synth_param_osc in a function that also sends it out to window.max object 
-//in the case that the page is bundled in max - https://docs.cycling74.com/userguide/web_browser/#sending-messages
 
 const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromisePoxy<any> => {
   const loop = launch(block)
@@ -284,7 +279,7 @@ const stopAll = () => {
 
 const launchQueue: Array<(ctx: TimeContext) => Promise<void>> = []
 
-const instrumentChains = [getPianoChain(), getPianoChain(), getSynthChain(), getSynthChain()]
+const instrumentChains = [getPianoChain(), getSynthChain(), getDriftChain(0)]
 
 // Piano roll test section state
 const testTransformInput = ref('clip1 : arp up 0.25 0.9 0 1')

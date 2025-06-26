@@ -94,8 +94,6 @@ export const appState: SonarAppState = {
 
 export const appStateName = 'sonarAppState'
 
-export const oscWebSocket = new WebSocket('ws://localhost:57130')
-
 export const resolution = {
   width: 1000,
   height: 500

@@ -275,6 +275,8 @@ export function timeStretch(clip: AbletonClip, factor: number): AbletonClip {
   return clip.scale(Math.max(0.01, factor));
 }
 
+const stretchValues = [1/8, 1/4, 1/2, 1, 2, 4, 8, 16, 1/6, 1/3, 2/3, 1.5, 3, 6].sort((a, b) => a - b)
+
 export function endTimeQuantize(clip: AbletonClip, quantValue: number): AbletonClip {
   if (quantValue <= 0) return clip.clone();
   
@@ -590,6 +592,13 @@ export const TRANSFORM_REGISTRY: Record<string, ClipTransform> = {
     transform: (clip, factor) => timeStretch(clip, factor),
     argParser: (args: string[]) => [numParse(args[0])],
     sliderScale: [n => n*3]
+  },
+
+  qstr: {
+    name: 'qstr',
+    transform: (clip, factor) => timeStretch(clip, factor),
+    argParser: (args: string[]) => [numParse(args[0])],
+    sliderScale: [n => stretchValues[Math.floor(n*stretchValues.length)]]
   },
 
   stac: {

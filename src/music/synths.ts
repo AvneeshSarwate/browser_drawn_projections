@@ -315,4 +315,49 @@ export const TONE_AUDIO_START = new Promise((resolve) => {
   document.querySelector('body')?.addEventListener('click', audioStart)
 })
 
+export const oscWebSocket = new WebSocket('ws://localhost:57130')
+const OSC_CLIENT_PORT = 6543
+oscWebSocket.send(JSON.stringify({ type: 'new_osc_client', port: OSC_CLIENT_PORT }))
+// oscWebSocket.send(JSON.stringify({ type: 'synth_param_osc', instrumentPath: '/drift1', voiceInd: 0, paramInd: 0, value: 0.5, portNum: OSC_CLIENT_PORT }))
+//todo wrap synth_param_osc in a function that also sends it out to window.max object 
+//in the case that the page is bundled in max - https://docs.cycling74.com/userguide/web_browser/#sending-messages
 
+
+export function createClient(port: number) {
+  oscWebSocket.send(JSON.stringify({ type: 'new_osc_client', port: port }))
+}
+
+export function sendSynthParam(instrumentPath: string, voiceInd: number, paramInd: number, value: number) {
+  oscWebSocket.send(JSON.stringify({ type: 'synth_param_osc', instrumentPath: instrumentPath, voiceInd: voiceInd, paramInd: paramInd, value: value, portNum: OSC_CLIENT_PORT }))
+}
+
+export const getDriftChain = (instrumentInd: number) => {
+
+
+  const paramNames = []
+  const paramFuncs = {}
+  const defaultParams = {}
+  const paramScaling = {}
+
+  Array.from({ length: 16 }).forEach((_, i) => {
+    const paramName = `param${i}`
+    paramNames.push(paramName)
+    paramFuncs[paramName] = (val: number) => {
+      sendSynthParam(`/drift${instrumentInd}`, 0, i, val)
+      return val
+    }
+    defaultParams[paramName] = 0.5
+    paramScaling[paramName] = (val: number) => val * 127
+  })
+
+  return {
+    instrument: {
+      triggerAttack: (pitches: number[], time: number, velocity: number) => {},
+      triggerRelease: (pitch: number) => {}
+    },
+    paramNames,
+    paramFuncs,
+    defaultParams,
+    paramScaling
+  }
+}
