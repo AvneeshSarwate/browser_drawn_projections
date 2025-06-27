@@ -1,5 +1,38 @@
 # notes
 
+
+
+
+parameter ramping syntax
+debug1 : seg 1 : s_tr 1 : str 1 : q 1
+=> p1 0.5 0.8
+debug1 : seg 1 : s_tr 2 : str 1 : q 1
+=> p1 0.5 0.8
+=> p3 0.6 0.7
+debug1 : seg 1 : s_tr 3 : str 1 : q 1
+
+
+splits into 
+
+
+[
+	`debug1 : seg 1 : s_tr 1 : str 1 : q 1
+	=> p1 0.5 0.8`,
+
+	`debug1 : seg 1 : s_tr 2 : str 1 : q 1
+	=> p1 0.5 0.8
+	=> p3 0.6 0.7`
+
+	`debug1 : seg 1 : s_tr 3 : str 1 : q 1`
+]
+
+
+
+
+
+
+
+
 debug1 : seg 1 : s_tr 1 : str 1 : q 1
 debug1 : seg 1 : s_tr 2 : str 1 : q 1
 debug1 : seg 1 : s_tr 3 : str 1 : q 1

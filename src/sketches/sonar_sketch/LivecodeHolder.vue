@@ -132,12 +132,12 @@ const paramUsesSlider = (paramString: string) => {
   return typeof paramString === 'string' && /s\d+/.test(paramString)
 }
 
-const buildClipFromLine = (line: string): { clip: AbletonClip, updatedLine: string } => {
-  const { srcName, commandStrings } = splitTransformChainToCommandStrings(line)
-  if (!commandStrings.length) return { clip: undefined, updatedLine: line };
+const buildClipFromLine = (clipLine: string): { clip: AbletonClip, updatedClipLine: string } => {
+  const { srcName, commandStrings } = splitTransformChainToCommandStrings(clipLine)
+  if (!commandStrings.length) return { clip: undefined, updatedClipLine: clipLine };
 
   const srcClip = clipMap.get(srcName);
-  if (!srcClip) return { clip: undefined, updatedLine: line };
+  if (!srcClip) return { clip: undefined, updatedClipLine: clipLine };
 
   let curClip = srcClip.clone();
   const origClip = srcClip.clone();
@@ -167,14 +167,18 @@ const buildClipFromLine = (line: string): { clip: AbletonClip, updatedLine: stri
     updatedTokens.push(`${symbol} ${updatedParams.join(' ')}`);
   });
 
-  // Join tokens with " : " to reconstruct the line
-  const updatedLine = updatedTokens.join(' : ');
+  // Join tokens with " : " to reconstruct the main line
+  const updatedClipLine = updatedTokens.join(' : ');
   
-  return { clip: curClip, updatedLine };
+  return { clip: curClip, updatedClipLine };
 }
 
 const testTransform = () => {
-  const { clip } = buildClipFromLine(testTransformInput.value)
+  // For testing, just use the first group's clipLine
+  const groups = splitTextToGroups(testTransformInput.value)
+  if (!groups.length) return
+  
+  const { clip } = buildClipFromLine(groups[0].clipLine)
   if (!clip || !testPianoRoll) return
 
   // Convert AbletonClip to PianoRoll NoteInfo format
@@ -191,52 +195,116 @@ const testTransform = () => {
 }
 
 
+const parseRampLine = (rampLine: string) => {
+  const parts = rampLine.split(/\s+/).filter(Boolean)
+  const paramName = parts[0]
+  const startVal = parseFloat(parts[1])
+  const endVal = parseFloat(parts[2])
+  return { paramName, startVal, endVal }
+}
+
+const launchParamRamp = (paramName: string, startVal: number, endVal: number, duration: number, voiceIdx: number, ctx: TimeContext) => {
+  const startBeats = ctx.beats
+  const ramp = ctx.branch(async (ctx) => {
+    while (ctx.beats < startBeats + duration) {
+      const progress = (ctx.beats - startBeats) / duration
+      const val = startVal + (endVal - startVal) * progress
+
+      const voice = appState.voices[voiceIdx]
+      const instrumentChain = instrumentChains[mod2(voiceIdx, instrumentChains.length)];
+      const paramFunc = instrumentChain.paramFuncs[paramName]
+      if (!paramFunc) return
+      voice.saveable.fxParams[paramName] = val
+      paramFunc(val)
+      await ctx.wait(0.016)
+    }
+  })
+  return ramp
+}
+
 const playClips = async (
-  lines: string[],
+  groups: { clipLine: string, rampLines: string[] }[],
   ctx: TimeContext,
   voiceIdx: number,
   voiceState: VoiceState,
   firstLoop: boolean
 ) => {
-  const displayLines = lines.map(l => l)
-  voiceState.playingText = displayLines.join('\n')
+  const displayGroups = groups.map(g => ({...g}))
+  voiceState.playingText = displayGroups.map(g => 
+    g.rampLines.length > 0 ? [g.clipLine, ...g.rampLines].join('\n') : g.clipLine
+  ).join('\n')
 
-  for (const [idx, line] of lines.entries()) {
+  for (const [idx, group] of groups.entries()) {
     if (firstLoop && idx < voiceState.saveable.startPhraseIdx) continue //note this comes from a v-model.number on a text input, could have wierd edge cases
-
 
     if (!voiceState.isPlaying) break
     voiceState.playingLineIdx = idx
 
-    const { clip: curClip, updatedLine } = buildClipFromLine(line)
+    const { clip: curClip, updatedClipLine } = buildClipFromLine(group.clipLine)
     if (!curClip) continue
 
-    displayLines[idx] = updatedLine
-    voiceState.playingText = displayLines.join('\n')
+    // Update the display group with the processed clip line
+    displayGroups[idx] = { clipLine: updatedClipLine, rampLines: group.rampLines }
+    voiceState.playingText = displayGroups.map(g => 
+      g.rampLines.length > 0 ? [g.clipLine, ...g.rampLines].join('\n') : g.clipLine
+    ).join('\n')
 
     const notes = curClip.noteBuffer()
+    const ramps = group.rampLines.map(parseRampLine).map(r => launchParamRamp(r.paramName, r.startVal, r.endVal, curClip.duration, voiceIdx, ctx))
     for (const nextNote of notes) {
       await ctx.wait(nextNote.preDelta)
-      if (!voiceState.isPlaying) break
+      if (!voiceState.isPlaying) {
+        ramps.forEach(r => r.cancel())
+        break
+      }
       playNote(nextNote.note.pitch, nextNote.note.velocity, ctx, nextNote.note.duration, voiceIdx)
       if (nextNote.postDelta) await ctx.wait(nextNote.postDelta)
     }
-    if (!voiceState.isPlaying) break
+    if (!voiceState.isPlaying) {
+      ramps.forEach(r => r.cancel())
+      break
+    }
   }
   voiceState.playingLineIdx = -1
 }
 
-const splitTextToLines = (text: string) => {
-  return text.split('\n').map(l => l.trim()).filter(Boolean)
+const splitTextToGroups = (text: string): { clipLine: string, rampLines: string[] }[] => {
+  const allLines = text.split('\n').map(l => l.trim()).filter(Boolean)
+  const groups: { clipLine: string, rampLines: string[] }[] = []
+  let currentClipLine = ''
+  let currentRampLines: string[] = []
+  
+  for (const line of allLines) {
+    if (line.startsWith('=> ')) {
+      // This is a modifier line, add to current group
+      currentRampLines.push(line)
+    } else {
+      // This is a main line, start a new group
+      if (currentClipLine) {
+        // Save the previous group
+        groups.push({ clipLine: currentClipLine, rampLines: [...currentRampLines] })
+      }
+      // Start new group with this main line
+      currentClipLine = line
+      currentRampLines = []
+    }
+  }
+  
+  // Don't forget the last group
+  if (currentClipLine) {
+    groups.push({ clipLine: currentClipLine, rampLines: [...currentRampLines] })
+  }
+  
+  return groups
 }
 
 const startVoice = (voiceIdx: number) => {
   const v = appState.voices[voiceIdx]
 
   const playOnce = async (ctx: TimeContext, firstLoop: boolean) => {
-    const lines = splitTextToLines(v.saveable.sliceText)
-    if (!lines.length || !midiOuts[voiceIdx]) return
-    await playClips(lines, ctx, voiceIdx, v, firstLoop)
+    const groups = splitTextToGroups(v.saveable.sliceText)
+    if (!groups.length || !midiOuts[voiceIdx]) return
+    await playClips(groups, ctx, voiceIdx, v, firstLoop)
   }
 
   if (v.isLooping) {
