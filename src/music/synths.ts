@@ -348,7 +348,7 @@ export const getDriftChain = (instrumentInd: number) => {
     const paramName = `param${i}`
     paramNames.push(paramName)
     paramFuncs[paramName] = (val: number) => {
-      sendSynthParam(`/drift${instrumentInd}`, 0, i, val)
+      sendSynthParam(`/drift${instrumentInd}`, 0, i+1, val * 127)
       return val
     }
     defaultParams[paramName] = 0.5
