@@ -116,22 +116,35 @@ const loadSnapshotStateOnly = (ind: number) => {
   appState.voices.forEach((_, idx) => updatePianoFX(idx))
 }
 
-const buildClipFromLine = (line: string): { clip: AbletonClip, updatedLine: string } => {
+const splitTransformChainToCommandStrings = (line: string) => {
   const tokens = line.split(/\s*:\s*/).map((t) => t.trim()).filter(Boolean);
-  if (!tokens.length) return { clip: undefined, updatedLine: line };
+  return { srcName: tokens[0], commandStrings: tokens.slice(1) }
+}
 
-  const srcName = tokens[0];
+const parseCommandString = (cmdString: string) => {
+  const parts = cmdString.split(/\s+/).filter(Boolean);
+  const symbol = parts[0];
+  const params = parts.slice(1);
+  return { symbol, params }
+}
+
+const paramUsesSlider = (paramString: string) => {
+  return typeof paramString === 'string' && /s\d+/.test(paramString)
+}
+
+const buildClipFromLine = (line: string): { clip: AbletonClip, updatedLine: string } => {
+  const { srcName, commandStrings } = splitTransformChainToCommandStrings(line)
+  if (!commandStrings.length) return { clip: undefined, updatedLine: line };
+
   const srcClip = clipMap.get(srcName);
   if (!srcClip) return { clip: undefined, updatedLine: line };
 
   let curClip = srcClip.clone();
   const origClip = srcClip.clone();
-  let updatedTokens = [tokens[0]]; // Start with the clip name
+  let updatedTokens = [srcName]; // Start with the clip name
 
-  tokens.slice(1).forEach((cmdToken) => {
-    const parts = cmdToken.split(/\s+/).filter(Boolean);
-    const symbol = parts[0];
-    const params = parts.slice(1);
+  commandStrings.forEach((cmdString) => {
+    const { symbol, params } = parseCommandString(cmdString)
 
     const tf = TRANSFORM_REGISTRY[symbol as keyof typeof TRANSFORM_REGISTRY];
     const parsedParams = tf.argParser(params);
@@ -139,7 +152,7 @@ const buildClipFromLine = (line: string): { clip: AbletonClip, updatedLine: stri
 
     //if string arg is s1-s8, replace with the value of the corresponding slider
     parsedParams.forEach((param, index) => {
-      if (typeof param === 'string' && /s\d+/.test(param)) { //regex to check if the param is a slider reference
+      if (paramUsesSlider(param)) { 
         const sliderIndex = parseInt(param.slice(1)) - 1;
         if (sliderIndex >= 0 && sliderIndex < appState.sliders.length) {
           const scaledValue = tf.sliderScale[index](appState.sliders[sliderIndex], origClip);
@@ -213,11 +226,15 @@ const playClips = async (
   voiceState.playingLineIdx = -1
 }
 
+const splitTextToLines = (text: string) => {
+  return text.split('\n').map(l => l.trim()).filter(Boolean)
+}
+
 const startVoice = (voiceIdx: number) => {
   const v = appState.voices[voiceIdx]
 
   const playOnce = async (ctx: TimeContext, firstLoop: boolean) => {
-    const lines = v.saveable.sliceText.split('\n').map(l => l.trim()).filter(Boolean)
+    const lines = splitTextToLines(v.saveable.sliceText)
     if (!lines.length || !midiOuts[voiceIdx]) return
     await playClips(lines, ctx, voiceIdx, v, firstLoop)
   }
