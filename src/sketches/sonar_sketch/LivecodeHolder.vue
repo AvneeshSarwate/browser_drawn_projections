@@ -17,6 +17,7 @@ import { clipData as staticClipData } from './clipData';
 import type { MIDIValOutput } from '@midival/core';
 import { PianoRoll, type NoteInfo } from '@/music/pianoRoll'
 import * as Tone from 'tone'
+import { evaluate } from './sliderExprParser'
 
 const appState = inject<SonarAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
@@ -126,10 +127,37 @@ const parseCommandString = (cmdString: string) => {
   const symbol = parts[0];
   const params = parts.slice(1);
   return { symbol, params }
+  // Note: slider expressions cannot contain spaces (e.g., use "s1*2+s2" not "s1 * 2 + s2")
 }
 
-const paramUsesSlider = (paramString: string) => {
+const paramUsesSliderExpression = (paramString: string) => {
   return typeof paramString === 'string' && /s\d+/.test(paramString)
+}
+
+const evaluateSliderExpression = (expression: string, sliderScaleFunc: (val: number, clip: AbletonClip) => number, origClip: AbletonClip) => {
+  // Build variables map with current slider values
+  const sliderVars: Record<string, number> = {}
+  
+  // Extract all slider references (s1, s2, etc.) from the expression
+  const sliderMatches = expression.match(/s\d+/g) || []
+  
+  for (const sliderRef of sliderMatches) {
+    const sliderIndex = parseInt(sliderRef.slice(1)) - 1
+    if (sliderIndex >= 0 && sliderIndex < appState.sliders.length) {
+      // Use scaled slider value for the expression evaluation
+      sliderVars[sliderRef] = sliderScaleFunc(appState.sliders[sliderIndex], origClip)
+    }
+  }
+  
+  try {
+    // Evaluate the expression with scaled slider values
+    const result = evaluate(expression, sliderVars)
+    
+    return { success: true, value: result }
+  } catch (error) {
+    console.warn('Failed to evaluate slider expression:', expression, error)
+    return { success: false, value: 0, rawValue: 0 }
+  }
 }
 
 const buildClipFromLine = (clipLine: string): { clip: AbletonClip, updatedClipLine: string } => {
@@ -150,14 +178,13 @@ const buildClipFromLine = (clipLine: string): { clip: AbletonClip, updatedClipLi
     const parsedParams = tf.argParser(params);
     const updatedParams = [...params]; // Clone params for updating
 
-    //if string arg is s1-s8, replace with the value of the corresponding slider
+    //if string arg contains slider expressions, evaluate and replace with the computed value
     parsedParams.forEach((param, index) => {
-      if (paramUsesSlider(param)) { 
-        const sliderIndex = parseInt(param.slice(1)) - 1;
-        if (sliderIndex >= 0 && sliderIndex < appState.sliders.length) {
-          const scaledValue = tf.sliderScale[index](appState.sliders[sliderIndex], origClip);
-          parsedParams[index] = scaledValue;
-          updatedParams[index] = scaledValue.toFixed(2); // Format for readability
+      if (paramUsesSliderExpression(param)) { 
+        const result = evaluateSliderExpression(param, tf.sliderScale[index], origClip);
+        if (result.success) {
+          parsedParams[index] = result.value;
+          updatedParams[index] = result.value.toFixed(2); // Format for readability
         }
       }
     });
@@ -367,7 +394,7 @@ const launchQueue: Array<(ctx: TimeContext) => Promise<void>> = []
 const instrumentChains = [getPianoChain(), getSynthChain(), getDriftChain(1), getDriftChain(2)]
 
 // Piano roll test section state
-const testTransformInput = ref('clip1 : arp up 0.25 0.9 0 1')
+const testTransformInput = ref('clip1 : arp up s1*0.5+0.1 s2^2 0 1')
 let testPianoRoll: PianoRoll<{}> | undefined = undefined
 
 // Snapshot selection state
