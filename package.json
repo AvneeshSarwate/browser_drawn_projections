@@ -15,6 +15,9 @@
     "oscBridge": "npx ts-node node_src/oscBridge.ts"
   },
   "dependencies": {
+    "@codemirror/lang-javascript": "^6.2.4",
+    "@codemirror/state": "^6.5.2",
+    "@codemirror/view": "^6.38.0",
     "@elemaudio/core": "^3.2.1",
     "@elemaudio/web-renderer": "^3.2.3",
     "@grame/faustwasm": "0.7.6",
@@ -31,6 +34,7 @@
     "ableton-js": "^3.6.0",
     "acorn": "^8.11.3",
     "babylonjs": "^6.19.1",
+    "codemirror": "^6.0.2",
     "dat.gui": "^0.7.9",
     "earcut": "^3.0.0",
     "fast-xml-parser": "^4.3.2",

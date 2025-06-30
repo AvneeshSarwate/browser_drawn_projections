@@ -2,7 +2,7 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
 import { type SonarAppState, appStateName, type VoiceState, globalStore, type SaveableProperties } from './appState';
-import { inject, onMounted, onUnmounted, reactive, ref, computed } from 'vue';
+import { inject, onMounted, onUnmounted, reactive, ref, computed, watch } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
@@ -140,6 +140,7 @@ const evaluateSliderExpression = (expression: string, sliderScaleFunc: (val: num
   
   // Extract all slider references (s1, s2, etc.) from the expression
   const sliderMatches = expression.match(/s\d+/g) || []
+  const usedSliders = new Set(sliderMatches)
   
   for (const sliderRef of sliderMatches) {
     const sliderIndex = parseInt(sliderRef.slice(1)) - 1
@@ -153,14 +154,14 @@ const evaluateSliderExpression = (expression: string, sliderScaleFunc: (val: num
     // Evaluate the expression with scaled slider values
     const result = evaluate(expression, sliderVars)
     
-    return { success: true, value: result }
+    return { success: true, value: result, usedSliders }
   } catch (error) {
     console.warn('Failed to evaluate slider expression:', expression, error)
     return { success: false, value: 0, rawValue: 0 }
   }
 }
 
-const buildClipFromLine = (clipLine: string): { clip: AbletonClip, updatedClipLine: string } => {
+const buildClipFromLine = (clipLine: string, skipClipTransform: boolean = false): { clip: AbletonClip, updatedClipLine: string } => {
   const { srcName, commandStrings } = splitTransformChainToCommandStrings(clipLine)
   if (!commandStrings.length) return { clip: undefined, updatedClipLine: clipLine };
 
@@ -184,12 +185,13 @@ const buildClipFromLine = (clipLine: string): { clip: AbletonClip, updatedClipLi
         const result = evaluateSliderExpression(param, tf.sliderScale[index], origClip);
         if (result.success) {
           parsedParams[index] = result.value;
-          updatedParams[index] = result.value.toFixed(2); // Format for readability
+          const usedSliders = Array.from(result.usedSliders).join('')
+          updatedParams[index] = result.value.toFixed(2) + '-' + usedSliders; // Format for readability
         }
       }
     });
 
-    if (tf) curClip = tf.transform(curClip, ...parsedParams);
+    if (tf && !skipClipTransform) curClip = tf.transform(curClip, ...parsedParams);
     // Add the updated command token to the updatedTokens array
     updatedTokens.push(`${symbol} ${updatedParams.join(' ')}`);
   });
@@ -259,9 +261,7 @@ const playClips = async (
   firstLoop: boolean
 ) => {
   const displayGroups = groups.map(g => ({...g}))
-  voiceState.playingText = displayGroups.map(g => 
-    g.rampLines.length > 0 ? [g.clipLine, ...g.rampLines].join('\n') : g.clipLine
-  ).join('\n')
+  voiceState.playingText = computeDisplayTextForVoice(voiceState)
 
   // Build map of group index to clipLine display index once before the loop
   const buildGroupToLineIndexMap = (groups: { clipLine: string, rampLines: string[] }[]) => {
@@ -290,9 +290,6 @@ const playClips = async (
 
     // Update the display group with the processed clip line
     displayGroups[idx] = { clipLine: updatedClipLine, rampLines: group.rampLines }
-    voiceState.playingText = displayGroups.map(g => 
-      g.rampLines.length > 0 ? [g.clipLine, ...g.rampLines].join('\n') : g.clipLine
-    ).join('\n')
 
     const notes = curClip.noteBuffer()
     const ramps = group.rampLines.map(parseRampLine).map(r => launchParamRamp(r.paramName, r.startVal, r.endVal, curClip.duration, voiceIdx, ctx))
@@ -800,6 +797,60 @@ function buildCurrentLiveState() {
     currentTopLevelBank: appState.currentTopLevelBank
   }
 }
+
+// ---------------------------------------------------------------------------
+//  Debounced, reactive computation of the display text for every voice
+// ---------------------------------------------------------------------------
+
+// Simple debounce helper (no external dependency)
+function debounce<T extends (...args: any[]) => void>(fn: T, waitMs: number): T {
+  let timeout: ReturnType<typeof setTimeout> | undefined
+  return function(this: any, ...args: any[]) {
+    if (timeout) clearTimeout(timeout)
+    timeout = setTimeout(() => fn.apply(this, args), waitMs)
+  } as T
+}
+
+// Produce the fully-resolved slice text (slider expressions evaluated)
+const computeDisplayTextForVoice = (voice: VoiceState): string => {
+  const groups = splitTextToGroups(voice.saveable.sliceText)
+  const lines: string[] = []
+
+  groups.forEach(group => {
+    const { updatedClipLine } = buildClipFromLine(group.clipLine, true)
+    if (group.rampLines.length) {
+      lines.push(updatedClipLine, ...group.rampLines)
+    } else {
+      lines.push(updatedClipLine)
+    }
+  })
+
+  return lines.join('\n')
+}
+
+// Set up a debounced watcher per-voice that recomputes the display text at
+// most 10×/second whenever its slice definition OR any slider value changes.
+appState.voices.forEach((voice, vIdx) => {
+  const debouncedUpdate = debounce(() => {
+    voice.playingText = computeDisplayTextForVoice(voice)
+  }, 100) // 100 ms → 10 Hz max
+
+  // Initial computation
+  debouncedUpdate()
+
+  // React to changes in the slice text of THIS voice …
+  watch(
+    () => voice.saveable.sliceText,
+    () => debouncedUpdate()
+  )
+
+  // …and to any change in the global slider array
+  watch(
+    () => appState.sliders,
+    () => debouncedUpdate(),
+    { deep: true }
+  )
+})
 </script>
 
 <template>
