@@ -23,7 +23,8 @@ function parseXmlNote(xmlNote: any, pitchStr: string): AbletonNote {
   const velocity = Number(xmlNote["@_Velocity"]);
   const offVelocity = Number(xmlNote["@_OffVelocity"]);
   const probability = Number(xmlNote["@_Probability"]);
-  const isEnabled = xmlNote["@_IsEnabled"] == "true";
+  const isEnabled = !(xmlNote["@_IsEnabled"] == "false");
+  // console.log("isEnabled", isEnabled, xmlNote["@_IsEnabled"])
   const position = Number(xmlNote["@_Time"]);
   return { pitch, duration, velocity, offVelocity, probability, position, isEnabled };
 }

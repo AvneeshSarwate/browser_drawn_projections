@@ -570,7 +570,7 @@ onMounted(async() => {
     
     await MIDI_READY
     console.log('midi ready')
-    await INITIALIZE_ABLETON_CLIPS('src/sketches/sonar_sketch/piano_melodies Project/piano_melodies.als', staticClipData, false)
+    await INITIALIZE_ABLETON_CLIPS('src/sketches/sonar_sketch/piano_melodies Project/piano_melodies_mapped.als', staticClipData, false)
     console.log('clips ready')
     await TONE_AUDIO_START
     console.log('tone ready')
