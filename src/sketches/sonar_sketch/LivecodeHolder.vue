@@ -261,11 +261,27 @@ const playClips = async (
     g.rampLines.length > 0 ? [g.clipLine, ...g.rampLines].join('\n') : g.clipLine
   ).join('\n')
 
+  // Build map of group index to clipLine display index once before the loop
+  const buildGroupToLineIndexMap = (groups: { clipLine: string, rampLines: string[] }[]) => {
+    const map = new Map<number, number>();
+    let lineIndex = 0;
+    for (let i = 0; i < groups.length; i++) {
+      map.set(i, lineIndex);
+      lineIndex += 1; // for the clipLine
+      lineIndex += groups[i].rampLines.length; // for the rampLines
+    }
+    return map;
+  }
+
+  let groupToLineIndexMap = buildGroupToLineIndexMap(displayGroups);
+
   for (const [idx, group] of groups.entries()) {
     if (firstLoop && idx < voiceState.saveable.startPhraseIdx) continue //note this comes from a v-model.number on a text input, could have wierd edge cases
 
     if (!voiceState.isPlaying) break
-    voiceState.playingLineIdx = idx
+    
+    // Look up the display line index from the pre-built map
+    voiceState.playingLineIdx = groupToLineIndexMap.get(idx)!
 
     const { clip: curClip, updatedClipLine } = buildClipFromLine(group.clipLine)
     if (!curClip) continue
