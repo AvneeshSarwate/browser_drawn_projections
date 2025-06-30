@@ -223,16 +223,17 @@ const testTransform = () => {
 
 
 const parseRampLine = (rampLine: string) => {
-  const parts = rampLine.split(/\s+/).filter(Boolean)
-  const paramName = parts[0]
-  const startVal = parseFloat(parts[1])
-  const endVal = parseFloat(parts[2])
+  const parts = rampLine.split(/\s+/).filter(Boolean) //[=>, param, startVal, endVal]
+  const paramName = parts[1]
+  const startVal = parseFloat(parts[2])
+  const endVal = parseFloat(parts[3])
   return { paramName, startVal, endVal }
 }
 
 const launchParamRamp = (paramName: string, startVal: number, endVal: number, duration: number, voiceIdx: number, ctx: TimeContext) => {
   const startBeats = ctx.beats
   const ramp = ctx.branch(async (ctx) => {
+    // console.log("ramp", paramName, startVal, endVal, duration)
     while (ctx.beats < startBeats + duration) {
       const progress = (ctx.beats - startBeats) / duration
       const val = startVal + (endVal - startVal) * progress
@@ -240,6 +241,7 @@ const launchParamRamp = (paramName: string, startVal: number, endVal: number, du
       const voice = appState.voices[voiceIdx]
       const instrumentChain = instrumentChains[mod2(voiceIdx, instrumentChains.length)];
       const paramFunc = instrumentChain.paramFuncs[paramName]
+      console.log("ramp", paramName, val, paramFunc)
       if (!paramFunc) return
       voice.saveable.fxParams[paramName] = val
       paramFunc(val)
@@ -419,8 +421,9 @@ const selectedSnapshot = ref(-1)
 // Function to get a readable name for each parameter
 const formatParamName = (paramName: string) => {
   return paramName
-    .replace(/([A-Z])/g, ' $1') // Add space before capital letters
-    .replace(/^./, str => str.toUpperCase()); // Capitalize first letter
+  // return paramName
+  //   .replace(/([A-Z])/g, ' $1') // Add space before capital letters
+  //   .replace(/^./, str => str.toUpperCase()); // Capitalize first letter
 };
 
 // Function to get scaled parameter value using the modular scaling functions
