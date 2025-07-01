@@ -26,7 +26,7 @@ debug1 : seg 1 : s_tr 2 : str 1 : q 1
 debug1 : seg 1 : s_tr 3 : str 1 : q 1
 ```
 
-could have conditials added to it, and would be expressed in JavaScript as:
+could have conditials added to it, and would be executed in JavaScript as:
 
 (this is the "runtime version" of the code)
 ```javascript
@@ -71,10 +71,19 @@ line(`debug1 : seg 1 : s_tr 3 : str 1 : q 1`, some_uuid_3)
 
 The preprocessor will then create a map between the UUIDs and the lines of the input code, so that when the `runLine` function is called, it can highlight the line in the editor.
 
-There are 2 different editors, the input time editor. the input time editor is monaco and used for editting the code with full typescript support. the visualzie time editor is codemirror and used for its easy decorator API. 
+The visualize time code will then be transformed into the runtime version of the code, which is what will finally be executed. It will run in a loop with an outer structure like the existing pseudo scripting language. Use the Function constructor to create the runtime version of the code, so that it can be executed in a controlled environment.
+
+There are 2 different editors, the input time editor. the input time editor is monaco and used for editting the code with full typescript support. the visualzie time editor is codemirror and used for its easy decorator API. Once playback starts, the input time editor is hidden and the visualize time editor is shown.
 
 After the initial code is submitted, the input time version of the code is converted to the visualize time version of the code. 
 The visualize time version of the code is then executed, and the UUIDs of the executed lines are used to see which lines will actually execute. The view then switches from the input time editor to the visualize time editor. The lines to be executed are then highlighted in the visualize time editor.
 
 Finally, the runtime version of the code is executed, and as the code is executed, the line currently running is highlighted in the visualize time editor.
 
+To see an example how monaco is integrated into these sketches, see src/sketches/pianoRollLivecoding/LivecodeHolder.vue. 
+
+Search the web for examples of how to use codemirror with decorators.
+
+Keep code organized, but don't split it up into multiple files. This is a prototype so ideal organization keeps components separated without the headache of refactoring across modules.
+
+When in doubt, use web search to find examples of how to do something. Also, remember that this is UI code, so there is no automated testing to run. 
