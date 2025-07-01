@@ -2,7 +2,7 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
 import { type SonarAppState, appStateName, type VoiceState, globalStore, type SaveableProperties } from './appState';
-import { inject, onMounted, onUnmounted, reactive, ref, computed, watch } from 'vue';
+import { inject, onMounted, onUnmounted, reactive, ref, computed, watch, nextTick } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
@@ -18,10 +18,34 @@ import type { MIDIValOutput } from '@midival/core';
 import { PianoRoll, type NoteInfo } from '@/music/pianoRoll'
 import * as Tone from 'tone'
 import { evaluate } from './sliderExprParser'
+import * as monaco from 'monaco-editor'
+import { EditorView, basicSetup } from 'codemirror'
+import { javascript } from '@codemirror/lang-javascript'
+import { oneDark } from '@codemirror/theme-one-dark'
+import { Decoration, type DecorationSet } from '@codemirror/view'
+import { StateField, StateEffect } from '@codemirror/state'
+import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
+import TsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
+
+// Monaco environment setup
+self.MonacoEnvironment = {
+  getWorker(_, label) {
+    if (label === 'typescript' || label === 'javascript') {
+      return new TsWorker();
+    }
+    return new EditorWorker();
+  }
+};
 
 const appState = inject<SonarAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
 let timeLoops: CancelablePromisePoxy<any>[] = []
+
+// Editor state - arrays to handle multiple voices
+const monacoEditors: (monaco.editor.IStandaloneCodeEditor | undefined)[] = []
+const codeMirrorEditors: (EditorView | undefined)[] = []
+const isJavascriptMode = ref(true)
+const showInputEditor = ref([true, true, true, true]) // Per-voice input editor visibility
 
 
 const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromisePoxy<any> => {
@@ -243,7 +267,7 @@ const launchParamRamp = (paramName: string, startVal: number, endVal: number, du
       const voice = appState.voices[voiceIdx]
       const instrumentChain = instrumentChains[mod2(voiceIdx, instrumentChains.length)];
       const paramFunc = instrumentChain.paramFuncs[paramName]
-      console.log("ramp", paramName, val, paramFunc)
+      // console.log("ramp", paramName, val, paramFunc)
       if (!paramFunc) return
       voice.saveable.fxParams[paramName] = val
       paramFunc(val)
@@ -340,13 +364,476 @@ const splitTextToGroups = (text: string): { clipLine: string, rampLines: string[
   return groups
 }
 
+// Editor initialization and management
+const initializeMonacoEditor = (containerId: string, voiceIndex: number) => {
+  const container = document.getElementById(containerId)
+  if (!container) return
+
+  // TypeScript definitions for the line function
+  const lineTypeDef = `
+declare function line(text: string): void;
+declare const ctx: TimeContext;
+`
+
+  monaco.languages.typescript.javascriptDefaults.addExtraLib(lineTypeDef, 'line-types.d.ts')
+  
+  const defaultCode = `// JavaScript livecoding with line() function
+// Use conditionals and loops around line() calls
+
+const playFirstPattern = true
+const playAlternate = false
+
+if (playFirstPattern) {
+  line(\`debug1 : seg 1 : s_tr 1 : str 1 : q 1
+       => param1 0.5 0.8\`)
+}
+
+line(\`debug1 : seg 1 : s_tr 2 : str 1 : q 1
+     => param1 0.5 0.8
+     => param3 0.6 0.7\`)
+
+if (playAlternate) {
+  line(\`debug1 : seg 1 : s_tr 4 : str 1 : q 1\`)
+}
+
+line(\`debug1 : seg 1 : s_tr 3 : str 1 : q 1\`)
+`
+
+  const editor = monaco.editor.create(container, {
+    value: defaultCode,
+    language: 'javascript',
+    theme: 'vs-dark',
+    automaticLayout: true,
+    minimap: { enabled: false },
+    fontSize: 14,
+    lineNumbers: 'on',
+    wordWrap: 'on'
+  })
+  
+  monacoEditors[voiceIndex] = editor
+}
+
+const initializeCodeMirrorEditor = (containerId: string, voiceIndex: number) => {
+  const container = document.getElementById(containerId)
+  if (!container) return
+
+  const editor = new EditorView({
+    extensions: [
+      basicSetup,
+      javascript(),
+      oneDark,
+      lineHighlightField,
+      EditorView.editable.of(false) // Read-only for visualization
+    ],
+    parent: container
+  })
+  
+  codeMirrorEditors[voiceIndex] = editor
+}
+
+const switchToInputMode = (voiceIndex: number) => {
+  showInputEditor.value[voiceIndex] = true
+  // Copy content from CodeMirror to Monaco if needed
+}
+
+const switchToVisualizeMode = (voiceIndex: number) => {
+  showInputEditor.value[voiceIndex] = false
+  // Copy content from Monaco to CodeMirror
+  const monacoEditor = monacoEditors[voiceIndex]
+  const codeMirrorEditor = codeMirrorEditors[voiceIndex]
+  
+  if (monacoEditor && codeMirrorEditor) {
+    const content = monacoEditor.getValue()
+    codeMirrorEditor.dispatch({
+      changes: {
+        from: 0,
+        to: codeMirrorEditor.state.doc.length,
+        insert: content
+      }
+    })
+  }
+}
+
+// Code transformation pipeline
+type UUIDMapping = {
+  uuid: string
+  sourceLineNumber: number
+  sourceLineText: string
+  endLineNumber?: number  // For multiline spans
+}
+
+const uuidMappings = new Map<string, UUIDMapping[]>() // voiceIndex -> mappings
+
+const generateUUID = (): string => {
+  return crypto.randomUUID()
+}
+
+// Step 1: Preprocessor - transforms line() calls to include UUIDs
+const preprocessJavaScript = (inputCode: string, voiceIndex: number): { visualizeCode: string, mappings: UUIDMapping[] } => {
+  const mappings: UUIDMapping[] = []
+  let processedCode = inputCode
+  
+  // Find all line(` patterns and their matching `)
+  const lineCallMatches: { start: number, end: number }[] = []
+  
+  let searchIndex = 0
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const start = processedCode.indexOf('line(`', searchIndex)
+    if (start === -1) break
+    
+    // Find the matching `)` - look for backtick followed by closing paren
+    const backtickEnd = processedCode.indexOf('`)', start + 6)
+    if (backtickEnd === -1) {
+      searchIndex = start + 6
+      continue
+    }
+    
+    const end = backtickEnd + 2 // Include the `)
+    
+    lineCallMatches.push({ start, end })
+    searchIndex = end
+  }
+  
+  // Process matches from end to beginning to avoid offset issues
+  for (let i = lineCallMatches.length - 1; i >= 0; i--) {
+    const match = lineCallMatches[i]
+    const uuid = generateUUID()
+    
+    // Get the complete line() call
+    const fullCallText = processedCode.substring(match.start, match.end)
+    
+    // Calculate line numbers for the span
+    const beforeCall = processedCode.substring(0, match.start)
+    const startLineNumber = beforeCall.split('\n').length
+    const endLineNumber = startLineNumber + fullCallText.split('\n').length - 1
+    
+    // Create mapping
+    mappings.unshift({
+      uuid,
+      sourceLineNumber: startLineNumber,
+      sourceLineText: fullCallText,
+      endLineNumber: endLineNumber
+    })
+    
+    // Extract just the template literal part
+    const templateStart = processedCode.indexOf('`', match.start)
+    const templateEnd = processedCode.indexOf('`)', match.start) + 1
+    const templateLiteral = processedCode.substring(templateStart, templateEnd)
+    
+    // Replace with UUID version
+    const replacement = `line(${templateLiteral}, "${uuid}")`
+    processedCode = processedCode.substring(0, match.start) + replacement + processedCode.substring(match.end)
+  }
+  
+  uuidMappings.set(voiceIndex.toString(), mappings)
+  return { visualizeCode: processedCode, mappings }
+}
+
+// Step 2: Runtime transformer - converts line() calls to runLine() calls
+const transformToRuntime = (visualizeCode: string, voiceIndex: number): string => {
+  let runtimeCode = visualizeCode
+  
+  // Find and replace line() calls that may span multiple lines
+  const lineCallRegex = /line\s*\(\s*(`(?:[^`\\]|\\.)*`)\s*,\s*"([^"]+)"\s*\)/gs
+  
+  runtimeCode = runtimeCode.replace(
+    lineCallRegex,
+    `await runLine($1, ctx, "$2", ${voiceIndex})`
+  )
+  
+  return runtimeCode
+}
+
+// Step 3: Create executable function from JavaScript code
+const createExecutableFunction = (inputCode: string, voiceIndex: number): { 
+  executableFunc: Function | null, 
+  visualizeCode: string, 
+  mappings: UUIDMapping[] 
+} => {
+  try {
+    const { visualizeCode, mappings } = preprocessJavaScript(inputCode, voiceIndex)
+    const runtimeCode = transformToRuntime(visualizeCode, voiceIndex)
+    
+    // Create async function with proper context  
+    const executableFunc = new Function('ctx', 'runLine', `
+      async function execute() {
+        ${runtimeCode}
+      }
+      return execute();
+    `)
+    
+    return { executableFunc, visualizeCode, mappings }
+  } catch (error) {
+    console.error('Error creating executable function:', error)
+    return { executableFunc: null, visualizeCode: '', mappings: [] }
+  }
+}
+
+// Helper to get mappings for a voice
+const getMappingsForVoice = (voiceIndex: number): UUIDMapping[] => {
+  return uuidMappings.get(voiceIndex.toString()) || []
+}
+
+// Line highlighting system using CodeMirror decorations
+const scheduledLineEffect = StateEffect.define<{lineNumbers: number[]}>()
+const currentLineEffect = StateEffect.define<{lineNumber: number | null, endLineNumber?: number}>()
+
+// Decoration themes
+const scheduledLineDeco = Decoration.line({
+  attributes: { class: 'cm-scheduled-line' }
+})
+
+const currentLineDeco = Decoration.line({
+  attributes: { class: 'cm-current-line' }
+})
+
+// State field to manage line decorations
+const lineHighlightField = StateField.define<DecorationSet>({
+  create() {
+    return Decoration.none
+  },
+  update(decorations, tr) {
+    decorations = decorations.map(tr.changes)
+    
+    for (let effect of tr.effects) {
+      if (effect.is(scheduledLineEffect)) {
+        // Remove old scheduled line decorations and add new ones
+        decorations = decorations.update({
+          filter: (from, to, decoration) => {
+            // Keep current line decorations, remove scheduled line decorations
+            return !decoration.spec.attributes?.class?.includes('cm-scheduled-line')
+          }
+        })
+        
+        // Add new scheduled line decorations
+        const ranges = effect.value.lineNumbers.map(lineNum => {
+          const line = tr.state.doc.line(Math.min(lineNum, tr.state.doc.lines))
+          return scheduledLineDeco.range(line.from)
+        })
+        
+        decorations = decorations.update({ add: ranges })
+      }
+      
+      if (effect.is(currentLineEffect)) {
+        // Remove old current line decorations
+        decorations = decorations.update({
+          filter: (from, to, decoration) => {
+            return !decoration.spec.attributes?.class?.includes('cm-current-line')
+          }
+        })
+        
+        // Add new current line decoration(s) if lineNumber is not null
+        if (effect.value.lineNumber !== null) {
+          const startLineNum = effect.value.lineNumber
+          const endLineNum = effect.value.endLineNumber || startLineNum
+          const ranges = []
+          
+          // Highlight all lines in the span
+          for (let lineNum = startLineNum; lineNum <= endLineNum; lineNum++) {
+            if (lineNum <= tr.state.doc.lines) {
+              const line = tr.state.doc.line(lineNum)
+              ranges.push(currentLineDeco.range(line.from))
+            }
+          }
+          
+          decorations = decorations.update({ add: ranges })
+        }
+      }
+    }
+    
+    return decorations
+  },
+  provide: f => EditorView.decorations.from(f)
+})
+
+// Functions to control line highlighting
+const highlightScheduledLines = (voiceIndex: number, uuids: string[]) => {
+  const editor = codeMirrorEditors[voiceIndex]
+  if (editor) {
+    // Map UUIDs to line numbers (including multiline spans)
+    const mappings = getMappingsForVoice(voiceIndex)
+    const lineNumbers: number[] = []
+    
+    uuids.forEach(uuid => {
+      const mapping = mappings.find(m => m.uuid === uuid)
+      if (mapping) {
+        const startLine = mapping.sourceLineNumber
+        const endLine = mapping.endLineNumber || startLine
+        
+        // Add all lines in the span
+        for (let lineNum = startLine; lineNum <= endLine; lineNum++) {
+          lineNumbers.push(lineNum)
+        }
+      }
+    })
+    
+    editor.dispatch({
+      effects: scheduledLineEffect.of({ lineNumbers })
+    })
+  }
+}
+
+const highlightCurrentLine = (voiceIndex: number, lineNumber: number | null) => {
+  const editor = codeMirrorEditors[voiceIndex]
+  if (editor) {
+    editor.dispatch({
+      effects: currentLineEffect.of({ lineNumber })
+    })
+  }
+}
+
+// Helper to highlight current line by UUID (handles multiline spans)
+const highlightCurrentLineByUUID = (voiceIndex: number, uuid: string | null) => {
+  const editor = codeMirrorEditors[voiceIndex]
+  if (!editor) return
+  
+  if (uuid === null) {
+    // Clear current line highlighting
+    editor.dispatch({
+      effects: currentLineEffect.of({ lineNumber: null })
+    })
+    return
+  }
+  
+  const mappings = getMappingsForVoice(voiceIndex)
+  const mapping = mappings.find(m => m.uuid === uuid)
+  if (!mapping) return
+  
+  // For multiline spans, highlight all lines
+  const startLine = mapping.sourceLineNumber
+  const endLine = mapping.endLineNumber || startLine
+  const lineNumbers: number[] = []
+  
+  for (let lineNum = startLine; lineNum <= endLine; lineNum++) {
+    lineNumbers.push(lineNum)
+  }
+  
+  // Use a special effect for multiline current highlighting
+  editor.dispatch({
+    effects: currentLineEffect.of({ lineNumber: startLine, endLineNumber: endLine })
+  })
+}
+
+// Function to analyze JavaScript code by executing visualize-time version and tracking line() calls
+const analyzeExecutableLines = (jsCode: string, voiceIndex: number): string[] => {
+  const executedUUIDs: string[] = []
+  
+  try {
+    // Get the visualize-time code with UUIDs
+    const { visualizeCode } = preprocessJavaScript(jsCode, voiceIndex)
+    
+    // Create line function that tracks which UUIDs are called (analysis mode)
+    const line = (text: string, uuid: string) => {
+      executedUUIDs.push(uuid)
+      // No execution - just tracking
+    }
+    
+    // Create and execute the visualize-time function
+    const visualizeFunc = new Function('line', visualizeCode)
+    
+    // Execute with the line function to see which UUIDs would be called
+    visualizeFunc(line)
+    
+    return executedUUIDs // Return UUIDs of lines that will execute
+    
+  } catch (error) {
+    console.error('Error analyzing executable lines:', error)
+    return []
+  }
+}
+
+// runLine function - executes livecoding lines and manages highlighting
+const runLine = async (lineText: string, ctx: TimeContext, uuid: string, voiceIndex: number) => {
+  // Highlight the current line being executed using UUID
+  highlightCurrentLineByUUID(voiceIndex, uuid)
+  
+  try {
+    // Parse the line using existing parsing logic
+    const groups = splitTextToGroups(lineText)
+    if (!groups.length) return
+    
+    const group = groups[0] // runLine handles one group at a time
+    const { clip: curClip, updatedClipLine } = buildClipFromLine(group.clipLine)
+    if (!curClip) return
+    
+    // Execute the clip similar to existing playClips logic
+    const notes = curClip.noteBuffer()
+    const ramps = group.rampLines.map(parseRampLine).map(r => 
+      launchParamRamp(r.paramName, r.startVal, r.endVal, curClip.duration, voiceIndex, ctx)
+    )
+    
+    // Play the notes
+    for (const nextNote of notes) {
+      await ctx.wait(nextNote.preDelta)
+      
+      // Check if voice is still playing
+      const voice = appState.voices[voiceIndex]
+      if (!voice.isPlaying) {
+        ramps.forEach(r => r.cancel())
+        break
+      }
+      
+      playNote(nextNote.note.pitch, nextNote.note.velocity, ctx, nextNote.note.duration, voiceIndex)
+      if (nextNote.postDelta) await ctx.wait(nextNote.postDelta)
+    }
+    
+    // Clean up ramps if we completed normally
+    if (appState.voices[voiceIndex].isPlaying) {
+      // Let ramps complete naturally
+    } else {
+      ramps.forEach(r => r.cancel())
+    }
+    
+  } catch (error) {
+    console.error('Error in runLine:', error)
+  } finally {
+    // Clear current line highlighting after execution
+    highlightCurrentLineByUUID(voiceIndex, null)
+  }
+}
+
 const startVoice = (voiceIdx: number) => {
   const v = appState.voices[voiceIdx]
 
   const playOnce = async (ctx: TimeContext, firstLoop: boolean) => {
-    const groups = splitTextToGroups(v.saveable.sliceText)
-    if (!groups.length || !midiOuts[voiceIdx]) return
-    await playClips(groups, ctx, voiceIdx, v, firstLoop)
+    if (isJavascriptMode.value) {
+      // JavaScript mode execution
+      const monacoEditor = monacoEditors[voiceIdx]
+      if (!monacoEditor) return
+      
+      const jsCode = monacoEditor.getValue()
+      if (!jsCode.trim()) return
+      
+      // Switch to visualize mode when starting playback
+      if (firstLoop) {
+        switchToVisualizeMode(voiceIdx)
+        
+        // Analyze and highlight scheduled lines (returns UUIDs)
+        const executableUUIDs = analyzeExecutableLines(jsCode, voiceIdx)
+        highlightScheduledLines(voiceIdx, executableUUIDs)
+      }
+      
+      // Create executable function
+      const { executableFunc } = createExecutableFunction(jsCode, voiceIdx)
+      if (!executableFunc) {
+        console.error('Failed to create executable function for voice', voiceIdx)
+        return
+      }
+      
+      try {
+        // Execute the JavaScript code with proper context
+        await executableFunc(ctx, runLine)
+      } catch (error) {
+        console.error('Error executing JavaScript code:', error)
+      }
+      
+    } else {
+      // Original text mode execution
+      const groups = splitTextToGroups(v.saveable.sliceText)
+      if (!groups.length || !midiOuts[voiceIdx]) return
+      await playClips(groups, ctx, voiceIdx, v, firstLoop)
+    }
   }
 
   if (v.isLooping) {
@@ -376,6 +863,14 @@ const stopVoice = (voiceIdx: number) => {
   v.loopHandle = null
   v.playingLineIdx = -1
   v.playingText = ''
+  
+  // Switch back to input mode when stopping in JavaScript mode
+  if (isJavascriptMode.value) {
+    switchToInputMode(voiceIdx)
+    // Clear all highlighting
+    highlightScheduledLines(voiceIdx, []) // Empty UUID array
+    highlightCurrentLineByUUID(voiceIdx, null)
+  }
 }
 
 const togglePlay = (voiceIdx: number) => {
@@ -581,6 +1076,13 @@ onMounted(async() => {
     // Load from localStorage first (both snapshots and current state)
     loadFromLocalStorage()
     
+    // Initialize editors for all voices
+    await nextTick() // Ensure DOM is ready
+    for (let i = 0; i < appState.voices.length; i++) {
+      initializeMonacoEditor(`monacoEditorContainer-${i}`, i)
+      initializeCodeMirrorEditor(`codeMirrorEditorContainer-${i}`, i)
+    }
+    
     // Initialize test piano roll
     testPianoRoll = new PianoRoll<{}>('testPianoRollHolder', () => {}, () => {}, true)
     
@@ -747,6 +1249,10 @@ onUnmounted(() => {
   if (appState.autoSaveInterval) {
     clearInterval(appState.autoSaveInterval)
   }
+  
+  // Clean up editors
+  monacoEditors.forEach(editor => editor?.dispose())
+  codeMirrorEditors.forEach(editor => editor?.destroy())
   
   shaderGraphEndNode?.disposeAll()
   clearListeners()
@@ -938,11 +1444,31 @@ appState.voices.forEach((voice, vIdx) => {
       </div>
       <details v-if="!voice.isPlaying" open class="text-display">
         <summary>Slice Editor</summary>
-        <textarea
-          v-model="voice.saveable.sliceText"
-          placeholder="clipName : seg 1 : s_tr 2 : str 0.5 : q 1"
-          rows="10"
-        />
+        <div class="editor-mode-toggle">
+          <button @click="isJavascriptMode = !isJavascriptMode" :class="{ active: isJavascriptMode }">
+            {{ isJavascriptMode ? 'Switch to Text Mode' : 'Switch to JavaScript Mode' }}
+          </button>
+        </div>
+        
+        <div v-if="!isJavascriptMode">
+          <textarea
+            v-model="voice.saveable.sliceText"
+            placeholder="clipName : seg 1 : s_tr 2 : str 0.5 : q 1"
+            rows="10"
+          />
+        </div>
+        
+        <div v-else class="javascript-editors">
+          <div v-show="showInputEditor[idx]" class="editor-container">
+            <div class="editor-header">Input Editor (JavaScript)</div>
+            <div :id="`monacoEditorContainer-${idx}`" class="monaco-editor"></div>
+          </div>
+          
+          <div v-show="!showInputEditor[idx]" class="editor-container">
+            <div class="editor-header">Visualize Editor (Playback)</div>
+            <div :id="`codeMirrorEditorContainer-${idx}`" class="codemirror-editor"></div>
+          </div>
+        </div>
       </details>
       <details v-else open class="text-display">
         <summary>Now Playing</summary>
@@ -1610,5 +2136,90 @@ details summary {
 
 .display-text::-webkit-scrollbar-thumb:hover {
   background: #666;
+}
+
+/* Editor styling */
+.editor-mode-toggle {
+  margin-bottom: 0.5rem;
+}
+
+.editor-mode-toggle button {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.8rem;
+  border: 1px solid #555;
+  border-radius: 2px;
+  background: #333;
+  color: #e0e0e0;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.editor-mode-toggle button:hover {
+  background: #444;
+}
+
+.editor-mode-toggle button.active {
+  background: #6a9bd1;
+  border-color: #4a7ba7;
+  color: #fff;
+}
+
+.javascript-editors {
+  border: 1px solid #555;
+  border-radius: 4px;
+  background: #1e1e1e;
+  min-height: 300px;
+}
+
+.editor-container {
+  height: 100%;
+}
+
+.editor-header {
+  padding: 0.5rem;
+  background: #2a2a2a;
+  border-bottom: 1px solid #555;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #f0f0f0;
+}
+
+.monaco-editor {
+  height: 300px;
+  border-radius: 0 0 4px 4px;
+}
+
+.codemirror-editor {
+  height: 300px;
+  border-radius: 0 0 4px 4px;
+}
+
+.codemirror-editor .cm-editor {
+  height: 100%;
+}
+
+.codemirror-editor .cm-scroller {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+}
+
+/* CodeMirror line highlighting styles */
+.codemirror-editor .cm-scheduled-line {
+  background-color: rgba(106, 155, 209, 0.15) !important;
+  border-left: 3px solid #6a9bd1;
+}
+
+.codemirror-editor .cm-current-line {
+  background-color: rgba(74, 92, 42, 0.4) !important;
+  border-left: 3px solid #4a5c2a;
+  animation: pulse-line 1s ease-in-out infinite alternate;
+}
+
+@keyframes pulse-line {
+  from {
+    background-color: rgba(74, 92, 42, 0.4);
+  }
+  to {
+    background-color: rgba(74, 92, 42, 0.6);
+  }
 }
 </style>
