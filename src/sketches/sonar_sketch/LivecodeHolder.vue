@@ -978,12 +978,14 @@ const startVoice = (voiceIdx: number) => {
           firstLoop = false
         }
         v.isPlaying = false
+        switchToInputMode(voiceIdx)
       })
     })
   } else {
     launchQueue.push(async (ctx) => {
       await playOnce(ctx, true)
       v.isPlaying = false
+      switchToInputMode(voiceIdx)
     })               // one-shot
   }
 }
