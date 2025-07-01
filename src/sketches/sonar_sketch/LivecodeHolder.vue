@@ -410,6 +410,22 @@ line(\`debug1 : seg 1 : s_tr 3 : str 1 : q 1\`)
     wordWrap: 'on'
   })
   
+  // Sync Monaco content to CodeMirror when it changes
+  editor.onDidChangeModelContent(() => {
+    // Sync content to CodeMirror editor if it exists
+    const codeMirrorEditor = codeMirrorEditors[voiceIndex]
+    if (codeMirrorEditor) {
+      const newContent = editor.getValue()
+      codeMirrorEditor.dispatch({
+        changes: {
+          from: 0,
+          to: codeMirrorEditor.state.doc.length,
+          insert: newContent
+        }
+      })
+    }
+  })
+  
   monacoEditors[voiceIndex] = editor
 }
 
@@ -417,18 +433,63 @@ const initializeCodeMirrorEditor = (containerId: string, voiceIndex: number) => 
   const container = document.getElementById(containerId)
   if (!container) return
 
+  // Get initial content from Monaco editor or use default
+  const monacoEditor = monacoEditors[voiceIndex]
+  const initialContent = monacoEditor ? monacoEditor.getValue() : `// Voice ${voiceIndex + 1} - JavaScript Livecoding
+line(\`debug1 : seg 1\`)
+line(\`debug2 : seg 2\`)
+line(\`debug3 : seg 3\`)`
+
   const editor = new EditorView({
+    doc: initialContent,
     extensions: [
       basicSetup,
       javascript(),
       oneDark,
       lineHighlightField,
-      EditorView.editable.of(false) // Read-only for visualization
+      EditorView.editable.of(false), // Read-only for visualization
+      EditorView.theme({
+        '&': { 
+          maxHeight: '400px',
+          minHeight: '200px'
+        },
+        '.cm-gutter, .cm-content': { 
+          minHeight: '200px' 
+        },
+        '.cm-scroller': { 
+          overflow: 'auto',
+          maxHeight: '400px'
+        },
+        '.cm-scheduled-line': {
+          backgroundColor: 'rgba(106, 155, 209, 0.15)',
+          borderLeft: '3px solid #6a9bd1'
+        },
+        '.cm-current-line': {
+          backgroundColor: 'rgba(74, 92, 42, 0.4)',
+          borderLeft: '3px solid #4a5c2a',
+          animation: 'pulse-line 1s ease-in-out infinite alternate'
+        }
+      })
     ],
     parent: container
   })
   
   codeMirrorEditors[voiceIndex] = editor
+  
+  // Test decorator functionality after a short delay
+  // setTimeout(() => {
+  //   console.log(`Testing decorators for voice ${voiceIndex}`)
+  //   // Test scheduled line decorator on line 1
+  //   editor.dispatch({
+  //     effects: scheduledLineEffect.of({ lineNumbers: [1] })
+  //   })
+  //   // Test current line decorator on line 2 after 2 seconds
+  //   setTimeout(() => {
+  //     editor.dispatch({
+  //       effects: currentLineEffect.of({ lineNumber: 2 })
+  //     })
+  //   }, 2000)
+  // }, 1000)
 }
 
 const switchToInputMode = (voiceIndex: number) => {
@@ -598,28 +659,39 @@ const lineHighlightField = StateField.define<DecorationSet>({
     
     for (let effect of tr.effects) {
       if (effect.is(scheduledLineEffect)) {
+        console.log('Processing scheduled line effect:', effect.value)
         // Remove old scheduled line decorations and add new ones
         decorations = decorations.update({
           filter: (from, to, decoration) => {
             // Keep current line decorations, remove scheduled line decorations
-            return !decoration.spec.attributes?.class?.includes('cm-scheduled-line')
+            const keepDeco = !decoration.spec.attributes?.class?.includes('cm-scheduled-line')
+            console.log('Filtering scheduled decoration:', decoration.spec, 'keep:', keepDeco)
+            return keepDeco
           }
         })
         
         // Add new scheduled line decorations
-        const ranges = effect.value.lineNumbers.map(lineNum => {
-          const line = tr.state.doc.line(Math.min(lineNum, tr.state.doc.lines))
-          return scheduledLineDeco.range(line.from)
+        const ranges = []
+        effect.value.lineNumbers.forEach(lineNum => {
+          if (lineNum >= 1 && lineNum <= tr.state.doc.lines) {
+            const line = tr.state.doc.line(lineNum)
+            console.log(`Adding scheduled decoration to line ${lineNum} at position ${line.from}`)
+            ranges.push(scheduledLineDeco.range(line.from))
+          }
         })
         
         decorations = decorations.update({ add: ranges })
+        console.log('Updated decorations after scheduled effect:', decorations)
       }
       
       if (effect.is(currentLineEffect)) {
+        console.log('Processing current line effect:', effect.value)
         // Remove old current line decorations
         decorations = decorations.update({
           filter: (from, to, decoration) => {
-            return !decoration.spec.attributes?.class?.includes('cm-current-line')
+            const keepDeco = !decoration.spec.attributes?.class?.includes('cm-current-line')
+            console.log('Filtering current decoration:', decoration.spec, 'keep:', keepDeco)
+            return keepDeco
           }
         })
         
@@ -631,14 +703,16 @@ const lineHighlightField = StateField.define<DecorationSet>({
           
           // Highlight all lines in the span
           for (let lineNum = startLineNum; lineNum <= endLineNum; lineNum++) {
-            if (lineNum <= tr.state.doc.lines) {
+            if (lineNum >= 1 && lineNum <= tr.state.doc.lines) {
               const line = tr.state.doc.line(lineNum)
+              console.log(`Adding current decoration to line ${lineNum} at position ${line.from}`)
               ranges.push(currentLineDeco.range(line.from))
             }
           }
           
           decorations = decorations.update({ add: ranges })
         }
+        console.log('Updated decorations after current effect:', decorations)
       }
     }
     
@@ -649,29 +723,35 @@ const lineHighlightField = StateField.define<DecorationSet>({
 
 // Functions to control line highlighting
 const highlightScheduledLines = (voiceIndex: number, uuids: string[]) => {
+  console.log(`highlightScheduledLines called for voice ${voiceIndex} with UUIDs:`, uuids)
   const editor = codeMirrorEditors[voiceIndex]
-  if (editor) {
-    // Map UUIDs to line numbers (including multiline spans)
-    const mappings = getMappingsForVoice(voiceIndex)
-    const lineNumbers: number[] = []
-    
-    uuids.forEach(uuid => {
-      const mapping = mappings.find(m => m.uuid === uuid)
-      if (mapping) {
-        const startLine = mapping.sourceLineNumber
-        const endLine = mapping.endLineNumber || startLine
-        
-        // Add all lines in the span
-        for (let lineNum = startLine; lineNum <= endLine; lineNum++) {
-          lineNumbers.push(lineNum)
-        }
-      }
-    })
-    
-    editor.dispatch({
-      effects: scheduledLineEffect.of({ lineNumbers })
-    })
+  if (!editor) {
+    console.log(`No editor found for voice ${voiceIndex}`)
+    return
   }
+  
+  // Map UUIDs to line numbers (including multiline spans)
+  const mappings = getMappingsForVoice(voiceIndex)
+  console.log(`Mappings for voice ${voiceIndex}:`, mappings)
+  const lineNumbers: number[] = []
+  
+  uuids.forEach(uuid => {
+    const mapping = mappings.find(m => m.uuid === uuid)
+    if (mapping) {
+      const startLine = mapping.sourceLineNumber
+      const endLine = mapping.endLineNumber || startLine
+      
+      // Add all lines in the span
+      for (let lineNum = startLine; lineNum <= endLine; lineNum++) {
+        lineNumbers.push(lineNum)
+      }
+    }
+  })
+  
+  console.log(`Highlighting scheduled lines:`, lineNumbers)
+  editor.dispatch({
+    effects: scheduledLineEffect.of({ lineNumbers })
+  })
 }
 
 const highlightCurrentLine = (voiceIndex: number, lineNumber: number | null) => {
@@ -685,10 +765,15 @@ const highlightCurrentLine = (voiceIndex: number, lineNumber: number | null) => 
 
 // Helper to highlight current line by UUID (handles multiline spans)
 const highlightCurrentLineByUUID = (voiceIndex: number, uuid: string | null) => {
+  console.log(`highlightCurrentLineByUUID called for voice ${voiceIndex} with UUID:`, uuid)
   const editor = codeMirrorEditors[voiceIndex]
-  if (!editor) return
+  if (!editor) {
+    console.log(`No editor found for voice ${voiceIndex}`)
+    return
+  }
   
   if (uuid === null) {
+    console.log(`Clearing current line highlighting`)
     // Clear current line highlighting
     editor.dispatch({
       effects: currentLineEffect.of({ lineNumber: null })
@@ -698,17 +783,16 @@ const highlightCurrentLineByUUID = (voiceIndex: number, uuid: string | null) => 
   
   const mappings = getMappingsForVoice(voiceIndex)
   const mapping = mappings.find(m => m.uuid === uuid)
-  if (!mapping) return
+  if (!mapping) {
+    console.log(`No mapping found for UUID: ${uuid}`)
+    return
+  }
   
   // For multiline spans, highlight all lines
   const startLine = mapping.sourceLineNumber
   const endLine = mapping.endLineNumber || startLine
-  const lineNumbers: number[] = []
   
-  for (let lineNum = startLine; lineNum <= endLine; lineNum++) {
-    lineNumbers.push(lineNum)
-  }
-  
+  console.log(`Highlighting current line(s) ${startLine} to ${endLine}`)
   // Use a special effect for multiline current highlighting
   editor.dispatch({
     effects: currentLineEffect.of({ lineNumber: startLine, endLineNumber: endLine })
@@ -1442,7 +1526,7 @@ appState.voices.forEach((voice, vIdx) => {
           Start Phrase Index
         </label>
       </div>
-      <details v-if="!voice.isPlaying" open class="text-display">
+      <details open class="text-display">
         <summary>Slice Editor</summary>
         <div class="editor-mode-toggle">
           <button @click="isJavascriptMode = !isJavascriptMode" :class="{ active: isJavascriptMode }">
@@ -1459,26 +1543,15 @@ appState.voices.forEach((voice, vIdx) => {
         </div>
         
         <div v-else class="javascript-editors">
-          <div v-show="showInputEditor[idx]" class="editor-container">
+          <!-- Show both editors for debugging -->
+          <div class="editor-container">
             <div class="editor-header">Input Editor (JavaScript)</div>
             <div :id="`monacoEditorContainer-${idx}`" class="monaco-editor"></div>
           </div>
           
-          <div v-show="!showInputEditor[idx]" class="editor-container">
+          <div class="editor-container">
             <div class="editor-header">Visualize Editor (Playback)</div>
             <div :id="`codeMirrorEditorContainer-${idx}`" class="codemirror-editor"></div>
-          </div>
-        </div>
-      </details>
-      <details v-else open class="text-display">
-        <summary>Now Playing</summary>
-        <div class="display-text">
-          <div
-            v-for="(line, lIdx) in voice.playingText.split('\n')"
-            :key="lIdx"
-            :class="{ highlight: lIdx === voice.playingLineIdx }"
-          >
-            {{ line }}
           </div>
         </div>
       </details>
@@ -2190,12 +2263,7 @@ details summary {
 }
 
 .codemirror-editor {
-  height: 300px;
   border-radius: 0 0 4px 4px;
-}
-
-.codemirror-editor .cm-editor {
-  height: 100%;
 }
 
 .codemirror-editor .cm-scroller {
