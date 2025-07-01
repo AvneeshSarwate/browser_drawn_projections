@@ -423,6 +423,10 @@ line(\`debug1 : seg 1 : s_tr 3 : str 1 : q 1\`)
           insert: newContent
         }
       })
+      
+      // Update UUID mappings when Monaco content changes
+      const { mappings } = preprocessJavaScript(newContent, voiceIndex)
+      uuidMappings.set(voiceIndex.toString(), mappings)
     }
   })
   
@@ -529,36 +533,81 @@ const generateUUID = (): string => {
   return crypto.randomUUID()
 }
 
-// Step 1: Preprocessor - transforms line() calls to include UUIDs
-const preprocessJavaScript = (inputCode: string, voiceIndex: number): { visualizeCode: string, mappings: UUIDMapping[] } => {
-  const mappings: UUIDMapping[] = []
-  let processedCode = inputCode
-  
-  // Find all line(` patterns and their matching `)
-  const lineCallMatches: { start: number, end: number }[] = []
-  
+// Common function to find all line() calls in JavaScript code
+const findLineCallMatches = (jsCode: string): { 
+  start: number, 
+  end: number, 
+  templateStart: number, 
+  templateEnd: number, 
+  content: string,
+  lines: { content: string, startIndex: number, endIndex: number }[]
+}[] => {
+  const matches: { 
+    start: number, 
+    end: number, 
+    templateStart: number, 
+    templateEnd: number, 
+    content: string,
+    lines: { content: string, startIndex: number, endIndex: number }[]
+  }[] = []
   let searchIndex = 0
+  
   // eslint-disable-next-line no-constant-condition
   while (true) {
-    const start = processedCode.indexOf('line(`', searchIndex)
+    const start = jsCode.indexOf('line(`', searchIndex)
     if (start === -1) break
     
     // Find the matching `)` - look for backtick followed by closing paren
-    const backtickEnd = processedCode.indexOf('`)', start + 6)
+    const backtickEnd = jsCode.indexOf('`)', start + 6)
     if (backtickEnd === -1) {
       searchIndex = start + 6
       continue
     }
     
     const end = backtickEnd + 2 // Include the `)
+    const templateStart = jsCode.indexOf('`', start)
+    const templateEnd = backtickEnd
+    const content = jsCode.substring(templateStart + 1, templateEnd)
     
-    lineCallMatches.push({ start, end })
+    // Parse individual lines within the template literal
+    const lines: { content: string, startIndex: number, endIndex: number }[] = []
+    const contentLines = content.split('\n')
+    let currentIndex = 0
+    
+    contentLines.forEach((lineContent, index) => {
+      const trimmedContent = lineContent.trim()
+      if (trimmedContent) { // Skip empty lines
+        const lineStartIndex = templateStart + 1 + currentIndex
+        const lineEndIndex = lineStartIndex + lineContent.length
+        
+        lines.push({
+          content: trimmedContent,
+          startIndex: lineStartIndex,
+          endIndex: lineEndIndex
+        })
+      }
+      // +1 for the newline character (except for the last line)
+      currentIndex += lineContent.length + (index < contentLines.length - 1 ? 1 : 0)
+    })
+    
+    matches.push({ start, end, templateStart, templateEnd, content, lines })
     searchIndex = end
   }
   
+  return matches
+}
+
+// Step 1: Preprocessor - transforms line() calls to include UUIDs
+const preprocessJavaScript = (inputCode: string, voiceIndex: number): { visualizeCode: string, mappings: UUIDMapping[] } => {
+  const mappings: UUIDMapping[] = []
+  let processedCode = inputCode
+  
+  // Find all line() calls using common function
+  const matches = findLineCallMatches(processedCode)
+  
   // Process matches from end to beginning to avoid offset issues
-  for (let i = lineCallMatches.length - 1; i >= 0; i--) {
-    const match = lineCallMatches[i]
+  for (let i = matches.length - 1; i >= 0; i--) {
+    const match = matches[i]
     const uuid = generateUUID()
     
     // Get the complete line() call
@@ -578,9 +627,7 @@ const preprocessJavaScript = (inputCode: string, voiceIndex: number): { visualiz
     })
     
     // Extract just the template literal part
-    const templateStart = processedCode.indexOf('`', match.start)
-    const templateEnd = processedCode.indexOf('`)', match.start) + 1
-    const templateLiteral = processedCode.substring(templateStart, templateEnd)
+    const templateLiteral = processedCode.substring(match.templateStart, match.templateEnd + 1)
     
     // Replace with UUID version
     const replacement = `line(${templateLiteral}, "${uuid}")`
@@ -659,13 +706,13 @@ const lineHighlightField = StateField.define<DecorationSet>({
     
     for (let effect of tr.effects) {
       if (effect.is(scheduledLineEffect)) {
-        console.log('Processing scheduled line effect:', effect.value)
+        // console.log('Processing scheduled line effect:', effect.value)
         // Remove old scheduled line decorations and add new ones
         decorations = decorations.update({
           filter: (from, to, decoration) => {
             // Keep current line decorations, remove scheduled line decorations
             const keepDeco = !decoration.spec.attributes?.class?.includes('cm-scheduled-line')
-            console.log('Filtering scheduled decoration:', decoration.spec, 'keep:', keepDeco)
+            // console.log('Filtering scheduled decoration:', decoration.spec, 'keep:', keepDeco)
             return keepDeco
           }
         })
@@ -675,22 +722,22 @@ const lineHighlightField = StateField.define<DecorationSet>({
         effect.value.lineNumbers.forEach(lineNum => {
           if (lineNum >= 1 && lineNum <= tr.state.doc.lines) {
             const line = tr.state.doc.line(lineNum)
-            console.log(`Adding scheduled decoration to line ${lineNum} at position ${line.from}`)
+            // console.log(`Adding scheduled decoration to line ${lineNum} at position ${line.from}`)
             ranges.push(scheduledLineDeco.range(line.from))
           }
         })
         
         decorations = decorations.update({ add: ranges })
-        console.log('Updated decorations after scheduled effect:', decorations)
+        // console.log('Updated decorations after scheduled effect:', decorations)
       }
       
       if (effect.is(currentLineEffect)) {
-        console.log('Processing current line effect:', effect.value)
+        // console.log('Processing current line effect:', effect.value)
         // Remove old current line decorations
         decorations = decorations.update({
           filter: (from, to, decoration) => {
             const keepDeco = !decoration.spec.attributes?.class?.includes('cm-current-line')
-            console.log('Filtering current decoration:', decoration.spec, 'keep:', keepDeco)
+            // console.log('Filtering current decoration:', decoration.spec, 'keep:', keepDeco)
             return keepDeco
           }
         })
@@ -705,14 +752,14 @@ const lineHighlightField = StateField.define<DecorationSet>({
           for (let lineNum = startLineNum; lineNum <= endLineNum; lineNum++) {
             if (lineNum >= 1 && lineNum <= tr.state.doc.lines) {
               const line = tr.state.doc.line(lineNum)
-              console.log(`Adding current decoration to line ${lineNum} at position ${line.from}`)
+              // console.log(`Adding current decoration to line ${lineNum} at position ${line.from}`)
               ranges.push(currentLineDeco.range(line.from))
             }
           }
           
           decorations = decorations.update({ add: ranges })
         }
-        console.log('Updated decorations after current effect:', decorations)
+        // console.log('Updated decorations after current effect:', decorations)
       }
     }
     
@@ -765,15 +812,15 @@ const highlightCurrentLine = (voiceIndex: number, lineNumber: number | null) => 
 
 // Helper to highlight current line by UUID (handles multiline spans)
 const highlightCurrentLineByUUID = (voiceIndex: number, uuid: string | null) => {
-  console.log(`highlightCurrentLineByUUID called for voice ${voiceIndex} with UUID:`, uuid)
+  // console.log(`highlightCurrentLineByUUID called for voice ${voiceIndex} with UUID:`, uuid)
   const editor = codeMirrorEditors[voiceIndex]
   if (!editor) {
-    console.log(`No editor found for voice ${voiceIndex}`)
+    // console.log(`No editor found for voice ${voiceIndex}`)
     return
   }
   
   if (uuid === null) {
-    console.log(`Clearing current line highlighting`)
+    // console.log(`Clearing current line highlighting`)
     // Clear current line highlighting
     editor.dispatch({
       effects: currentLineEffect.of({ lineNumber: null })
@@ -792,7 +839,7 @@ const highlightCurrentLineByUUID = (voiceIndex: number, uuid: string | null) => 
   const startLine = mapping.sourceLineNumber
   const endLine = mapping.endLineNumber || startLine
   
-  console.log(`Highlighting current line(s) ${startLine} to ${endLine}`)
+  // console.log(`Highlighting current line(s) ${startLine} to ${endLine}`)
   // Use a special effect for multiline current highlighting
   editor.dispatch({
     effects: currentLineEffect.of({ lineNumber: startLine, endLineNumber: endLine })
@@ -894,6 +941,7 @@ const startVoice = (voiceIdx: number) => {
         switchToVisualizeMode(voiceIdx)
         
         // Analyze and highlight scheduled lines (returns UUIDs)
+        //todo - using a seeded random number generator here would make this work properly with "randomness"
         const executableUUIDs = analyzeExecutableLines(jsCode, voiceIdx)
         highlightScheduledLines(voiceIdx, executableUUIDs)
       }
@@ -1418,11 +1466,78 @@ const computeDisplayTextForVoice = (voice: VoiceState): string => {
   return lines.join('\n')
 }
 
+// Function to resolve slider expressions in JavaScript code with line() calls
+const resolveSliderExpressionsInJavaScript = (jsCode: string): string => {
+  let processedCode = jsCode
+  
+  // Find all line() calls using common function
+  const matches = findLineCallMatches(processedCode)
+  
+  // Process matches from end to beginning to avoid offset issues
+  for (let i = matches.length - 1; i >= 0; i--) {
+    const match = matches[i]
+    
+    try {
+      // Find the main clip line (first non-empty, non-modifier line)
+      const mainClipLine = match.lines.find(line => !line.content.trim().startsWith('=>'))
+      
+      if (mainClipLine) {
+        // Transform only the main clip line
+        const { updatedClipLine } = buildClipFromLine(mainClipLine.content, true)
+        
+        // Replace just the main clip line in the original code, leaving modifiers unchanged
+        const beforeMainLine = processedCode.substring(0, mainClipLine.startIndex)
+        const afterMainLine = processedCode.substring(mainClipLine.endIndex)
+        processedCode = beforeMainLine + updatedClipLine + afterMainLine
+      }
+      
+    } catch (error) {
+      console.warn('Failed to resolve slider expressions in line:', match.lines[0]?.content || match.content, error)
+      // Keep original if resolution fails
+    }
+  }
+  
+  return processedCode
+}
+
+// Enhanced update function that handles both text display and CodeMirror
+const updateVoiceDisplays = (voiceIndex: number) => {
+  const voice = appState.voices[voiceIndex]
+  
+  // Update the old text display (for non-JavaScript mode)
+  voice.playingText = computeDisplayTextForVoice(voice)
+  
+  // Update CodeMirror editor if in JavaScript mode and it exists
+  const codeMirrorEditor = codeMirrorEditors[voiceIndex]
+  if (codeMirrorEditor && isJavascriptMode.value) {
+    // Get the original Monaco content (with raw slider expressions)
+    const monacoEditor = monacoEditors[voiceIndex]
+    if (monacoEditor) {
+      const originalJsCode = monacoEditor.getValue()
+      
+      // Resolve slider expressions in the JavaScript code
+      const resolvedJsCode = resolveSliderExpressionsInJavaScript(originalJsCode)
+      
+      // Check if content has actually changed to avoid unnecessary updates
+      const currentContent = codeMirrorEditor.state.doc.toString()
+      if (currentContent !== resolvedJsCode) {
+        codeMirrorEditor.dispatch({
+          changes: {
+            from: 0,
+            to: codeMirrorEditor.state.doc.length,
+            insert: resolvedJsCode
+          }
+        })
+      }
+    }
+  }
+}
+
 // Set up a debounced watcher per-voice that recomputes the display text at
 // most 10×/second whenever its slice definition OR any slider value changes.
 appState.voices.forEach((voice, vIdx) => {
   const debouncedUpdate = debounce(() => {
-    voice.playingText = computeDisplayTextForVoice(voice)
+    updateVoiceDisplays(vIdx)
   }, 100) // 100 ms → 10 Hz max
 
   // Initial computation
