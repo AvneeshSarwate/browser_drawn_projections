@@ -1542,25 +1542,37 @@ appState.voices.forEach((voice, vIdx) => {
         
         <div v-if="!isJavascriptMode">
           <textarea
+            v-if="!voice.isPlaying"
             v-model="voice.saveable.sliceText"
             placeholder="clipName : seg 1 : s_tr 2 : str 0.5 : q 1"
             rows="10"
           />
+          
+          <!-- Simple text playhead display for non-JavaScript mode -->
+          <details v-if="voice.isPlaying" open class="text-display">
+            <summary>Now Playing</summary>
+            <div class="display-text">
+              <div
+                v-for="(line, lIdx) in voice.playingText.split('\n')"
+                :key="lIdx"
+                :class="{ highlight: lIdx === voice.playingLineIdx }"
+              >
+                {{ line }}
+              </div>
+            </div>
+          </details>
         </div>
-        
-        <div v-else class="javascript-editors">
           <!-- Monaco Editor (Input) -->
-          <div class="editor-container" :class="{ 'editor-hidden-opacity': !showInputEditor[idx] }">
+          <div class="editor-container" :class="{ 'editor-hidden-opacity': !isJavascriptMode || !showInputEditor[idx] }">
             <div class="editor-header">Input Editor (JavaScript)</div>
             <div :id="`monacoEditorContainer-${idx}`" class="monaco-editor"></div>
           </div>
           
           <!-- CodeMirror Editor (Visualize) -->
-          <div class="editor-container" :class="{ 'editor-hidden-opacity': showInputEditor[idx] }">
+          <div class="editor-container" :class="{ 'editor-hidden-opacity': !isJavascriptMode || showInputEditor[idx] }">
             <div class="editor-header">Visualize Editor (Playback)</div>
             <div :id="`codeMirrorEditorContainer-${idx}`" class="codemirror-editor"></div>
           </div>
-        </div>
       </details>
       
       <details open class="fx-controls">
