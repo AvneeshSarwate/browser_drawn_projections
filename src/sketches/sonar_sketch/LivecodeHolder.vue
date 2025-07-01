@@ -364,6 +364,15 @@ const splitTextToGroups = (text: string): { clipLine: string, rampLines: string[
   return groups
 }
 
+const setCodeMirrorContent = (voiceIndex: number, content: string) => {
+  const codeMirrorEditor = codeMirrorEditors[voiceIndex]
+  if (codeMirrorEditor) {
+    codeMirrorEditor.dispatch({
+      changes: { from: 0, to: codeMirrorEditor.state.doc.length, insert: content }
+    })
+  }
+}
+
 // Editor initialization and management
 const initializeMonacoEditor = (containerId: string, voiceIndex: number) => {
   const container = document.getElementById(containerId)
@@ -416,17 +425,7 @@ line(\`debug1 : seg 1 : s_tr 3 : str 1 : q 1\`)
     const codeMirrorEditor = codeMirrorEditors[voiceIndex]
     if (codeMirrorEditor) {
       const newContent = editor.getValue()
-      codeMirrorEditor.dispatch({
-        changes: {
-          from: 0,
-          to: codeMirrorEditor.state.doc.length,
-          insert: newContent
-        }
-      })
-      
-      // Update UUID mappings when Monaco content changes
-      const { mappings } = preprocessJavaScript(newContent, voiceIndex)
-      uuidMappings.set(voiceIndex.toString(), mappings)
+      setCodeMirrorContent(voiceIndex, newContent)
     }
   })
   
@@ -509,13 +508,7 @@ const switchToVisualizeMode = (voiceIndex: number) => {
   
   if (monacoEditor && codeMirrorEditor) {
     const content = monacoEditor.getValue()
-    codeMirrorEditor.dispatch({
-      changes: {
-        from: 0,
-        to: codeMirrorEditor.state.doc.length,
-        insert: content
-      }
-    })
+    setCodeMirrorContent(voiceIndex, content)
   }
 }
 
@@ -528,6 +521,9 @@ type UUIDMapping = {
 }
 
 const uuidMappings = new Map<string, UUIDMapping[]>() // voiceIndex -> mappings
+const voiceActiveUUIDs = new Map<string, string>() // voiceIndex -> UUID for currently playing line
+const voiceScheduledUUIDs = new Map<string, string[]>() // voiceIndex -> UUIDs for scheduled lines
+const voiceExecutableFuncs = new Map<string, Function>() // voiceIndex -> executable function
 
 const generateUUID = (): string => {
   return crypto.randomUUID()
@@ -654,13 +650,12 @@ const transformToRuntime = (visualizeCode: string, voiceIndex: number): string =
 }
 
 // Step 3: Create executable function from JavaScript code
-const createExecutableFunction = (inputCode: string, voiceIndex: number): { 
+const createExecutableFunction = (visualizeCode: string, mappings: UUIDMapping[], voiceIndex: number): { 
   executableFunc: Function | null, 
   visualizeCode: string, 
   mappings: UUIDMapping[] 
 } => {
   try {
-    const { visualizeCode, mappings } = preprocessJavaScript(inputCode, voiceIndex)
     const runtimeCode = transformToRuntime(visualizeCode, voiceIndex)
     
     // Create async function with proper context  
@@ -770,6 +765,8 @@ const lineHighlightField = StateField.define<DecorationSet>({
 
 // Functions to control line highlighting
 const highlightScheduledLines = (voiceIndex: number, uuids: string[]) => {
+  voiceScheduledUUIDs.set(voiceIndex.toString(), uuids)
+  
   console.log(`highlightScheduledLines called for voice ${voiceIndex} with UUIDs:`, uuids)
   const editor = codeMirrorEditors[voiceIndex]
   if (!editor) {
@@ -813,6 +810,9 @@ const highlightCurrentLine = (voiceIndex: number, lineNumber: number | null) => 
 // Helper to highlight current line by UUID (handles multiline spans)
 const highlightCurrentLineByUUID = (voiceIndex: number, uuid: string | null) => {
   // console.log(`highlightCurrentLineByUUID called for voice ${voiceIndex} with UUID:`, uuid)
+
+  voiceActiveUUIDs.set(voiceIndex.toString(), uuid)
+  
   const editor = codeMirrorEditors[voiceIndex]
   if (!editor) {
     // console.log(`No editor found for voice ${voiceIndex}`)
@@ -847,12 +847,12 @@ const highlightCurrentLineByUUID = (voiceIndex: number, uuid: string | null) => 
 }
 
 // Function to analyze JavaScript code by executing visualize-time version and tracking line() calls
-const analyzeExecutableLines = (jsCode: string, voiceIndex: number): string[] => {
+const analyzeExecutableLines = (jsCode: string, voiceIndex: number): { executedUUIDs: string[], mappings: UUIDMapping[], visualizeCode: string } => {
   const executedUUIDs: string[] = []
   
   try {
     // Get the visualize-time code with UUIDs
-    const { visualizeCode } = preprocessJavaScript(jsCode, voiceIndex)
+    const { visualizeCode, mappings } = preprocessJavaScript(jsCode, voiceIndex)
     
     // Create line function that tracks which UUIDs are called (analysis mode)
     const line = (text: string, uuid: string) => {
@@ -866,11 +866,11 @@ const analyzeExecutableLines = (jsCode: string, voiceIndex: number): string[] =>
     // Execute with the line function to see which UUIDs would be called
     visualizeFunc(line)
     
-    return executedUUIDs // Return UUIDs of lines that will execute
+    return { executedUUIDs, mappings, visualizeCode } // Return UUIDs of lines that will execute
     
   } catch (error) {
     console.error('Error analyzing executable lines:', error)
-    return []
+    return { executedUUIDs: [], mappings: [], visualizeCode: '' }
   }
 }
 
@@ -940,22 +940,28 @@ const startVoice = (voiceIdx: number) => {
       if (firstLoop) {
         switchToVisualizeMode(voiceIdx)
         
+        
+        const sliderResolvedCode = resolveSliderExpressionsInJavaScript(jsCode)
+        setCodeMirrorContent(voiceIdx, sliderResolvedCode)
+
         // Analyze and highlight scheduled lines (returns UUIDs)
         //todo - using a seeded random number generator here would make this work properly with "randomness"
-        const executableUUIDs = analyzeExecutableLines(jsCode, voiceIdx)
-        highlightScheduledLines(voiceIdx, executableUUIDs)
+        const { executedUUIDs, mappings, visualizeCode } = analyzeExecutableLines(jsCode, voiceIdx)
+        highlightScheduledLines(voiceIdx, executedUUIDs)
+        // Create executable function
+        const { executableFunc } = createExecutableFunction(visualizeCode, mappings, voiceIdx)
+        if (!executableFunc) {
+          console.error('Failed to create executable function for voice', voiceIdx)
+          return
+        }
+        voiceExecutableFuncs.set(voiceIdx.toString(), executableFunc)
       }
       
-      // Create executable function
-      const { executableFunc } = createExecutableFunction(jsCode, voiceIdx)
-      if (!executableFunc) {
-        console.error('Failed to create executable function for voice', voiceIdx)
-        return
-      }
+      
       
       try {
         // Execute the JavaScript code with proper context
-        await executableFunc(ctx, runLine)
+        await voiceExecutableFuncs.get(voiceIdx.toString())(ctx, runLine)
       } catch (error) {
         console.error('Error executing JavaScript code:', error)
       }
@@ -1523,13 +1529,19 @@ const updateVoiceDisplays = (voiceIndex: number) => {
       // Check if content has actually changed to avoid unnecessary updates
       const currentContent = codeMirrorEditor.state.doc.toString()
       if (currentContent !== resolvedJsCode) {
-        codeMirrorEditor.dispatch({
-          changes: {
-            from: 0,
-            to: codeMirrorEditor.state.doc.length,
-            insert: resolvedJsCode
-          }
-        })
+        setCodeMirrorContent(voiceIndex, resolvedJsCode)
+
+        // Re-apply scheduled line decorations if they were active
+        const scheduledUUIDs = voiceScheduledUUIDs.get(voiceIndex.toString())
+        if (scheduledUUIDs && scheduledUUIDs.length > 0) {
+          highlightScheduledLines(voiceIndex, scheduledUUIDs)
+        }
+
+        // Re-apply current line decorations if they were active
+        const activeUUID = voiceActiveUUIDs.get(voiceIndex.toString())
+        if (activeUUID) {
+          highlightCurrentLineByUUID(voiceIndex, activeUUID)
+        }
       }
     }
   }
