@@ -1532,6 +1532,12 @@ appState.voices.forEach((voice, vIdx) => {
           <button @click="isJavascriptMode = !isJavascriptMode" :class="{ active: isJavascriptMode }">
             {{ isJavascriptMode ? 'Switch to Text Mode' : 'Switch to JavaScript Mode' }}
           </button>
+          <button v-if="isJavascriptMode" @click="switchToInputMode(idx)" :class="{ active: showInputEditor[idx] }">
+            Input Mode
+          </button>
+          <button v-if="isJavascriptMode" @click="switchToVisualizeMode(idx)" :class="{ active: !showInputEditor[idx] }">
+            Visualize Mode
+          </button>
         </div>
         
         <div v-if="!isJavascriptMode">
@@ -1543,13 +1549,14 @@ appState.voices.forEach((voice, vIdx) => {
         </div>
         
         <div v-else class="javascript-editors">
-          <!-- Show both editors for debugging -->
-          <div class="editor-container">
+          <!-- Monaco Editor (Input) -->
+          <div class="editor-container" :class="{ 'editor-hidden-opacity': !showInputEditor[idx] }">
             <div class="editor-header">Input Editor (JavaScript)</div>
             <div :id="`monacoEditorContainer-${idx}`" class="monaco-editor"></div>
           </div>
           
-          <div class="editor-container">
+          <!-- CodeMirror Editor (Visualize) -->
+          <div class="editor-container" :class="{ 'editor-hidden-opacity': showInputEditor[idx] }">
             <div class="editor-header">Visualize Editor (Playback)</div>
             <div :id="`codeMirrorEditorContainer-${idx}`" class="codemirror-editor"></div>
           </div>
@@ -2246,6 +2253,13 @@ details summary {
 
 .editor-container {
   height: 100%;
+}
+
+.editor-hidden-opacity {
+  opacity: 0;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
 }
 
 .editor-header {
