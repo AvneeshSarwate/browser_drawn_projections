@@ -11,8 +11,11 @@
 
 ## JavascriptBased livecdoing
 
-The goal of this change set is to replace the custom pseudo scripting langauge with a more standard JavaScript based livecoding system to allow for general logic to be expressed more easily. 
+This describes a desired set of features to be added to the file src/sketches/sonar_sketch/LivecodeHolder.vue. The parent directory of this app is src/sketches/sonar_sketch. Some relevant information might also be in src/sketches/sonar_sketch/appState.ts.
 
+The goal of this change set is to replace a custom pseudo scripting langauge with a more standard JavaScript based livecoding system to allow for general logic to be expressed more easily. 
+
+The changes to be made are as follows:
 - add a function called `runLine` that takes existing lines in the livecoding language and parses them into clips, similar to the existing `buildClipFromLine` function. This should also handle blocks with `=>` style modifier lines. It should wrap existing functions and code for parsing and executing the lines.
 
 so, text that looks like:
@@ -39,9 +42,9 @@ await runLine(`debug1 : seg 1 : s_tr 2 : str 1 : q 1
               => p3 0.6 0.7`, ctx, some_uuid_2)
 await runLine(`debug1 : seg 1 : s_tr 3 : str 1 : q 1`, ctx, some_uuid_3)
 ```
-where ctx is the TimeContext instance from the parent that controls timing
+where ctx is the TimeContext instance from the parent that controls timing.
 
-The text that actually gets written into the editor will be slightly different. it will be 
+The text that actually gets written into the editor by the user will be slightly different. it will be 
 
 (this is the "input time version" of the code)
 ```javascript
@@ -84,6 +87,9 @@ To see an example how monaco is integrated into these sketches, see src/sketches
 
 Search the web for examples of how to use codemirror with decorators.
 
+Write all the changes into src/sketches/sonar_sketch/LivecodeHolder.vue.
 Keep code organized, but don't split it up into multiple files. This is a prototype so ideal organization keeps components separated without the headache of refactoring across modules.
 
 When in doubt, use web search to find examples of how to do something. Also, remember that this is UI code, so there is no automated testing to run. 
+
+First, generate an implementation plan for the changes to be made. do no yet. After I approve the plan, then write the code.
