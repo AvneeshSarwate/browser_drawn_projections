@@ -11,6 +11,8 @@ export type SaveableProperties = {
   startPhraseIdx: number;
   fxParams: Record<string, number>;
   fxBanks: Record<string, number>[]; // 8 banks of FX parameters for this voice
+  /** JavaScript livecoding source for this voice (Monaco input editor) */
+  jsCode: string;
 }
 
 export type VoiceState = {
@@ -70,7 +72,8 @@ export const appState: SonarAppState = {
       sliceText: '',
       startPhraseIdx: 0,
       fxParams: {},
-      fxBanks: Array.from({ length: 8 }, () => ({} as Record<string, number>))
+      fxBanks: Array.from({ length: 8 }, () => ({} as Record<string, number>)),
+      jsCode: ''
     },
     /** true while the voice is actively playing (Play-button ON) */
     isPlaying: false,

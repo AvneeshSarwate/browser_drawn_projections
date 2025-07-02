@@ -97,7 +97,7 @@ const loadFxSliderBank = (voiceIndex: number, bankIndex: number) => {
   if (!params) return
   voice.saveable.fxParams = params
   voice.currentFxBank = bankIndex
-  updatePianoFX(voiceIndex)
+  updateFxParams(voiceIndex)
   console.log(`Voice ${voiceIndex + 1} FX bank ${bankIndex + 1} loaded`)
 }
 
@@ -138,7 +138,7 @@ const loadSnapshotStateOnly = (ind: number) => {
   }
   
   // Update FX parameters for all voices
-  appState.voices.forEach((_, idx) => updatePianoFX(idx))
+  appState.voices.forEach((_, idx) => updateFxParams(idx))
 }
 
 const splitTransformChainToCommandStrings = (line: string) => {
@@ -408,8 +408,10 @@ if (playAlternate) {
 line(\`debug1 : seg 1 : s_tr 3 : str 1 : q 1\`)
 `
 
+  const initialCode = appState.voices[voiceIndex].saveable.jsCode && appState.voices[voiceIndex].saveable.jsCode.length ? appState.voices[voiceIndex].saveable.jsCode : defaultCode
+
   const editor = monaco.editor.create(container, {
-    value: defaultCode,
+    value: initialCode,
     language: 'javascript',
     theme: 'vs-dark',
     automaticLayout: true,
@@ -419,17 +421,24 @@ line(\`debug1 : seg 1 : s_tr 3 : str 1 : q 1\`)
     wordWrap: 'on'
   })
   
-  // Sync Monaco content to CodeMirror when it changes
+  // Persist and sync content on change
   editor.onDidChangeModelContent(() => {
+    const newContent = editor.getValue()
+
+    // Update saveable state for snapshots / persistence
+    appState.voices[voiceIndex].saveable.jsCode = newContent
+
     // Sync content to CodeMirror editor if it exists
     const codeMirrorEditor = codeMirrorEditors[voiceIndex]
     if (codeMirrorEditor) {
-      const newContent = editor.getValue()
       setCodeMirrorContent(voiceIndex, newContent)
     }
   })
   
   monacoEditors[voiceIndex] = editor
+
+  // Ensure jsCode is stored (important for freshly initialized editors)
+  appState.voices[voiceIndex].saveable.jsCode = initialCode
 }
 
 const initializeCodeMirrorEditor = (containerId: string, voiceIndex: number) => {
@@ -1066,7 +1075,7 @@ const getScaledParamValue = (paramName, paramScaling: Record<string, (val: numbe
 }
 
 // Function to update piano FX parameters
-const updatePianoFX = (voiceIdx: number, paramName?: string) => {
+const updateFxParams = (voiceIdx: number, paramName?: string) => {
   const voice = appState.voices[voiceIdx];
   const pianoChain = instrumentChains[mod2(voiceIdx, instrumentChains.length)];
 
@@ -1119,6 +1128,10 @@ const validateSnapshots = (snapshots: any, source: string) => {
           typeof voice.startPhraseIdx !== 'number' ||
           typeof voice.fxParams !== 'object') {
         throw new Error('Invalid voice format in snapshot')
+      }
+      // jsCode is optional but if present must be string
+      if (voice.jsCode !== undefined && typeof voice.jsCode !== 'string') {
+        throw new Error('Invalid voice format: jsCode must be string')
       }
       // Validate FX banks if present (optional for backwards compatibility)
       if (voice.fxBanks && !Array.isArray(voice.fxBanks)) {
@@ -1213,15 +1226,17 @@ const loadFromLocalStorage = () => {
 
 onMounted(async() => {
   try {
-    // Load from localStorage first (both snapshots and current state)
-    loadFromLocalStorage()
-    
     // Initialize editors for all voices
     await nextTick() // Ensure DOM is ready
     for (let i = 0; i < appState.voices.length; i++) {
       initializeMonacoEditor(`monacoEditorContainer-${i}`, i)
       initializeCodeMirrorEditor(`codeMirrorEditorContainer-${i}`, i)
     }
+
+    // Load from localStorage first (both snapshots and current state)
+    loadFromLocalStorage()
+    // Refresh editors to show restored JavaScript code
+    refreshEditorsFromState()
     
     // Initialize test piano roll
     testPianoRoll = new PianoRoll<{}>('testPianoRollHolder', () => {}, () => {}, true)
@@ -1570,6 +1585,32 @@ appState.voices.forEach((voice, vIdx) => {
     { deep: true }
   )
 })
+
+// ----------------------------------------------------------------------------------
+//  Update editors after snapshot-load (and similar state restores)
+// ----------------------------------------------------------------------------------
+
+function refreshEditorsFromState() {
+  // Ensure Monaco & CodeMirror editors reflect current jsCode strings
+  appState.voices.forEach((voice, vIdx) => {
+    const jsCode = voice.saveable.jsCode || ''
+
+    const monacoEd = monacoEditors[vIdx]
+    if (monacoEd && monacoEd.getValue() !== jsCode) {
+      monacoEd.setValue(jsCode)
+    }
+
+    const cmEd = codeMirrorEditors[vIdx]
+    if (cmEd) {
+      setCodeMirrorContent(vIdx, jsCode)
+    }
+  })
+}
+
+// Update FX parameters for all voices
+appState.voices.forEach((_, idx) => updateFxParams(idx))
+
+
 </script>
 
 <template>
@@ -1719,7 +1760,7 @@ appState.voices.forEach((voice, vIdx) => {
               min="0" 
               max="1" 
               step="0.001" 
-              @input="updatePianoFX(idx, paramName)" 
+              @input="updateFxParams(idx, paramName)" 
             />
           </div>
         </div>
