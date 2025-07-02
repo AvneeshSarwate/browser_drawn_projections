@@ -197,11 +197,28 @@ export const findLineCallMatches = (jsCode: string): {
   return matches
 }
 
+const uuidCache = new Map<string, { visualizeCode: string, mappings: UUIDMapping[] }>()
+const makeCacheKey = (jsCode: string, voiceIndex: number) => `voice: ${voiceIndex} ${jsCode}`
+
 /** 
  * Step 1: Preprocessor - transforms line() calls to include UUIDs 
  * Returns the processed code and UUID mappings without storing them globally
+ * 
+ * note - needs to be run with code from the INPUT editor for cache stuff to work
  */
-export const preprocessJavaScript = (inputCode: string): { visualizeCode: string, mappings: UUIDMapping[] } => {
+export const preprocessJavaScript = (inputCode: string, voiceIndex: number): { visualizeCode: string, mappings: UUIDMapping[] } => {
+
+  /**
+   * this is necessary for allowing re-evaluation of what lines run when toggles/flags change - 
+   * you want to re-run the visualization code, but maintain the same UUID mappings for lines()
+   */
+  if (voiceIndex == 0) {
+    const x = 5
+  }
+  
+  const cacheKey = makeCacheKey(inputCode, voiceIndex)
+  if(uuidCache.has(cacheKey)) return uuidCache.get(cacheKey)
+
   const mappings: UUIDMapping[] = []
   let processedCode = inputCode
   
@@ -236,6 +253,8 @@ export const preprocessJavaScript = (inputCode: string): { visualizeCode: string
     const replacement = `line(${templateLiteral}, "${uuid}")`
     processedCode = processedCode.substring(0, match.start) + replacement + processedCode.substring(match.end)
   }
+
+  uuidCache.set(cacheKey, { visualizeCode: processedCode, mappings })
   
   return { visualizeCode: processedCode, mappings }
 }

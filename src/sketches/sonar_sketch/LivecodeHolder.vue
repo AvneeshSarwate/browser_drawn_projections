@@ -9,21 +9,12 @@ import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
 import { AbletonClip, clipMap, INITIALIZE_ABLETON_CLIPS, type AbletonNote, quickNote } from '@/io/abletonClips';
 import { MIDI_READY, midiInputs, midiOutputs } from '@/io/midi';
-import { Scale } from '@/music/scale';
 import { getPiano, getPianoChain, TONE_AUDIO_START, getSynthChain, getDriftChain } from '@/music/synths';
 import { m2f } from '@/music/mpeSynth';
-import { TRANSFORM_REGISTRY } from './clipTransforms';
 import { clipData as staticClipData } from './clipData';
 import type { MIDIValOutput } from '@midival/core';
 import { PianoRoll, type NoteInfo } from '@/music/pianoRoll'
 import * as Tone from 'tone'
-import { evaluate } from './sliderExprParser'
-import * as monaco from 'monaco-editor'
-import { EditorView, basicSetup } from 'codemirror'
-import { javascript } from '@codemirror/lang-javascript'
-import { oneDark } from '@codemirror/theme-one-dark'
-import { Decoration, type DecorationSet } from '@codemirror/view'
-import { StateField, StateEffect } from '@codemirror/state'
 import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
 import TsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
 import { buildClipFromLine, splitTextToGroups, generateUUID, findLineCallMatches, preprocessJavaScript, transformToRuntime, createExecutableFunction, resolveSliderExpressionsInJavaScript, type UUIDMapping, computeDisplayTextForVoice, parseRampLine } from './utils/transformHelpers'
@@ -291,7 +282,7 @@ const analyzeExecutableLines = (jsCode: string, voiceIndex: number): { executedU
   
   try {
     // Get the visualize-time code with UUIDs
-    const { visualizeCode, mappings } = preprocessJavaScript(jsCode)
+    const { visualizeCode, mappings } = preprocessJavaScript(jsCode, voiceIndex)
     
     // Store mappings for this voice
     uuidMappings.set(voiceIndex.toString(), mappings)
@@ -303,11 +294,11 @@ const analyzeExecutableLines = (jsCode: string, voiceIndex: number): { executedU
     }
     
     // Create and execute the visualize-time function
-    const visualizeFunc = new Function('line', visualizeCode)
+    const visualizeFunc = new Function('line', 'flags', visualizeCode)
     
     // Execute with the line function to see which UUIDs would be called
-    visualizeFunc(line)
-    
+    visualizeFunc(line, appState.toggles)
+    console.log("executedUUIDs", voiceIndex, executedUUIDs)
     return { executedUUIDs, mappings, visualizeCode } // Return UUIDs of lines that will execute
     
   } catch (error) {
@@ -403,7 +394,7 @@ const startVoice = (voiceIdx: number) => {
       
       try {
         // Execute the JavaScript code with proper context
-        await voiceExecutableFuncs.get(voiceIdx.toString())(ctx, runLine, appState.sliders) 
+        await voiceExecutableFuncs.get(voiceIdx.toString())(ctx, runLine, appState.toggles) 
       } catch (error) {
         console.error('Error executing JavaScript code:', error)
       }
@@ -781,7 +772,7 @@ const updateVoiceOnSliderChange = (voiceIndex: number) => {
 }
 
 const updateVoiceOnToggleChange = (voiceIndex: number) => {
-  const jsCode = codeMirrorEditors[voiceIndex].state.doc.toString()
+  const jsCode = monacoEditors[voiceIndex].getValue()
   const { executedUUIDs } = analyzeExecutableLines(jsCode, voiceIndex)
   applyScheduledHighlightByUUID(voiceIndex, executedUUIDs)
 }
