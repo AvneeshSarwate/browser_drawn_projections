@@ -265,7 +265,7 @@ export const createExecutableFunction = (visualizeCode: string, mappings: UUIDMa
     const runtimeCode = transformToRuntime(visualizeCode, voiceIndex)
     
     // Create async function with proper context  
-    const executableFunc = new Function('ctx', 'runLine', `
+    const executableFunc = new Function('ctx', 'runLine', 'flags', `
       async function execute() {
         ${runtimeCode}
       }

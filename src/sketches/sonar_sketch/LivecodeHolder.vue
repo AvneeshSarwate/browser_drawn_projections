@@ -28,7 +28,7 @@ import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
 import TsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
 import { buildClipFromLine, splitTextToGroups, generateUUID, findLineCallMatches, preprocessJavaScript, transformToRuntime, createExecutableFunction, resolveSliderExpressionsInJavaScript, type UUIDMapping, computeDisplayTextForVoice, parseRampLine } from './utils/transformHelpers'
 import { monacoEditors, codeMirrorEditors, setCodeMirrorContent, highlightCurrentLine, highlightScheduledLines, initializeMonacoEditorComplete, initializeCodeMirrorEditorComplete } from './utils/editorManager'
-import { saveSnapshot as saveSnapshotSM, loadSnapshotStateOnly as loadSnapshotStateOnlySM, downloadSnapshotsFile, loadSnapshotsFromFile as loadSnapshotsFromFileSM, saveToLocalStorage as saveToLocalStorageSM, loadFromLocalStorage as loadFromLocalStorageSM, saveBank, loadBank, makeBankClickHandler, saveTopLevelSliderBank as saveTopLevelSliderBankSM, loadTopLevelSliderBank as loadTopLevelSliderBankSM, saveFxSliderBank as saveFxSliderBankSM, loadFxSliderBank as loadFxSliderBankSM } from './utils/snapshotManager'
+import { saveSnapshot as saveSnapshotSM, loadSnapshotStateOnly as loadSnapshotStateOnlySM, downloadSnapshotsFile, loadSnapshotsFromFile as loadSnapshotsFromFileSM, saveToLocalStorage as saveToLocalStorageSM, loadFromLocalStorage as loadFromLocalStorageSM, saveBank, loadBank, makeBankClickHandler, saveTopLevelSliderBank as saveTopLevelSliderBankSM, loadTopLevelSliderBank as loadTopLevelSliderBankSM, saveFxSliderBank as saveFxSliderBankSM, loadFxSliderBank as loadFxSliderBankSM, saveTopLevelToggleBank as saveTopLevelToggleBankSM, loadTopLevelToggleBank as loadTopLevelToggleBankSM } from './utils/snapshotManager'
 
 // Monaco environment setup
 self.MonacoEnvironment = {
@@ -74,6 +74,10 @@ let playNote: (pitch: number, velocity: number, ctx?: TimeContext, noteDur?: num
 const saveTopLevelSliderBank = (idx:number)=> saveTopLevelSliderBankSM(appState, idx)
 const loadTopLevelSliderBank = (idx:number)=> loadTopLevelSliderBankSM(appState, idx)
 
+// Toggle bank management wrappers
+const saveTopLevelToggleBank = (idx:number)=> saveTopLevelToggleBankSM(appState, idx)
+const loadTopLevelToggleBank = (idx:number)=> loadTopLevelToggleBankSM(appState, idx)
+
 const saveFxSliderBank = (voiceIdx:number, bankIdx:number)=> saveFxSliderBankSM(appState, voiceIdx, bankIdx)
 const loadFxSliderBank = (voiceIdx:number, bankIdx:number)=> loadFxSliderBankSM(appState, voiceIdx, bankIdx, updateFxParams)
 
@@ -86,8 +90,14 @@ const handleFxBankClick = (voiceIndex: number, bankIndex: number, event: MouseEv
 }
 
 const handleTopLevelBankClick = makeBankClickHandler(
-  saveTopLevelSliderBank,
-  loadTopLevelSliderBank,
+  (idx) => {
+    saveTopLevelSliderBank(idx)
+    saveTopLevelToggleBank(idx)
+  },
+  (idx) => {
+    loadTopLevelSliderBank(idx)
+    loadTopLevelToggleBank(idx)
+  },
   (idx) => appState.currentTopLevelBank = idx,
 )
 
@@ -393,7 +403,7 @@ const startVoice = (voiceIdx: number) => {
       
       try {
         // Execute the JavaScript code with proper context
-        await voiceExecutableFuncs.get(voiceIdx.toString())(ctx, runLine)
+        await voiceExecutableFuncs.get(voiceIdx.toString())(ctx, runLine, appState.sliders) 
       } catch (error) {
         console.error('Error executing JavaScript code:', error)
       }
@@ -523,6 +533,23 @@ const loadSnapshotsFromFile = () => loadSnapshotsFromFileSM((snaps)=>{ appState.
 const saveToLocalStorage = () => saveToLocalStorageSM(appState)
 
 const loadFromLocalStorage = () => loadFromLocalStorageSM(appState)
+
+function refreshEditorsFromState() {
+  // Ensure Monaco & CodeMirror editors reflect current jsCode strings
+  appState.voices.forEach((voice, vIdx) => {
+    const jsCode = voice.saveable.jsCode || ''
+
+    const monacoEd = monacoEditors[vIdx]
+    if (monacoEd && monacoEd.getValue() !== jsCode) {
+      monacoEd.setValue(jsCode)
+    }
+
+    const cmEd = codeMirrorEditors[vIdx]
+    if (cmEd) {
+      setCodeMirrorContent(vIdx, jsCode)
+    }
+  })
+}
 
 onMounted(async() => {
   try {
@@ -715,7 +742,7 @@ function debounce<T extends (...args: any[]) => void>(fn: T, waitMs: number): T 
 
 
 // Enhanced update function that handles both text display and CodeMirror
-const updateVoiceDisplays = (voiceIndex: number) => {
+const updateVoiceOnSliderChange = (voiceIndex: number) => {
   const voice = appState.voices[voiceIndex]
   
   // Update the old text display (for non-JavaScript mode)
@@ -753,15 +780,21 @@ const updateVoiceDisplays = (voiceIndex: number) => {
   }
 }
 
+const updateVoiceOnToggleChange = (voiceIndex: number) => {
+  const jsCode = codeMirrorEditors[voiceIndex].state.doc.toString()
+  const { executedUUIDs } = analyzeExecutableLines(jsCode, voiceIndex)
+  applyScheduledHighlightByUUID(voiceIndex, executedUUIDs)
+}
+
 // Set up a debounced watcher per-voice that recomputes the display text at
 // most 10×/second whenever its slice definition OR any slider value changes.
 appState.voices.forEach((voice, vIdx) => {
   const debouncedUpdate = debounce(() => {
-    updateVoiceDisplays(vIdx)
+    updateVoiceOnSliderChange(vIdx)
   }, 100) // 100 ms → 10 Hz max
 
   // Initial computation
-  debouncedUpdate()
+  debouncedUpdate() //todo is this needed?
 
   // React to changes in the slice text of THIS voice …
   watch(
@@ -775,28 +808,14 @@ appState.voices.forEach((voice, vIdx) => {
     () => debouncedUpdate(),
     { deep: true }
   )
+
+  // …and to any change in the global toggle array
+  watch(
+    () => appState.toggles,
+    () => updateVoiceOnToggleChange(vIdx),
+    { deep: true }
+  )
 })
-
-// ----------------------------------------------------------------------------------
-//  Update editors after snapshot-load (and similar state restores)
-// ----------------------------------------------------------------------------------
-
-function refreshEditorsFromState() {
-  // Ensure Monaco & CodeMirror editors reflect current jsCode strings
-  appState.voices.forEach((voice, vIdx) => {
-    const jsCode = voice.saveable.jsCode || ''
-
-    const monacoEd = monacoEditors[vIdx]
-    if (monacoEd && monacoEd.getValue() !== jsCode) {
-      monacoEd.setValue(jsCode)
-    }
-
-    const cmEd = codeMirrorEditors[vIdx]
-    if (cmEd) {
-      setCodeMirrorContent(vIdx, jsCode)
-    }
-  })
-}
 
 // Update FX parameters for all voices
 appState.voices.forEach((_, idx) => updateFxParams(idx))
@@ -825,9 +844,9 @@ appState.voices.forEach((_, idx) => updateFxParams(idx))
     </div>
   </div>
   
-  <!-- Top Level Slider Banks -->
+  <!-- Top Level Slider & Toggle Banks -->
   <div class="slider-banks-section">
-    <h4>Top Level Slider Banks (Click: Load, Shift+Click: Save)</h4>
+    <h4>Top Level Banks (Click: Load, Shift+Click: Save) - Saves/Loads Both Sliders & Toggles</h4>
     <div class="top-level-bank-buttons">
       <button 
         v-for="bankIdx in 8" 
@@ -845,6 +864,14 @@ appState.voices.forEach((_, idx) => updateFxParams(idx))
       <div>{{ appState.sliders[idx] }}</div>
       <input type="range" v-model.number="appState.sliders[idx]" min="0" max="1" step="0.0001" />
       <label>slider {{ idx + 1 }}</label>
+    </div>
+  </div>
+
+  <div class="toggles-row">
+    <div class="toggle-column" v-for="(toggle, idx) in appState.toggles" :key="idx">
+      <div>{{ appState.toggles[idx] ? 'ON' : 'OFF' }}</div>
+      <input type="checkbox" v-model="appState.toggles[idx]" />
+      <label>toggle {{ idx + 1 }}</label>
     </div>
   </div>
   
@@ -1005,6 +1032,48 @@ appState.voices.forEach((_, idx) => updateFxParams(idx))
 }
 
 .slider-column label {
+  color: #d0d0d0;
+  font-size: 0.7rem;
+}
+
+.toggles-row {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+  padding: 0.5rem;
+  background: #1a1a1a;
+  border-radius: 4px;
+  border: 1px solid #444;
+}
+
+.toggle-column {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  color: #e0e0e0;
+  min-width: 80px;
+}
+
+.toggle-column div {
+  font-family: monospace;
+  font-size: 0.7rem;
+  min-height: 1rem;
+  color: #f0f0f0;
+  font-weight: 600;
+}
+
+.toggle-column input[type=checkbox] {
+  width: 20px;
+  height: 20px;
+  accent-color: #6a9bd1;
+  cursor: pointer;
+}
+
+.toggle-column label {
   color: #d0d0d0;
   font-size: 0.7rem;
 }

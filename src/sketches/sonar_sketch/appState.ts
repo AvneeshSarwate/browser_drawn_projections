@@ -31,6 +31,10 @@ export type SliderBanks = {
   topLevel: number[][]; // 8 banks of 8 sliders each
 }
 
+export type ToggleBanks = {
+  topLevel: boolean[][]; // 8 banks of 8 toggles each
+}
+
 export type SonarAppState = {
   p5Instance: p5 | undefined
   threeRenderer: THREE.WebGLRenderer | undefined
@@ -45,12 +49,16 @@ export type SonarAppState = {
   drawing: boolean
   voices: VoiceState[]
   sliders: number[]
+  toggles: boolean[]
   sliderBanks: SliderBanks
+  toggleBanks: ToggleBanks
   currentTopLevelBank: number
   snapshots: Array<{
     sliders: number[]
+    toggles: boolean[]
     voices: SaveableProperties[]
     sliderBanks: SliderBanks
+    toggleBanks: ToggleBanks
   }>
   autoSaveInterval?: number
 }
@@ -88,8 +96,12 @@ export const appState: SonarAppState = {
     currentFxBank: 0,
   })),
   sliders: Array.from({ length: 8 }, (): number => 0),
+  toggles: Array.from({ length: 8 }, (): boolean => false),
   sliderBanks: {
     topLevel: Array.from({ length: 8 }, () => Array.from({ length: 8 }, () => 0)),
+  },
+  toggleBanks: {
+    topLevel: Array.from({ length: 8 }, () => Array.from({ length: 8 }, () => false)),
   },
   currentTopLevelBank: 0,
   snapshots: [],

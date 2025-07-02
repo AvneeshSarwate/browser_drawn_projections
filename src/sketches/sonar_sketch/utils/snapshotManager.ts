@@ -75,10 +75,12 @@ export function loadFromLocalStorage(app: SonarAppState) {
     if (stateStr) {
       const state = JSON.parse(stateStr)
       if (Array.isArray(state.sliders)) app.sliders = [...state.sliders]
+      if (Array.isArray(state.toggles)) app.toggles = [...state.toggles]
       if (Array.isArray(state.voices)) state.voices.forEach((sv:SaveableProperties,i:number)=>{
         if (i<app.voices.length) app.voices[i].saveable = sv
       })
       if (state.sliderBanks?.topLevel) app.sliderBanks.topLevel = state.sliderBanks.topLevel.map((b:number[])=>[...b])
+      if (state.toggleBanks?.topLevel) app.toggleBanks.topLevel = state.toggleBanks.topLevel.map((b:boolean[])=>[...b])
       if (typeof state.currentTopLevelBank==='number') app.currentTopLevelBank = state.currentTopLevelBank
     }
   } catch (e) { console.error('localStorage load error', e) }
@@ -95,9 +97,13 @@ export function loadSnapshotStateOnly(app: SonarAppState, index:number, updateFx
   if (index<0 || index>=app.snapshots.length) return
   const snap = app.snapshots[index]
   app.sliders = [...snap.sliders]
+  if (snap.toggles) app.toggles = [...snap.toggles]
   app.voices.forEach((v,i)=>{ v.saveable = deepClone(snap.voices[i]) })
   if (snap.sliderBanks) {
     app.sliderBanks = { topLevel: snap.sliderBanks.topLevel.map((b:number[])=>[...b]) }
+  }
+  if (snap.toggleBanks) {
+    app.toggleBanks = { topLevel: snap.toggleBanks.topLevel.map((b:boolean[])=>[...b]) }
   }
   app.voices.forEach((_,i)=>updateFxParams(i))
 }
@@ -105,8 +111,10 @@ export function loadSnapshotStateOnly(app: SonarAppState, index:number, updateFx
 function buildCurrentLiveState(app: SonarAppState) {
   return {
     sliders: [...app.sliders],
+    toggles: [...app.toggles],
     voices : app.voices.map(v=> deepClone(v.saveable) as SaveableProperties),
-    sliderBanks:{ topLevel: app.sliderBanks.topLevel.map(b=>[...b]) },
+    sliderBanks: { topLevel: app.sliderBanks.topLevel.map(b => [...b]) },
+    toggleBanks: { topLevel: app.toggleBanks.topLevel.map(b => [...b]) },
     currentTopLevelBank: app.currentTopLevelBank
   }
 }
@@ -168,3 +176,17 @@ export function loadFxSliderBank(app: SonarAppState, voiceIndex:number, bankInde
   voice.currentFxBank = bankIndex
   updateFxParams(voiceIndex)
 } 
+
+// ---------------------------------------------------------------------------
+//  Toggle-bank save / load helpers (top-level)  -----------------------------
+// ---------------------------------------------------------------------------
+export function saveTopLevelToggleBank(app: SonarAppState, bankIndex:number) {
+  saveBank(app.toggleBanks.topLevel, bankIndex, [...app.toggles])
+}
+
+export function loadTopLevelToggleBank(app: SonarAppState, bankIndex:number) {
+  const bank = loadBank(app.toggleBanks.topLevel, bankIndex)
+  if (!bank) return
+  app.toggles = [...bank]
+  app.currentTopLevelBank = bankIndex
+}
