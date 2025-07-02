@@ -26,6 +26,9 @@ import { Decoration, type DecorationSet } from '@codemirror/view'
 import { StateField, StateEffect } from '@codemirror/state'
 import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
 import TsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
+import { buildClipFromLine, splitTextToGroups, generateUUID, findLineCallMatches, preprocessJavaScript, transformToRuntime, createExecutableFunction, resolveSliderExpressionsInJavaScript, type UUIDMapping, computeDisplayTextForVoice, parseRampLine } from './utils/transformHelpers'
+import { monacoEditors, codeMirrorEditors, setCodeMirrorContent, highlightCurrentLine, highlightScheduledLines, initializeMonacoEditorComplete, initializeCodeMirrorEditorComplete } from './utils/editorManager'
+import { saveSnapshot as saveSnapshotSM, loadSnapshotStateOnly as loadSnapshotStateOnlySM, downloadSnapshotsFile, loadSnapshotsFromFile as loadSnapshotsFromFileSM, saveToLocalStorage as saveToLocalStorageSM, loadFromLocalStorage as loadFromLocalStorageSM, saveBank, loadBank, makeBankClickHandler, saveTopLevelSliderBank as saveTopLevelSliderBankSM, loadTopLevelSliderBank as loadTopLevelSliderBankSM, saveFxSliderBank as saveFxSliderBankSM, loadFxSliderBank as loadFxSliderBankSM } from './utils/snapshotManager'
 
 // Monaco environment setup
 self.MonacoEnvironment = {
@@ -42,8 +45,6 @@ let shaderGraphEndNode: ShaderEffect | undefined = undefined
 let timeLoops: CancelablePromisePoxy<any>[] = []
 
 // Editor state - arrays to handle multiple voices
-const monacoEditors: (monaco.editor.IStandaloneCodeEditor | undefined)[] = []
-const codeMirrorEditors: (EditorView | undefined)[] = []
 const isJavascriptMode = ref(true)
 const showInputEditor = ref([true, true, true, true]) // Per-voice input editor visibility
 
@@ -69,37 +70,12 @@ const midiOuts: MIDIValOutput[] = [];
 let playNote: (pitch: number, velocity: number, ctx?: TimeContext, noteDur?: number, instInd?: number) => void = () => {}
 
 
-// Slider bank management functions
-const saveTopLevelSliderBank = (bankIndex: number) => {
-  saveBank(appState.sliderBanks.topLevel, bankIndex, [...appState.sliders])
-  console.log(`Top-level slider bank ${bankIndex + 1} saved`)
-}
+// Slider bank management wrappers
+const saveTopLevelSliderBank = (idx:number)=> saveTopLevelSliderBankSM(appState, idx)
+const loadTopLevelSliderBank = (idx:number)=> loadTopLevelSliderBankSM(appState, idx)
 
-const loadTopLevelSliderBank = (bankIndex: number) => {
-  const bank = loadBank(appState.sliderBanks.topLevel, bankIndex)
-  if (!bank) return
-  appState.sliders = [...bank]
-  appState.currentTopLevelBank = bankIndex
-  console.log(`Top-level slider bank ${bankIndex + 1} loaded`)
-}
-
-const saveFxSliderBank = (voiceIndex: number, bankIndex: number) => {
-  if (voiceIndex < 0 || voiceIndex >= appState.voices.length) return
-  const voice = appState.voices[voiceIndex]
-  saveBank(voice.saveable.fxBanks, bankIndex, voice.saveable.fxParams)
-  console.log(`Voice ${voiceIndex + 1} FX bank ${bankIndex + 1} saved`)
-}
-
-const loadFxSliderBank = (voiceIndex: number, bankIndex: number) => {
-  if (voiceIndex < 0 || voiceIndex >= appState.voices.length) return
-  const voice = appState.voices[voiceIndex]
-  const params = loadBank(voice.saveable.fxBanks, bankIndex)
-  if (!params) return
-  voice.saveable.fxParams = params
-  voice.currentFxBank = bankIndex
-  updateFxParams(voiceIndex)
-  console.log(`Voice ${voiceIndex + 1} FX bank ${bankIndex + 1} loaded`)
-}
+const saveFxSliderBank = (voiceIdx:number, bankIdx:number)=> saveFxSliderBankSM(appState, voiceIdx, bankIdx)
+const loadFxSliderBank = (voiceIdx:number, bankIdx:number)=> loadFxSliderBankSM(appState, voiceIdx, bankIdx, updateFxParams)
 
 const handleFxBankClick = (voiceIndex: number, bankIndex: number, event: MouseEvent) => {
   makeBankClickHandler(
@@ -115,123 +91,17 @@ const handleTopLevelBankClick = makeBankClickHandler(
   (idx) => appState.currentTopLevelBank = idx,
 )
 
-const saveSnapshot = () => {
-  appState.snapshots.push(buildCurrentLiveState())
-  console.log('Snapshot saved. Total snapshots:', appState.snapshots.length)
-}
+// Snapshot wrappers using snapshotManager
+const saveSnapshot = () => saveSnapshotSM(appState)
 
-//does not manage any playing state - only "safe" to load when not playing
-const loadSnapshotStateOnly = (ind: number) => {
-  if (ind < 0 || ind >= appState.snapshots.length) return
-  const snapshot = appState.snapshots[ind]
-  
-  appState.sliders = [...snapshot.sliders]
-  appState.voices.forEach((v, i) => {
-    v.saveable = JSON.parse(JSON.stringify(snapshot.voices[i]))
-  })
-  
-  // Load slider banks if they exist in the snapshot
-  if (snapshot.sliderBanks) {
-    appState.sliderBanks = {
-      topLevel: snapshot.sliderBanks.topLevel.map(bank => [...bank])
-    }
-  }
-  
-  // Update FX parameters for all voices
-  appState.voices.forEach((_, idx) => updateFxParams(idx))
-}
-
-const splitTransformChainToCommandStrings = (line: string) => {
-  const tokens = line.split(/\s*:\s*/).map((t) => t.trim()).filter(Boolean);
-  return { srcName: tokens[0], commandStrings: tokens.slice(1) }
-}
-
-const parseCommandString = (cmdString: string) => {
-  const parts = cmdString.split(/\s+/).filter(Boolean);
-  const symbol = parts[0];
-  const params = parts.slice(1);
-  return { symbol, params }
-  // Note: slider expressions cannot contain spaces (e.g., use "s1*2+s2" not "s1 * 2 + s2")
-}
-
-const paramUsesSliderExpression = (paramString: string) => {
-  return typeof paramString === 'string' && /s\d+/.test(paramString)
-}
-
-const evaluateSliderExpression = (expression: string, sliderScaleFunc: (val: number, clip: AbletonClip) => number, origClip: AbletonClip) => {
-  // Build variables map with current slider values
-  const sliderVars: Record<string, number> = {}
-  
-  // Extract all slider references (s1, s2, etc.) from the expression
-  const sliderMatches = expression.match(/s\d+/g) || []
-  const usedSliders = new Set(sliderMatches)
-  
-  for (const sliderRef of sliderMatches) {
-    const sliderIndex = parseInt(sliderRef.slice(1)) - 1
-    if (sliderIndex >= 0 && sliderIndex < appState.sliders.length) {
-      // Use scaled slider value for the expression evaluation
-      sliderVars[sliderRef] = sliderScaleFunc(appState.sliders[sliderIndex], origClip)
-    }
-  }
-  
-  try {
-    // Evaluate the expression with scaled slider values
-    const result = evaluate(expression, sliderVars)
-    
-    return { success: true, value: result, usedSliders }
-  } catch (error) {
-    console.warn('Failed to evaluate slider expression:', expression, error)
-    return { success: false, value: 0, rawValue: 0 }
-  }
-}
-
-const buildClipFromLine = (clipLine: string, skipClipTransform: boolean = false): { clip: AbletonClip, updatedClipLine: string } => {
-  const { srcName, commandStrings } = splitTransformChainToCommandStrings(clipLine)
-  if (!commandStrings.length) return { clip: undefined, updatedClipLine: clipLine };
-
-  const srcClip = clipMap.get(srcName);
-  if (!srcClip) return { clip: undefined, updatedClipLine: clipLine };
-
-  let curClip = srcClip.clone();
-  const origClip = srcClip.clone();
-  let updatedTokens = [srcName]; // Start with the clip name
-
-  commandStrings.forEach((cmdString) => {
-    const { symbol, params } = parseCommandString(cmdString)
-
-    const tf = TRANSFORM_REGISTRY[symbol as keyof typeof TRANSFORM_REGISTRY];
-    const parsedParams = tf.argParser(params);
-    const updatedParams = [...params]; // Clone params for updating
-
-    //if string arg contains slider expressions, evaluate and replace with the computed value
-    parsedParams.forEach((param, index) => {
-      if (paramUsesSliderExpression(param)) { 
-        const result = evaluateSliderExpression(param, tf.sliderScale[index], origClip);
-        if (result.success) {
-          parsedParams[index] = result.value;
-          const usedSliders = Array.from(result.usedSliders).join('')
-          updatedParams[index] = result.value.toFixed(2) + '-' + usedSliders; // Format for readability
-        }
-      }
-    });
-
-    if (tf && !skipClipTransform) curClip = tf.transform(curClip, ...parsedParams);
-    // Add the updated command token to the updatedTokens array
-    updatedTokens.push(`${symbol} ${updatedParams.join(' ')}`);
-  });
-
-  // Join tokens with " : " to reconstruct the main line
-  const updatedClipLine = updatedTokens.join(' : ');
-  
-  return { clip: curClip, updatedClipLine };
-}
+const loadSnapshotStateOnly = (ind:number)=> loadSnapshotStateOnlySM(appState, ind, updateFxParams)
 
 const testTransform = () => {
   // For testing, just use the first group's clipLine
   const groups = splitTextToGroups(testTransformInput.value)
   if (!groups.length) return
   
-  const { clip } = buildClipFromLine(groups[0].clipLine)
+  const { clip } = buildClipFromLine(groups[0].clipLine, appState.sliders)
   if (!clip || !testPianoRoll) return
 
   // Convert AbletonClip to PianoRoll NoteInfo format
@@ -247,14 +117,6 @@ const testTransform = () => {
   testPianoRoll.setViewportToShowAllNotes()
 }
 
-
-const parseRampLine = (rampLine: string) => {
-  const parts = rampLine.split(/\s+/).filter(Boolean) //[=>, param, startVal, endVal]
-  const paramName = parts[1]
-  const startVal = parseFloat(parts[2])
-  const endVal = parseFloat(parts[3])
-  return { paramName, startVal, endVal }
-}
 
 const launchParamRamp = (paramName: string, startVal: number, endVal: number, duration: number, voiceIdx: number, ctx: TimeContext) => {
   const startBeats = ctx.beats
@@ -285,7 +147,7 @@ const playClips = async (
   firstLoop: boolean
 ) => {
   const displayGroups = groups.map(g => ({...g}))
-  voiceState.playingText = computeDisplayTextForVoice(voiceState)
+  voiceState.playingText = computeDisplayTextForVoice(voiceState, appState)
 
   // Build map of group index to clipLine display index once before the loop
   const buildGroupToLineIndexMap = (groups: { clipLine: string, rampLines: string[] }[]) => {
@@ -309,7 +171,7 @@ const playClips = async (
     // Look up the display line index from the pre-built map
     voiceState.playingLineIdx = groupToLineIndexMap.get(idx)!
 
-    const { clip: curClip, updatedClipLine } = buildClipFromLine(group.clipLine)
+    const { clip: curClip, updatedClipLine } = buildClipFromLine(group.clipLine, appState.sliders)
     if (!curClip) continue
 
     // Update the display group with the processed clip line
@@ -334,174 +196,23 @@ const playClips = async (
   voiceState.playingLineIdx = -1
 }
 
-const splitTextToGroups = (text: string): { clipLine: string, rampLines: string[] }[] => {
-  const allLines = text.split('\n').map(l => l.trim()).filter(Boolean)
-  const groups: { clipLine: string, rampLines: string[] }[] = []
-  let currentClipLine = ''
-  let currentRampLines: string[] = []
-  
-  for (const line of allLines) {
-    if (line.startsWith('=> ')) {
-      // This is a modifier line, add to current group
-      currentRampLines.push(line)
-    } else {
-      // This is a main line, start a new group
-      if (currentClipLine) {
-        // Save the previous group
-        groups.push({ clipLine: currentClipLine, rampLines: [...currentRampLines] })
-      }
-      // Start new group with this main line
-      currentClipLine = line
-      currentRampLines = []
-    }
-  }
-  
-  // Don't forget the last group
-  if (currentClipLine) {
-    groups.push({ clipLine: currentClipLine, rampLines: [...currentRampLines] })
-  }
-  
-  return groups
-}
-
-const setCodeMirrorContent = (voiceIndex: number, content: string) => {
-  const codeMirrorEditor = codeMirrorEditors[voiceIndex]
-  if (codeMirrorEditor) {
-    codeMirrorEditor.dispatch({
-      changes: { from: 0, to: codeMirrorEditor.state.doc.length, insert: content }
-    })
-  }
-}
-
-// Editor initialization and management
+// Editor initialization wrappers
 const initializeMonacoEditor = (containerId: string, voiceIndex: number) => {
-  const container = document.getElementById(containerId)
-  if (!container) return
-
-  // TypeScript definitions for the line function
-  const lineTypeDef = `
-declare function line(text: string): void;
-declare const ctx: TimeContext;
-`
-
-  monaco.languages.typescript.javascriptDefaults.addExtraLib(lineTypeDef, 'line-types.d.ts')
-  
-  const defaultCode = `// JavaScript livecoding with line() function
-// Use conditionals and loops around line() calls
-
-const playFirstPattern = true
-const playAlternate = false
-
-if (playFirstPattern) {
-  line(\`debug1 : seg 1 : s_tr 1 : str 1 : q 1
-       => param1 0.5 0.8\`)
-}
-
-line(\`debug1 : seg 1 : s_tr 2 : str 1 : q 1
-     => param1 0.5 0.8
-     => param3 0.6 0.7\`)
-
-if (playAlternate) {
-  line(\`debug1 : seg 1 : s_tr 4 : str 1 : q 1\`)
-}
-
-line(\`debug1 : seg 1 : s_tr 3 : str 1 : q 1\`)
-`
-
-  const initialCode = appState.voices[voiceIndex].saveable.jsCode && appState.voices[voiceIndex].saveable.jsCode.length ? appState.voices[voiceIndex].saveable.jsCode : defaultCode
-
-  const editor = monaco.editor.create(container, {
-    value: initialCode,
-    language: 'javascript',
-    theme: 'vs-dark',
-    automaticLayout: true,
-    minimap: { enabled: false },
-    fontSize: 14,
-    lineNumbers: 'on',
-    wordWrap: 'on'
-  })
-  
-  // Persist and sync content on change
-  editor.onDidChangeModelContent(() => {
-    const newContent = editor.getValue()
-
-    // Update saveable state for snapshots / persistence
-    appState.voices[voiceIndex].saveable.jsCode = newContent
-
-    // Sync content to CodeMirror editor if it exists
-    const codeMirrorEditor = codeMirrorEditors[voiceIndex]
-    if (codeMirrorEditor) {
-      setCodeMirrorContent(voiceIndex, newContent)
-    }
-  })
-  
-  monacoEditors[voiceIndex] = editor
-
-  // Ensure jsCode is stored (important for freshly initialized editors)
-  appState.voices[voiceIndex].saveable.jsCode = initialCode
+  initializeMonacoEditorComplete(
+    containerId,
+    voiceIndex,
+    () => appState.voices[voiceIndex].saveable.jsCode,
+    (code, vIdx) => { appState.voices[vIdx].saveable.jsCode = code },
+    setCodeMirrorContent
+  )
 }
 
 const initializeCodeMirrorEditor = (containerId: string, voiceIndex: number) => {
-  const container = document.getElementById(containerId)
-  if (!container) return
-
-  // Get initial content from Monaco editor or use default
-  const monacoEditor = monacoEditors[voiceIndex]
-  const initialContent = monacoEditor ? monacoEditor.getValue() : `// Voice ${voiceIndex + 1} - JavaScript Livecoding
-line(\`debug1 : seg 1\`)
-line(\`debug2 : seg 2\`)
-line(\`debug3 : seg 3\`)`
-
-  const editor = new EditorView({
-    doc: initialContent,
-    extensions: [
-      basicSetup,
-      javascript(),
-      oneDark,
-      lineHighlightField,
-      EditorView.editable.of(false), // Read-only for visualization
-      EditorView.theme({
-        '&': { 
-          maxHeight: '400px',
-          minHeight: '200px'
-        },
-        '.cm-gutter, .cm-content': { 
-          minHeight: '200px' 
-        },
-        '.cm-scroller': { 
-          overflow: 'auto',
-          maxHeight: '400px'
-        },
-        '.cm-scheduled-line': {
-          backgroundColor: 'rgba(106, 155, 209, 0.15)',
-          borderLeft: '3px solid #6a9bd1'
-        },
-        '.cm-current-line': {
-          backgroundColor: 'rgba(74, 92, 42, 0.4)',
-          borderLeft: '3px solid #4a5c2a',
-          animation: 'pulse-line 1s ease-in-out infinite alternate'
-        }
-      })
-    ],
-    parent: container
-  })
-  
-  codeMirrorEditors[voiceIndex] = editor
-  
-  // Test decorator functionality after a short delay
-  // setTimeout(() => {
-  //   console.log(`Testing decorators for voice ${voiceIndex}`)
-  //   // Test scheduled line decorator on line 1
-  //   editor.dispatch({
-  //     effects: scheduledLineEffect.of({ lineNumbers: [1] })
-  //   })
-  //   // Test current line decorator on line 2 after 2 seconds
-  //   setTimeout(() => {
-  //     editor.dispatch({
-  //       effects: currentLineEffect.of({ lineNumber: 2 })
-  //     })
-  //   }, 2000)
-  // }, 1000)
+  initializeCodeMirrorEditorComplete(
+    containerId,
+    voiceIndex,
+    () => monacoEditors[voiceIndex]?.getValue() || ''
+  )
 }
 
 const switchToInputMode = (voiceIndex: number) => {
@@ -522,337 +233,46 @@ const switchToVisualizeMode = (voiceIndex: number) => {
 }
 
 // Code transformation pipeline
-type UUIDMapping = {
-  uuid: string
-  sourceLineNumber: number
-  sourceLineText: string
-  endLineNumber?: number  // For multiline spans
-}
-
 const uuidMappings = new Map<string, UUIDMapping[]>() // voiceIndex -> mappings
 const voiceActiveUUIDs = new Map<string, string>() // voiceIndex -> UUID for currently playing line
 const voiceScheduledUUIDs = new Map<string, string[]>() // voiceIndex -> UUIDs for scheduled lines
 const voiceExecutableFuncs = new Map<string, Function>() // voiceIndex -> executable function
-
-const generateUUID = (): string => {
-  return crypto.randomUUID()
-}
-
-// Common function to find all line() calls in JavaScript code
-const findLineCallMatches = (jsCode: string): { 
-  start: number, 
-  end: number, 
-  templateStart: number, 
-  templateEnd: number, 
-  content: string,
-  lines: { content: string, startIndex: number, endIndex: number }[]
-}[] => {
-  const matches: { 
-    start: number, 
-    end: number, 
-    templateStart: number, 
-    templateEnd: number, 
-    content: string,
-    lines: { content: string, startIndex: number, endIndex: number }[]
-  }[] = []
-  let searchIndex = 0
-  
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
-    const start = jsCode.indexOf('line(`', searchIndex)
-    if (start === -1) break
-    
-    // Find the matching `)` - look for backtick followed by closing paren
-    const backtickEnd = jsCode.indexOf('`)', start + 6)
-    if (backtickEnd === -1) {
-      searchIndex = start + 6
-      continue
-    }
-    
-    const end = backtickEnd + 2 // Include the `)
-    const templateStart = jsCode.indexOf('`', start)
-    const templateEnd = backtickEnd
-    const content = jsCode.substring(templateStart + 1, templateEnd)
-    
-    // Parse individual lines within the template literal
-    const lines: { content: string, startIndex: number, endIndex: number }[] = []
-    const contentLines = content.split('\n')
-    let currentIndex = 0
-    
-    contentLines.forEach((lineContent, index) => {
-      const trimmedContent = lineContent.trim()
-      if (trimmedContent) { // Skip empty lines
-        const lineStartIndex = templateStart + 1 + currentIndex
-        const lineEndIndex = lineStartIndex + lineContent.length
-        
-        lines.push({
-          content: trimmedContent,
-          startIndex: lineStartIndex,
-          endIndex: lineEndIndex
-        })
-      }
-      // +1 for the newline character (except for the last line)
-      currentIndex += lineContent.length + (index < contentLines.length - 1 ? 1 : 0)
-    })
-    
-    matches.push({ start, end, templateStart, templateEnd, content, lines })
-    searchIndex = end
-  }
-  
-  return matches
-}
-
-// Step 1: Preprocessor - transforms line() calls to include UUIDs
-const preprocessJavaScript = (inputCode: string, voiceIndex: number): { visualizeCode: string, mappings: UUIDMapping[] } => {
-  const mappings: UUIDMapping[] = []
-  let processedCode = inputCode
-  
-  // Find all line() calls using common function
-  const matches = findLineCallMatches(processedCode)
-  
-  // Process matches from end to beginning to avoid offset issues
-  for (let i = matches.length - 1; i >= 0; i--) {
-    const match = matches[i]
-    const uuid = generateUUID()
-    
-    // Get the complete line() call
-    const fullCallText = processedCode.substring(match.start, match.end)
-    
-    // Calculate line numbers for the span
-    const beforeCall = processedCode.substring(0, match.start)
-    const startLineNumber = beforeCall.split('\n').length
-    const endLineNumber = startLineNumber + fullCallText.split('\n').length - 1
-    
-    // Create mapping
-    mappings.unshift({
-      uuid,
-      sourceLineNumber: startLineNumber,
-      sourceLineText: fullCallText,
-      endLineNumber: endLineNumber
-    })
-    
-    // Extract just the template literal part
-    const templateLiteral = processedCode.substring(match.templateStart, match.templateEnd + 1)
-    
-    // Replace with UUID version
-    const replacement = `line(${templateLiteral}, "${uuid}")`
-    processedCode = processedCode.substring(0, match.start) + replacement + processedCode.substring(match.end)
-  }
-  
-  uuidMappings.set(voiceIndex.toString(), mappings)
-  return { visualizeCode: processedCode, mappings }
-}
-
-// Step 2: Runtime transformer - converts line() calls to runLine() calls
-const transformToRuntime = (visualizeCode: string, voiceIndex: number): string => {
-  let runtimeCode = visualizeCode
-  
-  // Find and replace line() calls that may span multiple lines
-  const lineCallRegex = /line\s*\(\s*(`(?:[^`\\]|\\.)*`)\s*,\s*"([^"]+)"\s*\)/gs
-  
-  runtimeCode = runtimeCode.replace(
-    lineCallRegex,
-    `await runLine($1, ctx, "$2", ${voiceIndex})`
-  )
-  
-  return runtimeCode
-}
-
-// Step 3: Create executable function from JavaScript code
-const createExecutableFunction = (visualizeCode: string, mappings: UUIDMapping[], voiceIndex: number): { 
-  executableFunc: Function | null, 
-  visualizeCode: string, 
-  mappings: UUIDMapping[] 
-} => {
-  try {
-    const runtimeCode = transformToRuntime(visualizeCode, voiceIndex)
-    
-    // Create async function with proper context  
-    const executableFunc = new Function('ctx', 'runLine', `
-      async function execute() {
-        ${runtimeCode}
-      }
-      return execute();
-    `)
-    
-    return { executableFunc, visualizeCode, mappings }
-  } catch (error) {
-    console.error('Error creating executable function:', error)
-    return { executableFunc: null, visualizeCode: '', mappings: [] }
-  }
-}
 
 // Helper to get mappings for a voice
 const getMappingsForVoice = (voiceIndex: number): UUIDMapping[] => {
   return uuidMappings.get(voiceIndex.toString()) || []
 }
 
-// Line highlighting system using CodeMirror decorations
-const scheduledLineEffect = StateEffect.define<{lineNumbers: number[]}>()
-const currentLineEffect = StateEffect.define<{lineNumber: number | null, endLineNumber?: number}>()
 
-// Decoration themes
-const scheduledLineDeco = Decoration.line({
-  attributes: { class: 'cm-scheduled-line' }
-})
-
-const currentLineDeco = Decoration.line({
-  attributes: { class: 'cm-current-line' }
-})
-
-// State field to manage line decorations
-const lineHighlightField = StateField.define<DecorationSet>({
-  create() {
-    return Decoration.none
-  },
-  update(decorations, tr) {
-    decorations = decorations.map(tr.changes)
-    
-    for (let effect of tr.effects) {
-      if (effect.is(scheduledLineEffect)) {
-        // console.log('Processing scheduled line effect:', effect.value)
-        // Remove old scheduled line decorations and add new ones
-        decorations = decorations.update({
-          filter: (from, to, decoration) => {
-            // Keep current line decorations, remove scheduled line decorations
-            const keepDeco = !decoration.spec.attributes?.class?.includes('cm-scheduled-line')
-            // console.log('Filtering scheduled decoration:', decoration.spec, 'keep:', keepDeco)
-            return keepDeco
-          }
-        })
-        
-        // Add new scheduled line decorations
-        const ranges = []
-        effect.value.lineNumbers.forEach(lineNum => {
-          if (lineNum >= 1 && lineNum <= tr.state.doc.lines) {
-            const line = tr.state.doc.line(lineNum)
-            // console.log(`Adding scheduled decoration to line ${lineNum} at position ${line.from}`)
-            ranges.push(scheduledLineDeco.range(line.from))
-          }
-        })
-        
-        decorations = decorations.update({ add: ranges })
-        // console.log('Updated decorations after scheduled effect:', decorations)
-      }
-      
-      if (effect.is(currentLineEffect)) {
-        // console.log('Processing current line effect:', effect.value)
-        // Remove old current line decorations
-        decorations = decorations.update({
-          filter: (from, to, decoration) => {
-            const keepDeco = !decoration.spec.attributes?.class?.includes('cm-current-line')
-            // console.log('Filtering current decoration:', decoration.spec, 'keep:', keepDeco)
-            return keepDeco
-          }
-        })
-        
-        // Add new current line decoration(s) if lineNumber is not null
-        if (effect.value.lineNumber !== null) {
-          const startLineNum = effect.value.lineNumber
-          const endLineNum = effect.value.endLineNumber || startLineNum
-          const ranges = []
-          
-          // Highlight all lines in the span
-          for (let lineNum = startLineNum; lineNum <= endLineNum; lineNum++) {
-            if (lineNum >= 1 && lineNum <= tr.state.doc.lines) {
-              const line = tr.state.doc.line(lineNum)
-              // console.log(`Adding current decoration to line ${lineNum} at position ${line.from}`)
-              ranges.push(currentLineDeco.range(line.from))
-            }
-          }
-          
-          decorations = decorations.update({ add: ranges })
-        }
-        // console.log('Updated decorations after current effect:', decorations)
-      }
-    }
-    
-    return decorations
-  },
-  provide: f => EditorView.decorations.from(f)
-})
-
-// Functions to control line highlighting
-const highlightScheduledLines = (voiceIndex: number, uuids: string[]) => {
+// Helper: convert a list of UUIDs to line numbers then call highlightScheduledLines from editorManager
+const applyScheduledHighlightByUUID = (voiceIndex: number, uuids: string[]) => {
   voiceScheduledUUIDs.set(voiceIndex.toString(), uuids)
-  
-  console.log(`highlightScheduledLines called for voice ${voiceIndex} with UUIDs:`, uuids)
-  const editor = codeMirrorEditors[voiceIndex]
-  if (!editor) {
-    console.log(`No editor found for voice ${voiceIndex}`)
-    return
-  }
-  
-  // Map UUIDs to line numbers (including multiline spans)
   const mappings = getMappingsForVoice(voiceIndex)
-  console.log(`Mappings for voice ${voiceIndex}:`, mappings)
   const lineNumbers: number[] = []
-  
   uuids.forEach(uuid => {
-    const mapping = mappings.find(m => m.uuid === uuid)
-    if (mapping) {
-      const startLine = mapping.sourceLineNumber
-      const endLine = mapping.endLineNumber || startLine
-      
-      // Add all lines in the span
-      for (let lineNum = startLine; lineNum <= endLine; lineNum++) {
-        lineNumbers.push(lineNum)
+    const m = mappings.find(mi => mi.uuid === uuid)
+    if (m) {
+      for (let ln = m.sourceLineNumber; ln <= (m.endLineNumber || m.sourceLineNumber); ln++) {
+        lineNumbers.push(ln)
       }
     }
   })
-  
-  console.log(`Highlighting scheduled lines:`, lineNumbers)
-  editor.dispatch({
-    effects: scheduledLineEffect.of({ lineNumbers })
-  })
+  highlightScheduledLines(voiceIndex, lineNumbers)
 }
 
-const highlightCurrentLine = (voiceIndex: number, lineNumber: number | null) => {
-  const editor = codeMirrorEditors[voiceIndex]
-  if (editor) {
-    editor.dispatch({
-      effects: currentLineEffect.of({ lineNumber })
-    })
-  }
-}
-
-// Helper to highlight current line by UUID (handles multiline spans)
+// Highlight current-line (or span) in CodeMirror based on UUID mapping
 const highlightCurrentLineByUUID = (voiceIndex: number, uuid: string | null) => {
-  // console.log(`highlightCurrentLineByUUID called for voice ${voiceIndex} with UUID:`, uuid)
-
   voiceActiveUUIDs.set(voiceIndex.toString(), uuid)
-  
-  const editor = codeMirrorEditors[voiceIndex]
-  if (!editor) {
-    // console.log(`No editor found for voice ${voiceIndex}`)
-    return
-  }
-  
+
   if (uuid === null) {
-    // console.log(`Clearing current line highlighting`)
-    // Clear current line highlighting
-    editor.dispatch({
-      effects: currentLineEffect.of({ lineNumber: null })
-    })
+    highlightCurrentLine(voiceIndex, null)
     return
   }
-  
-  const mappings = getMappingsForVoice(voiceIndex)
-  const mapping = mappings.find(m => m.uuid === uuid)
-  if (!mapping) {
-    console.log(`No mapping found for UUID: ${uuid}`)
-    return
-  }
-  
-  // For multiline spans, highlight all lines
-  const startLine = mapping.sourceLineNumber
-  const endLine = mapping.endLineNumber || startLine
-  
-  // console.log(`Highlighting current line(s) ${startLine} to ${endLine}`)
-  // Use a special effect for multiline current highlighting
-  editor.dispatch({
-    effects: currentLineEffect.of({ lineNumber: startLine, endLineNumber: endLine })
-  })
+
+  const mapping = getMappingsForVoice(voiceIndex).find(m => m.uuid === uuid)
+  if (!mapping) return
+
+  highlightCurrentLine(voiceIndex, mapping.sourceLineNumber, mapping.endLineNumber)
 }
 
 // Function to analyze JavaScript code by executing visualize-time version and tracking line() calls
@@ -861,7 +281,10 @@ const analyzeExecutableLines = (jsCode: string, voiceIndex: number): { executedU
   
   try {
     // Get the visualize-time code with UUIDs
-    const { visualizeCode, mappings } = preprocessJavaScript(jsCode, voiceIndex)
+    const { visualizeCode, mappings } = preprocessJavaScript(jsCode)
+    
+    // Store mappings for this voice
+    uuidMappings.set(voiceIndex.toString(), mappings)
     
     // Create line function that tracks which UUIDs are called (analysis mode)
     const line = (text: string, uuid: string) => {
@@ -894,7 +317,7 @@ const runLine = async (lineText: string, ctx: TimeContext, uuid: string, voiceIn
     if (!groups.length) return
     
     const group = groups[0] // runLine handles one group at a time
-    const { clip: curClip, updatedClipLine } = buildClipFromLine(group.clipLine)
+    const { clip: curClip, updatedClipLine } = buildClipFromLine(group.clipLine, appState.sliders)
     if (!curClip) return
     
     // Execute the clip similar to existing playClips logic
@@ -950,13 +373,13 @@ const startVoice = (voiceIdx: number) => {
         switchToVisualizeMode(voiceIdx)
         
         
-        const sliderResolvedCode = resolveSliderExpressionsInJavaScript(jsCode)
+        const sliderResolvedCode = resolveSliderExpressionsInJavaScript(jsCode, appState.sliders)
         setCodeMirrorContent(voiceIdx, sliderResolvedCode)
 
         // Analyze and highlight scheduled lines (returns UUIDs)
         //todo - using a seeded random number generator here would make this work properly with "randomness"
         const { executedUUIDs, mappings, visualizeCode } = analyzeExecutableLines(jsCode, voiceIdx)
-        highlightScheduledLines(voiceIdx, executedUUIDs)
+        applyScheduledHighlightByUUID(voiceIdx, executedUUIDs)
         // Create executable function
         const { executableFunc } = createExecutableFunction(visualizeCode, mappings, voiceIdx)
         if (!executableFunc) {
@@ -1017,7 +440,7 @@ const stopVoice = (voiceIdx: number) => {
   if (isJavascriptMode.value) {
     switchToInputMode(voiceIdx)
     // Clear all highlighting
-    highlightScheduledLines(voiceIdx, []) // Empty UUID array
+    applyScheduledHighlightByUUID(voiceIdx, []) // Empty UUID array
     highlightCurrentLineByUUID(voiceIdx, null)
   }
 }
@@ -1093,136 +516,13 @@ const updateFxParams = (voiceIdx: number, paramName?: string) => {
   }
 }
 
-const saveSnapshotsToFile = () => {
-  const dataStr = serialize(appState.snapshots)
-  const dataBlob = new Blob([dataStr], { type: 'application/json' })
-  
-  const link = document.createElement('a')
-  link.href = URL.createObjectURL(dataBlob)
-  link.download = `sonar_snapshots_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  URL.revokeObjectURL(link.href)
-  
-  console.log('Snapshots saved to file')
-}
+const saveSnapshotsToFile = () => downloadSnapshotsFile(appState.snapshots)
 
-// Shared validation function for snapshots
-const validateSnapshots = (snapshots: any, source: string) => {
-  if (!Array.isArray(snapshots)) {
-    throw new Error(`Invalid ${source} format: expected array of snapshots`)
-  }
-  
-  // Basic validation of snapshot structure
-  for (const snapshot of snapshots) {
-    if (!snapshot.sliders || !Array.isArray(snapshot.sliders)) {
-      throw new Error('Invalid snapshot format: missing or invalid sliders array')
-    }
-    if (!snapshot.voices || !Array.isArray(snapshot.voices)) {
-      throw new Error('Invalid snapshot format: missing or invalid voices array')
-    }
-    // Validate each voice has required properties
-    for (const voice of snapshot.voices) {
-      if (typeof voice.sliceText !== 'string' || 
-          typeof voice.startPhraseIdx !== 'number' ||
-          typeof voice.fxParams !== 'object') {
-        throw new Error('Invalid voice format in snapshot')
-      }
-      // jsCode is optional but if present must be string
-      if (voice.jsCode !== undefined && typeof voice.jsCode !== 'string') {
-        throw new Error('Invalid voice format: jsCode must be string')
-      }
-      // Validate FX banks if present (optional for backwards compatibility)
-      if (voice.fxBanks && !Array.isArray(voice.fxBanks)) {
-        throw new Error('Invalid voice format: invalid fxBanks array')
-      }
-    }
-    
-    // Validate slider banks if present (optional for backwards compatibility)
-    if (snapshot.sliderBanks) {
-      if (!snapshot.sliderBanks.topLevel || !Array.isArray(snapshot.sliderBanks.topLevel)) {
-        throw new Error('Invalid snapshot format: invalid topLevel slider banks')
-      }
-    }
-  }
-}
+const loadSnapshotsFromFile = () => loadSnapshotsFromFileSM((snaps)=>{ appState.snapshots = snaps; selectedSnapshot.value=-1 })
 
-const loadSnapshotsFromFile = () => {
-  const input = document.createElement('input')
-  input.type = 'file'
-  input.accept = '.json'
-  
-  input.onchange = (event) => {
-    const file = (event.target as HTMLInputElement).files?.[0]
-    if (!file) return
-    
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      try {
-        const result = e.target?.result as string
-        const loadedSnapshots = JSON.parse(result)
-        
-        // Use shared validation
-        validateSnapshots(loadedSnapshots, 'file')
-        
-        appState.snapshots = loadedSnapshots
-        selectedSnapshot.value = -1 // Reset selection
-        console.log(`Loaded ${loadedSnapshots.length} snapshots from file`)
-        
-      } catch (error) {
-        console.error('Error loading snapshots:', error)
-        alert(`Error loading snapshots: ${error.message}`)
-      }
-    }
-    
-    reader.readAsText(file)
-  }
-  
-  input.click()
-}
+const saveToLocalStorage = () => saveToLocalStorageSM(appState)
 
-// Add localStorage functions for both snapshots and current live state
-const LOCAL_SNAP_KEY = 'sonar_snapshots'
-const LOCAL_STATE_KEY = 'sonar_current_state'
-
-const saveToLocalStorage = () => {
-  try {
-    localStorage.setItem(LOCAL_SNAP_KEY, serialize(appState.snapshots))
-    localStorage.setItem(LOCAL_STATE_KEY, serialize(buildCurrentLiveState()))
-    // console.log('State auto-saved to localStorage (snapshots + current state)')
-  } catch (err) {
-    console.error('Error saving to localStorage:', err)
-  }
-}
-
-const loadFromLocalStorage = () => {
-  try {
-    const savedSnapshots = localStorage.getItem(LOCAL_SNAP_KEY)
-    if (savedSnapshots) {
-      const loaded = JSON.parse(savedSnapshots)
-      validateSnapshots(loaded, 'localStorage')
-      appState.snapshots = loaded
-      console.log(`Loaded ${loaded.length} snapshots from localStorage`)
-    }
-
-    const savedState = localStorage.getItem(LOCAL_STATE_KEY)
-    if (savedState) {
-      const state = JSON.parse(savedState)
-      if (Array.isArray(state.sliders)) appState.sliders = [...state.sliders]
-      if (Array.isArray(state.voices)) {
-        state.voices.forEach((sv: SaveableProperties, i: number) => {
-          if (i < appState.voices.length) appState.voices[i].saveable = sv
-        })
-      }
-      if (state.sliderBanks?.topLevel) appState.sliderBanks.topLevel = state.sliderBanks.topLevel.map((b: number[]) => [...b])
-      if (typeof state.currentTopLevelBank === 'number') appState.currentTopLevelBank = state.currentTopLevelBank
-      console.log('Loaded current live state from localStorage')
-    }
-  } catch (err) {
-    console.error('Error loading from localStorage:', err)
-  }
-}
+const loadFromLocalStorage = () => loadFromLocalStorageSM(appState)
 
 onMounted(async() => {
   try {
@@ -1378,25 +678,6 @@ onMounted(async() => {
 })
 
 
-/*
- add a UI to this component to allow live coding of the slice definitions.
-
-There should be 4 vertical columns, 1 for each voice, which plays on it's own midi output. they should have:
- - a text input to define the slice definitions
- - a button to play the slice definition clip
- - a toggle to select if the slice definition clip should loop
-
-the text of the slice definition should be one slice per line of text with the following format:
-
-clipName - sliceInd - transpose - speed - quantForNextSlice
-
-the clipName is the name of the clip to slice.
-the sliceInd is the index of the slice to play.
-the transpose is the transpose of the slice.
-the speed is the speed of the slice.
-the quantForNextSlice is the quantization value for the end of the slice.
-*/
-
 onUnmounted(() => {
   console.log("disposing livecoded resources")
   
@@ -1416,49 +697,6 @@ onUnmounted(() => {
 })
 
 
-// Generic bank helpers
-const deepClone = <T,>(obj: T): T => JSON.parse(JSON.stringify(obj))
-function saveBank<T>(bankArr: T[], bankIdx: number, data: T): void {
-  if (bankIdx < 0 || bankIdx >= bankArr.length) return
-  bankArr[bankIdx] = deepClone(data)
-}
-
-function loadBank<T>(bankArr: T[], bankIdx: number): T | undefined {
-  if (bankIdx < 0 || bankIdx >= bankArr.length) return
-  return deepClone(bankArr[bankIdx])
-}
-
-// Generic click-handler factory – hoisted because it is a function decl.
-function makeBankClickHandler(
-  saveFn: (idx: number) => void,
-  loadFn: (idx: number) => void,
-  selectFn?: (idx: number) => void
-) {
-  return (idx: number, ev: MouseEvent) => {
-    if (ev.shiftKey) {
-      saveFn(idx)
-      selectFn?.(idx)
-    } else {
-      loadFn(idx)
-    }
-  }
-}
-
-// JSON helper
-const serialize = (data: any) => JSON.stringify(data, null, 2)
-
-// Build a snapshot of the current editable state (sliders + voices + banks)
-function buildCurrentLiveState() {
-  return {
-    sliders: [...appState.sliders],
-    voices: appState.voices.map(v => deepClone(v.saveable) as SaveableProperties),
-    sliderBanks: {
-      topLevel: appState.sliderBanks.topLevel.map(bank => [...bank])
-    },
-    currentTopLevelBank: appState.currentTopLevelBank
-  }
-}
-
 // ---------------------------------------------------------------------------
 //  Debounced, reactive computation of the display text for every voice
 // ---------------------------------------------------------------------------
@@ -1472,63 +710,16 @@ function debounce<T extends (...args: any[]) => void>(fn: T, waitMs: number): T 
   } as T
 }
 
-// Produce the fully-resolved slice text (slider expressions evaluated)
-const computeDisplayTextForVoice = (voice: VoiceState): string => {
-  const groups = splitTextToGroups(voice.saveable.sliceText)
-  const lines: string[] = []
 
-  groups.forEach(group => {
-    const { updatedClipLine } = buildClipFromLine(group.clipLine, true)
-    if (group.rampLines.length) {
-      lines.push(updatedClipLine, ...group.rampLines)
-    } else {
-      lines.push(updatedClipLine)
-    }
-  })
 
-  return lines.join('\n')
-}
 
-// Function to resolve slider expressions in JavaScript code with line() calls
-const resolveSliderExpressionsInJavaScript = (jsCode: string): string => {
-  let processedCode = jsCode
-  
-  // Find all line() calls using common function
-  const matches = findLineCallMatches(processedCode)
-  
-  // Process matches from end to beginning to avoid offset issues
-  for (let i = matches.length - 1; i >= 0; i--) {
-    const match = matches[i]
-    
-    try {
-      // Find the main clip line (first non-empty, non-modifier line)
-      const mainClipLine = match.lines.find(line => !line.content.trim().startsWith('=>'))
-      
-      if (mainClipLine) {
-        // Transform only the main clip line
-        const { updatedClipLine } = buildClipFromLine(mainClipLine.content, true)
-        
-        // Replace just the main clip line in the original code, leaving modifiers unchanged
-        const beforeMainLine = processedCode.substring(0, mainClipLine.startIndex)
-        const afterMainLine = processedCode.substring(mainClipLine.endIndex)
-        processedCode = beforeMainLine + updatedClipLine + afterMainLine
-      }
-      
-    } catch (error) {
-      console.warn('Failed to resolve slider expressions in line:', match.lines[0]?.content || match.content, error)
-      // Keep original if resolution fails
-    }
-  }
-  
-  return processedCode
-}
 
 // Enhanced update function that handles both text display and CodeMirror
 const updateVoiceDisplays = (voiceIndex: number) => {
   const voice = appState.voices[voiceIndex]
   
   // Update the old text display (for non-JavaScript mode)
-  voice.playingText = computeDisplayTextForVoice(voice)
+  voice.playingText = computeDisplayTextForVoice(voice, appState)
   
   // Update CodeMirror editor if in JavaScript mode and it exists
   const codeMirrorEditor = codeMirrorEditors[voiceIndex]
@@ -1539,7 +730,7 @@ const updateVoiceDisplays = (voiceIndex: number) => {
       const originalJsCode = monacoEditor.getValue()
       
       // Resolve slider expressions in the JavaScript code
-      const resolvedJsCode = resolveSliderExpressionsInJavaScript(originalJsCode)
+      const resolvedJsCode = resolveSliderExpressionsInJavaScript(originalJsCode, appState.sliders)
       
       // Check if content has actually changed to avoid unnecessary updates
       const currentContent = codeMirrorEditor.state.doc.toString()
@@ -1549,7 +740,7 @@ const updateVoiceDisplays = (voiceIndex: number) => {
         // Re-apply scheduled line decorations if they were active
         const scheduledUUIDs = voiceScheduledUUIDs.get(voiceIndex.toString())
         if (scheduledUUIDs && scheduledUUIDs.length > 0) {
-          highlightScheduledLines(voiceIndex, scheduledUUIDs)
+          applyScheduledHighlightByUUID(voiceIndex, scheduledUUIDs)
         }
 
         // Re-apply current line decorations if they were active
@@ -1609,6 +800,7 @@ function refreshEditorsFromState() {
 
 // Update FX parameters for all voices
 appState.voices.forEach((_, idx) => updateFxParams(idx))
+
 
 
 </script>
