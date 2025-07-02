@@ -208,11 +208,114 @@ const initializeMonacoEditor = (containerId: string, voiceIndex: number) => {
   )
 }
 
+const handleDslLineClick = (lineContent: string, lineNumber: number, voiceIndex: number) => {
+  console.log(`DSL line clicked - Voice ${voiceIndex}, Line ${lineNumber}: ${lineContent}`)
+  
+  // Get the debug piano roll for this voice
+  const debugPianoRoll = debugPianoRolls[voiceIndex]
+  if (!debugPianoRoll) {
+    console.warn(`Debug piano roll not found for voice ${voiceIndex}`)
+    return
+  }
+  
+  // Get the full content from the CodeMirror editor to find complete DSL group
+  const codeMirrorEditor = codeMirrorEditors[voiceIndex]
+  if (!codeMirrorEditor) {
+    console.warn(`CodeMirror editor not found for voice ${voiceIndex}`)
+    return
+  }
+  
+  const fullContent = codeMirrorEditor.state.doc.toString()
+  const lines = fullContent.split('\n')
+  
+  // Use existing functionality to properly extract DSL from line() calls
+  let completeGroup = ''
+  
+  // First, check if this line is part of a line() call using the existing parser
+  const lineMatches = findLineCallMatches(fullContent)
+  let foundInLineCall = false
+  
+  for (const match of lineMatches) {
+    // Check if the clicked line is within this line() call
+    // Use a simpler approach: check if any of the match's lines correspond to our clicked line
+    for (const matchLine of match.lines) {
+      // Calculate which line number this match line corresponds to
+      const beforeMatch = fullContent.substring(0, matchLine.startIndex)
+      const matchLineNumber = beforeMatch.split('\n').length
+      
+      if (matchLineNumber === lineNumber) {
+        // Found the line() call that contains the clicked line
+        completeGroup = match.content
+        foundInLineCall = true
+        break
+      }
+    }
+    
+    if (foundInLineCall) break
+  }
+  
+  // If not found in a line() call, treat as direct DSL and look for modifier lines
+  if (!foundInLineCall) {
+    let dslContent = lineContent
+    // Remove any line() wrapper if it's a simple single-line case
+    if (lineContent.includes('line(`')) {
+      const match = lineContent.match(/line\(`([^`]*)`\)/)
+      if (match) {
+        dslContent = match[1]
+      }
+    }
+    
+    // Check if this is a multi-line DSL group with => modifier lines
+    // Find all subsequent lines that start with => and include them
+    completeGroup = dslContent
+    // Start from the next line after the clicked line (lineNumber is 1-based, array is 0-based)
+    for (let i = lineNumber; i < lines.length; i++) {
+      const nextLine = lines[i]?.trim()
+      if (nextLine && nextLine.startsWith('=>')) {
+        completeGroup += '\n' + nextLine
+      } else if (nextLine && !nextLine.startsWith('//') && nextLine !== '') {
+        // Stop at non-empty, non-comment line that's not a modifier
+        break
+      }
+    }
+  }
+  
+  console.log(`Complete DSL group:`, completeGroup)
+  
+  // Try to parse the DSL and update piano roll
+  try {
+    const groups = splitTextToGroups(completeGroup)
+    if (!groups.length) return
+    
+    const { clip } = buildClipFromLine(groups[0].clipLine, appState.sliders)
+    if (!clip) return
+
+    // Convert AbletonClip to PianoRoll NoteInfo format
+    const noteInfos: NoteInfo<{}>[] = clip.notes.map(note => ({
+      pitch: note.pitch,
+      position: note.position,
+      duration: note.duration,
+      velocity: note.velocity,
+      metadata: {}
+    }))
+
+    // Clear and refill the existing piano roll
+    debugPianoRoll.setNoteData(noteInfos)
+    debugPianoRoll.setViewportToShowAllNotes()
+    
+    console.log(`Updated debug piano roll for voice ${voiceIndex} with ${noteInfos.length} notes`)
+    
+  } catch (error) {
+    console.error('Error updating debug piano roll from DSL line:', error)
+  }
+}
+
 const initializeCodeMirrorEditor = (containerId: string, voiceIndex: number) => {
   initializeCodeMirrorEditorComplete(
     containerId,
     voiceIndex,
-    () => monacoEditors[voiceIndex]?.getValue() || ''
+    () => monacoEditors[voiceIndex]?.getValue() || '',
+    handleDslLineClick
   )
 }
 
@@ -480,6 +583,9 @@ const instrumentChains = [getPianoChain(), getSynthChain(), getDriftChain(1), ge
 const testTransformInput = ref('clip1 : arp up s1*0.5+0.1 s2^2 0 1')
 let testPianoRoll: PianoRoll<{}> | undefined = undefined
 
+// Debug piano rolls - one per voice
+const debugPianoRolls: (PianoRoll<{}> | undefined)[] = []
+
 // Snapshot selection state
 const selectedSnapshot = ref(-1)
 
@@ -558,6 +664,12 @@ onMounted(async() => {
     
     // Initialize test piano roll
     testPianoRoll = new PianoRoll<{}>('testPianoRollHolder', () => {}, () => {}, true)
+    
+    // Initialize debug piano rolls for each voice
+    for (let i = 0; i < appState.voices.length; i++) {
+      const containerId = `dslPianoRoll-${i}`
+      debugPianoRolls[i] = new PianoRoll<{}>(containerId, () => {}, () => {}, true)
+    }
     
     await MIDI_READY
     console.log('midi ready')
@@ -707,6 +819,9 @@ onUnmounted(() => {
   // Clean up editors
   monacoEditors.forEach(editor => editor?.dispose())
   codeMirrorEditors.forEach(editor => editor?.destroy())
+  
+  // Clean up debug piano rolls
+  debugPianoRolls.length = 0
   
   shaderGraphEndNode?.disposeAll()
   clearListeners()
@@ -987,6 +1102,13 @@ appState.voices.forEach((_, idx) => updateFxParams(idx))
           >
             {{ bankIdx }}
           </button>
+        </div>
+      </details>
+      
+      <details open class="debug-piano-roll">
+        <summary>Debug Piano Roll (Click DSL lines in editor to visualize)</summary>
+        <div class="debug-piano-roll-container">
+          <div :id="`dslPianoRoll-${idx}`" class="debug-piano-roll-viewer"></div>
         </div>
       </details>
     </div>
@@ -1737,5 +1859,26 @@ details summary {
   to {
     background-color: rgba(74, 92, 42, 0.6);
   }
+}
+
+/* Debug Piano Roll styling */
+.debug-piano-roll {
+  margin-bottom: 10px;
+}
+
+.debug-piano-roll-container {
+  background-color: #2e2e2e;
+  border: 1px solid #444;
+  border-radius: 4px;
+  padding: 10px;
+  min-height: 200px;
+  max-height: 300px;
+  overflow: auto;
+}
+
+.debug-piano-roll-viewer {
+  width: 100%;
+  height: 100%;
+  min-height: 180px;
 }
 </style>

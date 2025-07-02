@@ -6,12 +6,15 @@ import { Decoration, type DecorationSet } from '@codemirror/view'
 import { StateField, StateEffect } from '@codemirror/state'
 import { javascript } from '@codemirror/lang-javascript'
 import { oneDark } from '@codemirror/theme-one-dark'
+import { ViewPlugin, type ViewUpdate } from '@codemirror/view'
 
 // ---------------------------------------------------------------------------
 //  Shared arrays so callers can address editors by voice-index
 // ---------------------------------------------------------------------------
 export const monacoEditors: (monaco.editor.IStandaloneCodeEditor | undefined)[] = []
 export const codeMirrorEditors: (EditorView | undefined)[] = []
+
+
 
 // ---------------------------------------------------------------------------
 //  CodeMirror line-highlight decorations
@@ -91,6 +94,45 @@ export function highlightScheduledLines(voiceIndex: number, lineNumbers: number[
 }
 
 // ---------------------------------------------------------------------------
+//  DSL Line Click Decorator Plugin
+// ---------------------------------------------------------------------------
+export const createDslClickPlugin = (
+  voiceIndex: number, 
+  onDslLineClick: (lineContent: string, lineNumber: number, voiceIndex: number) => void
+) => {
+  return ViewPlugin.fromClass(class {
+    constructor() {}
+    
+    update(update: ViewUpdate) {
+      // Plugin updates when needed
+    }
+  }, {
+    eventHandlers: {
+      click: (event: MouseEvent, view: EditorView) => {
+        const target = event.target as HTMLElement
+        const pos = view.posAtCoords({ x: event.clientX, y: event.clientY })
+        if (!pos) return false
+        
+        const doc = view.state.doc
+        const line = doc.lineAt(pos)
+        const lineContent = line.text.trim()
+        
+        // Check if this looks like a DSL line (contains line() call or simple DSL pattern)
+        const isDslLine = lineContent.includes('line(`') || 
+                         /^[a-zA-Z_][a-zA-Z0-9_]*\s*:/.test(lineContent)
+        
+        if (isDslLine) {
+          onDslLineClick(lineContent, line.number, voiceIndex)
+          return true
+        }
+        
+        return false
+      }
+    }
+  })
+}
+
+// ---------------------------------------------------------------------------
 //  Complete editor initialization functions
 // ---------------------------------------------------------------------------
 export function initializeMonacoEditorComplete(
@@ -160,7 +202,8 @@ line(\`debug1 : seg 1 : s_tr 3 : str 1 : q 1\`)
 export function initializeCodeMirrorEditorComplete(
   containerId: string,
   voiceIndex: number,
-  getInitialContent: () => string
+  getInitialContent: () => string,
+  onDslLineClick?: (lineContent: string, lineNumber: number, voiceIndex: number) => void
 ) {
   const container = document.getElementById(containerId)
   if (!container) return
@@ -170,37 +213,50 @@ line(\`debug1 : seg 1\`)
 line(\`debug2 : seg 2\`)
 line(\`debug3 : seg 3\`)`
 
+  const extensions = [
+    basicSetup,
+    javascript(),
+    oneDark,
+    lineHighlightField,
+    EditorView.editable.of(false), // Read-only for visualization
+    EditorView.theme({
+      '&': { 
+        maxHeight: '400px',
+        minHeight: '200px'
+      },
+      '.cm-gutter, .cm-content': { 
+        minHeight: '200px' 
+      },
+      '.cm-scroller': { 
+        overflow: 'auto',
+        maxHeight: '400px'
+      },
+      '.cm-scheduled-line': {
+        backgroundColor: 'rgba(106, 155, 209, 0.15)',
+        borderLeft: '3px solid #6a9bd1'
+      },
+      '.cm-current-line': {
+        backgroundColor: 'rgba(74, 92, 42, 0.4)',
+        borderLeft: '3px solid #4a5c2a',
+        animation: 'pulse-line 1s ease-in-out infinite alternate'
+      },
+      '.cm-dsl-clickable': {
+        cursor: 'pointer',
+        '&:hover': {
+          backgroundColor: 'rgba(255, 255, 255, 0.1)'
+        }
+      }
+    })
+  ]
+
+  // Add DSL click plugin if callback provided
+  if (onDslLineClick) {
+    extensions.push(createDslClickPlugin(voiceIndex, onDslLineClick))
+  }
+
   const editor = new EditorView({
     doc: initialContent,
-    extensions: [
-      basicSetup,
-      javascript(),
-      oneDark,
-      lineHighlightField,
-      EditorView.editable.of(false), // Read-only for visualization
-      EditorView.theme({
-        '&': { 
-          maxHeight: '400px',
-          minHeight: '200px'
-        },
-        '.cm-gutter, .cm-content': { 
-          minHeight: '200px' 
-        },
-        '.cm-scroller': { 
-          overflow: 'auto',
-          maxHeight: '400px'
-        },
-        '.cm-scheduled-line': {
-          backgroundColor: 'rgba(106, 155, 209, 0.15)',
-          borderLeft: '3px solid #6a9bd1'
-        },
-        '.cm-current-line': {
-          backgroundColor: 'rgba(74, 92, 42, 0.4)',
-          borderLeft: '3px solid #4a5c2a',
-          animation: 'pulse-line 1s ease-in-out infinite alternate'
-        }
-      })
-    ],
+    extensions,
     parent: container
   })
   
