@@ -590,7 +590,6 @@ onMounted(async() => {
       // updatePianoFX(pianoIndex);
       
       const piano = instrumentChains[mod2(pianoIndex, instrumentChains.length)].instrument
-      //todo - get this to use duration and have midi output signature for consistency
       // const bpm = ctx.bpm
       // const dur = noteDur * (60 / bpm)
       // piano.triggerAttackRelease([m2f(pitch)], dur, null, velocity)

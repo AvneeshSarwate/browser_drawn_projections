@@ -274,7 +274,7 @@ export const applyScheduledHighlightByUUID = (voiceIndex: number, uuids: string[
   uuids.forEach(uuid => {
     const m = mappings.find(mi => mi.uuid === uuid)
     if (m) {
-      for (let ln = m.sourceLineNumber; ln <= (m.endLineNumber || m.sourceLineNumber); ln++) {
+      for (let ln = m.startLineNumber; ln <= (m.endLineNumber || m.startLineNumber); ln++) {
         lineNumbers.push(ln)
       }
     }
@@ -294,10 +294,10 @@ export const highlightCurrentLineByUUID = (voiceIndex: number, uuid: string | nu
   const mapping = getMappingsForVoice(voiceIndex).find(m => m.uuid === uuid)
   if (!mapping) return
 
-  highlightCurrentLine(voiceIndex, mapping.sourceLineNumber, mapping.endLineNumber)
+  highlightCurrentLine(voiceIndex, mapping.startLineNumber, mapping.endLineNumber)
 }
 
-export const handleDslLineClick = (lineContent: string, lineNumber: number, voiceIndex: number, appState: SonarAppState, debugPianoRolls: PianoRoll<{}>[]) => {
+export const handleDslLineClick = (lineContent: string, lineNumber: number, voiceIndex: number, appState: SonarAppState, debugPianoRolls: PianoRoll<{}>[], ) => {
   console.log(`DSL line clicked - Voice ${voiceIndex}, Line ${lineNumber}: ${lineContent}`)
   
   // Get the debug piano roll for this voice
@@ -313,9 +313,15 @@ export const handleDslLineClick = (lineContent: string, lineNumber: number, voic
     console.warn(`CodeMirror editor not found for voice ${voiceIndex}`)
     return
   }
+
+  const monacoEditor = monacoEditors[voiceIndex]
+  if (!monacoEditor) {
+    console.warn(`Monaco editor not found for voice ${voiceIndex}`)
+    return
+  }
   
-  const fullContent = codeMirrorEditor.state.doc.toString()
-  const lines = fullContent.split('\n')
+  const fullContent = monacoEditor.getValue()
+  // const lines = fullContent.split('\n')
   
   // Use existing functionality to properly extract DSL from line() calls
   let completeGroup = ''
@@ -343,31 +349,32 @@ export const handleDslLineClick = (lineContent: string, lineNumber: number, voic
     if (foundInLineCall) break
   }
   
-  // If not found in a line() call, treat as direct DSL and look for modifier lines
-  if (!foundInLineCall) {
-    let dslContent = lineContent
-    // Remove any line() wrapper if it's a simple single-line case
-    if (lineContent.includes('line(`')) {
-      const match = lineContent.match(/line\(`([^`]*)`\)/)
-      if (match) {
-        dslContent = match[1]
-      }
-    }
+  // this never happens
+  // // If not found in a line() call, treat as direct DSL and look for modifier lines
+  // if (!foundInLineCall) {
+  //   let dslContent = lineContent
+  //   // Remove any line() wrapper if it's a simple single-line case
+  //   if (lineContent.includes('line(`')) {
+  //     const match = lineContent.match(/line\(`([^`]*)`\)/)
+  //     if (match) {
+  //       dslContent = match[1]
+  //     }
+  //   }
     
-    // Check if this is a multi-line DSL group with => modifier lines
-    // Find all subsequent lines that start with => and include them
-    completeGroup = dslContent
-    // Start from the next line after the clicked line (lineNumber is 1-based, array is 0-based)
-    for (let i = lineNumber; i < lines.length; i++) {
-      const nextLine = lines[i]?.trim()
-      if (nextLine && nextLine.startsWith('=>')) {
-        completeGroup += '\n' + nextLine
-      } else if (nextLine && !nextLine.startsWith('//') && nextLine !== '') {
-        // Stop at non-empty, non-comment line that's not a modifier
-        break
-      }
-    }
-  }
+  //   // Check if this is a multi-line DSL group with => modifier lines
+  //   // Find all subsequent lines that start with => and include them
+  //   completeGroup = dslContent
+  //   // Start from the next line after the clicked line (lineNumber is 1-based, array is 0-based)
+  //   for (let i = lineNumber; i < lines.length; i++) {
+  //     const nextLine = lines[i]?.trim()
+  //     if (nextLine && nextLine.startsWith('=>')) {
+  //       completeGroup += '\n' + nextLine
+  //     } else if (nextLine && !nextLine.startsWith('//') && nextLine !== '') {
+  //       // Stop at non-empty, non-comment line that's not a modifier
+  //       break
+  //     }
+  //   }
+  // }
   
   console.log(`Complete DSL group:`, completeGroup)
   

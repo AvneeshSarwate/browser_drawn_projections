@@ -123,7 +123,7 @@ export const splitTextToGroups = (text: string): { clipLine: string; rampLines: 
 /** Type definition for UUID mapping data */
 export type UUIDMapping = {
   uuid: string
-  sourceLineNumber: number
+  startLineNumber: number
   sourceLineText: string
   endLineNumber?: number  // For multiline spans
 }
@@ -197,7 +197,7 @@ export const findLineCallMatches = (jsCode: string): {
   return matches
 }
 
-const uuidCache = new Map<string, { visualizeCode: string, mappings: UUIDMapping[] }>()
+const uuidCache = new Map<string, { visualizeCode: string, inputCode: string, mappings: UUIDMapping[] }>()
 const makeCacheKey = (jsCode: string, voiceIndex: number) => `voice: ${voiceIndex} ${jsCode}`
 
 /** 
@@ -211,11 +211,7 @@ export const preprocessJavaScript = (inputCode: string, voiceIndex: number): { v
   /**
    * this is necessary for allowing re-evaluation of what lines run when toggles/flags change - 
    * you want to re-run the visualization code, but maintain the same UUID mappings for lines()
-   */
-  if (voiceIndex == 0) {
-    const x = 5
-  }
-  
+   */  
   const cacheKey = makeCacheKey(inputCode, voiceIndex)
   if(uuidCache.has(cacheKey)) return uuidCache.get(cacheKey)
 
@@ -241,9 +237,9 @@ export const preprocessJavaScript = (inputCode: string, voiceIndex: number): { v
     // Create mapping
     mappings.unshift({
       uuid,
-      sourceLineNumber: startLineNumber,
+      startLineNumber,
       sourceLineText: fullCallText,
-      endLineNumber: endLineNumber
+      endLineNumber
     })
     
     // Extract just the template literal part
@@ -254,7 +250,7 @@ export const preprocessJavaScript = (inputCode: string, voiceIndex: number): { v
     processedCode = processedCode.substring(0, match.start) + replacement + processedCode.substring(match.end)
   }
 
-  uuidCache.set(cacheKey, { visualizeCode: processedCode, mappings })
+  uuidCache.set(cacheKey, { visualizeCode: processedCode, inputCode, mappings })
   
   return { visualizeCode: processedCode, mappings }
 }
