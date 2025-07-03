@@ -232,7 +232,14 @@ const switchToVisualizeMode = (voiceIndex: number) => {
   
   if (monacoEditor && codeMirrorEditor) {
     const content = monacoEditor.getValue()
-    setCodeMirrorContent(voiceIndex, content)
+
+    //transform source to reflect slider values
+    const sliderResolvedCode = resolveSliderExpressionsInJavaScript(content, appState.sliders)
+    setCodeMirrorContent(voiceIndex, sliderResolvedCode)
+
+    // Analyze and highlight scheduled lines (returns UUIDs)
+    const { executedUUIDs, mappings, visualizeCode } = analyzeExecutableLines(content, voiceIndex, appState, uuidMappings)
+    applyScheduledHighlightByUUID(voiceIndex, executedUUIDs, voiceScheduledUUIDs, getMappingsForVoice)
   }
 }
 
