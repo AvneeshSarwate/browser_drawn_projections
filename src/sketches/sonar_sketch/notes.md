@@ -1,6 +1,11 @@
 # notes
 
 
+## design assumptions to remember
+- first line of DSL is the clip line
+- transforming text never changes its line structure
+
+
 
 
 parameter ramping syntax
