@@ -383,25 +383,37 @@ export const handleDslLineClick = (lineContent: string, lineNumber: number, voic
     const groups = splitTextToGroups(completeGroup)
     if (!groups.length) return
     
-    const { clip } = buildClipFromLine(groups[0].clipLine, appState.sliders)
-    if (!clip) return
-
-    // Convert AbletonClip to PianoRoll NoteInfo format
-    const noteInfos: NoteInfo<{}>[] = clip.notes.map(note => ({
-      pitch: note.pitch,
-      position: note.position,
-      duration: note.duration,
-      velocity: note.velocity,
-      metadata: {}
-    }))
-
-    // Clear and refill the existing piano roll
-    debugPianoRoll.setNoteData(noteInfos)
-    debugPianoRoll.setViewportToShowAllNotes()
-    
-    console.log(`Updated debug piano roll for voice ${voiceIndex} with ${noteInfos.length} notes`)
+    setPianoRollFromDslLine(completeGroup, voiceIndex, appState, debugPianoRolls)
     
   } catch (error) {
     console.error('Error updating debug piano roll from DSL line:', error)
   }
+}
+
+export const setPianoRollFromDslLine = (lineContent: string, voiceIndex: number, appState: SonarAppState, debugPianoRolls: PianoRoll<{}>[]) => {
+  const debugPianoRoll = debugPianoRolls[voiceIndex]
+  if (!debugPianoRoll) {
+    console.warn(`Debug piano roll not found for voice ${voiceIndex}`)
+    return
+  }
+
+  const { clip } = buildClipFromLine(lineContent, appState.sliders)
+  if (!clip) return
+
+  // Convert AbletonClip to PianoRoll NoteInfo format
+  const noteInfos: NoteInfo<{}>[] = clip.notes.map(note => ({
+    pitch: note.pitch,
+    position: note.position,
+    duration: note.duration,
+    velocity: note.velocity,
+    metadata: {}
+  }))
+
+  // Clear and refill the existing piano roll
+  debugPianoRoll.setNoteData(noteInfos)
+  debugPianoRoll.setViewportToShowAllNotes()
+  
+  console.log(`Updated debug piano roll for voice ${voiceIndex} with ${noteInfos.length} notes`)
+  
+  return noteInfos
 }
