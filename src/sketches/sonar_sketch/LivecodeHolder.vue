@@ -234,7 +234,7 @@ const switchToVisualizeMode = (voiceIndex: number) => {
     const content = monacoEditor.getValue()
 
     //transform source to reflect slider values
-    const sliderResolvedCode = resolveSliderExpressionsInJavaScript(content, appState.sliders)
+    const { sliderResolvedCode } = resolveSliderExpressionsInJavaScript(content, appState.sliders)
     setCodeMirrorContent(voiceIndex, sliderResolvedCode)
 
     // Analyze and highlight scheduled lines (returns UUIDs)
@@ -324,7 +324,7 @@ const startVoice = (voiceIdx: number) => {
         switchToVisualizeMode(voiceIdx)
         
         
-        const sliderResolvedCode = resolveSliderExpressionsInJavaScript(jsCode, appState.sliders)
+        const { sliderResolvedCode } = resolveSliderExpressionsInJavaScript(jsCode, appState.sliders)
         setCodeMirrorContent(voiceIdx, sliderResolvedCode)
 
         // Analyze and highlight scheduled lines (returns UUIDs)
@@ -709,12 +709,12 @@ const updateVoiceOnSliderChange = (voiceIndex: number) => {
       const originalJsCode = monacoEditor.getValue()
       
       // Resolve slider expressions in the JavaScript code
-      const resolvedJsCode = resolveSliderExpressionsInJavaScript(originalJsCode, appState.sliders)
+      const { sliderResolvedCode } = resolveSliderExpressionsInJavaScript(originalJsCode, appState.sliders)
       
       // Check if content has actually changed to avoid unnecessary updates
       const currentContent = codeMirrorEditor.state.doc.toString()
-      if (currentContent !== resolvedJsCode) {
-        setCodeMirrorContent(voiceIndex, resolvedJsCode)
+      if (currentContent !== sliderResolvedCode) {
+        setCodeMirrorContent(voiceIndex, sliderResolvedCode)
 
         // Re-apply scheduled line decorations if they were active
         const scheduledUUIDs = voiceScheduledUUIDs.get(voiceIndex.toString())

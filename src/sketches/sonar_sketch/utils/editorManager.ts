@@ -299,6 +299,8 @@ export const highlightCurrentLineByUUID = (voiceIndex: number, uuid: string | nu
 
 export const handleDslLineClick = (lineContent: string, lineNumber: number, voiceIndex: number, appState: SonarAppState, debugPianoRolls: PianoRoll<{}>[], ) => {
   console.log(`DSL line clicked - Voice ${voiceIndex}, Line ${lineNumber}: ${lineContent}`)
+
+  const lineIndex = lineNumber - 1
   
   // Get the debug piano roll for this voice
   const debugPianoRoll = debugPianoRolls[voiceIndex]
@@ -321,70 +323,26 @@ export const handleDslLineClick = (lineContent: string, lineNumber: number, voic
   }
   
   const fullContent = monacoEditor.getValue()
-  // const lines = fullContent.split('\n')
   
-  // Use existing functionality to properly extract DSL from line() calls
-  let completeGroup = ''
+  let clipLine = ''
   
   // First, check if this line is part of a line() call using the existing parser
   const lineMatches = findLineCallMatches(fullContent)
-  let foundInLineCall = false
   
   for (const match of lineMatches) {
-    // Check if the clicked line is within this line() call
-    // Use a simpler approach: check if any of the match's lines correspond to our clicked line
-    for (const matchLine of match.lines) {
-      // Calculate which line number this match line corresponds to
-      const beforeMatch = fullContent.substring(0, matchLine.startIndex)
-      const matchLineNumber = beforeMatch.split('\n').length
-      
-      if (matchLineNumber === lineNumber) {
-        // Found the line() call that contains the clicked line
-        completeGroup = match.content
-        foundInLineCall = true
-        break
-      }
+    // Check if the clicked line is the line() call itself
+    if (lineIndex === match.templateStartLine) {
+      // Found the line() call that contains the clicked line
+      clipLine = match.lines[0].content
+      break
     }
-    
-    if (foundInLineCall) break
   }
   
-  // this never happens
-  // // If not found in a line() call, treat as direct DSL and look for modifier lines
-  // if (!foundInLineCall) {
-  //   let dslContent = lineContent
-  //   // Remove any line() wrapper if it's a simple single-line case
-  //   if (lineContent.includes('line(`')) {
-  //     const match = lineContent.match(/line\(`([^`]*)`\)/)
-  //     if (match) {
-  //       dslContent = match[1]
-  //     }
-  //   }
-    
-  //   // Check if this is a multi-line DSL group with => modifier lines
-  //   // Find all subsequent lines that start with => and include them
-  //   completeGroup = dslContent
-  //   // Start from the next line after the clicked line (lineNumber is 1-based, array is 0-based)
-  //   for (let i = lineNumber; i < lines.length; i++) {
-  //     const nextLine = lines[i]?.trim()
-  //     if (nextLine && nextLine.startsWith('=>')) {
-  //       completeGroup += '\n' + nextLine
-  //     } else if (nextLine && !nextLine.startsWith('//') && nextLine !== '') {
-  //       // Stop at non-empty, non-comment line that's not a modifier
-  //       break
-  //     }
-  //   }
-  // }
-  
-  console.log(`Complete DSL group:`, completeGroup)
+  console.log(`Complete DSL group:`, clipLine)
   
   // Try to parse the DSL and update piano roll
-  try {
-    const groups = splitTextToGroups(completeGroup)
-    if (!groups.length) return
-    
-    setPianoRollFromDslLine(completeGroup, voiceIndex, appState, debugPianoRolls)
-    
+  try {    
+    setPianoRollFromDslLine(clipLine, voiceIndex, appState, debugPianoRolls)
   } catch (error) {
     console.error('Error updating debug piano roll from DSL line:', error)
   }

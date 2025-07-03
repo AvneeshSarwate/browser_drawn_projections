@@ -90,6 +90,7 @@ export function buildClipFromLine(
   return { clip: curClip, updatedClipLine: updatedTokens.join(' : ') }
 }
 
+//todo - splitTextToGroups is kind of redudant with findLineCallMatches this only works for raw DSL, not javascriot?
 /** Split multiline slice text into groups of main line + optional ramp lines */
 export const splitTextToGroups = (text: string): { clipLine: string; rampLines: string[] }[] => {
   const allLines = text.split('\n').map((l) => l.trim()).filter(Boolean)
@@ -139,6 +140,7 @@ export const findLineCallMatches = (jsCode: string): {
   end: number, 
   templateStart: number, 
   templateEnd: number, 
+  templateStartLine: number,
   content: string,
   lines: { content: string, startIndex: number, endIndex: number }[]
 }[] => {
@@ -147,6 +149,7 @@ export const findLineCallMatches = (jsCode: string): {
     end: number, 
     templateStart: number, 
     templateEnd: number, 
+    templateStartLine: number,
     content: string,
     lines: { content: string, startIndex: number, endIndex: number }[]
   }[] = []
@@ -169,6 +172,10 @@ export const findLineCallMatches = (jsCode: string): {
     const templateEnd = backtickEnd
     const content = jsCode.substring(templateStart + 1, templateEnd)
     
+    // Calculate the line number where the line() call starts
+    const beforeCallText = jsCode.substring(0, start)
+    const templateStartLine = (beforeCallText.match(/\n/g) || []).length
+    
     // Parse individual lines within the template literal
     const lines: { content: string, startIndex: number, endIndex: number }[] = []
     const contentLines = content.split('\n')
@@ -190,7 +197,7 @@ export const findLineCallMatches = (jsCode: string): {
       currentIndex += lineContent.length + (index < contentLines.length - 1 ? 1 : 0)
     })
     
-    matches.push({ start, end, templateStart, templateEnd, content, lines })
+    matches.push({ start, end, templateStart, templateEnd, templateStartLine, content, lines })
     searchIndex = end
   }
   
@@ -231,7 +238,7 @@ export const preprocessJavaScript = (inputCode: string, voiceIndex: number): { v
     
     // Calculate line numbers for the span
     const beforeCall = processedCode.substring(0, match.start)
-    const startLineNumber = beforeCall.split('\n').length
+    const startLineNumber = (beforeCall.match(/\n/g) || []).length + 1 // +1 for CodeMirror 1-based indexing
     const endLineNumber = startLineNumber + fullCallText.split('\n').length - 1
     
     // Create mapping
@@ -295,11 +302,13 @@ export const createExecutableFunction = (visualizeCode: string, mappings: UUIDMa
 }
 
 /** Resolve slider expressions in JavaScript code with line() calls */
-export const resolveSliderExpressionsInJavaScript = (jsCode: string, sliders: number[]): string => {
-  let processedCode = jsCode
+export const resolveSliderExpressionsInJavaScript = (jsCode: string, sliders: number[]): { sliderResolvedCode: string, clipLineReplacements: {originalLine: string, updatedLine: string, index: number}[] } => {
+  let sliderResolvedCode = jsCode
   
   // Find all line() calls using common function
-  const matches = findLineCallMatches(processedCode)
+  const matches = findLineCallMatches(jsCode)
+
+  const clipLineReplacements: {originalLine: string, updatedLine: string, index: number}[] = []
   
   // Process matches from end to beginning to avoid offset issues
   for (let i = matches.length - 1; i >= 0; i--) {
@@ -314,9 +323,10 @@ export const resolveSliderExpressionsInJavaScript = (jsCode: string, sliders: nu
         const { updatedClipLine } = buildClipFromLine(mainClipLine.content, sliders, true)
         
         // Replace just the main clip line in the original code, leaving modifiers unchanged
-        const beforeMainLine = processedCode.substring(0, mainClipLine.startIndex)
-        const afterMainLine = processedCode.substring(mainClipLine.endIndex)
-        processedCode = beforeMainLine + updatedClipLine + afterMainLine
+        const beforeMainLine = sliderResolvedCode.substring(0, mainClipLine.startIndex)
+        const afterMainLine = sliderResolvedCode.substring(mainClipLine.endIndex)
+        sliderResolvedCode = beforeMainLine + updatedClipLine + afterMainLine
+        clipLineReplacements.push({ originalLine: mainClipLine.content, updatedLine: updatedClipLine, index: match.templateStartLine })
       }
       
     } catch (error) {
@@ -325,7 +335,7 @@ export const resolveSliderExpressionsInJavaScript = (jsCode: string, sliders: nu
     }
   }
   
-  return processedCode
+  return { sliderResolvedCode, clipLineReplacements }
 } 
 
 
