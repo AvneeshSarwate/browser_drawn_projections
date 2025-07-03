@@ -18,7 +18,7 @@ import * as Tone from 'tone'
 import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
 import TsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
 import { buildClipFromLine, splitTextToGroups, generateUUID, findLineCallMatches, preprocessJavaScript, transformToRuntime, createExecutableFunction, resolveSliderExpressionsInJavaScript, type UUIDMapping, computeDisplayTextForVoice, parseRampLine, analyzeExecutableLines } from './utils/transformHelpers'
-import { monacoEditors, codeMirrorEditors, setCodeMirrorContent, highlightCurrentLine, highlightScheduledLines, initializeMonacoEditorComplete, initializeCodeMirrorEditorComplete, highlightCurrentLineByUUID, applyScheduledHighlightByUUID, handleDslLineClick, setPianoRollFromDslLine   } from './utils/editorManager'
+import { monacoEditors, codeMirrorEditors, setCodeMirrorContent, highlightCurrentLine, highlightScheduledLines, initializeMonacoEditorComplete, initializeCodeMirrorEditorComplete, highlightCurrentLineByUUID, applyScheduledHighlightByUUID, handleDslLineClick, setPianoRollFromDslLine, clickedDslRanges, highlightClickedDsl, updateDslOutlines } from './utils/editorManager'
 import { saveSnapshot as saveSnapshotSM, loadSnapshotStateOnly as loadSnapshotStateOnlySM, downloadSnapshotsFile, loadSnapshotsFromFile as loadSnapshotsFromFileSM, saveToLocalStorage as saveToLocalStorageSM, loadFromLocalStorage as loadFromLocalStorageSM, saveBank, loadBank, makeBankClickHandler, saveTopLevelSliderBank as saveTopLevelSliderBankSM, loadTopLevelSliderBank as loadTopLevelSliderBankSM, saveFxSliderBank as saveFxSliderBankSM, loadFxSliderBank as loadFxSliderBankSM, saveTopLevelToggleBank as saveTopLevelToggleBankSM, loadTopLevelToggleBank as loadTopLevelToggleBankSM } from './utils/snapshotManager'
 
 // Monaco environment setup
@@ -240,6 +240,10 @@ const switchToVisualizeMode = (voiceIndex: number) => {
     // Analyze and highlight scheduled lines (returns UUIDs)
     const { executedUUIDs, mappings, visualizeCode } = analyzeExecutableLines(content, voiceIndex, appState, uuidMappings)
     applyScheduledHighlightByUUID(voiceIndex, executedUUIDs, voiceScheduledUUIDs, getMappingsForVoice)
+    
+    // Clear any previous clicked DSL range when switching modes
+    clickedDslRanges.set(voiceIndex.toString(), null)
+    highlightClickedDsl(voiceIndex, null)
   }
 }
 
@@ -393,6 +397,9 @@ const stopVoice = (voiceIdx: number) => {
     // Clear all highlighting
     applyScheduledHighlightByUUID(voiceIdx, [], voiceScheduledUUIDs, getMappingsForVoice)
     highlightCurrentLineByUUID(voiceIdx, null, voiceActiveUUIDs, getMappingsForVoice)
+    // Clear clicked DSL highlighting
+    clickedDslRanges.set(voiceIdx.toString(), null)
+    highlightClickedDsl(voiceIdx, null)
   }
 }
 
@@ -714,6 +721,8 @@ const updateVoiceOnSliderChange = (voiceIndex: number) => {
       // Check if content has actually changed to avoid unnecessary updates
       const currentContent = codeMirrorEditor.state.doc.toString()
       if (currentContent !== sliderResolvedCode) {
+
+        
         setCodeMirrorContent(voiceIndex, sliderResolvedCode)
 
         // Re-apply scheduled line decorations if they were active
