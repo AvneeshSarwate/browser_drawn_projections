@@ -7,6 +7,9 @@ import { StateField, StateEffect } from '@codemirror/state'
 import { javascript } from '@codemirror/lang-javascript'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { ViewPlugin, type ViewUpdate } from '@codemirror/view'
+import { buildClipFromLine, findLineCallMatches, splitTextToGroups, type UUIDMapping } from './transformHelpers'
+import type { NoteInfo, PianoRoll } from '@/music/pianoRoll'
+import type { SonarAppState } from '../appState'
 
 // ---------------------------------------------------------------------------
 //  Shared arrays so callers can address editors by voice-index
@@ -262,3 +265,136 @@ line(\`debug3 : seg 3\`)`
   
   codeMirrorEditors[voiceIndex] = editor
 } 
+
+// Helper: convert a list of UUIDs to line numbers then call highlightScheduledLines from editorManager
+export const applyScheduledHighlightByUUID = (voiceIndex: number, uuids: string[], voiceScheduledUUIDs: Map<string, string[]>, getMappingsForVoice: (voiceIndex: number) => UUIDMapping[]) => {
+  voiceScheduledUUIDs.set(voiceIndex.toString(), uuids)
+  const mappings = getMappingsForVoice(voiceIndex)
+  const lineNumbers: number[] = []
+  uuids.forEach(uuid => {
+    const m = mappings.find(mi => mi.uuid === uuid)
+    if (m) {
+      for (let ln = m.sourceLineNumber; ln <= (m.endLineNumber || m.sourceLineNumber); ln++) {
+        lineNumbers.push(ln)
+      }
+    }
+  })
+  highlightScheduledLines(voiceIndex, lineNumbers)
+}
+
+// Highlight current-line (or span) in CodeMirror based on UUID mapping
+export const highlightCurrentLineByUUID = (voiceIndex: number, uuid: string | null, voiceActiveUUIDs: Map<string, string>, getMappingsForVoice: (voiceIndex: number) => UUIDMapping[]) => {
+  voiceActiveUUIDs.set(voiceIndex.toString(), uuid)
+
+  if (uuid === null) {
+    highlightCurrentLine(voiceIndex, null)
+    return
+  }
+
+  const mapping = getMappingsForVoice(voiceIndex).find(m => m.uuid === uuid)
+  if (!mapping) return
+
+  highlightCurrentLine(voiceIndex, mapping.sourceLineNumber, mapping.endLineNumber)
+}
+
+export const handleDslLineClick = (lineContent: string, lineNumber: number, voiceIndex: number, appState: SonarAppState, debugPianoRolls: PianoRoll<{}>[]) => {
+  console.log(`DSL line clicked - Voice ${voiceIndex}, Line ${lineNumber}: ${lineContent}`)
+  
+  // Get the debug piano roll for this voice
+  const debugPianoRoll = debugPianoRolls[voiceIndex]
+  if (!debugPianoRoll) {
+    console.warn(`Debug piano roll not found for voice ${voiceIndex}`)
+    return
+  }
+  
+  // Get the full content from the CodeMirror editor to find complete DSL group
+  const codeMirrorEditor = codeMirrorEditors[voiceIndex]
+  if (!codeMirrorEditor) {
+    console.warn(`CodeMirror editor not found for voice ${voiceIndex}`)
+    return
+  }
+  
+  const fullContent = codeMirrorEditor.state.doc.toString()
+  const lines = fullContent.split('\n')
+  
+  // Use existing functionality to properly extract DSL from line() calls
+  let completeGroup = ''
+  
+  // First, check if this line is part of a line() call using the existing parser
+  const lineMatches = findLineCallMatches(fullContent)
+  let foundInLineCall = false
+  
+  for (const match of lineMatches) {
+    // Check if the clicked line is within this line() call
+    // Use a simpler approach: check if any of the match's lines correspond to our clicked line
+    for (const matchLine of match.lines) {
+      // Calculate which line number this match line corresponds to
+      const beforeMatch = fullContent.substring(0, matchLine.startIndex)
+      const matchLineNumber = beforeMatch.split('\n').length
+      
+      if (matchLineNumber === lineNumber) {
+        // Found the line() call that contains the clicked line
+        completeGroup = match.content
+        foundInLineCall = true
+        break
+      }
+    }
+    
+    if (foundInLineCall) break
+  }
+  
+  // If not found in a line() call, treat as direct DSL and look for modifier lines
+  if (!foundInLineCall) {
+    let dslContent = lineContent
+    // Remove any line() wrapper if it's a simple single-line case
+    if (lineContent.includes('line(`')) {
+      const match = lineContent.match(/line\(`([^`]*)`\)/)
+      if (match) {
+        dslContent = match[1]
+      }
+    }
+    
+    // Check if this is a multi-line DSL group with => modifier lines
+    // Find all subsequent lines that start with => and include them
+    completeGroup = dslContent
+    // Start from the next line after the clicked line (lineNumber is 1-based, array is 0-based)
+    for (let i = lineNumber; i < lines.length; i++) {
+      const nextLine = lines[i]?.trim()
+      if (nextLine && nextLine.startsWith('=>')) {
+        completeGroup += '\n' + nextLine
+      } else if (nextLine && !nextLine.startsWith('//') && nextLine !== '') {
+        // Stop at non-empty, non-comment line that's not a modifier
+        break
+      }
+    }
+  }
+  
+  console.log(`Complete DSL group:`, completeGroup)
+  
+  // Try to parse the DSL and update piano roll
+  try {
+    const groups = splitTextToGroups(completeGroup)
+    if (!groups.length) return
+    
+    const { clip } = buildClipFromLine(groups[0].clipLine, appState.sliders)
+    if (!clip) return
+
+    // Convert AbletonClip to PianoRoll NoteInfo format
+    const noteInfos: NoteInfo<{}>[] = clip.notes.map(note => ({
+      pitch: note.pitch,
+      position: note.position,
+      duration: note.duration,
+      velocity: note.velocity,
+      metadata: {}
+    }))
+
+    // Clear and refill the existing piano roll
+    debugPianoRoll.setNoteData(noteInfos)
+    debugPianoRoll.setViewportToShowAllNotes()
+    
+    console.log(`Updated debug piano roll for voice ${voiceIndex} with ${noteInfos.length} notes`)
+    
+  } catch (error) {
+    console.error('Error updating debug piano roll from DSL line:', error)
+  }
+}

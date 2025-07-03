@@ -17,8 +17,8 @@ import { PianoRoll, type NoteInfo } from '@/music/pianoRoll'
 import * as Tone from 'tone'
 import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
 import TsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
-import { buildClipFromLine, splitTextToGroups, generateUUID, findLineCallMatches, preprocessJavaScript, transformToRuntime, createExecutableFunction, resolveSliderExpressionsInJavaScript, type UUIDMapping, computeDisplayTextForVoice, parseRampLine } from './utils/transformHelpers'
-import { monacoEditors, codeMirrorEditors, setCodeMirrorContent, highlightCurrentLine, highlightScheduledLines, initializeMonacoEditorComplete, initializeCodeMirrorEditorComplete } from './utils/editorManager'
+import { buildClipFromLine, splitTextToGroups, generateUUID, findLineCallMatches, preprocessJavaScript, transformToRuntime, createExecutableFunction, resolveSliderExpressionsInJavaScript, type UUIDMapping, computeDisplayTextForVoice, parseRampLine, analyzeExecutableLines } from './utils/transformHelpers'
+import { monacoEditors, codeMirrorEditors, setCodeMirrorContent, highlightCurrentLine, highlightScheduledLines, initializeMonacoEditorComplete, initializeCodeMirrorEditorComplete, highlightCurrentLineByUUID, applyScheduledHighlightByUUID, handleDslLineClick } from './utils/editorManager'
 import { saveSnapshot as saveSnapshotSM, loadSnapshotStateOnly as loadSnapshotStateOnlySM, downloadSnapshotsFile, loadSnapshotsFromFile as loadSnapshotsFromFileSM, saveToLocalStorage as saveToLocalStorageSM, loadFromLocalStorage as loadFromLocalStorageSM, saveBank, loadBank, makeBankClickHandler, saveTopLevelSliderBank as saveTopLevelSliderBankSM, loadTopLevelSliderBank as loadTopLevelSliderBankSM, saveFxSliderBank as saveFxSliderBankSM, loadFxSliderBank as loadFxSliderBankSM, saveTopLevelToggleBank as saveTopLevelToggleBankSM, loadTopLevelToggleBank as loadTopLevelToggleBankSM } from './utils/snapshotManager'
 
 // Monaco environment setup
@@ -208,114 +208,14 @@ const initializeMonacoEditor = (containerId: string, voiceIndex: number) => {
   )
 }
 
-const handleDslLineClick = (lineContent: string, lineNumber: number, voiceIndex: number) => {
-  console.log(`DSL line clicked - Voice ${voiceIndex}, Line ${lineNumber}: ${lineContent}`)
-  
-  // Get the debug piano roll for this voice
-  const debugPianoRoll = debugPianoRolls[voiceIndex]
-  if (!debugPianoRoll) {
-    console.warn(`Debug piano roll not found for voice ${voiceIndex}`)
-    return
-  }
-  
-  // Get the full content from the CodeMirror editor to find complete DSL group
-  const codeMirrorEditor = codeMirrorEditors[voiceIndex]
-  if (!codeMirrorEditor) {
-    console.warn(`CodeMirror editor not found for voice ${voiceIndex}`)
-    return
-  }
-  
-  const fullContent = codeMirrorEditor.state.doc.toString()
-  const lines = fullContent.split('\n')
-  
-  // Use existing functionality to properly extract DSL from line() calls
-  let completeGroup = ''
-  
-  // First, check if this line is part of a line() call using the existing parser
-  const lineMatches = findLineCallMatches(fullContent)
-  let foundInLineCall = false
-  
-  for (const match of lineMatches) {
-    // Check if the clicked line is within this line() call
-    // Use a simpler approach: check if any of the match's lines correspond to our clicked line
-    for (const matchLine of match.lines) {
-      // Calculate which line number this match line corresponds to
-      const beforeMatch = fullContent.substring(0, matchLine.startIndex)
-      const matchLineNumber = beforeMatch.split('\n').length
-      
-      if (matchLineNumber === lineNumber) {
-        // Found the line() call that contains the clicked line
-        completeGroup = match.content
-        foundInLineCall = true
-        break
-      }
-    }
-    
-    if (foundInLineCall) break
-  }
-  
-  // If not found in a line() call, treat as direct DSL and look for modifier lines
-  if (!foundInLineCall) {
-    let dslContent = lineContent
-    // Remove any line() wrapper if it's a simple single-line case
-    if (lineContent.includes('line(`')) {
-      const match = lineContent.match(/line\(`([^`]*)`\)/)
-      if (match) {
-        dslContent = match[1]
-      }
-    }
-    
-    // Check if this is a multi-line DSL group with => modifier lines
-    // Find all subsequent lines that start with => and include them
-    completeGroup = dslContent
-    // Start from the next line after the clicked line (lineNumber is 1-based, array is 0-based)
-    for (let i = lineNumber; i < lines.length; i++) {
-      const nextLine = lines[i]?.trim()
-      if (nextLine && nextLine.startsWith('=>')) {
-        completeGroup += '\n' + nextLine
-      } else if (nextLine && !nextLine.startsWith('//') && nextLine !== '') {
-        // Stop at non-empty, non-comment line that's not a modifier
-        break
-      }
-    }
-  }
-  
-  console.log(`Complete DSL group:`, completeGroup)
-  
-  // Try to parse the DSL and update piano roll
-  try {
-    const groups = splitTextToGroups(completeGroup)
-    if (!groups.length) return
-    
-    const { clip } = buildClipFromLine(groups[0].clipLine, appState.sliders)
-    if (!clip) return
 
-    // Convert AbletonClip to PianoRoll NoteInfo format
-    const noteInfos: NoteInfo<{}>[] = clip.notes.map(note => ({
-      pitch: note.pitch,
-      position: note.position,
-      duration: note.duration,
-      velocity: note.velocity,
-      metadata: {}
-    }))
-
-    // Clear and refill the existing piano roll
-    debugPianoRoll.setNoteData(noteInfos)
-    debugPianoRoll.setViewportToShowAllNotes()
-    
-    console.log(`Updated debug piano roll for voice ${voiceIndex} with ${noteInfos.length} notes`)
-    
-  } catch (error) {
-    console.error('Error updating debug piano roll from DSL line:', error)
-  }
-}
 
 const initializeCodeMirrorEditor = (containerId: string, voiceIndex: number) => {
   initializeCodeMirrorEditorComplete(
     containerId,
     voiceIndex,
     () => monacoEditors[voiceIndex]?.getValue() || '',
-    handleDslLineClick
+    (lc, ln, vIdx) => handleDslLineClick(lc, ln, vIdx, appState, debugPianoRolls)
   )
 }
 
@@ -348,72 +248,12 @@ const getMappingsForVoice = (voiceIndex: number): UUIDMapping[] => {
 }
 
 
-// Helper: convert a list of UUIDs to line numbers then call highlightScheduledLines from editorManager
-const applyScheduledHighlightByUUID = (voiceIndex: number, uuids: string[]) => {
-  voiceScheduledUUIDs.set(voiceIndex.toString(), uuids)
-  const mappings = getMappingsForVoice(voiceIndex)
-  const lineNumbers: number[] = []
-  uuids.forEach(uuid => {
-    const m = mappings.find(mi => mi.uuid === uuid)
-    if (m) {
-      for (let ln = m.sourceLineNumber; ln <= (m.endLineNumber || m.sourceLineNumber); ln++) {
-        lineNumbers.push(ln)
-      }
-    }
-  })
-  highlightScheduledLines(voiceIndex, lineNumbers)
-}
 
-// Highlight current-line (or span) in CodeMirror based on UUID mapping
-const highlightCurrentLineByUUID = (voiceIndex: number, uuid: string | null) => {
-  voiceActiveUUIDs.set(voiceIndex.toString(), uuid)
-
-  if (uuid === null) {
-    highlightCurrentLine(voiceIndex, null)
-    return
-  }
-
-  const mapping = getMappingsForVoice(voiceIndex).find(m => m.uuid === uuid)
-  if (!mapping) return
-
-  highlightCurrentLine(voiceIndex, mapping.sourceLineNumber, mapping.endLineNumber)
-}
-
-// Function to analyze JavaScript code by executing visualize-time version and tracking line() calls
-const analyzeExecutableLines = (jsCode: string, voiceIndex: number): { executedUUIDs: string[], mappings: UUIDMapping[], visualizeCode: string } => {
-  const executedUUIDs: string[] = []
-  
-  try {
-    // Get the visualize-time code with UUIDs
-    const { visualizeCode, mappings } = preprocessJavaScript(jsCode, voiceIndex)
-    
-    // Store mappings for this voice
-    uuidMappings.set(voiceIndex.toString(), mappings)
-    
-    // Create line function that tracks which UUIDs are called (analysis mode)
-    const line = (text: string, uuid: string) => {
-      executedUUIDs.push(uuid)
-      // No execution - just tracking
-    }
-    
-    // Create and execute the visualize-time function
-    const visualizeFunc = new Function('line', 'flags', visualizeCode)
-    
-    // Execute with the line function to see which UUIDs would be called
-    visualizeFunc(line, appState.toggles)
-    console.log("executedUUIDs", voiceIndex, executedUUIDs)
-    return { executedUUIDs, mappings, visualizeCode } // Return UUIDs of lines that will execute
-    
-  } catch (error) {
-    console.error('Error analyzing executable lines:', error)
-    return { executedUUIDs: [], mappings: [], visualizeCode: '' }
-  }
-}
 
 // runLine function - executes livecoding lines and manages highlighting
 const runLine = async (lineText: string, ctx: TimeContext, uuid: string, voiceIndex: number) => {
   // Highlight the current line being executed using UUID
-  highlightCurrentLineByUUID(voiceIndex, uuid)
+  highlightCurrentLineByUUID(voiceIndex, uuid, voiceActiveUUIDs, getMappingsForVoice)
   
   try {
     // Parse the line using existing parsing logic
@@ -456,7 +296,7 @@ const runLine = async (lineText: string, ctx: TimeContext, uuid: string, voiceIn
     console.error('Error in runLine:', error)
   } finally {
     // Clear current line highlighting after execution
-    highlightCurrentLineByUUID(voiceIndex, null)
+    highlightCurrentLineByUUID(voiceIndex, null, voiceActiveUUIDs, getMappingsForVoice)
   }
 }
 
@@ -482,8 +322,8 @@ const startVoice = (voiceIdx: number) => {
 
         // Analyze and highlight scheduled lines (returns UUIDs)
         //todo - using a seeded random number generator here would make this work properly with "randomness"
-        const { executedUUIDs, mappings, visualizeCode } = analyzeExecutableLines(jsCode, voiceIdx)
-        applyScheduledHighlightByUUID(voiceIdx, executedUUIDs)
+        const { executedUUIDs, mappings, visualizeCode } = analyzeExecutableLines(jsCode, voiceIdx, appState, uuidMappings)
+        applyScheduledHighlightByUUID(voiceIdx, executedUUIDs, voiceScheduledUUIDs, getMappingsForVoice)
         // Create executable function
         const { executableFunc } = createExecutableFunction(visualizeCode, mappings, voiceIdx)
         if (!executableFunc) {
@@ -544,8 +384,8 @@ const stopVoice = (voiceIdx: number) => {
   if (isJavascriptMode.value) {
     switchToInputMode(voiceIdx)
     // Clear all highlighting
-    applyScheduledHighlightByUUID(voiceIdx, []) // Empty UUID array
-    highlightCurrentLineByUUID(voiceIdx, null)
+    applyScheduledHighlightByUUID(voiceIdx, [], voiceScheduledUUIDs, getMappingsForVoice)
+    highlightCurrentLineByUUID(voiceIdx, null, voiceActiveUUIDs, getMappingsForVoice)
   }
 }
 
@@ -873,13 +713,13 @@ const updateVoiceOnSliderChange = (voiceIndex: number) => {
         // Re-apply scheduled line decorations if they were active
         const scheduledUUIDs = voiceScheduledUUIDs.get(voiceIndex.toString())
         if (scheduledUUIDs && scheduledUUIDs.length > 0) {
-          applyScheduledHighlightByUUID(voiceIndex, scheduledUUIDs)
+          applyScheduledHighlightByUUID(voiceIndex, scheduledUUIDs, voiceScheduledUUIDs, getMappingsForVoice)
         }
 
         // Re-apply current line decorations if they were active
         const activeUUID = voiceActiveUUIDs.get(voiceIndex.toString())
         if (activeUUID) {
-          highlightCurrentLineByUUID(voiceIndex, activeUUID)
+          highlightCurrentLineByUUID(voiceIndex, activeUUID, voiceActiveUUIDs, getMappingsForVoice)
         }
       }
     }
@@ -888,8 +728,8 @@ const updateVoiceOnSliderChange = (voiceIndex: number) => {
 
 const updateVoiceOnToggleChange = (voiceIndex: number) => {
   const jsCode = monacoEditors[voiceIndex].getValue()
-  const { executedUUIDs } = analyzeExecutableLines(jsCode, voiceIndex)
-  applyScheduledHighlightByUUID(voiceIndex, executedUUIDs)
+  const { executedUUIDs } = analyzeExecutableLines(jsCode, voiceIndex, appState, uuidMappings)
+  applyScheduledHighlightByUUID(voiceIndex, executedUUIDs, voiceScheduledUUIDs, getMappingsForVoice)
 }
 
 // Set up a debounced watcher per-voice that recomputes the display text at

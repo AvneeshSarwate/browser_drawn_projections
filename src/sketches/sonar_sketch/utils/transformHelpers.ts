@@ -357,3 +357,34 @@ export const parseRampLine = (rampLine: string) => {
   const endVal = parseFloat(parts[3])
   return { paramName, startVal, endVal }
 }
+
+// Function to analyze JavaScript code by executing visualize-time version and tracking line() calls
+export const analyzeExecutableLines = (jsCode: string, voiceIndex: number, appState: SonarAppState, uuidMappings: Map<string, UUIDMapping[]>): { executedUUIDs: string[], mappings: UUIDMapping[], visualizeCode: string } => {
+  const executedUUIDs: string[] = []
+  
+  try {
+    // Get the visualize-time code with UUIDs
+    const { visualizeCode, mappings } = preprocessJavaScript(jsCode, voiceIndex)
+    
+    // Store mappings for this voice
+    uuidMappings.set(voiceIndex.toString(), mappings)
+    
+    // Create line function that tracks which UUIDs are called (analysis mode)
+    const line = (text: string, uuid: string) => {
+      executedUUIDs.push(uuid)
+      // No execution - just tracking
+    }
+    
+    // Create and execute the visualize-time function
+    const visualizeFunc = new Function('line', 'flags', visualizeCode)
+    
+    // Execute with the line function to see which UUIDs would be called
+    visualizeFunc(line, appState.toggles)
+    console.log("executedUUIDs", voiceIndex, executedUUIDs)
+    return { executedUUIDs, mappings, visualizeCode } // Return UUIDs of lines that will execute
+    
+  } catch (error) {
+    console.error('Error analyzing executable lines:', error)
+    return { executedUUIDs: [], mappings: [], visualizeCode: '' }
+  }
+}
