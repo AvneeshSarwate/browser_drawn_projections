@@ -18,7 +18,7 @@ import * as Tone from 'tone'
 import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
 import TsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
 import { buildClipFromLine, splitTextToGroups, generateUUID, findLineCallMatches, preprocessJavaScript, transformToRuntime, createExecutableFunction, resolveSliderExpressionsInJavaScript, type UUIDMapping, computeDisplayTextForVoice, parseRampLine, analyzeExecutableLines } from './utils/transformHelpers'
-import { monacoEditors, codeMirrorEditors, setCodeMirrorContent, highlightCurrentLine, highlightScheduledLines, initializeMonacoEditorComplete, initializeCodeMirrorEditorComplete, highlightCurrentLineByUUID, applyScheduledHighlightByUUID, handleDslLineClick, setPianoRollFromDslLine, clickedDslRanges, highlightClickedDsl, updateDslOutlines, clearPianoRoll } from './utils/editorManager'
+import { monacoEditors, codeMirrorEditors, setCodeMirrorContent, highlightCurrentLine, highlightScheduledLines, initializeMonacoEditorComplete, initializeCodeMirrorEditorComplete, highlightCurrentLineByUUID, applyScheduledHighlightByUUID, handleDslLineClick, setPianoRollFromDslLine, clickedDslRanges, highlightClickedDsl, updateDslOutlines, clearPianoRoll, clickedDslOriginalText } from './utils/editorManager'
 import { saveSnapshot as saveSnapshotSM, loadSnapshotStateOnly as loadSnapshotStateOnlySM, downloadSnapshotsFile, loadSnapshotsFromFile as loadSnapshotsFromFileSM, saveToLocalStorage as saveToLocalStorageSM, loadFromLocalStorage as loadFromLocalStorageSM, saveBank, loadBank, makeBankClickHandler, saveTopLevelSliderBank as saveTopLevelSliderBankSM, loadTopLevelSliderBank as loadTopLevelSliderBankSM, saveFxSliderBank as saveFxSliderBankSM, loadFxSliderBank as loadFxSliderBankSM, saveTopLevelToggleBank as saveTopLevelToggleBankSM, loadTopLevelToggleBank as loadTopLevelToggleBankSM } from './utils/snapshotManager'
 
 // Monaco environment setup
@@ -215,7 +215,7 @@ const initializeCodeMirrorEditor = (containerId: string, voiceIndex: number) => 
     containerId,
     voiceIndex,
     () => monacoEditors[voiceIndex]?.getValue() || '',
-    (lc, ln, vIdx) => handleDslLineClick(lc, ln, vIdx, appState, debugPianoRolls)
+    (lc, ln, vIdx, originalText) => handleDslLineClick(lc, ln, vIdx, appState, debugPianoRolls, originalText)
   )
 }
 
@@ -223,8 +223,9 @@ const switchToInputMode = (voiceIndex: number) => {
   showInputEditor.value[voiceIndex] = true
   // Clear the piano roll when switching to input mode
   clearPianoRoll(voiceIndex, debugPianoRolls)
-  // Clear DSL highlighting
+  // Clear DSL highlighting and stored text
   clickedDslRanges.set(voiceIndex.toString(), null)
+  clickedDslOriginalText.set(voiceIndex.toString(), null)
   highlightClickedDsl(voiceIndex, null)
 }
 
@@ -401,8 +402,9 @@ const stopVoice = (voiceIdx: number) => {
     // Clear all highlighting
     applyScheduledHighlightByUUID(voiceIdx, [], voiceScheduledUUIDs, getMappingsForVoice)
     highlightCurrentLineByUUID(voiceIdx, null, voiceActiveUUIDs, getMappingsForVoice)
-    // Clear clicked DSL highlighting and piano roll
+    // Clear clicked DSL highlighting, stored text, and piano roll
     clickedDslRanges.set(voiceIdx.toString(), null)
+    clickedDslOriginalText.set(voiceIdx.toString(), null)
     highlightClickedDsl(voiceIdx, null)
     clearPianoRoll(voiceIdx, debugPianoRolls)
   }
@@ -741,6 +743,14 @@ const updateVoiceOnSliderChange = (voiceIndex: number) => {
         if (activeUUID) {
           highlightCurrentLineByUUID(voiceIndex, activeUUID, voiceActiveUUIDs, getMappingsForVoice)
         }
+      }
+      
+      // Re-render piano roll if there's an active DSL selection
+      const clickedRange = clickedDslRanges.get(voiceIndex.toString())
+      const originalDsl = clickedDslOriginalText.get(voiceIndex.toString())
+      if (clickedRange && originalDsl && !showInputEditor.value[voiceIndex]) {
+        // Re-render the piano roll with the stored original DSL text
+        setPianoRollFromDslLine(originalDsl, voiceIndex, appState, debugPianoRolls)
       }
     }
   }

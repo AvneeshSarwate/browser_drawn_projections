@@ -134,7 +134,7 @@ export function setCodeMirrorContent(voiceIndex: number, newContent: string) {
   if (!editor) return
   editor.dispatch({ changes: { from: 0, to: editor.state.doc.length, insert: newContent } })
   
-  //todo - should setting DSL decet+click decorators happen here? in general, decorator logic needs consolidation
+  //todo - should setting DSL decet+click decorators happen here? in general, decorator logic + state-flow needs consolidation
 
   // Update DSL outlines after content change
   updateDslOutlines(voiceIndex, newContent)
@@ -187,7 +187,7 @@ export function highlightClickedDsl(voiceIndex: number, range: { from: number, t
 // ---------------------------------------------------------------------------
 export const createDslClickPlugin = (
   voiceIndex: number, 
-  onDslLineClick: (lineContent: string, lineNumber: number, voiceIndex: number) => void,
+  onDslLineClick: (lineContent: string, lineNumber: number, voiceIndex: number, originalText?: string) => void,
   clickedDslRanges: Map<string, { from: number, to: number } | null>
 ) => {
   return ViewPlugin.fromClass(class {
@@ -217,10 +217,26 @@ export const createDslClickPlugin = (
           if (pos >= from && pos <= to) {
             const range = { from, to }
             
+            // Get the original DSL text from Monaco editor at the same line
+            const monacoEditor = monacoEditors[voiceIndex]
+            let originalDslText: string | undefined
+            
+            if (monacoEditor) {
+              const monacoModel = monacoEditor.getModel()
+              if (monacoModel) {
+                // Get the same line from Monaco editor
+                const monacoLine = monacoModel.getLineContent(line.number)
+                const monacoExtract = extractDslFromLine(monacoLine)
+                if (monacoExtract.isDsl && monacoExtract.dslText) {
+                  originalDslText = monacoExtract.dslText
+                }
+              }
+            }
+            
             // Set highlight
             clickedDslRanges.set(voiceIndex.toString(), range)
             highlightClickedDsl(voiceIndex, range)
-            onDslLineClick(dslExtract.dslText, line.number, voiceIndex)
+            onDslLineClick(dslExtract.dslText, line.number, voiceIndex, originalDslText)
             return true
           }
         }
@@ -300,14 +316,15 @@ line(\`debug1 : seg 1 : s_tr 3 : str 1 : q 1\`)
   onContentChange(initialCode, voiceIndex) // Ensure initial code is stored
 }
 
-// Store clicked DSL ranges per voice
+// Store clicked DSL ranges and original text per voice
 export const clickedDslRanges = new Map<string, { from: number, to: number } | null>()
+export const clickedDslOriginalText = new Map<string, string | null>()
 
 export function initializeCodeMirrorEditorComplete(
   containerId: string,
   voiceIndex: number,
   getInitialContent: () => string,
-  onDslLineClick?: (lineContent: string, lineNumber: number, voiceIndex: number) => void
+  onDslLineClick?: (lineContent: string, lineNumber: number, voiceIndex: number, originalText: string) => void
 ) {
   const container = document.getElementById(containerId)
   if (!container) return
@@ -440,7 +457,7 @@ export const highlightCurrentLineByUUID = (voiceIndex: number, uuid: string | nu
   highlightCurrentLine(voiceIndex, mapping.startLineNumber, mapping.endLineNumber)
 }
 
-export const handleDslLineClick = (lineContent: string, lineNumber: number, voiceIndex: number, appState: SonarAppState, debugPianoRolls: PianoRoll<{}>[], ) => {
+export const handleDslLineClick = (lineContent: string, lineNumber: number, voiceIndex: number, appState: SonarAppState, debugPianoRolls: PianoRoll<{}>[], originalDslText?: string) => {
   console.log(`DSL line clicked - Voice ${voiceIndex}, Line ${lineNumber}: ${lineContent}`)
 
   const lineIndex = lineNumber - 1
@@ -452,7 +469,14 @@ export const handleDslLineClick = (lineContent: string, lineNumber: number, voic
     return
   }
   
-  // Get the full content from the CodeMirror editor to find complete DSL group
+  // If we have the original DSL text, use it directly
+  if (originalDslText) {
+    clickedDslOriginalText.set(voiceIndex.toString(), originalDslText)
+    setPianoRollFromDslLine(originalDslText, voiceIndex, appState, debugPianoRolls)
+    return
+  }
+  
+  // Otherwise fall back to the old method
   const codeMirrorEditor = codeMirrorEditors[voiceIndex]
   if (!codeMirrorEditor) {
     console.warn(`CodeMirror editor not found for voice ${voiceIndex}`)
@@ -485,6 +509,7 @@ export const handleDslLineClick = (lineContent: string, lineNumber: number, voic
   
   // Try to parse the DSL and update piano roll
   try {    
+    clickedDslOriginalText.set(voiceIndex.toString(), clipLine)
     setPianoRollFromDslLine(clipLine, voiceIndex, appState, debugPianoRolls)
   } catch (error) {
     console.error('Error updating debug piano roll from DSL line:', error)
