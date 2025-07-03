@@ -225,9 +225,8 @@ export const createDslClickPlugin = (
           }
         }
         
-        // If clicked outside any DSL pattern, clear highlight
-        clickedDslRanges.set(voiceIndex.toString(), null)
-        highlightClickedDsl(voiceIndex, null)
+        // Don't clear highlight when clicking non-DSL lines
+        // The highlight should persist to show which DSL is in the piano roll
         return false
       }
     }
@@ -518,4 +517,16 @@ export const setPianoRollFromDslLine = (lineContent: string, voiceIndex: number,
   console.log(`Updated debug piano roll for voice ${voiceIndex} with ${noteInfos.length} notes`)
   
   return noteInfos
+}
+
+export const clearPianoRoll = (voiceIndex: number, debugPianoRolls: PianoRoll<{}>[]) => {
+  const debugPianoRoll = debugPianoRolls[voiceIndex]
+  if (!debugPianoRoll) {
+    console.warn(`Debug piano roll not found for voice ${voiceIndex}`)
+    return
+  }
+  
+  // Clear the piano roll
+  debugPianoRoll.setNoteData([])
+  console.log(`Cleared debug piano roll for voice ${voiceIndex}`)
 }

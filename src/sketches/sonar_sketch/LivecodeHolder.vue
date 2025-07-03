@@ -18,7 +18,7 @@ import * as Tone from 'tone'
 import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
 import TsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
 import { buildClipFromLine, splitTextToGroups, generateUUID, findLineCallMatches, preprocessJavaScript, transformToRuntime, createExecutableFunction, resolveSliderExpressionsInJavaScript, type UUIDMapping, computeDisplayTextForVoice, parseRampLine, analyzeExecutableLines } from './utils/transformHelpers'
-import { monacoEditors, codeMirrorEditors, setCodeMirrorContent, highlightCurrentLine, highlightScheduledLines, initializeMonacoEditorComplete, initializeCodeMirrorEditorComplete, highlightCurrentLineByUUID, applyScheduledHighlightByUUID, handleDslLineClick, setPianoRollFromDslLine, clickedDslRanges, highlightClickedDsl, updateDslOutlines } from './utils/editorManager'
+import { monacoEditors, codeMirrorEditors, setCodeMirrorContent, highlightCurrentLine, highlightScheduledLines, initializeMonacoEditorComplete, initializeCodeMirrorEditorComplete, highlightCurrentLineByUUID, applyScheduledHighlightByUUID, handleDslLineClick, setPianoRollFromDslLine, clickedDslRanges, highlightClickedDsl, updateDslOutlines, clearPianoRoll } from './utils/editorManager'
 import { saveSnapshot as saveSnapshotSM, loadSnapshotStateOnly as loadSnapshotStateOnlySM, downloadSnapshotsFile, loadSnapshotsFromFile as loadSnapshotsFromFileSM, saveToLocalStorage as saveToLocalStorageSM, loadFromLocalStorage as loadFromLocalStorageSM, saveBank, loadBank, makeBankClickHandler, saveTopLevelSliderBank as saveTopLevelSliderBankSM, loadTopLevelSliderBank as loadTopLevelSliderBankSM, saveFxSliderBank as saveFxSliderBankSM, loadFxSliderBank as loadFxSliderBankSM, saveTopLevelToggleBank as saveTopLevelToggleBankSM, loadTopLevelToggleBank as loadTopLevelToggleBankSM } from './utils/snapshotManager'
 
 // Monaco environment setup
@@ -221,7 +221,11 @@ const initializeCodeMirrorEditor = (containerId: string, voiceIndex: number) => 
 
 const switchToInputMode = (voiceIndex: number) => {
   showInputEditor.value[voiceIndex] = true
-  // Copy content from CodeMirror to Monaco if needed
+  // Clear the piano roll when switching to input mode
+  clearPianoRoll(voiceIndex, debugPianoRolls)
+  // Clear DSL highlighting
+  clickedDslRanges.set(voiceIndex.toString(), null)
+  highlightClickedDsl(voiceIndex, null)
 }
 
 const switchToVisualizeMode = (voiceIndex: number) => {
@@ -397,9 +401,10 @@ const stopVoice = (voiceIdx: number) => {
     // Clear all highlighting
     applyScheduledHighlightByUUID(voiceIdx, [], voiceScheduledUUIDs, getMappingsForVoice)
     highlightCurrentLineByUUID(voiceIdx, null, voiceActiveUUIDs, getMappingsForVoice)
-    // Clear clicked DSL highlighting
+    // Clear clicked DSL highlighting and piano roll
     clickedDslRanges.set(voiceIdx.toString(), null)
     highlightClickedDsl(voiceIdx, null)
+    clearPianoRoll(voiceIdx, debugPianoRolls)
   }
 }
 
