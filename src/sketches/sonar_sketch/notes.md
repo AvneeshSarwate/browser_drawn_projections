@@ -5,10 +5,47 @@
 - first line of DSL is the clip line
 - transforming text never changes its line structure
 
-
 ## UI additions
-- when slider is changed, if you're in visualize mode and have a DSL line selected, update the piano roll
 - when you click on a DSL line, you can click segmented into the line to see progressive transformations
+
+
+
+
+
+
+
+
+
+
+
+## demo syntax to use in voice 3
+```
+// JavaScript livecoding with line() function
+// Use conditionals and loops around line() calls
+
+const playFirstPattern = true
+const playAlternate = false
+
+if (playFirstPattern) {
+  line(`debug1 : seg 1 : s_tr 1 : str s1 : q 1
+       => param1 0.5 0.8`)
+}
+
+line(`debug1 : seg 1 : s_tr 2 : str 1 : q 1
+     => param1 0.5 0.8
+     => param3 0.6 0.7`)
+
+if (playAlternate) {
+  line(`debug1 : seg 1 : s_tr 4 : str 1 : q 1`)
+}
+
+line(`debug1 : seg 1 : s_tr 3 : str 1 : q 1`)
+```
+
+
+
+
+
 
 
 
