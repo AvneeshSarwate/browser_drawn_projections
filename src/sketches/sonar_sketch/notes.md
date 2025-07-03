@@ -6,6 +6,15 @@
 - transforming text never changes its line structure
 
 
+## UI additions
+- when slider is changed, if you're in visualize mode and have a DSL line selected, update the piano roll
+- when you click on a DSL line, you can click segmented into the line to see progressive transformations
+
+
+
+
+
+
 
 
 parameter ramping syntax
