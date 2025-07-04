@@ -366,7 +366,23 @@ function logLineDecorators(view: EditorView, lineNumber: number, mousePos: numbe
   const isLastLine = lineNumber === view.state.doc.lines
   const boundary = isFirstLine || isLastLine ? ` (${isFirstLine ? 'FIRST' : ''}${isLastLine ? 'LAST' : ''} LINE)` : ''
   
-  const logString = `Line ${lineNumber}${boundary} (mouse@${mousePos}, hover:${hoverRange ? `${hoverRange.from}-${hoverRange.to}` : 'none'}): ${decoratorInfo || 'no decorators'}`
+  // Extract DSL info for this line
+  const lineContent = line.text
+  const dslExtract = extractDslFromLine(lineContent)
+  let dslInfo = ''
+  if (dslExtract.isDsl && dslExtract.dslText && dslExtract.prefixLength !== undefined) {
+    const dslStart = line.from + dslExtract.prefixLength
+    const dslEnd = dslStart + dslExtract.dslText.length
+    dslInfo = ` DSL[${dslStart}-${dslEnd}]`
+    
+    // Calculate relative mouse position within DSL
+    if (mousePos >= dslStart && mousePos <= dslEnd) {
+      const relPos = mousePos - dslStart
+      dslInfo += ` relPos:${relPos}`
+    }
+  }
+  
+  const logString = `Line ${lineNumber}${boundary} (mouse@${mousePos}${dslInfo}, hover:${hoverRange ? `${hoverRange.from}-${hoverRange.to}` : 'none'}): ${decoratorInfo || 'no decorators'}`
   
   // Only log if something changed
   if (logString !== lastLoggedDecorators || lineNumber !== lastLoggedLineNumber) {
@@ -435,6 +451,11 @@ const createDslHoverPlugin = (voiceIndex: number) => {
       // Just use the position we calculated
       const partialEnd = dslStart + partialLength
       const newRange = { from: dslStart, to: partialEnd }
+      
+      // Debug log the calculation
+      if (!currentHoverRange || currentHoverRange.from !== newRange.from || currentHoverRange.to !== newRange.to) {
+        addLog(`Hover calc: pos=${pos}, dslStart=${dslStart}, relPos=${relativePos}, dslText="${dslExtract.dslText}", partialDsl="${partialDsl}", partialLength=${partialLength}, newRange=${newRange.from}-${newRange.to}`)
+      }
       
       // Only update if range changed
       if (!currentHoverRange || currentHoverRange.from !== newRange.from || currentHoverRange.to !== newRange.to) {
