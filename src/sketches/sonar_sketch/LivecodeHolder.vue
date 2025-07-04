@@ -18,7 +18,7 @@ import * as Tone from 'tone'
 import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
 import TsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
 import { buildClipFromLine, splitTextToGroups, generateUUID, findLineCallMatches, preprocessJavaScript, transformToRuntime, createExecutableFunction, resolveSliderExpressionsInJavaScript, type UUIDMapping, computeDisplayTextForVoice, parseRampLine, analyzeExecutableLines } from './utils/transformHelpers'
-import { monacoEditors, codeMirrorEditors, setCodeMirrorContent, highlightCurrentLine, highlightScheduledLines, initializeMonacoEditorComplete, initializeCodeMirrorEditorComplete, highlightCurrentLineByUUID, applyScheduledHighlightByUUID, handleDslLineClick, setPianoRollFromDslLine, clickedDslRanges, highlightClickedDsl, updateDslOutlines, clearPianoRoll, clickedDslOriginalText } from './utils/editorManager'
+import { monacoEditors, codeMirrorEditors, setCodeMirrorContent, highlightCurrentLine, highlightScheduledLines, initializeMonacoEditorComplete, initializeCodeMirrorEditorComplete, highlightCurrentLineByUUID, applyScheduledHighlightByUUID, handleDslLineClick, setPianoRollFromDslLine, clickedDslRanges, highlightClickedDsl, updateDslOutlines, clearPianoRoll, clickedDslOriginalText, clearAllDslHighlights, extractDslFromLine, clickedDslSegmentCounts } from './utils/editorManager'
 import { saveSnapshot as saveSnapshotSM, loadSnapshotStateOnly as loadSnapshotStateOnlySM, downloadSnapshotsFile, loadSnapshotsFromFile as loadSnapshotsFromFileSM, saveToLocalStorage as saveToLocalStorageSM, loadFromLocalStorage as loadFromLocalStorageSM, saveBank, loadBank, makeBankClickHandler, saveTopLevelSliderBank as saveTopLevelSliderBankSM, loadTopLevelSliderBank as loadTopLevelSliderBankSM, saveFxSliderBank as saveFxSliderBankSM, loadFxSliderBank as loadFxSliderBankSM, saveTopLevelToggleBank as saveTopLevelToggleBankSM, loadTopLevelToggleBank as loadTopLevelToggleBankSM } from './utils/snapshotManager'
 
 // Monaco environment setup
@@ -223,10 +223,8 @@ const switchToInputMode = (voiceIndex: number) => {
   showInputEditor.value[voiceIndex] = true
   // Clear the piano roll when switching to input mode
   clearPianoRoll(voiceIndex, debugPianoRolls)
-  // Clear DSL highlighting and stored text
-  clickedDslRanges.set(voiceIndex.toString(), null)
-  clickedDslOriginalText.set(voiceIndex.toString(), null)
-  highlightClickedDsl(voiceIndex, null)
+  // Clear all DSL highlights and state
+  clearAllDslHighlights(voiceIndex)
 }
 
 const switchToVisualizeMode = (voiceIndex: number) => {
@@ -751,6 +749,32 @@ const updateVoiceOnSliderChange = (voiceIndex: number) => {
       if (clickedRange && originalDsl && !showInputEditor.value[voiceIndex]) {
         // Re-render the piano roll with the stored original DSL text
         setPianoRollFromDslLine(originalDsl, voiceIndex, appState, debugPianoRolls)
+        
+        // Re-highlight the clicked range with updated resolved text
+        // The range might have changed due to slider value changes
+        const segmentCount = clickedDslSegmentCounts.get(voiceIndex.toString())
+        if (segmentCount && typeof segmentCount === 'number') {
+          // Find the new range for the partial DSL in the updated text
+          const doc = codeMirrorEditor.state.doc
+          const clickedLine = doc.lineAt(clickedRange.from)
+          const lineContent = clickedLine.text
+          const dslExtract = extractDslFromLine(lineContent)
+          
+          if (dslExtract.isDsl && dslExtract.dslText && dslExtract.prefixLength !== undefined) {
+            // Get the partial based on segment count
+            const parts = dslExtract.dslText.split(/\s*:\s*/)
+            const partialParts = parts.slice(0, segmentCount)
+            const partialDsl = partialParts.join(' : ')
+            
+            const from = clickedLine.from + dslExtract.prefixLength
+            const to = from + partialDsl.length
+            const newRange = { from, to }
+            
+            // Update the clicked range
+            clickedDslRanges.set(voiceIndex.toString(), newRange)
+            highlightClickedDsl(voiceIndex, newRange)
+          }
+        }
       }
     }
   }

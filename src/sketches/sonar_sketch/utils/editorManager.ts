@@ -20,7 +20,7 @@ export const codeMirrorEditors: (EditorView | undefined)[] = []
 // ---------------------------------------------------------------------------
 //  Helper to check if content is a DSL line and extract the DSL text
 // ---------------------------------------------------------------------------
-function extractDslFromLine(lineContent: string): { isDsl: boolean, dslText?: string, prefixLength?: number } {
+export function extractDslFromLine(lineContent: string): { isDsl: boolean, dslText?: string, prefixLength?: number } {
   // Check if line starts with line(`
   const lineCallMatch = lineContent.match(/^(\s*line\(`\s*)/)
   
@@ -49,6 +49,55 @@ function extractDslFromLine(lineContent: string): { isDsl: boolean, dslText?: st
   return { isDsl: false }
 }
 
+// ---------------------------------------------------------------------------
+//  Helper to get partial DSL text up to a hover position
+// ---------------------------------------------------------------------------
+function getPartialDslAtPosition(dslText: string, relativePos: number): { partialDsl: string | null, partialLength: number, segmentCount: number } {
+  // Split by colon but keep the structure
+  const parts = dslText.split(/\s*:\s*/)
+  let currentPos = 0
+  let segmentCount = 0
+  
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i]
+    const partEnd = currentPos + part.length
+    
+    // Check if position is within this part
+    if (relativePos <= partEnd || i === parts.length - 1) {
+      segmentCount = i + 1
+      // Reconstruct the partial DSL with proper formatting
+      const partialDsl = parts.slice(0, segmentCount).join(' : ')
+      // Calculate actual length including colons and spaces
+      const partialLength = partialDsl.length
+      return { partialDsl, partialLength, segmentCount }
+    }
+    
+    // Move past this part and the colon/spaces
+    currentPos = partEnd
+    // Account for the " : " separator if not the last part
+    if (i < parts.length - 1) {
+      const nextColonIndex = dslText.indexOf(':', currentPos)
+      if (nextColonIndex !== -1) {
+        currentPos = nextColonIndex + 1
+        // Skip spaces after colon
+        while (currentPos < dslText.length && dslText[currentPos] === ' ') {
+          currentPos++
+        }
+      }
+    }
+  }
+  
+  return { partialDsl: dslText, partialLength: dslText.length, segmentCount: parts.length }
+}
+
+// ---------------------------------------------------------------------------
+//  Helper to get partial DSL by segment count from original text
+// ---------------------------------------------------------------------------
+function getPartialDslBySegmentCount(dslText: string, segmentCount: number): string {
+  const parts = dslText.split(/\s*:\s*/)
+  return parts.slice(0, segmentCount).join(' : ')
+}
+
 
 
 // ---------------------------------------------------------------------------
@@ -58,11 +107,13 @@ export const scheduledLineEffect = StateEffect.define<{ lineNumbers: number[] }>
 export const currentLineEffect   = StateEffect.define<{ lineNumber: number | null; endLineNumber?: number }>()
 export const dslOutlineEffect    = StateEffect.define<{ ranges: { from: number, to: number }[] }>()
 export const clickedDslEffect   = StateEffect.define<{ range: { from: number, to: number } | null }>()
+export const hoverDslEffect     = StateEffect.define<{ range: { from: number, to: number } | null }>()
 
 const scheduledLineDeco = Decoration.line({ attributes: { class: 'cm-scheduled-line' } })
 const currentLineDeco   = Decoration.line({ attributes: { class: 'cm-current-line'   } })
 const dslOutlineDeco    = Decoration.mark({ attributes: { class: 'cm-dsl-outline'     } })
 const clickedDslDeco    = Decoration.mark({ attributes: { class: 'cm-clicked-dsl'    } })
+const hoverDslDeco      = Decoration.mark({ attributes: { class: 'cm-hover-dsl'      } })
 
 export const lineHighlightField = StateField.define<DecorationSet>({
   create() { return Decoration.none },
@@ -116,6 +167,17 @@ export const lineHighlightField = StateField.define<DecorationSet>({
         if (effect.value.range !== null) {
           decos = decos.update({ 
             add: [clickedDslDeco.range(effect.value.range.from, effect.value.range.to)] 
+          })
+        }
+      }
+
+      if (effect.is(hoverDslEffect)) {
+        decos = decos.update({
+          filter: (_f, _t, d) => !d.spec.attributes?.class?.includes('cm-hover-dsl')
+        })
+        if (effect.value.range !== null) {
+          decos = decos.update({ 
+            add: [hoverDslDeco.range(effect.value.range.from, effect.value.range.to)] 
           })
         }
       }
@@ -183,6 +245,94 @@ export function highlightClickedDsl(voiceIndex: number, range: { from: number, t
 }
 
 // ---------------------------------------------------------------------------
+//  Hover DSL highlight helper - highlights a hovered DSL section
+// ---------------------------------------------------------------------------
+export function highlightHoverDsl(voiceIndex: number, range: { from: number, to: number } | null) {
+  const editor = codeMirrorEditors[voiceIndex]
+  if (!editor) return
+  editor.dispatch({ effects: hoverDslEffect.of({ range }) })
+}
+
+// ---------------------------------------------------------------------------
+//  DSL Hover Handler Plugin
+// ---------------------------------------------------------------------------
+const createDslHoverPlugin = (voiceIndex: number) => {
+  let currentHoverRange: { from: number, to: number } | null = null
+  
+  return EditorView.domEventHandlers({
+    mousemove: (event, view) => {
+      const pos = view.posAtCoords({ x: event.clientX, y: event.clientY })
+      if (!pos) {
+        if (currentHoverRange) {
+          view.dispatch({ effects: hoverDslEffect.of({ range: null }) })
+          currentHoverRange = null
+        }
+        return false
+      }
+      
+      const doc = view.state.doc
+      const line = doc.lineAt(pos)
+      const lineContent = line.text
+      
+      // Extract DSL from line
+      const dslExtract = extractDslFromLine(lineContent)
+      if (!dslExtract.isDsl || !dslExtract.dslText || dslExtract.prefixLength === undefined) {
+        if (currentHoverRange) {
+          view.dispatch({ effects: hoverDslEffect.of({ range: null }) })
+          currentHoverRange = null
+        }
+        return false
+      }
+      
+      // Check if hover is within DSL text
+      const dslStart = line.from + dslExtract.prefixLength
+      const dslEnd = dslStart + dslExtract.dslText.length
+      
+      if (pos < dslStart || pos > dslEnd) {
+        if (currentHoverRange) {
+          view.dispatch({ effects: hoverDslEffect.of({ range: null }) })
+          currentHoverRange = null
+        }
+        return false
+      }
+      
+      // Get the relative position within the DSL text
+      const relativePos = pos - dslStart
+      const { partialDsl, partialLength, segmentCount } = getPartialDslAtPosition(dslExtract.dslText, relativePos)
+      
+      if (!partialDsl) {
+        if (currentHoverRange) {
+          view.dispatch({ effects: hoverDslEffect.of({ range: null }) })
+          currentHoverRange = null
+        }
+        return false
+      }
+      
+      // For resolved DSL, we need to recalculate the actual length since it may differ
+      // Just use the position we calculated
+      const partialEnd = dslStart + partialLength
+      const newRange = { from: dslStart, to: partialEnd }
+      
+      // Only update if range changed
+      if (!currentHoverRange || currentHoverRange.from !== newRange.from || currentHoverRange.to !== newRange.to) {
+        view.dispatch({ effects: hoverDslEffect.of({ range: newRange }) })
+        currentHoverRange = newRange
+      }
+      
+      return false
+    },
+    
+    mouseleave: (event, view) => {
+      if (currentHoverRange) {
+        view.dispatch({ effects: hoverDslEffect.of({ range: null }) })
+        currentHoverRange = null
+      }
+      return false
+    }
+  })
+}
+
+// ---------------------------------------------------------------------------
 //  DSL Line Click Decorator Plugin
 // ---------------------------------------------------------------------------
 export const createDslClickPlugin = (
@@ -215,7 +365,15 @@ export const createDslClickPlugin = (
           
           // Check if click is within DSL text
           if (pos >= from && pos <= to) {
-            const range = { from, to }
+            // Get the relative position within the DSL text for partial selection
+            const relativePos = pos - from
+            const { partialDsl, partialLength, segmentCount } = getPartialDslAtPosition(dslExtract.dslText, relativePos)
+            
+            if (!partialDsl) return false
+            
+            // Calculate the range for the partial DSL
+            const partialEnd = from + partialLength
+            const range = { from, to: partialEnd }
             
             // Get the original DSL text from Monaco editor at the same line
             const monacoEditor = monacoEditors[voiceIndex]
@@ -228,15 +386,21 @@ export const createDslClickPlugin = (
                 const monacoLine = monacoModel.getLineContent(line.number)
                 const monacoExtract = extractDslFromLine(monacoLine)
                 if (monacoExtract.isDsl && monacoExtract.dslText) {
-                  originalDslText = monacoExtract.dslText
+                  // Use segment count to get the same partial from original
+                  originalDslText = getPartialDslBySegmentCount(monacoExtract.dslText, segmentCount)
                 }
               }
             }
             
+            // Clear hover effect
+            view.dispatch({ effects: hoverDslEffect.of({ range: null }) })
+            
             // Set highlight
             clickedDslRanges.set(voiceIndex.toString(), range)
             highlightClickedDsl(voiceIndex, range)
-            onDslLineClick(dslExtract.dslText, line.number, voiceIndex, originalDslText)
+            // Store the segment count for re-rendering on slider changes
+            clickedDslSegmentCounts.set(voiceIndex.toString(), segmentCount)
+            onDslLineClick(partialDsl, line.number, voiceIndex, originalDslText)
             return true
           }
         }
@@ -319,6 +483,7 @@ line(\`debug1 : seg 1 : s_tr 3 : str 1 : q 1\`)
 // Store clicked DSL ranges and original text per voice
 export const clickedDslRanges = new Map<string, { from: number, to: number } | null>()
 export const clickedDslOriginalText = new Map<string, string | null>()
+export const clickedDslSegmentCounts = new Map<string, number>()
 
 export function initializeCodeMirrorEditorComplete(
   containerId: string,
@@ -373,6 +538,11 @@ line(\`debug3 : seg 3\`)`
         outlineOffset: '1px',
         borderRadius: '2px'
       },
+      '.cm-hover-dsl': {
+        backgroundColor: 'rgba(255, 140, 0, 0.15)',
+        borderRadius: '2px',
+        transition: 'background-color 0.1s ease'
+      },
       '.cm-dsl-clickable': {
         cursor: 'pointer',
         '&:hover': {
@@ -386,6 +556,9 @@ line(\`debug3 : seg 3\`)`
   if (onDslLineClick) {
     extensions.push(createDslClickPlugin(voiceIndex, onDslLineClick, clickedDslRanges))
   }
+  
+  // Add hover handler for DSL partial highlighting
+  extensions.push(createDslHoverPlugin(voiceIndex))
 
   const editor = new EditorView({
     doc: initialContent,
@@ -554,4 +727,22 @@ export const clearPianoRoll = (voiceIndex: number, debugPianoRolls: PianoRoll<{}
   // Clear the piano roll
   debugPianoRoll.setNoteData([])
   console.log(`Cleared debug piano roll for voice ${voiceIndex}`)
+}
+
+export const clearAllDslHighlights = (voiceIndex: number) => {
+  const editor = codeMirrorEditors[voiceIndex]
+  if (!editor) return
+  
+  // Clear hover, clicked, and any other DSL highlights
+  editor.dispatch({ 
+    effects: [
+      hoverDslEffect.of({ range: null }),
+      clickedDslEffect.of({ range: null })
+    ]
+  })
+  
+  // Clear stored state
+  clickedDslRanges.set(voiceIndex.toString(), null)
+  clickedDslOriginalText.set(voiceIndex.toString(), null)
+  clickedDslSegmentCounts.delete(voiceIndex.toString())
 }
