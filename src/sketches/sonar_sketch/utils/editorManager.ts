@@ -172,6 +172,14 @@ export const lineHighlightField = StateField.define<DecorationSet>({
       }
 
       if (effect.is(hoverDslEffect)) {
+        // Debug log before update
+        const before: any[] = []
+        decos.between(0, tr.state.doc.length, (from, to, decoration) => {
+          if (decoration.spec.attributes?.class?.includes('cm-hover-dsl')) {
+            before.push({ from, to })
+          }
+        })
+        
         decos = decos.update({
           filter: (_f, _t, d) => !d.spec.attributes?.class?.includes('cm-hover-dsl')
         })
@@ -179,6 +187,9 @@ export const lineHighlightField = StateField.define<DecorationSet>({
           decos = decos.update({ 
             add: [hoverDslDeco.range(effect.value.range.from, effect.value.range.to)] 
           })
+          addLog(`Hover update: cleared ${before.length} old hover decos, added new hover [${effect.value.range.from}-${effect.value.range.to}]`)
+        } else {
+          addLog(`Hover update: cleared ${before.length} hover decos`)
         }
       }
     }
@@ -254,6 +265,118 @@ export function highlightHoverDsl(voiceIndex: number, range: { from: number, to:
 }
 
 // ---------------------------------------------------------------------------
+//  Decorator Debug Logging
+// ---------------------------------------------------------------------------
+let lastLoggedDecorators = ''
+let lastLoggedLineNumber = -1
+
+// Store logs in a global array
+const dslDecoratorLogs: string[] = []
+
+// Make logs accessible via window
+if (typeof window !== 'undefined') {
+  (window as any).dslDecoratorLogs = dslDecoratorLogs;
+  
+  // Add download function
+  (window as any).downloadDslLogs = () => {
+    const logContent = dslDecoratorLogs.join('\n')
+    const blob = new Blob([logContent], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `dsl-decorator-logs-${new Date().toISOString()}.txt`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    console.log(`Downloaded ${dslDecoratorLogs.length} log entries`)
+  }
+  
+  // Add clear function
+  (window as any).clearDslLogs = () => {
+    dslDecoratorLogs.length = 0
+    console.log('DSL decorator logs cleared')
+  }
+  
+  // Add copy to clipboard function
+  (window as any).copyDslLogs = async () => {
+    const logContent = dslDecoratorLogs.join('\n')
+    try {
+      await navigator.clipboard.writeText(logContent)
+      console.log(`Copied ${dslDecoratorLogs.length} log entries to clipboard`)
+    } catch (err) {
+      console.error('Failed to copy logs to clipboard:', err)
+      // Fallback method
+      const textArea = document.createElement('textarea')
+      textArea.value = logContent
+      textArea.style.position = 'fixed'
+      textArea.style.top = '0'
+      textArea.style.left = '0'
+      textArea.style.width = '2em'
+      textArea.style.height = '2em'
+      textArea.style.padding = '0'
+      textArea.style.border = 'none'
+      textArea.style.outline = 'none'
+      textArea.style.boxShadow = 'none'
+      textArea.style.background = 'transparent'
+      document.body.appendChild(textArea)
+      textArea.focus()
+      textArea.select()
+      try {
+        document.execCommand('copy')
+        console.log(`Copied ${dslDecoratorLogs.length} log entries to clipboard (fallback method)`)
+      } catch (err2) {
+        console.error('Fallback copy also failed:', err2)
+      }
+      document.body.removeChild(textArea)
+    }
+  }
+}
+
+function addLog(message: string) {
+  const timestamp = new Date().toISOString()
+  const logEntry = `[${timestamp}] ${message}`
+  dslDecoratorLogs.push(logEntry)
+  console.log(`[DSL Decorators] ${message}`)
+}
+
+function logLineDecorators(view: EditorView, lineNumber: number, mousePos: number, hoverRange: { from: number, to: number } | null) {
+  const line = view.state.doc.line(lineNumber)
+  const decorations = view.state.field(lineHighlightField)
+  
+  // Find all decorations that overlap with this line
+  const lineDecorators: Array<{ from: number, to: number, class: string }> = []
+  
+  decorations.between(line.from, line.to, (from, to, decoration) => {
+    const spec = decoration.spec
+    const className = spec?.attributes?.class || 'unknown'
+    lineDecorators.push({ from, to, class: className })
+  })
+  
+  // Sort by position for consistent output
+  lineDecorators.sort((a, b) => a.from - b.from || a.to - b.to)
+  
+  // Create a string representation
+  const decoratorInfo = lineDecorators.map(d => 
+    `[${d.from}-${d.to}:${d.class}]`
+  ).join(' ')
+  
+  // Check if this is first or last line
+  const isFirstLine = lineNumber === 1
+  const isLastLine = lineNumber === view.state.doc.lines
+  const boundary = isFirstLine || isLastLine ? ` (${isFirstLine ? 'FIRST' : ''}${isLastLine ? 'LAST' : ''} LINE)` : ''
+  
+  const logString = `Line ${lineNumber}${boundary} (mouse@${mousePos}, hover:${hoverRange ? `${hoverRange.from}-${hoverRange.to}` : 'none'}): ${decoratorInfo || 'no decorators'}`
+  
+  // Only log if something changed
+  if (logString !== lastLoggedDecorators || lineNumber !== lastLoggedLineNumber) {
+    addLog(logString)
+    lastLoggedDecorators = logString
+    lastLoggedLineNumber = lineNumber
+  }
+}
+
+// ---------------------------------------------------------------------------
 //  DSL Hover Handler Plugin
 // ---------------------------------------------------------------------------
 const createDslHoverPlugin = (voiceIndex: number) => {
@@ -319,11 +442,15 @@ const createDslHoverPlugin = (voiceIndex: number) => {
         currentHoverRange = newRange
       }
       
+      // Log decorators after potential update
+      logLineDecorators(view, line.number, pos, currentHoverRange)
+      
       return false
     },
     
     mouseleave: (event, view) => {
       if (currentHoverRange) {
+        addLog('Mouse leave - clearing hover decoration')
         view.dispatch({ effects: hoverDslEffect.of({ range: null }) })
         currentHoverRange = null
       }
@@ -527,15 +654,13 @@ line(\`debug3 : seg 3\`)`
         animation: 'pulse-line 1s ease-in-out infinite alternate'
       },
       '.cm-dsl-outline': {
-        outline: '2px solid #ff8c00',
-        outlineOffset: '1px',
+        boxShadow: '0 0 0 2px #ff8c00',
         cursor: 'pointer',
         borderRadius: '2px'
       },
       '.cm-clicked-dsl': {
         backgroundColor: 'rgba(255, 140, 0, 0.3)',
-        outline: '2px solid #ff8c00',
-        outlineOffset: '1px',
+        boxShadow: '0 0 0 2px #ff8c00',
         borderRadius: '2px'
       },
       '.cm-hover-dsl': {
