@@ -58,10 +58,12 @@ export function buildClipFromLine(
   skipClipTransform = false,
 ): { clip: AbletonClip | undefined; updatedClipLine: string } {
   const { srcName, commandStrings } = splitTransformChainToCommandStrings(clipLine)
-  if (!commandStrings.length) return { clip: undefined, updatedClipLine: clipLine }
-
+  
   const srcClip = clipMap.get(srcName)
   if (!srcClip) return { clip: undefined, updatedClipLine: clipLine }
+  
+  // If no command strings, return the original clip (first segment only)
+  if (!commandStrings.length) return { clip: srcClip.clone(), updatedClipLine: clipLine }
 
   let curClip = srcClip.clone()
   const origClip = srcClip.clone()
