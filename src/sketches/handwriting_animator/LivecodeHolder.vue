@@ -1,6 +1,6 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
-import { type TemplateAppState, appStateName } from './appState';
+import { type TemplateAppState, appStateName, resolution } from './appState';
 import { inject, onMounted, onUnmounted, ref, watch } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
@@ -577,23 +577,25 @@ onMounted(() => {
     const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
     const threeCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
 
-    // Create Konva container
+    // Create Konva container - it will be added to the Vue component's DOM
     const container = document.createElement('div')
     container.id = 'konva-container'
-    container.style.position = 'absolute'
-    container.style.top = '0'
-    container.style.left = '0'
-    container.style.width = '800px'
-    container.style.height = '600px'
+    container.style.width = resolution.width + 'px'
+    container.style.height = resolution.height + 'px'
     container.style.backgroundColor = 'white'
-    container.style.border = '1px solid #ccc'
-    document.body.appendChild(container)
+    container.style.border = '1px solid black'
+    
+    // Add to component's DOM instead of body
+    const konvaWrapper = document.getElementById('konva-wrapper')
+    if (konvaWrapper) {
+      konvaWrapper.appendChild(container)
+    }
 
     // Initialize Konva
     stage = new Konva.Stage({
       container: 'konva-container',
-      width: 800,
-      height: 600,
+      width: resolution.width,
+      height: resolution.height,
     })
     
     // Update cursor based on mode
@@ -790,14 +792,12 @@ onUnmounted(() => {
   
   // Clean up Konva
   stage?.destroy()
-  const container = document.getElementById('konva-container')
-  container?.remove()
 })
 
 </script>
 
 <template>
-  <div>
+  <div class="handwriting-animator-container">
     <div class="control-panel">
       <button @click="drawMode = !drawMode" :class="{ active: drawMode }">
         {{ drawMode ? '✏️ Draw' : '👆 Select' }}
@@ -823,6 +823,7 @@ onUnmounted(() => {
       <span class="separator">|</span>
       <span class="info">{{ selectedStrokes.size }} selected</span>
     </div>
+    <div id="konva-wrapper" class="canvas-wrapper"></div>
     <Timeline 
       :strokes="strokes"
       :selectedStrokes="selectedStrokes"
@@ -834,11 +835,15 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.handwriting-animator-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 20px;
+}
+
 .control-panel {
-  position: fixed;
-  top: 20px;
-  left: 50%;
-  transform: translateX(-50%);
   background: white;
   border: 1px solid #ccc;
   border-radius: 8px;
@@ -847,7 +852,11 @@ onUnmounted(() => {
   align-items: center;
   gap: 10px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  z-index: 1000;
+}
+
+.canvas-wrapper {
+  display: flex;
+  justify-content: center;
 }
 
 .control-panel button {

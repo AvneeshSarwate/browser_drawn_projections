@@ -6,9 +6,12 @@
       <button @click="stop">⏹️</button>
       <span class="time-display">{{ formatTime(currentTime) }} / {{ formatTime(duration) }}</span>
     </div>
-    <div class="timeline-track" @click="seek">
+    <div class="timeline-track" @click="seek" @mousedown="startDrag">
       <div class="timeline-progress" :style="{ width: progressPercentage + '%' }"></div>
-      <div class="timeline-playhead" :style="{ left: progressPercentage + '%' }"></div>
+      <div class="timeline-playhead" 
+        :style="{ left: progressPercentage + '%' }"
+        @mousedown.stop="startDrag"
+      ></div>
     </div>
   </div>
 </template>
@@ -156,16 +159,58 @@ const stop = () => {
   emit('timeUpdate', 0)
 }
 
-const seek = (event: MouseEvent) => {
-  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
-  const percentage = (event.clientX - rect.left) / rect.width
-  currentTime.value = percentage * duration.value
+// Dragging state
+const isDragging = ref(false)
+
+const startDrag = (event: MouseEvent) => {
+  event.preventDefault()
+  isDragging.value = true
   
-  if (isPlaying.value) {
-    startTime = performance.now() - currentTime.value
+  const timelineTrack = document.querySelector('.timeline-track')
+  if (!timelineTrack) return
+  
+  const rect = timelineTrack.getBoundingClientRect()
+  
+  const updatePosition = (e: MouseEvent) => {
+    const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width))
+    const percentage = x / rect.width
+    currentTime.value = percentage * duration.value
+    emit('timeUpdate', currentTime.value)
   }
   
-  emit('timeUpdate', currentTime.value)
+  const handleMouseMove = (e: MouseEvent) => {
+    if (!isDragging.value) return
+    updatePosition(e)
+  }
+  
+  const handleMouseUp = () => {
+    isDragging.value = false
+    document.removeEventListener('mousemove', handleMouseMove)
+    document.removeEventListener('mouseup', handleMouseUp)
+  }
+  
+  document.addEventListener('mousemove', handleMouseMove)
+  document.addEventListener('mouseup', handleMouseUp)
+  
+  // Handle initial click position
+  updatePosition(event)
+}
+
+const seek = (event: MouseEvent) => {
+  // Only seek if not dragging (for direct clicks on track)
+  if (!isDragging.value) {
+    const timelineTrack = event.currentTarget as HTMLElement
+    const rect = timelineTrack.getBoundingClientRect()
+    const x = Math.max(0, Math.min(event.clientX - rect.left, rect.width))
+    const percentage = x / rect.width
+    currentTime.value = percentage * duration.value
+    
+    if (isPlaying.value) {
+      startTime = performance.now() - currentTime.value
+    }
+    
+    emit('timeUpdate', currentTime.value)
+  }
 }
 
 onUnmounted(() => {
@@ -175,16 +220,16 @@ onUnmounted(() => {
 
 <style scoped>
 .timeline-container {
-  position: fixed;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
   width: 600px;
   background: white;
   border: 1px solid #ccc;
   border-radius: 8px;
   padding: 15px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
 }
 
 .timeline-controls {
@@ -234,7 +279,6 @@ onUnmounted(() => {
   height: 100%;
   background: #0066ff;
   border-radius: 4px;
-  transition: width 0.05s linear;
 }
 
 .timeline-playhead {
@@ -245,6 +289,15 @@ onUnmounted(() => {
   background: #0066ff;
   border-radius: 2px;
   transform: translateX(-50%);
-  transition: left 0.05s linear;
+  cursor: grab;
+  z-index: 10;
+}
+
+.timeline-playhead:hover {
+  background: #0052cc;
+}
+
+.timeline-playhead:active {
+  cursor: grabbing;
 }
 </style>
