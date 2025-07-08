@@ -8,7 +8,7 @@
 ## UI additions
 - when you click on a DSL line, you can click segmented into the line to see progressive transformations
 
-
+state management cleanup suggestions - https://ampcode.com/threads/T-33628815-ed66-462c-b17c-b8d7c8f5d922
 
 
 

@@ -49,7 +49,7 @@ export const testCancel = async () => {
     const start = ctx.time
     const start2 = performance.now()  //+ (USE_TONE ? Tone.context.lookAhead * 1000 : 0)
     let drift, lastDrift = 0
-    const res0 = ctx.branchWait(async (ctx) => {
+    const res0 = ctx.branch(async (ctx) => {
       for (let i = 0; i < 100; i++) {
         const [logicalTime, wallTime] = [ctx.time - start, (performance.now() - start2) / 1000] //todo bug - is this correct?
         drift = wallTime - logicalTime 
