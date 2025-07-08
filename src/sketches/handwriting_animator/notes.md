@@ -36,9 +36,13 @@ Implementation notes
 
 
 things to do next:
-- fix typechecking
+- get nested groups working, ideally with konva native group transform logic
 - implement file save/load
   - will need to implement reattaching handlers to the strokes/groups/etc. when loading a file
 - implement undo/redo (will use handler reattaching logic)
 - have drawing state hot reload (will use handler reattaching logic)
 - implement stroke timing re-ordering in groups + per-gap inter stroke timing adjustment
+
+
+The file src/sketches/handwriting_animator/LivecodeHolder.ts is a shape drawing editor that lets you draw shapes and then group and transform them.
+in the file src/sketches/handwriting_animator/LivecodeHolder.ts, grouping and transforms are not working as expected. I want to be able to group strokes and then transform them as a group. for a group, rotation should be relative to the group's center. I should be able to nest groups. Un-grouping should bake the group transform into the children so that they keep their relative positions after ungrouping. All of these features are implemented in the file src/sketches/handwriting_animator/konva_group_transform.js. I want to be able to use this file as a reference for how to implement these features in LivecodeHolder.ts

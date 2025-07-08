@@ -37,6 +37,14 @@ let drawingStartTime = 0
 // Transform controls
 let transformer: Konva.Transformer | undefined = undefined
 
+// Helper function to lock pivot point to center
+const lockPivot = (node: Konva.Group | Konva.Node) => {
+  //@ts-ignore
+  const box = node.getClientRect({ relativeTo: node })
+  node.offset({ x: box.width / 2, y: box.height / 2 })
+  node.position({ x: node.x() + box.width / 2, y: node.y() + box.height / 2 })
+}
+
 // Stroke data structure
 interface Stroke {
   id: string
@@ -113,7 +121,7 @@ const clearDrawFuncs = () => {
 }
 
 // Helper function to convert points to perfect-freehand stroke
-const getStrokePath = (points: number[]): string => {
+const getStrokePath = (points: number[], normalize: boolean = false): string => {
   if (points.length < 4) return ''
   
   // Convert flat array to point pairs
@@ -134,24 +142,60 @@ const getStrokePath = (points: number[]): string => {
   // Convert to SVG path
   if (strokePoints.length === 0) return ''
   
-  const d = strokePoints.reduce(
+  let finalPoints = strokePoints
+  
+  // If normalizing, find bounds and translate to 0,0
+  if (normalize) {
+    let minX = Infinity, minY = Infinity
+    strokePoints.forEach(([x, y]) => {
+      minX = Math.min(minX, x)
+      minY = Math.min(minY, y)
+    })
+    finalPoints = strokePoints.map(([x, y]) => [x - minX, y - minY] as [number, number])
+  }
+  
+  const d = finalPoints.reduce(
     (acc, [x0, y0], i, arr) => {
       const [x1, y1] = arr[(i + 1) % arr.length]
       return `${acc} ${x0},${y0} ${x1},${y1}`
     },
-    `M ${strokePoints[0][0]},${strokePoints[0][1]} L`
+    `M ${finalPoints[0][0]},${finalPoints[0][1]} L`
   )
   
   return `${d} Z`
 }
 
+// Helper to get bounds of points
+const getPointsBounds = (points: number[]): { minX: number, minY: number, maxX: number, maxY: number } => {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  for (let i = 0; i < points.length; i += 2) {
+    minX = Math.min(minX, points[i])
+    maxX = Math.max(maxX, points[i])
+    minY = Math.min(minY, points[i + 1])
+    maxY = Math.max(maxY, points[i + 1])
+  }
+  return { minX, minY, maxX, maxY }
+}
+
 // Helper function to create a new stroke shape
 const createStrokeShape = (points: number[], id: string, isInGroup: boolean = false): Konva.Path => {
+  // Get bounds to position the shape
+  const bounds = getPointsBounds(points)
+  
+  // Create normalized points (starting at 0,0)
+  const normalizedPoints: number[] = []
+  for (let i = 0; i < points.length; i += 2) {
+    normalizedPoints.push(points[i] - bounds.minX)
+    normalizedPoints.push(points[i + 1] - bounds.minY)
+  }
+  
   const path = new Konva.Path({
-    data: getStrokePath(points),
+    data: getStrokePath(normalizedPoints),
     fill: 'black',
     strokeWidth: 0,
     id: id,
+    x: bounds.minX,
+    y: bounds.minY,
     draggable: !drawMode.value && !isInGroup, // Enable dragging only if in select mode AND not in a group
   })
   
@@ -275,16 +319,72 @@ const groupSelectedStrokes = () => {
   const groupId = `group-${Date.now()}`
   const strokeIds: string[] = []
   
-  // Move strokes to group
+  // First, check if any selected strokes are already in groups
+  // If so, we need to handle nested grouping
+  const groupsToNest = new Set<string>()
+  const individualStrokes: string[] = []
+  
   selectedStrokes.value.forEach(strokeId => {
+    let foundInGroup = false
+    strokeGroups.forEach((existingGroup, existingGroupId) => {
+      if (existingGroup.strokeIds.includes(strokeId)) {
+        groupsToNest.add(existingGroupId)
+        foundInGroup = true
+      }
+    })
+    if (!foundInGroup) {
+      individualStrokes.push(strokeId)
+    }
+  })
+  
+  // Move existing groups to new group (nested grouping)
+  groupsToNest.forEach(existingGroupId => {
+    const existingGroup = strokeGroups.get(existingGroupId)
+    if (existingGroup?.group) {
+      // Store absolute transforms
+      const absPos = existingGroup.group.getAbsolutePosition()
+      const absRot = existingGroup.group.getAbsoluteRotation()
+      const absScale = existingGroup.group.getAbsoluteScale()
+      
+      // Move to new group
+      existingGroup.group.moveTo(group)
+      
+      // Apply absolute transforms relative to new parent
+      existingGroup.group.position(absPos)
+      existingGroup.group.rotation(absRot)
+      existingGroup.group.scale(absScale)
+      
+      // Add all strokes from this group to our tracking
+      existingGroup.strokeIds.forEach(id => strokeIds.push(id))
+    }
+  })
+  
+  // Move individual strokes to group
+  individualStrokes.forEach(strokeId => {
     const stroke = strokes.get(strokeId)
     if (stroke?.shape) {
       strokeIds.push(strokeId)
+      // Store absolute transforms
+      const absPos = stroke.shape.getAbsolutePosition()
+      const absRot = stroke.shape.getAbsoluteRotation()
+      const absScale = stroke.shape.getAbsoluteScale()
+      
+      // Move to group
       stroke.shape.moveTo(group)
+      
+      // Apply absolute transforms relative to new parent
+      stroke.shape.position(absPos)
+      stroke.shape.rotation(absRot)
+      stroke.shape.scale(absScale)
+      
       // Disable individual dragging when in a group
       stroke.shape.draggable(false)
     }
   })
+  
+  // Add group to layer and lock pivot
+  layer?.add(group)
+  lockPivot(group)
   
   // Add click handler to group
   group.on('click', (e) => {
@@ -310,7 +410,6 @@ const groupSelectedStrokes = () => {
   }
   
   strokeGroups.set(groupId, strokeGroup)
-  layer?.add(group)
   
   // Clear selection
   selectedStrokes.value.clear()
@@ -335,19 +434,29 @@ const ungroupSelectedStrokes = () => {
   groupsToUngroup.forEach(groupId => {
     const strokeGroup = strokeGroups.get(groupId)
     if (strokeGroup?.group) {
-      // Move strokes back to main layer preserving their absolute transforms
-      strokeGroup.strokeIds.forEach(strokeId => {
-        const stroke = strokes.get(strokeId)
-        if (stroke?.shape) {
-          // Get the absolute transform before moving
-          const transform = stroke.shape.getAbsoluteTransform()
-          const attrs = transform.decompose()
-          
-          // Move to layer and apply the absolute transform
-          stroke.shape.moveTo(layer!)
-          stroke.shape.setAttrs(attrs)
-          // Re-enable dragging if in select mode
-          stroke.shape.draggable(!drawMode.value)
+      // Get children of the group (could be strokes or nested groups)
+      const children = strokeGroup.group.getChildren()
+      
+      children.forEach(child => {
+        // Get absolute transforms before moving
+        const absPos = child.getAbsolutePosition()
+        const absRot = child.getAbsoluteRotation()
+        const absScale = child.getAbsoluteScale()
+        
+        // Move to layer
+        child.moveTo(layer!)
+        
+        // Apply absolute transforms (baking the group transform)
+        child.position(absPos)
+        child.rotation(absRot)
+        child.scale(absScale)
+        
+        // If it's a regular shape (stroke), re-enable dragging
+        if (child instanceof Konva.Path) {
+          child.draggable(!drawMode.value)
+        } else if (child instanceof Konva.Group) {
+          // If it's a nested group, it remains draggable based on mode
+          child.draggable(!drawMode.value)
         }
       })
       
@@ -535,8 +644,18 @@ const handleTimeUpdate = (time: number) => {
       if (visiblePointIndex >= 0) {
         const visiblePoints = stroke.points.slice(0, (visiblePointIndex + 1) * 2)
         if (visiblePoints.length >= 4) {
+          // Get bounds for the original stroke
+          const fullBounds = getPointsBounds(stroke.points)
+          
+          // Normalize the visible points
+          const normalizedVisiblePoints: number[] = []
+          for (let i = 0; i < visiblePoints.length; i += 2) {
+            normalizedVisiblePoints.push(visiblePoints[i] - fullBounds.minX)
+            normalizedVisiblePoints.push(visiblePoints[i + 1] - fullBounds.minY)
+          }
+          
           stroke.shape.show()
-          stroke.shape.data(getStrokePath(visiblePoints))
+          stroke.shape.data(getStrokePath(normalizedVisiblePoints))
           
           // Check if this stroke is in a group
           strokeGroups.forEach((group, groupId) => {
@@ -622,6 +741,7 @@ onMounted(() => {
       rotationSnaps: [0, 45, 90, 135, 180, 225, 270, 315],
       rotationSnapTolerance: 5,
       keepRatio: false, // Allow free scaling
+      rotateEnabled: true,
       enabledAnchors: ['top-left', 'top-center', 'top-right', 'middle-left', 'middle-right', 'bottom-left', 'bottom-center', 'bottom-right'],
       boundBoxFunc: (oldBox, newBox) => {
         // Limit minimum size
@@ -708,7 +828,18 @@ onMounted(() => {
         // Create new stroke
         const creationTime = Date.now()
         const strokeId = `stroke-${creationTime}`
-        const originalPath = getStrokePath(currentPoints)
+        
+        // Get bounds for normalization
+        const bounds = getPointsBounds(currentPoints)
+        
+        // Create normalized points
+        const normalizedPoints: number[] = []
+        for (let i = 0; i < currentPoints.length; i += 2) {
+          normalizedPoints.push(currentPoints[i] - bounds.minX)
+          normalizedPoints.push(currentPoints[i + 1] - bounds.minY)
+        }
+        
+        const originalPath = getStrokePath(normalizedPoints)
         const stroke: Stroke = {
           id: strokeId,
           points: currentPoints,
