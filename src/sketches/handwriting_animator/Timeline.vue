@@ -1,0 +1,208 @@
+<template>
+  <div class="timeline-container">
+    <div class="timeline-controls">
+      <button @click="play" :disabled="isPlaying">▶️</button>
+      <button @click="pause" :disabled="!isPlaying">⏸️</button>
+      <button @click="stop">⏹️</button>
+      <span class="time-display">{{ formatTime(currentTime) }} / {{ formatTime(duration) }}</span>
+    </div>
+    <div class="timeline-track" @click="seek">
+      <div class="timeline-progress" :style="{ width: progressPercentage + '%' }"></div>
+      <div class="timeline-playhead" :style="{ left: progressPercentage + '%' }"></div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, watch, onUnmounted } from 'vue'
+import type { TimeContext, CancelablePromisePoxy } from '@/channels/channels'
+import { launch, BrowserTimeContext } from '@/channels/channels'
+import { dateNow } from '@/channels/base_time_context'
+
+interface Props {
+  strokes: Map<string, any>
+  selectedStrokes: Set<string>
+  timeContext?: TimeContext
+}
+
+const props = defineProps<Props>()
+
+const emit = defineEmits<{
+  timeUpdate: [time: number]
+}>()
+
+const currentTime = ref(0)
+const duration = ref(0)
+const isPlaying = ref(false)
+let animationLoop: CancelablePromisePoxy<any> | undefined
+let startTime = 0
+
+// Calculate total duration based on strokes
+const calculateDuration = () => {
+  let maxTime = 0
+  
+  if (props.selectedStrokes.size > 0) {
+    // Calculate duration for selected strokes
+    props.selectedStrokes.forEach(strokeId => {
+      const stroke = props.strokes.get(strokeId)
+      if (stroke?.timestamps) {
+        const strokeDuration = stroke.timestamps[stroke.timestamps.length - 1] || 0
+        maxTime = Math.max(maxTime, strokeDuration)
+      }
+    })
+  } else {
+    // Calculate duration for all strokes
+    props.strokes.forEach(stroke => {
+      if (stroke.timestamps) {
+        const strokeDuration = stroke.timestamps[stroke.timestamps.length - 1] || 0
+        maxTime = Math.max(maxTime, strokeDuration)
+      }
+    })
+  }
+  
+  duration.value = maxTime
+}
+
+// Watch for changes in strokes or selection
+watch([() => props.strokes, () => props.selectedStrokes], () => {
+  calculateDuration()
+}, { immediate: true, deep: true })
+
+const progressPercentage = computed(() => {
+  if (duration.value === 0) return 0
+  return (currentTime.value / duration.value) * 100
+})
+
+const formatTime = (ms: number): string => {
+  const seconds = Math.floor(ms / 1000)
+  const milliseconds = Math.floor((ms % 1000) / 10)
+  return `${seconds}.${milliseconds.toString().padStart(2, '0')}s`
+}
+
+const play = async () => {
+  if (isPlaying.value || duration.value === 0) return
+  
+  isPlaying.value = true
+  startTime = performance.now() - currentTime.value
+  
+  // Use launch for animation loop
+  animationLoop = launch(async (ctx) => {
+    while (isPlaying.value && currentTime.value < duration.value) {
+      currentTime.value = performance.now() - startTime
+      
+      if (currentTime.value >= duration.value) {
+        currentTime.value = duration.value
+        stop()
+        break
+      }
+      
+      emit('timeUpdate', currentTime.value)
+      await ctx.waitFrame()
+    }
+  })
+}
+
+const pause = () => {
+  isPlaying.value = false
+  animationLoop?.cancel()
+}
+
+const stop = () => {
+  isPlaying.value = false
+  currentTime.value = 0
+  animationLoop?.cancel()
+  emit('timeUpdate', 0)
+}
+
+const seek = (event: MouseEvent) => {
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  const percentage = (event.clientX - rect.left) / rect.width
+  currentTime.value = percentage * duration.value
+  
+  if (isPlaying.value) {
+    startTime = performance.now() - currentTime.value
+  }
+  
+  emit('timeUpdate', currentTime.value)
+}
+
+onUnmounted(() => {
+  animationLoop?.cancel()
+})
+</script>
+
+<style scoped>
+.timeline-container {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 600px;
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  padding: 15px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.timeline-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.timeline-controls button {
+  background: none;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 5px 10px;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.timeline-controls button:hover:not(:disabled) {
+  background: #f0f0f0;
+}
+
+.timeline-controls button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.time-display {
+  margin-left: auto;
+  font-family: monospace;
+  font-size: 14px;
+  color: #666;
+}
+
+.timeline-track {
+  position: relative;
+  height: 40px;
+  background: #f0f0f0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.timeline-progress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: #0066ff;
+  border-radius: 4px;
+  transition: width 0.05s linear;
+}
+
+.timeline-playhead {
+  position: absolute;
+  top: -5px;
+  width: 10px;
+  height: 50px;
+  background: #0066ff;
+  border-radius: 2px;
+  transform: translateX(-50%);
+  transition: left 0.05s linear;
+}
+</style>

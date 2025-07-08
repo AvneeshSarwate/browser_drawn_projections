@@ -41,7 +41,8 @@ export const sketchNames = [
   'mutek_playground',
   'sonar_sketch',
   'draw_to_piano_roll',
-  'polygonFill'
+  'polygonFill',
+  'handwriting_animator'
 ]
 
 const sketchRoutes = sketchNames.map(name => {
