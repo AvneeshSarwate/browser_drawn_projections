@@ -32,4 +32,13 @@ Implementation notes
 
 
 
-animation should be done one by one in the order in which the strokes are drawn. The gap between strokes should be the same as the gap between the strokes in the original handwriting. if strokes in a selection (including groups) are not contiguous, the animation should be done in the order of the strokes in the selection, and the gap between them should be 0.1 seconds. If animating a selection, only the state of the selected strokes should be animated, not the state of the entire canvas.
+
+
+
+things to do next:
+- fix typechecking
+- implement file save/load
+  - will need to implement reattaching handlers to the strokes/groups/etc. when loading a file
+- implement undo/redo (will use handler reattaching logic)
+- have drawing state hot reload (will use handler reattaching logic)
+- implement stroke timing re-ordering in groups + per-gap inter stroke timing adjustment
