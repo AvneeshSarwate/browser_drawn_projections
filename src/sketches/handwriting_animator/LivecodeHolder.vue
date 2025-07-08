@@ -45,6 +45,7 @@ interface Stroke {
   shape?: Konva.Path
   selected?: boolean
   originalPath?: string // Store original path data for animation
+  creationTime: number // Absolute time when stroke was created
 }
 
 interface StrokeGroup {
@@ -60,6 +61,8 @@ const showGrid = ref(false)
 const gridSize = 20
 const currentPlaybackTime = ref(0)
 const drawMode = ref(true) // true = draw mode, false = select mode
+const useRealTiming = ref(false) // false = use max threshold, true = use actual timing
+const maxInterStrokeDelay = 300 // 0.3 seconds max gap between strokes
 
 // Watch for draw mode changes
 watch(drawMode, () => {
@@ -378,71 +381,182 @@ const deleteSelected = () => {
 const handleTimeUpdate = (time: number) => {
   currentPlaybackTime.value = time
   
-  // If time is 0, restore all strokes to full visibility with original paths
-  if (time === 0) {
-    strokes.value.forEach(stroke => {
-      if (stroke.shape && stroke.originalPath) {
-        stroke.shape.show()
-        stroke.shape.data(stroke.originalPath)
-      }
+  // Get strokes to animate and sort them
+  let strokesToAnimate: Stroke[] = []
+  const isSelection = selectedStrokes.value.size > 0
+  
+  if (isSelection) {
+    // Get selected strokes including those in groups
+    const selectedStrokeIds = new Set<string>()
+    selectedStrokes.value.forEach(strokeId => {
+      selectedStrokeIds.add(strokeId)
+      // Also add strokes from selected groups
+      strokeGroups.value.forEach(group => {
+        if (group.strokeIds.includes(strokeId)) {
+          group.strokeIds.forEach(id => selectedStrokeIds.add(id))
+        }
+      })
     })
     
-    // Show all groups
-    strokeGroups.value.forEach(group => {
-      if (group.group) {
-        group.group.show()
-      }
+    selectedStrokeIds.forEach(id => {
+      const stroke = strokes.value.get(id)
+      if (stroke) strokesToAnimate.push(stroke)
     })
+  } else {
+    strokesToAnimate = Array.from(strokes.value.values())
+  }
+  
+  // Sort by creation time
+  strokesToAnimate.sort((a, b) => a.creationTime - b.creationTime)
+  
+  // If time is 0, restore state
+  if (time === 0) {
+    if (isSelection) {
+      // Only restore selected strokes
+      strokesToAnimate.forEach(stroke => {
+        if (stroke.shape && stroke.originalPath) {
+          stroke.shape.show()
+          stroke.shape.data(stroke.originalPath)
+        }
+      })
+      
+      // Show groups containing selected strokes
+      const groupsToShow = new Set<string>()
+      strokesToAnimate.forEach(stroke => {
+        strokeGroups.value.forEach((group, groupId) => {
+          if (group.strokeIds.includes(stroke.id)) {
+            groupsToShow.add(groupId)
+          }
+        })
+      })
+      groupsToShow.forEach(groupId => {
+        const group = strokeGroups.value.get(groupId)
+        if (group?.group) group.group.show()
+      })
+    } else {
+      // Restore all strokes
+      strokes.value.forEach(stroke => {
+        if (stroke.shape && stroke.originalPath) {
+          stroke.shape.show()
+          stroke.shape.data(stroke.originalPath)
+        }
+      })
+      strokeGroups.value.forEach(group => {
+        if (group.group) group.group.show()
+      })
+    }
     
     layer?.batchDraw()
     return
   }
   
-  // Hide all strokes and groups first
-  strokes.value.forEach(stroke => {
-    if (stroke.shape) stroke.shape.hide()
-  })
-  strokeGroups.value.forEach(group => {
-    if (group.group) group.group.hide()
-  })
+  // Hide strokes that will be animated
+  if (isSelection) {
+    strokesToAnimate.forEach(stroke => {
+      if (stroke.shape) stroke.shape.hide()
+    })
+  } else {
+    strokes.value.forEach(stroke => {
+      if (stroke.shape) stroke.shape.hide()
+    })
+    strokeGroups.value.forEach(group => {
+      if (group.group) group.group.hide()
+    })
+  }
   
-  // Get strokes to animate (selected or all)
-  const strokesToAnimate = selectedStrokes.value.size > 0 
-    ? Array.from(selectedStrokes.value).map(id => strokes.value.get(id)).filter(Boolean)
-    : Array.from(strokes.value.values())
+  // Calculate stroke timings
+  let currentTimeOffset = 0
+  const strokeTimings: Array<{stroke: Stroke, startTime: number, endTime: number}> = []
+  
+  if (isSelection) {
+    // For selections, use 0.1s gaps
+    strokesToAnimate.forEach((stroke, index) => {
+      const duration = stroke.timestamps[stroke.timestamps.length - 1] || 0
+      strokeTimings.push({
+        stroke,
+        startTime: currentTimeOffset,
+        endTime: currentTimeOffset + duration
+      })
+      currentTimeOffset += duration + (index < strokesToAnimate.length - 1 ? 100 : 0) // 0.1s gap
+    })
+  } else {
+    // For all strokes, use original gaps (with optional max threshold)
+    let lastEndTime = 0
+    strokesToAnimate.forEach((stroke, index) => {
+      const duration = stroke.timestamps[stroke.timestamps.length - 1] || 0
+      
+      if (index === 0) {
+        strokeTimings.push({
+          stroke,
+          startTime: 0,
+          endTime: duration
+        })
+        lastEndTime = stroke.creationTime + duration
+        currentTimeOffset = duration
+      } else {
+        // Gap is between end of previous stroke and start of current stroke
+        let gap = Math.max(0, stroke.creationTime - lastEndTime)
+        // Apply max threshold if not using real timing
+        if (!useRealTiming.value && gap > maxInterStrokeDelay) {
+          gap = maxInterStrokeDelay
+        }
+        const startTime = currentTimeOffset + gap
+        strokeTimings.push({
+          stroke,
+          startTime: startTime,
+          endTime: startTime + duration
+        })
+        currentTimeOffset = startTime + duration
+        lastEndTime = stroke.creationTime + duration
+      }
+    })
+  }
   
   // Track which groups should be visible
   const visibleGroups = new Set<string>()
   
-  // Show and update strokes based on current time
-  strokesToAnimate.forEach(stroke => {
-    if (!stroke || !stroke.shape || !stroke.timestamps) return
+  // Animate strokes based on current time
+  strokeTimings.forEach(({stroke, startTime, endTime}) => {
+    if (!stroke.shape || !stroke.timestamps) return
     
-    // Find the last point that should be visible at current time
-    let visiblePointIndex = -1
-    for (let i = 0; i < stroke.timestamps.length; i++) {
-      if (stroke.timestamps[i] <= time) {
-        visiblePointIndex = i
-      } else {
-        break
-      }
-    }
-    
-    if (visiblePointIndex >= 0) {
-      // Create partial stroke up to current time
-      const visiblePoints = stroke.points.slice(0, (visiblePointIndex + 1) * 2)
+    if (time >= startTime && time <= endTime) {
+      // Stroke is currently being drawn
+      const strokeTime = time - startTime
+      let visiblePointIndex = -1
       
-      if (visiblePoints.length >= 4) {
-        stroke.shape.show()
-        stroke.shape.data(getStrokePath(visiblePoints))
-        
-        // Check if this stroke is in a group
-        strokeGroups.value.forEach((group, groupId) => {
-          if (group.strokeIds.includes(stroke.id)) {
-            visibleGroups.add(groupId)
-          }
-        })
+      for (let i = 0; i < stroke.timestamps.length; i++) {
+        if (stroke.timestamps[i] <= strokeTime) {
+          visiblePointIndex = i
+        } else {
+          break
+        }
       }
+      
+      if (visiblePointIndex >= 0) {
+        const visiblePoints = stroke.points.slice(0, (visiblePointIndex + 1) * 2)
+        if (visiblePoints.length >= 4) {
+          stroke.shape.show()
+          stroke.shape.data(getStrokePath(visiblePoints))
+          
+          // Check if this stroke is in a group
+          strokeGroups.value.forEach((group, groupId) => {
+            if (group.strokeIds.includes(stroke.id)) {
+              visibleGroups.add(groupId)
+            }
+          })
+        }
+      }
+    } else if (time > endTime) {
+      // Stroke is complete
+      stroke.shape.show()
+      stroke.shape.data(stroke.originalPath!)
+      
+      // Check if this stroke is in a group
+      strokeGroups.value.forEach((group, groupId) => {
+        if (group.strokeIds.includes(stroke.id)) {
+          visibleGroups.add(groupId)
+        }
+      })
     }
   })
   
@@ -590,13 +704,15 @@ onMounted(() => {
       
       if (currentPoints.length > 2) {
         // Create new stroke
-        const strokeId = `stroke-${Date.now()}`
+        const creationTime = Date.now()
+        const strokeId = `stroke-${creationTime}`
         const originalPath = getStrokePath(currentPoints)
         const stroke: Stroke = {
           id: strokeId,
           points: currentPoints,
           timestamps: currentTimestamps,
           originalPath: originalPath,
+          creationTime: creationTime,
         }
         
         // Create shape
@@ -701,11 +817,17 @@ onUnmounted(() => {
         🗑️ Delete
       </button>
       <span class="separator">|</span>
+      <button @click="useRealTiming = !useRealTiming" :class="{ active: useRealTiming }">
+        {{ useRealTiming ? '⏱️ Real Time' : '⏱️ Max 0.3s' }}
+      </button>
+      <span class="separator">|</span>
       <span class="info">{{ selectedStrokes.size }} selected</span>
     </div>
     <Timeline 
       :strokes="strokes"
       :selectedStrokes="selectedStrokes"
+      :useRealTiming="useRealTiming"
+      :maxInterStrokeDelay="maxInterStrokeDelay"
       @timeUpdate="handleTimeUpdate"
     />
   </div>

@@ -23,6 +23,8 @@ interface Props {
   strokes: Map<string, any>
   selectedStrokes: Set<string>
   timeContext?: TimeContext
+  useRealTiming: boolean
+  maxInterStrokeDelay: number
 }
 
 const props = defineProps<Props>()
@@ -39,32 +41,72 @@ let startTime = 0
 
 // Calculate total duration based on strokes
 const calculateDuration = () => {
-  let maxTime = 0
+  let totalDuration = 0
+  const strokesToAnimate: any[] = []
   
   if (props.selectedStrokes.size > 0) {
-    // Calculate duration for selected strokes
+    // Get selected strokes in order
     props.selectedStrokes.forEach(strokeId => {
       const stroke = props.strokes.get(strokeId)
-      if (stroke?.timestamps) {
+      if (stroke) strokesToAnimate.push(stroke)
+    })
+    
+    // Sort by creation time (assuming stroke IDs contain timestamps)
+    strokesToAnimate.sort((a, b) => {
+      const timeA = parseInt(a.id.split('-')[1] || '0')
+      const timeB = parseInt(b.id.split('-')[1] || '0')
+      return timeA - timeB
+    })
+    
+    // Calculate duration with 0.1s gaps between non-contiguous strokes
+    strokesToAnimate.forEach((stroke, index) => {
+      if (stroke.timestamps && stroke.timestamps.length > 0) {
         const strokeDuration = stroke.timestamps[stroke.timestamps.length - 1] || 0
-        maxTime = Math.max(maxTime, strokeDuration)
+        totalDuration += strokeDuration
+        
+        // Add gap between strokes (except after the last one)
+        if (index < strokesToAnimate.length - 1) {
+          totalDuration += 100 // 0.1 seconds = 100ms
+        }
       }
     })
   } else {
-    // Calculate duration for all strokes
-    props.strokes.forEach(stroke => {
-      if (stroke.timestamps) {
+    // Calculate duration for all strokes with original gaps
+    const allStrokes = Array.from(props.strokes.values())
+    allStrokes.sort((a, b) => {
+      const timeA = parseInt(a.id.split('-')[1] || '0')
+      const timeB = parseInt(b.id.split('-')[1] || '0')
+      return timeA - timeB
+    })
+    
+    let lastEndTime = 0
+    allStrokes.forEach((stroke, index) => {
+      if (stroke.timestamps && stroke.timestamps.length > 0) {
+        const strokeStartTime = stroke.creationTime || parseInt(stroke.id.split('-')[1] || '0')
         const strokeDuration = stroke.timestamps[stroke.timestamps.length - 1] || 0
-        maxTime = Math.max(maxTime, strokeDuration)
+        
+        if (index === 0) {
+          totalDuration = strokeDuration
+          lastEndTime = strokeStartTime + strokeDuration
+        } else {
+          // Gap is between end of previous stroke and start of current stroke
+          let gap = Math.max(0, strokeStartTime - lastEndTime)
+          // Apply max threshold if not using real timing
+          if (!props.useRealTiming && gap > props.maxInterStrokeDelay) {
+            gap = props.maxInterStrokeDelay
+          }
+          totalDuration += gap + strokeDuration
+          lastEndTime = strokeStartTime + strokeDuration
+        }
       }
     })
   }
   
-  duration.value = maxTime
+  duration.value = totalDuration
 }
 
-// Watch for changes in strokes or selection
-watch([() => props.strokes, () => props.selectedStrokes], () => {
+// Watch for changes in strokes, selection, or timing mode
+watch([() => props.strokes, () => props.selectedStrokes, () => props.useRealTiming, () => props.maxInterStrokeDelay], () => {
   calculateDuration()
 }, { immediate: true, deep: true })
 
