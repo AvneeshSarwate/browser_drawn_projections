@@ -54,8 +54,8 @@ interface StrokeGroup {
   group?: Konva.Group
 }
 
-const strokes = ref<Map<string, Stroke>>(new Map())
-const strokeGroups = ref<Map<string, StrokeGroup>>(new Map())
+const strokes = new Map<string, Stroke>()
+const strokeGroups = new Map<string, StrokeGroup>()
 const selectedStrokes = ref<Set<string>>(new Set())
 const showGrid = ref(false)
 const gridSize = 20
@@ -69,11 +69,11 @@ watch(drawMode, () => {
   updateCursor?.()
   
   // Update draggable state for all shapes
-  strokes.value.forEach(stroke => {
+  strokes.forEach(stroke => {
     if (stroke.shape) {
       // Check if stroke is in a group
       let isInGroup = false
-      strokeGroups.value.forEach(group => {
+      strokeGroups.forEach(group => {
         if (group.strokeIds.includes(stroke.id)) {
           isInGroup = true
         }
@@ -85,7 +85,7 @@ watch(drawMode, () => {
   })
   
   // Update draggable state for all groups
-  strokeGroups.value.forEach(strokeGroup => {
+  strokeGroups.forEach(strokeGroup => {
     if (strokeGroup.group) {
       strokeGroup.group.draggable(!drawMode.value)
     }
@@ -204,7 +204,7 @@ const updateSelectionVisuals = () => {
   selectedStrokes.value.forEach(strokeId => {
     // First check if this stroke is part of a group
     let isInGroup = false
-    strokeGroups.value.forEach((group, groupId) => {
+    strokeGroups.forEach((group, groupId) => {
       if (group.strokeIds.includes(strokeId) && group.group && !processedGroups.has(groupId)) {
         // Add the entire group if any stroke in it is selected
         selectedNodes.push(group.group)
@@ -215,7 +215,7 @@ const updateSelectionVisuals = () => {
     
     // If not in a group, add the individual stroke
     if (!isInGroup) {
-      const stroke = strokes.value.get(strokeId)
+      const stroke = strokes.get(strokeId)
       if (stroke?.shape) {
         selectedNodes.push(stroke.shape)
       }
@@ -277,7 +277,7 @@ const groupSelectedStrokes = () => {
   
   // Move strokes to group
   selectedStrokes.value.forEach(strokeId => {
-    const stroke = strokes.value.get(strokeId)
+    const stroke = strokes.get(strokeId)
     if (stroke?.shape) {
       strokeIds.push(strokeId)
       stroke.shape.moveTo(group)
@@ -309,7 +309,7 @@ const groupSelectedStrokes = () => {
     group: group,
   }
   
-  strokeGroups.value.set(groupId, strokeGroup)
+  strokeGroups.set(groupId, strokeGroup)
   layer?.add(group)
   
   // Clear selection
@@ -324,7 +324,7 @@ const ungroupSelectedStrokes = () => {
   const groupsToUngroup = new Set<string>()
   
   selectedStrokes.value.forEach(strokeId => {
-    strokeGroups.value.forEach((group, groupId) => {
+    strokeGroups.forEach((group, groupId) => {
       if (group.strokeIds.includes(strokeId)) {
         groupsToUngroup.add(groupId)
       }
@@ -333,11 +333,11 @@ const ungroupSelectedStrokes = () => {
   
   // Ungroup each group
   groupsToUngroup.forEach(groupId => {
-    const strokeGroup = strokeGroups.value.get(groupId)
+    const strokeGroup = strokeGroups.get(groupId)
     if (strokeGroup?.group) {
       // Move strokes back to main layer preserving their absolute transforms
       strokeGroup.strokeIds.forEach(strokeId => {
-        const stroke = strokes.value.get(strokeId)
+        const stroke = strokes.get(strokeId)
         if (stroke?.shape) {
           // Get the absolute transform before moving
           const transform = stroke.shape.getAbsoluteTransform()
@@ -353,7 +353,7 @@ const ungroupSelectedStrokes = () => {
       
       // Remove group
       strokeGroup.group.destroy()
-      strokeGroups.value.delete(groupId)
+      strokeGroups.delete(groupId)
     }
   })
   
@@ -366,10 +366,10 @@ const ungroupSelectedStrokes = () => {
 // Delete selected strokes
 const deleteSelected = () => {
   selectedStrokes.value.forEach(strokeId => {
-    const stroke = strokes.value.get(strokeId)
+    const stroke = strokes.get(strokeId)
     if (stroke?.shape) {
       stroke.shape.destroy()
-      strokes.value.delete(strokeId)
+      strokes.delete(strokeId)
     }
   })
   selectedStrokes.value.clear()
@@ -391,7 +391,7 @@ const handleTimeUpdate = (time: number) => {
     selectedStrokes.value.forEach(strokeId => {
       selectedStrokeIds.add(strokeId)
       // Also add strokes from selected groups
-      strokeGroups.value.forEach(group => {
+      strokeGroups.forEach(group => {
         if (group.strokeIds.includes(strokeId)) {
           group.strokeIds.forEach(id => selectedStrokeIds.add(id))
         }
@@ -399,11 +399,11 @@ const handleTimeUpdate = (time: number) => {
     })
     
     selectedStrokeIds.forEach(id => {
-      const stroke = strokes.value.get(id)
+      const stroke = strokes.get(id)
       if (stroke) strokesToAnimate.push(stroke)
     })
   } else {
-    strokesToAnimate = Array.from(strokes.value.values())
+    strokesToAnimate = Array.from(strokes.values())
   }
   
   // Sort by creation time
@@ -423,25 +423,25 @@ const handleTimeUpdate = (time: number) => {
       // Show groups containing selected strokes
       const groupsToShow = new Set<string>()
       strokesToAnimate.forEach(stroke => {
-        strokeGroups.value.forEach((group, groupId) => {
+        strokeGroups.forEach((group, groupId) => {
           if (group.strokeIds.includes(stroke.id)) {
             groupsToShow.add(groupId)
           }
         })
       })
       groupsToShow.forEach(groupId => {
-        const group = strokeGroups.value.get(groupId)
+        const group = strokeGroups.get(groupId)
         if (group?.group) group.group.show()
       })
     } else {
       // Restore all strokes
-      strokes.value.forEach(stroke => {
+      strokes.forEach(stroke => {
         if (stroke.shape && stroke.originalPath) {
           stroke.shape.show()
           stroke.shape.data(stroke.originalPath)
         }
       })
-      strokeGroups.value.forEach(group => {
+      strokeGroups.forEach(group => {
         if (group.group) group.group.show()
       })
     }
@@ -456,10 +456,10 @@ const handleTimeUpdate = (time: number) => {
       if (stroke.shape) stroke.shape.hide()
     })
   } else {
-    strokes.value.forEach(stroke => {
+    strokes.forEach(stroke => {
       if (stroke.shape) stroke.shape.hide()
     })
-    strokeGroups.value.forEach(group => {
+    strokeGroups.forEach(group => {
       if (group.group) group.group.hide()
     })
   }
@@ -539,7 +539,7 @@ const handleTimeUpdate = (time: number) => {
           stroke.shape.data(getStrokePath(visiblePoints))
           
           // Check if this stroke is in a group
-          strokeGroups.value.forEach((group, groupId) => {
+          strokeGroups.forEach((group, groupId) => {
             if (group.strokeIds.includes(stroke.id)) {
               visibleGroups.add(groupId)
             }
@@ -552,7 +552,7 @@ const handleTimeUpdate = (time: number) => {
       stroke.shape.data(stroke.originalPath!)
       
       // Check if this stroke is in a group
-      strokeGroups.value.forEach((group, groupId) => {
+      strokeGroups.forEach((group, groupId) => {
         if (group.strokeIds.includes(stroke.id)) {
           visibleGroups.add(groupId)
         }
@@ -562,7 +562,7 @@ const handleTimeUpdate = (time: number) => {
   
   // Show groups that have visible strokes
   visibleGroups.forEach(groupId => {
-    const group = strokeGroups.value.get(groupId)
+    const group = strokeGroups.get(groupId)
     if (group?.group) {
       group.group.show()
     }
@@ -722,7 +722,7 @@ onMounted(() => {
         stroke.shape = shape
         
         // Add to data structures
-        strokes.value.set(strokeId, stroke)
+        strokes.set(strokeId, stroke)
         layer?.add(shape)
         layer?.batchDraw()
       }
