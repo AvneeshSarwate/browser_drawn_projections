@@ -1,6 +1,8 @@
 //disable eslint for this file
 /* eslint-disable */
 
+//disable typecheck for this file
+//@ts-nocheck
 
 
 /*!

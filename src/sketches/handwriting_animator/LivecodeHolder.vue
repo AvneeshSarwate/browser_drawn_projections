@@ -34,15 +34,83 @@ let currentPoints: number[] = []
 let currentTimestamps: number[] = []
 let drawingStartTime = 0
 
-// Transform controls
-let transformer: Konva.Transformer | undefined = undefined
+// Transform controls - dual transformer setup like working example
+let selTr: Konva.Transformer | undefined = undefined
+let grpTr: Konva.Transformer | undefined = undefined
 
-// Helper function to lock pivot point to center
+// Helper functions from working example
 const lockPivot = (node: Konva.Group | Konva.Node) => {
   //@ts-ignore
   const box = node.getClientRect({ relativeTo: node })
   node.offset({ x: box.width / 2, y: box.height / 2 })
   node.position({ x: node.x() + box.width / 2, y: node.y() + box.height / 2 })
+}
+
+// Return the top-most group (direct child of layer) for any descendant click
+const topGroup = (node: Konva.Node): Konva.Group | null => {
+  if (!layer) return null
+  let cur = node
+  let candidate: Konva.Group | null = null
+  while (cur && cur !== layer) {
+    if (cur instanceof Konva.Group) candidate = cur
+    cur = cur.getParent()
+  }
+  return candidate
+}
+
+// Guard against selecting ancestor & descendant simultaneously
+const hasAncestorConflict = (nodes: Konva.Node[]): boolean => {
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i + 1; j < nodes.length; j++) {
+      if (nodes[i].isAncestorOf(nodes[j]) || nodes[j].isAncestorOf(nodes[i])) return true
+    }
+  }
+  return false
+}
+
+// Selection functions from working example
+const add = (node: Konva.Node) => { 
+  if (!selected.includes(node)) selected.push(node) 
+  refreshUI() 
+}
+
+const toggle = (node: Konva.Node) => { 
+  const idx = selected.indexOf(node) 
+  idx >= 0 ? selected.splice(idx, 1) : selected.push(node) 
+  refreshUI() 
+}
+
+const clearSelection = () => { 
+  selected.length = 0 
+  refreshUI() 
+}
+
+// UI refresh function from working example
+const refreshUI = () => {
+  if (!selTr || !layer) return
+  
+  // transformers
+  if (selected.length === 1 && selected[0] instanceof Konva.Group) {
+    if (!grpTr) { 
+      grpTr = new Konva.Transformer({ rotateEnabled: true, keepRatio: true, padding: 6 }) 
+      selectionLayer?.add(grpTr) 
+    }
+    grpTr.nodes([selected[0]])
+    selTr.nodes([])
+  } else {
+    selTr.nodes(selected)
+    if (grpTr) grpTr.nodes([])
+  }
+
+  // Update UI refs like working example
+  selectedCount.value = selected.length
+  isGroupSelected.value = selected.length === 1 && selected[0] instanceof Konva.Group
+  
+  // Update button states like working example
+  const canGroup = selected.length >= 2 && !hasAncestorConflict(selected)
+  canGroupRef.value = canGroup
+
+  layer.batchDraw()
 }
 
 // Stroke data structure
@@ -64,7 +132,13 @@ interface StrokeGroup {
 
 const strokes = new Map<string, Stroke>()
 const strokeGroups = new Map<string, StrokeGroup>()
-const selectedStrokes = ref<Set<string>>(new Set())
+// Selection state - plain array like working example (no ref to avoid proxy issues)
+const selected: Konva.Node[] = []
+
+// Separate refs for UI state
+const selectedCount = ref(0)
+const isGroupSelected = ref(false)
+const canGroupRef = ref(false)
 const showGrid = ref(false)
 const gridSize = 20
 const currentPlaybackTime = ref(0)
@@ -72,37 +146,40 @@ const drawMode = ref(true) // true = draw mode, false = select mode
 const useRealTiming = ref(false) // false = use max threshold, true = use actual timing
 const maxInterStrokeDelay = 300 // 0.3 seconds max gap between strokes
 
-// Watch for draw mode changes
-watch(drawMode, () => {
-  updateCursor?.()
-  
-  // Update draggable state for all shapes
+// Function to update draggable state based on mode and group membership
+const updateDraggableStates = () => {
+  // Update all shapes
   strokes.forEach(stroke => {
     if (stroke.shape) {
-      // Check if stroke is in a group
-      let isInGroup = false
-      strokeGroups.forEach(group => {
-        if (group.strokeIds.includes(stroke.id)) {
-          isInGroup = true
-        }
-      })
+      // Check if stroke is in a group by looking at parent
+      const parent = stroke.shape.getParent()
+      const isInGroup = parent && parent !== layer
       
-      // Only make draggable if in select mode AND not in a group
+      // Only draggable if in select mode AND not in a group
       stroke.shape.draggable(!drawMode.value && !isInGroup)
     }
   })
   
-  // Update draggable state for all groups
-  strokeGroups.forEach(strokeGroup => {
-    if (strokeGroup.group) {
-      strokeGroup.group.draggable(!drawMode.value)
-    }
-  })
+  // Update all groups
+  if (layer) {
+    layer.getChildren().forEach(child => {
+      if (child instanceof Konva.Group) {
+        child.draggable(!drawMode.value)
+      }
+    })
+  }
+}
+
+// Watch for draw mode changes - simplified based on working example
+watch(drawMode, () => {
+  updateCursor?.()
+  
+  // Update draggable states when mode changes
+  updateDraggableStates()
   
   // Clear selection when switching to draw mode
   if (drawMode.value) {
-    selectedStrokes.value.clear()
-    updateSelectionVisuals()
+    clearSelection()
   }
 })
 
@@ -178,7 +255,7 @@ const getPointsBounds = (points: number[]): { minX: number, minY: number, maxX: 
 }
 
 // Helper function to create a new stroke shape
-const createStrokeShape = (points: number[], id: string, isInGroup: boolean = false): Konva.Path => {
+const createStrokeShape = (points: number[], id: string): Konva.Path => {
   // Get bounds to position the shape
   const bounds = getPointsBounds(points)
   
@@ -196,13 +273,13 @@ const createStrokeShape = (points: number[], id: string, isInGroup: boolean = fa
     id: id,
     x: bounds.minX,
     y: bounds.minY,
-    draggable: !drawMode.value && !isInGroup, // Enable dragging only if in select mode AND not in a group
+    draggable: true, // Start draggable like working example
   })
   
   // Add click handler for selection
   path.on('click', (e) => {
     e.cancelBubble = true
-    handleStrokeClick(id, e.evt.shiftKey)
+    handleClick(path, e.evt.shiftKey)
   })
   
   // Add drag end handler to update position
@@ -214,63 +291,16 @@ const createStrokeShape = (points: number[], id: string, isInGroup: boolean = fa
   return path
 }
 
-// Handle stroke selection
-const handleStrokeClick = (strokeId: string, shiftKey: boolean) => {
-  // Only allow selection in select mode
+// Handle click following working example pattern
+const handleClick = (target: Konva.Node, shiftKey: boolean) => {
+  // Only allow selection in select mode  
   if (drawMode.value) return
   
-  if (shiftKey) {
-    // Multi-select with shift
-    if (selectedStrokes.value.has(strokeId)) {
-      selectedStrokes.value.delete(strokeId)
-    } else {
-      selectedStrokes.value.add(strokeId)
-    }
-  } else {
-    // Single select
-    selectedStrokes.value.clear()
-    selectedStrokes.value.add(strokeId)
-  }
+  const group = topGroup(target)
+  const nodeToSelect = group ?? target // escalate to top-group if exists
   
-  updateSelectionVisuals()
-}
-
-// Update selection visuals
-const updateSelectionVisuals = () => {
-  // Clear transformer
-  if (transformer) {
-    transformer.nodes([])
-  }
-  
-  const selectedNodes: Konva.Node[] = []
-  const processedGroups = new Set<string>()
-  
-  selectedStrokes.value.forEach(strokeId => {
-    // First check if this stroke is part of a group
-    let isInGroup = false
-    strokeGroups.forEach((group, groupId) => {
-      if (group.strokeIds.includes(strokeId) && group.group && !processedGroups.has(groupId)) {
-        // Add the entire group if any stroke in it is selected
-        selectedNodes.push(group.group)
-        processedGroups.add(groupId)
-        isInGroup = true
-      }
-    })
-    
-    // If not in a group, add the individual stroke
-    if (!isInGroup) {
-      const stroke = strokes.get(strokeId)
-      if (stroke?.shape) {
-        selectedNodes.push(stroke.shape)
-      }
-    }
-  })
-  
-  // Update transformer with selected nodes
-  if (transformer && selectedNodes.length > 0) {
-    transformer.nodes(selectedNodes)
-    selectionLayer?.batchDraw()
-  }
+  if (shiftKey) toggle(nodeToSelect) 
+  else { clearSelection(); add(nodeToSelect) }
 }
 
 // Draw grid
@@ -308,212 +338,89 @@ const drawGrid = () => {
   gridLayer.batchDraw()
 }
 
-// Group selected strokes
+// Group selected strokes - simplified from working example  
 const groupSelectedStrokes = () => {
-  if (selectedStrokes.value.size < 2) return
-  
-  const group = new Konva.Group({
-    draggable: false, // Will be enabled dynamically based on mode
+  if (selected.length < 2) return
+
+  // compute common parent to insert new group into (layer by default)
+  let commonParent = selected[0].getParent()
+  for (const n of selected) if (n.getParent() !== commonParent) { commonParent = layer; break }
+
+  const superGroup = new Konva.Group({ draggable: true })
+  commonParent?.add(superGroup)
+
+  if (selTr) selTr.nodes([])
+  if (grpTr) grpTr.nodes([])
+
+  selected.forEach((node) => {
+    node.draggable(false)
+    const absPos = node.getAbsolutePosition()
+    const absRot = node.getAbsoluteRotation()
+    const absScale = node.getAbsoluteScale()
+    node.moveTo(superGroup)
+    node.position(absPos)
+    node.rotation(absRot)
+    node.scale(absScale)
   })
-  
-  const groupId = `group-${Date.now()}`
-  const strokeIds: string[] = []
-  
-  // First, check if any selected strokes are already in groups
-  // If so, we need to handle nested grouping
-  const groupsToNest = new Set<string>()
-  const individualStrokes: string[] = []
-  
-  selectedStrokes.value.forEach(strokeId => {
-    let foundInGroup = false
-    strokeGroups.forEach((existingGroup, existingGroupId) => {
-      if (existingGroup.strokeIds.includes(strokeId)) {
-        groupsToNest.add(existingGroupId)
-        foundInGroup = true
-      }
-    })
-    if (!foundInGroup) {
-      individualStrokes.push(strokeId)
-    }
-  })
-  
-  // Move existing groups to new group (nested grouping)
-  groupsToNest.forEach(existingGroupId => {
-    const existingGroup = strokeGroups.get(existingGroupId)
-    if (existingGroup?.group) {
-      // Store absolute transforms
-      const absPos = existingGroup.group.getAbsolutePosition()
-      const absRot = existingGroup.group.getAbsoluteRotation()
-      const absScale = existingGroup.group.getAbsoluteScale()
-      
-      // Move to new group
-      existingGroup.group.moveTo(group)
-      
-      // Apply absolute transforms relative to new parent
-      existingGroup.group.position(absPos)
-      existingGroup.group.rotation(absRot)
-      existingGroup.group.scale(absScale)
-      
-      // Add all strokes from this group to our tracking
-      existingGroup.strokeIds.forEach(id => strokeIds.push(id))
-    }
-  })
-  
-  // Move individual strokes to group
-  individualStrokes.forEach(strokeId => {
-    const stroke = strokes.get(strokeId)
-    if (stroke?.shape) {
-      strokeIds.push(strokeId)
-      // Store absolute transforms
-      const absPos = stroke.shape.getAbsolutePosition()
-      const absRot = stroke.shape.getAbsoluteRotation()
-      const absScale = stroke.shape.getAbsoluteScale()
-      
-      // Move to group
-      stroke.shape.moveTo(group)
-      
-      // Apply absolute transforms relative to new parent
-      stroke.shape.position(absPos)
-      stroke.shape.rotation(absRot)
-      stroke.shape.scale(absScale)
-      
-      // Disable individual dragging when in a group
-      stroke.shape.draggable(false)
-    }
-  })
-  
-  // Add group to layer and lock pivot
-  layer?.add(group)
-  lockPivot(group)
-  
-  // Add click handler to group
-  group.on('click', (e) => {
-    e.cancelBubble = true
-    
-    // Only handle selection in select mode
-    if (drawMode.value) return
-    
-    // When clicking a group, select all its strokes
-    selectedStrokes.value.clear()
-    strokeIds.forEach(id => selectedStrokes.value.add(id))
-    updateSelectionVisuals()
-  })
-  
-  // Enable dragging only in select mode
-  group.draggable(!drawMode.value)
-  
-  // Create group data
-  const strokeGroup: StrokeGroup = {
-    id: groupId,
-    strokeIds: strokeIds,
-    group: group,
-  }
-  
-  strokeGroups.set(groupId, strokeGroup)
-  
-  // Clear selection
-  selectedStrokes.value.clear()
-  updateSelectionVisuals()
+
+  lockPivot(superGroup)
+
+  clearSelection()
+  selected.push(superGroup)
+  refreshUI()
+  updateDraggableStates() // Update draggable states after grouping
   layer?.batchDraw()
 }
 
-// Ungroup selected strokes
+// Ungroup selected groups - simplified from working example
 const ungroupSelectedStrokes = () => {
-  // Find groups that contain selected strokes
-  const groupsToUngroup = new Set<string>()
-  
-  selectedStrokes.value.forEach(strokeId => {
-    strokeGroups.forEach((group, groupId) => {
-      if (group.strokeIds.includes(strokeId)) {
-        groupsToUngroup.add(groupId)
+  if (!(selected.length === 1 && selected[0] instanceof Konva.Group)) return
+  const grp = selected[0] as Konva.Group
+  const parent = grp.getParent()
+  if (grpTr) grpTr.nodes([])
+
+  // Snapshot children so iteration is safe during re-parenting
+  const children = [...grp.getChildren()]
+  children.forEach((child) => {
+    const absPos = child.getAbsolutePosition()
+    const absRot = child.getAbsoluteRotation()
+    const absScale = child.getAbsoluteScale()
+    child.moveTo(parent!)
+    child.position(absPos)
+    child.rotation(absRot)
+    child.scale(absScale)
+    child.draggable(true)
+  })
+
+  grp.destroy()
+
+  clearSelection()
+  updateDraggableStates() // Update draggable states after ungrouping
+  layer?.batchDraw()
+}
+
+// Delete selected items - simplified from working example
+const deleteSelected = () => {
+  selected.forEach(node => {
+    node.destroy()
+    // Also remove from strokes map if it's a stroke
+    strokes.forEach((stroke, id) => {
+      if (stroke.shape === node) {
+        strokes.delete(id)
       }
     })
   })
-  
-  // Ungroup each group
-  groupsToUngroup.forEach(groupId => {
-    const strokeGroup = strokeGroups.get(groupId)
-    if (strokeGroup?.group) {
-      // Get children of the group (could be strokes or nested groups)
-      const children = strokeGroup.group.getChildren()
-      
-      children.forEach(child => {
-        // Get absolute transforms before moving
-        const absPos = child.getAbsolutePosition()
-        const absRot = child.getAbsoluteRotation()
-        const absScale = child.getAbsoluteScale()
-        
-        // Move to layer
-        child.moveTo(layer!)
-        
-        // Apply absolute transforms (baking the group transform)
-        child.position(absPos)
-        child.rotation(absRot)
-        child.scale(absScale)
-        
-        // If it's a regular shape (stroke), re-enable dragging
-        if (child instanceof Konva.Path) {
-          child.draggable(!drawMode.value)
-        } else if (child instanceof Konva.Group) {
-          // If it's a nested group, it remains draggable based on mode
-          child.draggable(!drawMode.value)
-        }
-      })
-      
-      // Remove group
-      strokeGroup.group.destroy()
-      strokeGroups.delete(groupId)
-    }
-  })
-  
-  // Clear selection and update visuals
-  selectedStrokes.value.clear()
-  updateSelectionVisuals()
+  clearSelection()
   layer?.batchDraw()
 }
 
-// Delete selected strokes
-const deleteSelected = () => {
-  selectedStrokes.value.forEach(strokeId => {
-    const stroke = strokes.get(strokeId)
-    if (stroke?.shape) {
-      stroke.shape.destroy()
-      strokes.delete(strokeId)
-    }
-  })
-  selectedStrokes.value.clear()
-  updateSelectionVisuals()
-  layer?.batchDraw()
-}
-
-// Handle timeline updates and stroke animation
+// Handle timeline updates and stroke animation - simplified for new selection system
 const handleTimeUpdate = (time: number) => {
   currentPlaybackTime.value = time
   
-  // Get strokes to animate and sort them
-  let strokesToAnimate: Stroke[] = []
-  const isSelection = selectedStrokes.value.size > 0
-  
-  if (isSelection) {
-    // Get selected strokes including those in groups
-    const selectedStrokeIds = new Set<string>()
-    selectedStrokes.value.forEach(strokeId => {
-      selectedStrokeIds.add(strokeId)
-      // Also add strokes from selected groups
-      strokeGroups.forEach(group => {
-        if (group.strokeIds.includes(strokeId)) {
-          group.strokeIds.forEach(id => selectedStrokeIds.add(id))
-        }
-      })
-    })
-    
-    selectedStrokeIds.forEach(id => {
-      const stroke = strokes.get(id)
-      if (stroke) strokesToAnimate.push(stroke)
-    })
-  } else {
-    strokesToAnimate = Array.from(strokes.values())
-  }
+  // For now, just animate all strokes - can be enhanced later
+  const strokesToAnimate = Array.from(strokes.values())
+  const isSelection = selected.length > 0
   
   // Sort by creation time
   strokesToAnimate.sort((a, b) => a.creationTime - b.creationTime)
@@ -736,33 +643,15 @@ onMounted(() => {
     stage.add(drawingLayer)
     stage.add(selectionLayer)
 
-    // Create transformer
-    transformer = new Konva.Transformer({
+    // Create transformers like working example
+    selTr = new Konva.Transformer({ 
+      rotateEnabled: true, 
+      keepRatio: true, 
+      padding: 6,
       rotationSnaps: [0, 45, 90, 135, 180, 225, 270, 315],
       rotationSnapTolerance: 5,
-      keepRatio: false, // Allow free scaling
-      rotateEnabled: true,
-      enabledAnchors: ['top-left', 'top-center', 'top-right', 'middle-left', 'middle-right', 'bottom-left', 'bottom-center', 'bottom-right'],
-      boundBoxFunc: (oldBox, newBox) => {
-        // Limit minimum size
-        if (newBox.width < 10 || newBox.height < 10) {
-          return oldBox
-        }
-        return newBox
-      },
     })
-    
-    // Add transform events to track changes
-    transformer.on('transformstart', () => {
-      // Store initial transforms if needed
-    })
-    
-    transformer.on('transformend', () => {
-      // Update after transformation
-      layer?.batchDraw()
-    })
-    
-    selectionLayer.add(transformer)
+    selectionLayer.add(selTr)
 
     // Initial grid draw
     drawGrid()
@@ -786,14 +675,12 @@ onMounted(() => {
         currentTimestamps = [0]
         
         // Clear selection when starting to draw
-        selectedStrokes.value.clear()
-        updateSelectionVisuals()
+        clearSelection()
       } else {
         // Selection mode
         if (e.target === stage) {
           // Clicked on empty space - clear selection
-          selectedStrokes.value.clear()
-          updateSelectionVisuals()
+          clearSelection()
         }
       }
     })
@@ -855,6 +742,7 @@ onMounted(() => {
         // Add to data structures
         strokes.set(strokeId, stroke)
         layer?.add(shape)
+        updateDraggableStates() // Update draggable state for new stroke
         layer?.batchDraw()
       }
       
@@ -937,14 +825,14 @@ onUnmounted(() => {
         {{ showGrid ? '⊞ Grid On' : '⊡ Grid Off' }}
       </button>
       <span class="separator">|</span>
-      <button @click="groupSelectedStrokes" :disabled="selectedStrokes.size < 2">
+      <button @click="groupSelectedStrokes" :disabled="!canGroupRef">
         Group
       </button>
-      <button @click="ungroupSelectedStrokes" :disabled="selectedStrokes.size === 0">
+      <button @click="ungroupSelectedStrokes" :disabled="!isGroupSelected">
         Ungroup
       </button>
       <span class="separator">|</span>
-      <button @click="deleteSelected" :disabled="selectedStrokes.size === 0">
+      <button @click="deleteSelected" :disabled="selectedCount === 0">
         🗑️ Delete
       </button>
       <span class="separator">|</span>
@@ -952,12 +840,12 @@ onUnmounted(() => {
         {{ useRealTiming ? '⏱️ Real Time' : '⏱️ Max 0.3s' }}
       </button>
       <span class="separator">|</span>
-      <span class="info">{{ selectedStrokes.size }} selected</span>
+      <span class="info">{{ selectedCount }} selected</span>
     </div>
     <div id="konva-wrapper" class="canvas-wrapper"></div>
     <Timeline 
       :strokes="strokes"
-      :selectedStrokes="selectedStrokes"
+      :selectedStrokes="new Set()"
       :useRealTiming="useRealTiming"
       :maxInterStrokeDelay="maxInterStrokeDelay"
       @timeUpdate="handleTimeUpdate"
