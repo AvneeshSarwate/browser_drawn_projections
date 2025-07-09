@@ -10,12 +10,6 @@ import Konva from 'konva';
 import { getStroke } from 'perfect-freehand';
 import Timeline from './Timeline.vue';
 
-// Fix TypeScript issue with Konva.Path
-declare module 'konva/lib/shapes/Path' {
-  interface Path {
-    getSelfRect(): { x: number; y: number; width: number; height: number; }
-  }
-}
 
 const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
@@ -68,6 +62,45 @@ const hasAncestorConflict = (nodes: Konva.Node[]): boolean => {
   return false
 }
 
+// Helper function to get all strokes that are selected (including those in groups)
+const getSelectedStrokes = (): Stroke[] => {
+  const selectedStrokes: Stroke[] = []
+  const processedStrokeIds = new Set<string>()
+  
+  selected.forEach(node => {
+    if (node instanceof Konva.Group) {
+      // If it's a group, find all strokes in that group
+      const findStrokesInGroup = (group: Konva.Group) => {
+        group.getChildren().forEach(child => {
+          if (child instanceof Konva.Group) {
+            // Nested group
+            findStrokesInGroup(child)
+          } else if (child instanceof Konva.Path) {
+            // Find corresponding stroke
+            strokes.forEach(stroke => {
+              if (stroke.shape === child && !processedStrokeIds.has(stroke.id)) {
+                selectedStrokes.push(stroke)
+                processedStrokeIds.add(stroke.id)
+              }
+            })
+          }
+        })
+      }
+      findStrokesInGroup(node)
+    } else if (node instanceof Konva.Path) {
+      // Individual stroke
+      strokes.forEach(stroke => {
+        if (stroke.shape === node && !processedStrokeIds.has(stroke.id)) {
+          selectedStrokes.push(stroke)
+          processedStrokeIds.add(stroke.id)
+        }
+      })
+    }
+  })
+  
+  return selectedStrokes
+}
+
 // Selection functions from working example
 const add = (node: Konva.Node) => { 
   if (!selected.includes(node)) selected.push(node) 
@@ -83,6 +116,44 @@ const toggle = (node: Konva.Node) => {
 const clearSelection = () => { 
   selected.length = 0 
   refreshUI() 
+}
+
+// Update timeline state based on current selection
+const updateTimelineState = () => {
+  if (selected.length === 0) {
+    // No selection - use all strokes
+    selectedStrokesForTimeline.value = new Set()
+    timelineDuration.value = 0 // Timeline component will calculate total duration
+  } else {
+    // Selection exists - calculate selected strokes and trimmed duration
+    const selectedStrokes = getSelectedStrokes().filter(stroke => stroke.isFreehand)
+    
+    // Update selected strokes set for timeline
+    const strokeIds = new Set(selectedStrokes.map(s => s.id))
+    selectedStrokesForTimeline.value = strokeIds
+    
+    // Calculate trimmed timeline duration
+    if (selectedStrokes.length > 0) {
+      // Sort selected strokes by creation time
+      const sortedStrokes = selectedStrokes.sort((a, b) => a.creationTime - b.creationTime)
+      
+      // Calculate total duration like in handleTimeUpdate
+      let totalDuration = 0
+      sortedStrokes.forEach((stroke, index) => {
+        const strokeDuration = stroke.timestamps[stroke.timestamps.length - 1] || 0
+        totalDuration += strokeDuration
+        
+        // Add gap if not the last stroke (0.1s for selections)
+        if (index < sortedStrokes.length - 1) {
+          totalDuration += 100 // 0.1s gap
+        }
+      })
+      
+      timelineDuration.value = totalDuration
+    } else {
+      timelineDuration.value = 0
+    }
+  }
 }
 
 // UI refresh function from working example
@@ -110,6 +181,9 @@ const refreshUI = () => {
   const canGroup = selected.length >= 2 && !hasAncestorConflict(selected)
   canGroupRef.value = canGroup
 
+  // Update timeline-related state
+  updateTimelineState()
+
   layer.batchDraw()
 }
 
@@ -122,6 +196,7 @@ interface Stroke {
   selected?: boolean
   originalPath?: string // Store original path data for animation
   creationTime: number // Absolute time when stroke was created
+  isFreehand: boolean // Track if this is a freehand stroke with timing info
 }
 
 interface StrokeGroup {
@@ -139,6 +214,8 @@ const selected: Konva.Node[] = []
 const selectedCount = ref(0)
 const isGroupSelected = ref(false)
 const canGroupRef = ref(false)
+const selectedStrokesForTimeline = ref(new Set<string>())
+const timelineDuration = ref(0)
 const showGrid = ref(false)
 const gridSize = 20
 const currentPlaybackTime = ref(0)
@@ -411,16 +488,26 @@ const deleteSelected = () => {
     })
   })
   clearSelection()
+  updateTimelineState() // Update timeline state after deletion
   layer?.batchDraw()
 }
 
-// Handle timeline updates and stroke animation - simplified for new selection system
+// Handle timeline updates and stroke animation - restored full logic
 const handleTimeUpdate = (time: number) => {
   currentPlaybackTime.value = time
   
-  // For now, just animate all strokes - can be enhanced later
-  const strokesToAnimate = Array.from(strokes.values())
+  // Get strokes to animate and sort them
+  let strokesToAnimate: Stroke[] = []
   const isSelection = selected.length > 0
+  
+  if (isSelection) {
+    // Get selected strokes including those in groups, but only freehand ones
+    const selectedStrokes = getSelectedStrokes()
+    strokesToAnimate = selectedStrokes.filter(stroke => stroke.isFreehand)
+  } else {
+    // All freehand strokes
+    strokesToAnimate = Array.from(strokes.values()).filter(stroke => stroke.isFreehand)
+  }
   
   // Sort by creation time
   strokesToAnimate.sort((a, b) => a.creationTime - b.creationTime)
@@ -428,38 +515,43 @@ const handleTimeUpdate = (time: number) => {
   // If time is 0, restore state
   if (time === 0) {
     if (isSelection) {
-      // Only restore selected strokes
+      // Only restore selected strokes and their groups
+      const groupsToShow = new Set<Konva.Group>()
       strokesToAnimate.forEach(stroke => {
         if (stroke.shape && stroke.originalPath) {
+          stroke.shape.show()
+          stroke.shape.data(stroke.originalPath)
+          
+          // Check if stroke is in a group and mark group for showing
+          let parent = stroke.shape.getParent()
+          while (parent && parent !== layer) {
+            if (parent instanceof Konva.Group) {
+              groupsToShow.add(parent)
+            }
+            parent = parent.getParent()
+          }
+        }
+      })
+      
+      // Show all groups that contain selected strokes
+      groupsToShow.forEach(group => group.show())
+    } else {
+      // Restore all freehand strokes and all groups
+      strokes.forEach(stroke => {
+        if (stroke.shape && stroke.originalPath && stroke.isFreehand) {
           stroke.shape.show()
           stroke.shape.data(stroke.originalPath)
         }
       })
       
-      // Show groups containing selected strokes
-      const groupsToShow = new Set<string>()
-      strokesToAnimate.forEach(stroke => {
-        strokeGroups.forEach((group, groupId) => {
-          if (group.strokeIds.includes(stroke.id)) {
-            groupsToShow.add(groupId)
+      // Show all groups
+      if (layer) {
+        layer.getChildren().forEach(child => {
+          if (child instanceof Konva.Group) {
+            child.show()
           }
         })
-      })
-      groupsToShow.forEach(groupId => {
-        const group = strokeGroups.get(groupId)
-        if (group?.group) group.group.show()
-      })
-    } else {
-      // Restore all strokes
-      strokes.forEach(stroke => {
-        if (stroke.shape && stroke.originalPath) {
-          stroke.shape.show()
-          stroke.shape.data(stroke.originalPath)
-        }
-      })
-      strokeGroups.forEach(group => {
-        if (group.group) group.group.show()
-      })
+      }
     }
     
     layer?.batchDraw()
@@ -468,16 +560,24 @@ const handleTimeUpdate = (time: number) => {
   
   // Hide strokes that will be animated
   if (isSelection) {
+    // Hide only the selected strokes that will be animated
     strokesToAnimate.forEach(stroke => {
       if (stroke.shape) stroke.shape.hide()
     })
   } else {
+    // Hide all freehand strokes and all groups
     strokes.forEach(stroke => {
-      if (stroke.shape) stroke.shape.hide()
+      if (stroke.shape && stroke.isFreehand) stroke.shape.hide()
     })
-    strokeGroups.forEach(group => {
-      if (group.group) group.group.hide()
-    })
+    
+    // Hide all groups
+    if (layer) {
+      layer.getChildren().forEach(child => {
+        if (child instanceof Konva.Group) {
+          child.hide()
+        }
+      })
+    }
   }
   
   // Calculate stroke timings
@@ -529,7 +629,7 @@ const handleTimeUpdate = (time: number) => {
   }
   
   // Track which groups should be visible
-  const visibleGroups = new Set<string>()
+  const visibleGroups = new Set<Konva.Group>()
   
   // Animate strokes based on current time
   strokeTimings.forEach(({stroke, startTime, endTime}) => {
@@ -564,12 +664,14 @@ const handleTimeUpdate = (time: number) => {
           stroke.shape.show()
           stroke.shape.data(getStrokePath(normalizedVisiblePoints))
           
-          // Check if this stroke is in a group
-          strokeGroups.forEach((group, groupId) => {
-            if (group.strokeIds.includes(stroke.id)) {
-              visibleGroups.add(groupId)
+          // Check if this stroke is in a group and mark for showing
+          let parent = stroke.shape.getParent()
+          while (parent && parent !== layer) {
+            if (parent instanceof Konva.Group) {
+              visibleGroups.add(parent)
             }
-          })
+            parent = parent.getParent()
+          }
         }
       }
     } else if (time > endTime) {
@@ -577,22 +679,19 @@ const handleTimeUpdate = (time: number) => {
       stroke.shape.show()
       stroke.shape.data(stroke.originalPath!)
       
-      // Check if this stroke is in a group
-      strokeGroups.forEach((group, groupId) => {
-        if (group.strokeIds.includes(stroke.id)) {
-          visibleGroups.add(groupId)
+      // Check if this stroke is in a group and mark for showing  
+      let parent = stroke.shape.getParent()
+      while (parent && parent !== layer) {
+        if (parent instanceof Konva.Group) {
+          visibleGroups.add(parent)
         }
-      })
+        parent = parent.getParent()
+      }
     }
   })
   
   // Show groups that have visible strokes
-  visibleGroups.forEach(groupId => {
-    const group = strokeGroups.get(groupId)
-    if (group?.group) {
-      group.group.show()
-    }
-  })
+  visibleGroups.forEach(group => group.show())
   
   layer?.batchDraw()
 }
@@ -733,6 +832,7 @@ onMounted(() => {
           timestamps: currentTimestamps,
           originalPath: originalPath,
           creationTime: creationTime,
+          isFreehand: true, // This is a freehand stroke with timing info
         }
         
         // Create shape
@@ -743,6 +843,7 @@ onMounted(() => {
         strokes.set(strokeId, stroke)
         layer?.add(shape)
         updateDraggableStates() // Update draggable state for new stroke
+        updateTimelineState() // Update timeline state when new stroke is added
         layer?.batchDraw()
       }
       
@@ -845,9 +946,10 @@ onUnmounted(() => {
     <div id="konva-wrapper" class="canvas-wrapper"></div>
     <Timeline 
       :strokes="strokes"
-      :selectedStrokes="new Set()"
+      :selectedStrokes="selectedStrokesForTimeline"
       :useRealTiming="useRealTiming"
       :maxInterStrokeDelay="maxInterStrokeDelay"
+      :overrideDuration="timelineDuration > 0 ? timelineDuration : undefined"
       @timeUpdate="handleTimeUpdate"
     />
   </div>
