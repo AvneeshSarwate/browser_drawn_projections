@@ -103,7 +103,9 @@ const getSelectedStrokes = (): Stroke[] => {
 
 // Selection functions from working example
 const add = (node: Konva.Node) => { 
+  console.log('Adding to selection:', node.id(), node.constructor.name)
   if (!selected.includes(node)) selected.push(node) 
+  console.log('Selected array now has:', selected.length, 'items')
   refreshUI() 
 }
 
@@ -171,15 +173,20 @@ const updateTimelineState = () => {
 const refreshUI = () => {
   if (!selTr || !layer) return
   
+  // Ensure stroke connections are up to date
+  refreshStrokeConnections()
+  
   // transformers
   if (selected.length === 1 && selected[0] instanceof Konva.Group) {
     if (!grpTr) { 
       grpTr = new Konva.Transformer({ rotateEnabled: true, keepRatio: true, padding: 6 }) 
       selectionLayer?.add(grpTr) 
     }
+    console.log('Using group transformer for:', selected[0].id())
     grpTr.nodes([selected[0]])
     selTr.nodes([])
   } else {
+    console.log('Using selection transformer for:', selected.length, 'nodes:', selected.map(n => n.id()))
     selTr.nodes(selected)
     if (grpTr) grpTr.nodes([])
   }
@@ -234,17 +241,198 @@ const drawMode = ref(true) // true = draw mode, false = select mode
 const useRealTiming = ref(false) // false = use max threshold, true = use actual timing
 const maxInterStrokeDelay = 300 // 0.3 seconds max gap between strokes
 
+// Add this ref near the other refs
+const konvaContainer = ref<HTMLDivElement>()
+
+// Function to refresh stroke-shape connections
+const refreshStrokeConnections = () => {
+  strokes.forEach((stroke, id) => {
+    const currentShape = stage?.findOne(`#${id}`) as Konva.Path
+    if (currentShape && currentShape !== stroke.shape) {
+      console.log('Updating stroke connection for:', id)
+      stroke.shape = currentShape
+    }
+  })
+}
+
+// Serialization functions for hotreloading
+const serializeKonvaState = () => {
+  if (!stage || !layer) return
+  
+  try {
+    // Serialize only the essential canvas state
+    const layerJson = layer.toJSON()
+    const layerData = JSON.parse(layerJson)
+    const strokesData = Array.from(strokes.entries())
+    const strokeGroupsData = Array.from(strokeGroups.entries())
+    
+    const canvasState = {
+      layer: layerData,
+      strokes: strokesData,
+      strokeGroups: strokeGroupsData,
+    }
+    
+    appState.konvaStateString = JSON.stringify(canvasState)
+    console.log('Serialized canvas state:', { 
+      layerChildren: layerData?.children?.length || 0, 
+      strokes: strokesData.length,
+      strokeGroups: strokeGroupsData.length 
+    })
+  } catch (error) {
+    console.warn('Failed to serialize Konva state:', error)
+  }
+}
+
+const deserializeKonvaState = () => {
+  if (!appState.konvaStateString || !stage || !layer) return
+  
+  try {
+    const canvasState = JSON.parse(appState.konvaStateString)
+    console.log('Deserializing canvas state:', { 
+      layerChildren: canvasState.layer?.children?.length || 0, 
+      strokes: canvasState.strokes?.length || 0,
+      strokeGroups: canvasState.strokeGroups?.length || 0 
+    })
+    
+    // Clear existing content
+    layer.destroyChildren()
+    strokes.clear()
+    strokeGroups.clear()
+    selected.length = 0
+    
+    // Function to recursively attach handlers to all nodes
+    const attachHandlersRecursively = (node: Konva.Node) => {
+      if (node instanceof Konva.Path) {
+        console.log('Attaching handlers to path:', node.id())
+        // Ensure the path has the correct properties
+        node.draggable(true)
+        
+        // Add click handler for selection
+        node.on('click', (e) => {
+          e.cancelBubble = true
+          handleClick(node, e.evt.shiftKey)
+        })
+        
+        // Add drag end handler to update position
+        node.on('dragend', () => {
+          layer?.batchDraw()
+        })
+      }
+      
+      if (node instanceof Konva.Group) {
+        console.log('Attaching handlers to group:', node.id())
+        // Groups are draggable
+        node.draggable(true)
+        
+        // Add click handler for group selection
+        node.on('click', (e) => {
+          e.cancelBubble = true
+          handleClick(node, e.evt.shiftKey)
+        })
+        
+        // Add drag end handler
+        node.on('dragend', () => {
+          layer?.batchDraw()
+        })
+        
+        // Recursively attach handlers to all children
+        node.getChildren().forEach(child => {
+          attachHandlersRecursively(child)
+        })
+      }
+    }
+    
+    // Restore layer content using Konva.Node.create
+    const layerData = canvasState.layer
+    if (layerData && layerData.children) {
+      console.log('Restoring', layerData.children.length, 'children')
+      layerData.children.forEach((childData: any, index: number) => {
+        console.log('Creating node', index, 'of type', childData.className)
+        const node = Konva.Node.create(JSON.stringify(childData))
+        layer.add(node)
+        console.log('Added node to layer:', node.id(), node.isVisible())
+        
+        // Recursively attach handlers to this node and all its children
+        attachHandlersRecursively(node)
+      })
+    }
+    
+    // Restore stroke data
+    if (canvasState.strokes) {
+      canvasState.strokes.forEach(([id, strokeData]: [string, any]) => {
+        // Use stage.findOne to search recursively through all groups
+        const shape = stage.findOne(`#${id}`) as Konva.Path
+        console.log('Restoring stroke:', id, 'found shape:', !!shape)
+        const stroke: Stroke = {
+          id: strokeData.id,
+          points: strokeData.points,
+          timestamps: strokeData.timestamps,
+          originalPath: strokeData.originalPath,
+          creationTime: strokeData.creationTime,
+          isFreehand: strokeData.isFreehand,
+          shape: shape,
+        }
+        strokes.set(id, stroke)
+      })
+    }
+    
+    // Restore stroke groups
+    if (canvasState.strokeGroups) {
+      canvasState.strokeGroups.forEach(([id, groupData]: [string, any]) => {
+        const group: StrokeGroup = {
+          id: groupData.id,
+          strokeIds: groupData.strokeIds,
+          group: stage.findOne(`#${id}`) as Konva.Group,
+        }
+        strokeGroups.set(id, group)
+      })
+    }
+    
+    // Update UI states
+    refreshStrokeConnections() // Ensure all connections are properly established
+    updateDraggableStates()
+    
+    // Force refresh the transformers to ensure they work with restored shapes
+    if (selTr) {
+      selTr.nodes([])
+      selTr.forceUpdate()
+    }
+    if (grpTr) {
+      grpTr.nodes([])  
+      grpTr.forceUpdate()
+    }
+    
+    layer.batchDraw()
+    
+    console.log('Konva canvas state restored from hotreload')
+    
+    // Force a redraw to make sure everything is visible
+    setTimeout(() => {
+      layer.batchDraw()
+    }, 100)
+  } catch (error) {
+    console.warn('Failed to deserialize Konva state:', error)
+  }
+}
+
 // Function to update draggable state based on mode and group membership
 const updateDraggableStates = () => {
+  console.log('updateDraggableStates called, drawMode:', drawMode.value, 'strokes count:', strokes.size)
+  
   // Update all shapes
-  strokes.forEach(stroke => {
+  strokes.forEach((stroke, id) => {
     if (stroke.shape) {
       // Check if stroke is in a group by looking at parent
       const parent = stroke.shape.getParent()
       const isInGroup = parent && parent !== layer
       
+      const shouldBeDraggable = !drawMode.value && !isInGroup
+      console.log('Stroke', id, 'parent:', parent?.constructor.name, 'isInGroup:', isInGroup, 'shouldBeDraggable:', shouldBeDraggable)
+      
       // Only draggable if in select mode AND not in a group
-      stroke.shape.draggable(!drawMode.value && !isInGroup)
+      stroke.shape.draggable(shouldBeDraggable)
+    } else {
+      console.log('Stroke', id, 'has no shape!')
     }
   })
   
@@ -384,8 +572,12 @@ const handleClick = (target: Konva.Node, shiftKey: boolean) => {
   // Only allow selection in select mode  
   if (drawMode.value) return
   
+  console.log('Handle click on:', target.id(), target.constructor.name)
+  
   const group = topGroup(target)
   const nodeToSelect = group ?? target // escalate to top-group if exists
+  
+  console.log('Node to select:', nodeToSelect.id(), nodeToSelect.constructor.name)
   
   if (shiftKey) toggle(nodeToSelect) 
   else { clearSelection(); add(nodeToSelect) }
@@ -481,6 +673,9 @@ const ungroupSelectedStrokes = () => {
   })
 
   grp.destroy()
+
+  // Update stroke data to ensure shapes are properly connected after ungrouping
+  refreshStrokeConnections()
 
   clearSelection()
   updateDraggableStates() // Update draggable states after ungrouping
@@ -713,31 +908,23 @@ onMounted(() => {
     const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
     const threeCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
 
-    // Create Konva container - it will be added to the Vue component's DOM
-    const container = document.createElement('div')
-    container.id = 'konva-container'
-    container.style.width = resolution.width + 'px'
-    container.style.height = resolution.height + 'px'
-    container.style.backgroundColor = 'white'
-    container.style.border = '1px solid black'
-    
-    // Add to component's DOM instead of body
-    const konvaWrapper = document.getElementById('konva-wrapper')
-    if (konvaWrapper) {
-      konvaWrapper.appendChild(container)
+    // Remove the manual container creation and use the ref instead
+    if (!konvaContainer.value) {
+      console.error('Konva container ref not found')
+      return
     }
 
-    // Initialize Konva
+    // Initialize Konva using the ref
     stage = new Konva.Stage({
-      container: 'konva-container',
+      container: konvaContainer.value,
       width: resolution.width,
       height: resolution.height,
     })
     
     // Update cursor based on mode
     updateCursor = () => {
-      if (stage) {
-        container.style.cursor = drawMode.value ? 'crosshair' : 'default'
+      if (stage && konvaContainer.value) {
+        konvaContainer.value.style.cursor = drawMode.value ? 'crosshair' : 'default'
       }
     }
     updateCursor()
@@ -769,6 +956,9 @@ onMounted(() => {
     // Start in select mode for testing
     drawMode.value = false
     updateCursor()
+    
+    // Try to restore canvas state from hotreload (after all setup is complete)
+    deserializeKonvaState()
 
     // Mouse/touch event handlers
     stage.on('mousedown touchstart', (e) => {
@@ -916,6 +1106,10 @@ onMounted(() => {
 
 onUnmounted(() => {
   console.log("disposing livecoded resources")
+  
+  // Save state before unmounting (for hot reload)
+  serializeKonvaState()
+  
   shaderGraphEndNode?.disposeAll()
   clearListeners()
   clearDrawFuncs()
@@ -954,7 +1148,16 @@ onUnmounted(() => {
       <span class="separator">|</span>
       <span class="info">{{ selectedCount }} selected</span>
     </div>
-    <div id="konva-wrapper" class="canvas-wrapper"></div>
+    <div class="canvas-wrapper">
+      <div 
+        ref="konvaContainer"
+        class="konva-container"
+        :style="{
+          width: resolution.width + 'px',
+          height: resolution.height + 'px',
+        }"
+      ></div>
+    </div>
     <Timeline 
       :strokes="strokes"
       :selectedStrokes="selectedStrokesForTimeline"
@@ -1023,5 +1226,10 @@ onUnmounted(() => {
 .info {
   color: #666;
   font-size: 14px;
+}
+
+.konva-container {
+  background-color: white;
+  border: 1px solid black;
 }
 </style>

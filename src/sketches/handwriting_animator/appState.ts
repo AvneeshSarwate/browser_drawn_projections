@@ -22,6 +22,7 @@ export type TemplateAppState = {
   stats?: { begin: () => void, end: () => void }
   paused: boolean
   drawing: boolean
+  konvaStateString: string
 }
 
 export const appState: TemplateAppState = {
@@ -36,6 +37,7 @@ export const appState: TemplateAppState = {
   stats: undefined,
   paused: false,
   drawing: false,
+  konvaStateString: '',
 } 
 
 export const appStateName = 'templateAppState'
