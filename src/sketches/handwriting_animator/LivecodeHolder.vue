@@ -120,6 +120,9 @@ const clearSelection = () => {
 
 // Update timeline state based on current selection
 const updateTimelineState = () => {
+  const oldDuration = timelineDuration.value
+  let newDuration = 0
+  
   if (selected.length === 0) {
     // No selection - use all strokes
     selectedStrokesForTimeline.value = new Set()
@@ -149,10 +152,18 @@ const updateTimelineState = () => {
         }
       })
       
+      newDuration = totalDuration
       timelineDuration.value = totalDuration
     } else {
       timelineDuration.value = 0
     }
+  }
+  
+  // Reset playback time if it's beyond the new duration
+  if (newDuration > 0 && currentPlaybackTime.value > newDuration) {
+    currentPlaybackTime.value = 0
+    // Trigger time update to reset visual state
+    handleTimeUpdate(0)
   }
 }
 

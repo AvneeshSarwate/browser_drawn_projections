@@ -1,4 +1,16 @@
 
+
+## prompt for recreating p5 projection mapping polygon tool with konva
+Currently, there is a single layer in the konva sketch that allows for drawing and animation freehand lines. I want to create a second layer that allows for drawing and editing polygons. I should be able to draw a polygon point by point, and then edit the polygon by adding, removing, or moving points. This should effectively be a separate tool lives in the same sketch, with it's own state and UI, but is rendered in the same canvas. Using konva layers allows for "background" click handling to be isolated per layer for the different tools. add a 
+
+
+
+
+
+
+
+## prompt for drawing generation
+
 High level goal:
 I want to create a tool that lets me record handwriting and then replay it, and also lets me edit the drawn strokes. I want to be able to group individual strokes into characters and words, and also be able to stylistically position them on a fixed size canvas. I want to be able to export this configuration as a JSON file that I can use later for more complex animations. It should use the Konva.js library for the canvas and drawing since it already supports grouping and transforming shapes and has many examples for how to do this. It should use the perfect-freehand library to stylize the drawing of the strokes. It should be implemented in src/sketches/handwriting_animator/ (mostly in LivecodeHolder.vue)
 
