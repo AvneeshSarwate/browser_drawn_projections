@@ -302,43 +302,28 @@ const deserializeKonvaState = () => {
     
     // Function to recursively attach handlers to all nodes
     const attachHandlersRecursively = (node: Konva.Node) => {
-      if (node instanceof Konva.Path) {
-        console.log('Attaching handlers to path:', node.id())
-        // Ensure the path has the correct properties
+      // Shared setup for both Path and Group nodes
+      if (node instanceof Konva.Path || node instanceof Konva.Group) {
+        const nodeType = node instanceof Konva.Path ? 'path' : 'group'
+        console.log(`Attaching handlers to ${nodeType}:`, node.id())
+        
         node.draggable(true)
-        
-        // Add click handler for selection
-        node.on('click', (e) => {
-          e.cancelBubble = true
-          handleClick(node, e.evt.shiftKey)
-        })
-        
-        // Add drag end handler to update position
-        node.on('dragend', () => {
-          layer?.batchDraw()
-        })
-      }
       
-      if (node instanceof Konva.Group) {
-        console.log('Attaching handlers to group:', node.id())
-        // Groups are draggable
-        node.draggable(true)
-        
-        // Add click handler for group selection
         node.on('click', (e) => {
           e.cancelBubble = true
           handleClick(node, e.evt.shiftKey)
         })
         
-        // Add drag end handler
         node.on('dragend', () => {
           layer?.batchDraw()
         })
         
-        // Recursively attach handlers to all children
-        node.getChildren().forEach(child => {
-          attachHandlersRecursively(child)
-        })
+        // Group-specific logic: recursively attach handlers to all children
+        if (node instanceof Konva.Group) {
+          node.getChildren().forEach(child => {
+            attachHandlersRecursively(child)
+          })
+        }
       }
     }
     
@@ -614,6 +599,7 @@ const drawGrid = () => {
       strokeWidth: 1,
     }))
   }
+
   
   gridLayer.batchDraw()
 }
