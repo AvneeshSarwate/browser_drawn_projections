@@ -10,6 +10,23 @@
 
 state management cleanup suggestions - https://ampcode.com/threads/T-33628815-ed66-462c-b17c-b8d7c8f5d922
 
+## handling infinite loops in line analysis for js code
+currently you can do loops like this to allow line-analysis to terminate
+```javascript
+for(let i = 0; i < 100; i++) {
+  if(!flags[1]) break;
+  line(`debug1 : seg 1 : s_tr s2 : str s1 : harm s3 : s_tr -1 : str 0.25`)
+  line(`debug1 : seg 1 : s_tr s2 : str s1 : harm s3 : s_tr -2 : str 0.25`)
+}
+```
+
+what would it take to allow while-loops to work properly but also terminate?
+- instead of `flags[i]`, have `flags(i)` function that only returns true ~100 times
+  - if nested whiles, could still lead to analysis being slow? 
+  - rare to have more than 2 levels of nesting, would still be fast enough?
+- convert while statements with flags to if statements using acorn?
+  - might not allow for proper analysis and miss cases?
+
 
 
 
@@ -19,7 +36,7 @@ state management cleanup suggestions - https://ampcode.com/threads/T-33628815-ed
 
 
 ## demo syntax to use in voice 3
-```
+```javascript
 // JavaScript livecoding with line() function
 // Use conditionals and loops around line() calls
 
