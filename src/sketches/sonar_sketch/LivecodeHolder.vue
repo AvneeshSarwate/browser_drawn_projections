@@ -242,7 +242,7 @@ const switchToVisualizeMode = (voiceIndex: number) => {
 
     // Analyze and highlight scheduled lines (returns UUIDs)
     const { executedUUIDs, mappings, visualizeCode } = analyzeExecutableLines(content, voiceIndex, appState, uuidMappings)
-    applyScheduledHighlightByUUID(voiceIndex, executedUUIDs, voiceScheduledUUIDs, getMappingsForVoice)
+    applyScheduledHighlightByUUID(voiceIndex, Array.from(executedUUIDs), voiceScheduledUUIDs, getMappingsForVoice)
     
     // Clear any previous clicked DSL range when switching modes
     clickedDslRanges.set(voiceIndex.toString(), null)
@@ -337,7 +337,7 @@ const startVoice = (voiceIdx: number) => {
         // Analyze and highlight scheduled lines (returns UUIDs)
         //todo - using a seeded random number generator here would make this work properly with "randomness"
         const { executedUUIDs, mappings, visualizeCode } = analyzeExecutableLines(jsCode, voiceIdx, appState, uuidMappings)
-        applyScheduledHighlightByUUID(voiceIdx, executedUUIDs, voiceScheduledUUIDs, getMappingsForVoice)
+        applyScheduledHighlightByUUID(voiceIdx, Array.from(executedUUIDs), voiceScheduledUUIDs, getMappingsForVoice)
         // Create executable function
         const { executableFunc } = createExecutableFunction(visualizeCode, mappings, voiceIdx)
         if (!executableFunc) {
@@ -783,7 +783,7 @@ const updateVoiceOnSliderChange = (voiceIndex: number) => {
 const updateVoiceOnToggleChange = (voiceIndex: number) => {
   const jsCode = monacoEditors[voiceIndex].getValue()
   const { executedUUIDs } = analyzeExecutableLines(jsCode, voiceIndex, appState, uuidMappings)
-  applyScheduledHighlightByUUID(voiceIndex, executedUUIDs, voiceScheduledUUIDs, getMappingsForVoice)
+  applyScheduledHighlightByUUID(voiceIndex, Array.from(executedUUIDs), voiceScheduledUUIDs, getMappingsForVoice)
 }
 
 // Set up a debounced watcher per-voice that recomputes the display text at

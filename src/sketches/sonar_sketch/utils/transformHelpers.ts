@@ -136,7 +136,16 @@ export const generateUUID = (): string => {
   return crypto.randomUUID()
 }
 
-/** Find all line() calls in JavaScript code and return match information */
+/** Find all line() calls in JavaScript code and return match information
+ * 
+ * examples:
+ * line(`debug1 : seg 1 : s_tr 3 : str 1 : q 1`)
+ * 
+ * line(`debug1 : seg 1 : s_tr 2 : str 1 : q 1
+     => param1 0.5 0.8
+     => param3 0.6 0.7`)
+ * 
+ */
 export const findLineCallMatches = (jsCode: string): { 
   start: number, 
   end: number, 
@@ -367,8 +376,8 @@ export const parseRampLine = (rampLine: string) => {
 }
 
 // Function to analyze JavaScript code by executing visualize-time version and tracking line() calls
-export const analyzeExecutableLines = (jsCode: string, voiceIndex: number, appState: SonarAppState, uuidMappings: Map<string, UUIDMapping[]>): { executedUUIDs: string[], mappings: UUIDMapping[], visualizeCode: string } => {
-  const executedUUIDs: string[] = []
+export const analyzeExecutableLines = (jsCode: string, voiceIndex: number, appState: SonarAppState, uuidMappings: Map<string, UUIDMapping[]>): { executedUUIDs: Set<string>, mappings: UUIDMapping[], visualizeCode: string } => {
+  const executedUUIDs: Set<string> = new Set()
   
   try {
     // Get the visualize-time code with UUIDs
@@ -379,7 +388,7 @@ export const analyzeExecutableLines = (jsCode: string, voiceIndex: number, appSt
     
     // Create line function that tracks which UUIDs are called (analysis mode)
     const line = (text: string, uuid: string) => {
-      executedUUIDs.push(uuid)
+      executedUUIDs.add(uuid)
       // No execution - just tracking
     }
     
@@ -393,6 +402,6 @@ export const analyzeExecutableLines = (jsCode: string, voiceIndex: number, appSt
     
   } catch (error) {
     console.error('Error analyzing executable lines:', error)
-    return { executedUUIDs: [], mappings: [], visualizeCode: '' }
+    return { executedUUIDs: new Set(), mappings: [], visualizeCode: '' }
   }
 }
