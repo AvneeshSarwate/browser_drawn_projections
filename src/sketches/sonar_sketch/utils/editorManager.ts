@@ -1,5 +1,7 @@
 // editorManager.ts – common editor setup & decoration utilities
 
+const EDITOR_MAX_HEIGHT = '400px'
+
 import * as monaco from 'monaco-editor'
 import { EditorView, basicSetup } from 'codemirror'
 import { Decoration, type DecorationSet } from '@codemirror/view'
@@ -574,6 +576,11 @@ export function initializeMonacoEditorComplete(
   const container = document.getElementById(containerId)
   if (!container) return
 
+  // Apply max-width and horizontal scrolling styles to the container
+  container.style.maxWidth = '800px'
+  container.style.width = '100%'
+  container.style.overflow = 'auto'
+
   // TypeScript definitions for the line function
   const lineTypeDef = `
 declare function line(text: string): void;
@@ -614,7 +621,12 @@ line(\`debug1 : seg 1 : s_tr 3 : str 1 : q 1\`)
     minimap: { enabled: false },
     fontSize: 14,
     lineNumbers: 'on',
-    wordWrap: 'on'
+    wordWrap: 'off', // Disable word wrap to enable horizontal scrolling
+    scrollBeyondLastLine: false,
+    scrollbar: {
+      horizontal: 'auto',
+      vertical: 'auto'
+    }
   })
   
   // Persist and sync content on change
@@ -655,15 +667,20 @@ line(\`debug3 : seg 3\`)`
     EditorView.editable.of(false), // Read-only for visualization
     EditorView.theme({
       '&': { 
-        maxHeight: '400px',
-        minHeight: '200px'
-      },
-      '.cm-gutter, .cm-content': { 
-        minHeight: '200px' 
+        maxHeight: EDITOR_MAX_HEIGHT,
+        maxWidth: '800px',
+        width: '100%'
       },
       '.cm-scroller': { 
         overflow: 'auto',
-        maxHeight: '400px'
+        maxHeight: EDITOR_MAX_HEIGHT,
+        overflowX: 'auto',
+        overflowY: 'auto'
+      },
+      '.cm-content': {
+        whiteSpace: 'pre',
+        wordWrap: 'normal',
+        overflowWrap: 'normal'
       },
       '.cm-scheduled-line': {
         backgroundColor: 'rgba(106, 155, 209, 0.15)',

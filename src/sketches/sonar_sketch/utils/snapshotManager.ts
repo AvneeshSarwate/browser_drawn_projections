@@ -157,7 +157,9 @@ export function saveTopLevelSliderBank(app: SonarAppState, bankIndex:number) {
 export function loadTopLevelSliderBank(app: SonarAppState, bankIndex:number) {
   const bank = loadBank(app.sliderBanks.topLevel, bankIndex)
   if (!bank) return
-  app.sliders = [...bank]
+  bank.forEach((s, i) => {
+    if (i < app.sliders.length) app.sliders[i] = s
+  })
   app.currentTopLevelBank = bankIndex
 }
 
@@ -187,6 +189,8 @@ export function saveTopLevelToggleBank(app: SonarAppState, bankIndex:number) {
 export function loadTopLevelToggleBank(app: SonarAppState, bankIndex:number) {
   const bank = loadBank(app.toggleBanks.topLevel, bankIndex)
   if (!bank) return
-  app.toggles = [...bank]
+  bank.forEach((t, i) => {
+    if (i < app.toggles.length) app.toggles[i] = t
+  })
   app.currentTopLevelBank = bankIndex
 }
