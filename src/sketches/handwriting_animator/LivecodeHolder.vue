@@ -1,7 +1,7 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
 import { type TemplateAppState, appStateName, resolution } from './appState';
-import { inject, onMounted, onUnmounted, ref, watch } from 'vue';
+import { inject, onMounted, onUnmounted, ref, watch, computed } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
@@ -179,7 +179,17 @@ const refreshUI = () => {
   // transformers
   if (selected.length === 1 && selected[0] instanceof Konva.Group) {
     if (!grpTr) { 
-      grpTr = new Konva.Transformer({ rotateEnabled: true, keepRatio: true, padding: 6 }) 
+      grpTr = new Konva.Transformer({ rotateEnabled: true, keepRatio: true, padding: 6 })
+      
+      // Add transform tracking to group transformer
+      grpTr.on('transformstart', () => {
+        startDragTracking()
+      })
+      
+      grpTr.on('transformend', () => {
+        finishDragTracking('Transform Group')
+      })
+      
       selectionLayer?.add(grpTr) 
     }
     console.log('Using group transformer for:', selected[0].id())
@@ -240,6 +250,163 @@ const currentPlaybackTime = ref(0)
 const drawMode = ref(true) // true = draw mode, false = select mode
 const useRealTiming = ref(false) // false = use max threshold, true = use actual timing
 const maxInterStrokeDelay = 300 // 0.3 seconds max gap between strokes
+
+// Undo/Redo system
+interface Command {
+  name: string
+  beforeState: string
+  afterState: string
+}
+
+const commandHistory = ref<Command[]>([])
+const historyIndex = ref(-1)
+const maxHistorySize = 50
+
+// Track if we're currently in an undo/redo operation to prevent adding to history
+let isUndoRedoOperation = false
+
+// Get current canvas state for undo/redo
+const getCurrentState = (): string => {
+  if (!stage || !layer) return ''
+  
+  try {
+    const layerJson = layer.toJSON()
+    const layerData = JSON.parse(layerJson)
+    const strokesData = Array.from(strokes.entries())
+    const strokeGroupsData = Array.from(strokeGroups.entries())
+    
+    const canvasState = {
+      layer: layerData,
+      strokes: strokesData,
+      strokeGroups: strokeGroupsData,
+    }
+    
+    return JSON.stringify(canvasState)
+  } catch (error) {
+    console.warn('Failed to get current state:', error)
+    return ''
+  }
+}
+
+// Execute a command with undo/redo support
+const executeCommand = (commandName: string, action: () => void) => {
+  if (isUndoRedoOperation) {
+    // If we're in an undo/redo, just execute the action without tracking
+    action()
+    return
+  }
+  
+  const beforeState = getCurrentState()
+  if (!beforeState) return
+  
+  // Execute the action
+  action()
+  
+  const afterState = getCurrentState()
+  if (!afterState || beforeState === afterState) return
+  
+  // Add command to history
+  const command: Command = {
+    name: commandName,
+    beforeState,
+    afterState
+  }
+  
+  // Remove any commands after current index (when doing new action after undo)
+  commandHistory.value = commandHistory.value.slice(0, historyIndex.value + 1)
+  
+  // Add new command
+  commandHistory.value.push(command)
+  historyIndex.value = commandHistory.value.length - 1
+  
+  // Limit history size
+  if (commandHistory.value.length > maxHistorySize) {
+    commandHistory.value.shift()
+    historyIndex.value = commandHistory.value.length - 1
+  }
+  
+  console.log(`Command "${commandName}" added to history. Index: ${historyIndex.value}`)
+}
+
+// Restore state from string
+const restoreState = (stateString: string) => {
+  if (!stateString) return
+  
+  isUndoRedoOperation = true
+  try {
+    // Temporarily store the state string
+    const originalState = appState.konvaStateString
+    appState.konvaStateString = stateString
+    
+    // Use existing deserialization logic
+    deserializeKonvaState()
+    
+    // Restore original state string for hotreload
+    appState.konvaStateString = originalState
+  } catch (error) {
+    console.warn('Failed to restore state:', error)
+  } finally {
+    isUndoRedoOperation = false
+  }
+}
+
+// Undo/Redo functions
+const canUndo = computed(() => historyIndex.value >= 0)
+const canRedo = computed(() => historyIndex.value < commandHistory.value.length - 1)
+
+const undo = () => {
+  if (!canUndo.value) return
+  
+  const command = commandHistory.value[historyIndex.value]
+  console.log(`Undoing command: ${command.name}`)
+  
+  restoreState(command.beforeState)
+  historyIndex.value--
+}
+
+const redo = () => {
+  if (!canRedo.value) return
+  
+  historyIndex.value++
+  const command = commandHistory.value[historyIndex.value]
+  console.log(`Redoing command: ${command.name}`)
+  
+  restoreState(command.afterState)
+}
+
+// Transform tracking for drag operations
+let dragStartState: string | null = null
+
+const startDragTracking = () => {
+  dragStartState = getCurrentState()
+}
+
+const finishDragTracking = (nodeName: string) => {
+  if (!dragStartState) return
+  
+  const endState = getCurrentState()
+  if (dragStartState !== endState) {
+    // Manually add to history without using executeCommand to avoid double state capture
+    const command: Command = {
+      name: `Transform ${nodeName}`,
+      beforeState: dragStartState,
+      afterState: endState
+    }
+    
+    commandHistory.value = commandHistory.value.slice(0, historyIndex.value + 1)
+    commandHistory.value.push(command)
+    historyIndex.value = commandHistory.value.length - 1
+    
+    if (commandHistory.value.length > maxHistorySize) {
+      commandHistory.value.shift()
+      historyIndex.value = commandHistory.value.length - 1
+    }
+    
+    console.log(`Transform command added to history. Index: ${historyIndex.value}`)
+  }
+  
+  dragStartState = null
+}
 
 // Add this ref near the other refs
 const konvaContainer = ref<HTMLDivElement>()
@@ -314,7 +481,12 @@ const deserializeKonvaState = () => {
           handleClick(node, e.evt.shiftKey)
         })
         
+        node.on('dragstart', () => {
+          startDragTracking()
+        })
+        
         node.on('dragend', () => {
+          finishDragTracking(node.constructor.name)
           layer?.batchDraw()
         })
         
@@ -543,9 +715,13 @@ const createStrokeShape = (points: number[], id: string): Konva.Path => {
     handleClick(path, e.evt.shiftKey)
   })
   
-  // Add drag end handler to update position
+  // Add drag tracking handlers
+  path.on('dragstart', () => {
+    startDragTracking()
+  })
+  
   path.on('dragend', () => {
-    // Force redraw after drag
+    finishDragTracking('Stroke')
     layer?.batchDraw()
   })
   
@@ -608,80 +784,89 @@ const drawGrid = () => {
 const groupSelectedStrokes = () => {
   if (selected.length < 2) return
 
-  // compute common parent to insert new group into (layer by default)
-  let commonParent = selected[0].getParent()
-  for (const n of selected) if (n.getParent() !== commonParent) { commonParent = layer; break }
+  executeCommand('Group Strokes', () => {
+    // compute common parent to insert new group into (layer by default)
+    let commonParent = selected[0].getParent()
+    for (const n of selected) if (n.getParent() !== commonParent) { commonParent = layer; break }
 
-  const superGroup = new Konva.Group({ draggable: true })
-  commonParent?.add(superGroup)
+    const superGroup = new Konva.Group({ draggable: true })
+    commonParent?.add(superGroup)
 
-  if (selTr) selTr.nodes([])
-  if (grpTr) grpTr.nodes([])
+    if (selTr) selTr.nodes([])
+    if (grpTr) grpTr.nodes([])
 
-  selected.forEach((node) => {
-    node.draggable(false)
-    const absPos = node.getAbsolutePosition()
-    const absRot = node.getAbsoluteRotation()
-    const absScale = node.getAbsoluteScale()
-    node.moveTo(superGroup)
-    node.position(absPos)
-    node.rotation(absRot)
-    node.scale(absScale)
+    selected.forEach((node) => {
+      node.draggable(false)
+      const absPos = node.getAbsolutePosition()
+      const absRot = node.getAbsoluteRotation()
+      const absScale = node.getAbsoluteScale()
+      node.moveTo(superGroup)
+      node.position(absPos)
+      node.rotation(absRot)
+      node.scale(absScale)
+    })
+
+    lockPivot(superGroup)
+
+    clearSelection()
+    selected.push(superGroup)
+    refreshUI()
+    updateDraggableStates() // Update draggable states after grouping
+    layer?.batchDraw()
   })
-
-  lockPivot(superGroup)
-
-  clearSelection()
-  selected.push(superGroup)
-  refreshUI()
-  updateDraggableStates() // Update draggable states after grouping
-  layer?.batchDraw()
 }
 
 // Ungroup selected groups - simplified from working example
 const ungroupSelectedStrokes = () => {
   if (!(selected.length === 1 && selected[0] instanceof Konva.Group)) return
-  const grp = selected[0] as Konva.Group
-  const parent = grp.getParent()
-  if (grpTr) grpTr.nodes([])
+  
+  executeCommand('Ungroup Strokes', () => {
+    const grp = selected[0] as Konva.Group
+    const parent = grp.getParent()
+    if (grpTr) grpTr.nodes([])
 
-  // Snapshot children so iteration is safe during re-parenting
-  const children = [...grp.getChildren()]
-  children.forEach((child) => {
-    const absPos = child.getAbsolutePosition()
-    const absRot = child.getAbsoluteRotation()
-    const absScale = child.getAbsoluteScale()
-    child.moveTo(parent!)
-    child.position(absPos)
-    child.rotation(absRot)
-    child.scale(absScale)
-    child.draggable(true)
+    // Snapshot children so iteration is safe during re-parenting
+    const children = [...grp.getChildren()]
+    children.forEach((child) => {
+      const absPos = child.getAbsolutePosition()
+      const absRot = child.getAbsoluteRotation()
+      const absScale = child.getAbsoluteScale()
+      child.moveTo(parent!)
+      child.position(absPos)
+      child.rotation(absRot)
+      child.scale(absScale)
+      child.draggable(true)
+    })
+
+    grp.destroy()
+
+    // Update stroke data to ensure shapes are properly connected after ungrouping
+    refreshStrokeConnections()
+
+    clearSelection()
+    updateDraggableStates() // Update draggable states after ungrouping
+    layer?.batchDraw()
   })
-
-  grp.destroy()
-
-  // Update stroke data to ensure shapes are properly connected after ungrouping
-  refreshStrokeConnections()
-
-  clearSelection()
-  updateDraggableStates() // Update draggable states after ungrouping
-  layer?.batchDraw()
 }
 
 // Delete selected items - simplified from working example
 const deleteSelected = () => {
-  selected.forEach(node => {
-    node.destroy()
-    // Also remove from strokes map if it's a stroke
-    strokes.forEach((stroke, id) => {
-      if (stroke.shape === node) {
-        strokes.delete(id)
-      }
+  if (selected.length === 0) return
+  
+  executeCommand('Delete Selected', () => {
+    selected.forEach(node => {
+      node.destroy()
+      // Also remove from strokes map if it's a stroke
+      strokes.forEach((stroke, id) => {
+        if (stroke.shape === node) {
+          strokes.delete(id)
+        }
+      })
     })
+    clearSelection()
+    updateTimelineState() // Update timeline state after deletion
+    layer?.batchDraw()
   })
-  clearSelection()
-  updateTimelineState() // Update timeline state after deletion
-  layer?.batchDraw()
 }
 
 // Handle timeline updates and stroke animation - restored full logic
@@ -934,6 +1119,16 @@ onMounted(() => {
       rotationSnaps: [0, 45, 90, 135, 180, 225, 270, 315],
       rotationSnapTolerance: 5,
     })
+    
+    // Add transform tracking to main transformer
+    selTr.on('transformstart', () => {
+      startDragTracking()
+    })
+    
+    selTr.on('transformend', () => {
+      finishDragTracking('Transform Selection')
+    })
+    
     selectionLayer.add(selTr)
 
     // Initial grid draw
@@ -998,40 +1193,42 @@ onMounted(() => {
       drawingLayer?.destroyChildren()
       
       if (currentPoints.length > 2) {
-        // Create new stroke
-        const creationTime = Date.now()
-        const strokeId = `stroke-${creationTime}`
-        
-        // Get bounds for normalization
-        const bounds = getPointsBounds(currentPoints)
-        
-        // Create normalized points
-        const normalizedPoints: number[] = []
-        for (let i = 0; i < currentPoints.length; i += 2) {
-          normalizedPoints.push(currentPoints[i] - bounds.minX)
-          normalizedPoints.push(currentPoints[i + 1] - bounds.minY)
-        }
-        
-        const originalPath = getStrokePath(normalizedPoints)
-        const stroke: Stroke = {
-          id: strokeId,
-          points: currentPoints,
-          timestamps: currentTimestamps,
-          originalPath: originalPath,
-          creationTime: creationTime,
-          isFreehand: true, // This is a freehand stroke with timing info
-        }
-        
-        // Create shape
-        const shape = createStrokeShape(currentPoints, strokeId)
-        stroke.shape = shape
-        
-        // Add to data structures
-        strokes.set(strokeId, stroke)
-        layer?.add(shape)
-        updateDraggableStates() // Update draggable state for new stroke
-        updateTimelineState() // Update timeline state when new stroke is added
-        layer?.batchDraw()
+        executeCommand('Draw Stroke', () => {
+          // Create new stroke
+          const creationTime = Date.now()
+          const strokeId = `stroke-${creationTime}`
+          
+          // Get bounds for normalization
+          const bounds = getPointsBounds(currentPoints)
+          
+          // Create normalized points
+          const normalizedPoints: number[] = []
+          for (let i = 0; i < currentPoints.length; i += 2) {
+            normalizedPoints.push(currentPoints[i] - bounds.minX)
+            normalizedPoints.push(currentPoints[i + 1] - bounds.minY)
+          }
+          
+          const originalPath = getStrokePath(normalizedPoints)
+          const stroke: Stroke = {
+            id: strokeId,
+            points: currentPoints,
+            timestamps: currentTimestamps,
+            originalPath: originalPath,
+            creationTime: creationTime,
+            isFreehand: true, // This is a freehand stroke with timing info
+          }
+          
+          // Create shape
+          const shape = createStrokeShape(currentPoints, strokeId)
+          stroke.shape = shape
+          
+          // Add to data structures
+          strokes.set(strokeId, stroke)
+          layer?.add(shape)
+          updateDraggableStates() // Update draggable state for new stroke
+          updateTimelineState() // Update timeline state when new stroke is added
+          layer?.batchDraw()
+        })
       }
       
       currentPoints = []
@@ -1062,6 +1259,25 @@ onMounted(() => {
     
     singleKeydownEvent('Delete', () => {
       deleteSelected()
+    })
+    
+    // Undo/Redo keyboard shortcuts
+    singleKeydownEvent('z', (ev) => {
+      if (ev.metaKey || ev.ctrlKey) {
+        ev.preventDefault()
+        if (ev.shiftKey) {
+          redo() // Cmd/Ctrl + Shift + Z for redo
+        } else {
+          undo() // Cmd/Ctrl + Z for undo
+        }
+      }
+    })
+    
+    singleKeydownEvent('y', (ev) => {
+      if (ev.metaKey || ev.ctrlKey) {
+        ev.preventDefault()
+        redo() // Cmd/Ctrl + Y for redo (alternative)
+      }
     })
 
     // Original p5 setup
@@ -1126,6 +1342,13 @@ onUnmounted(() => {
       <span class="separator">|</span>
       <button @click="deleteSelected" :disabled="selectedCount === 0">
         🗑️ Delete
+      </button>
+      <span class="separator">|</span>
+      <button @click="undo" :disabled="!canUndo" title="Undo (Ctrl/Cmd+Z)">
+        ↶ Undo
+      </button>
+      <button @click="redo" :disabled="!canRedo" title="Redo (Ctrl/Cmd+Shift+Z)">
+        ↷ Redo
       </button>
       <span class="separator">|</span>
       <button @click="useRealTiming = !useRealTiming" :class="{ active: useRealTiming }">
