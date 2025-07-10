@@ -533,6 +533,19 @@ export function stacatto(clip: AbletonClip, duration: number): AbletonClip {
   return newClip
 }
 
+export function nnotes(clip: AbletonClip, n: number, start: number = 0): AbletonClip {
+  const nSortedNotes = clip.notes.map(n => ({ ...n })).sort((a, b) => a.position - b.position).slice(start, start + n)
+  const startPosition = nSortedNotes[0].position
+  nSortedNotes.forEach(note => {
+    note.position -= startPosition
+  })
+  let newDuration = 0
+  for(let i = 0; i < nSortedNotes.length; i++) {
+    newDuration = Math.max(newDuration, nSortedNotes[i].position + nSortedNotes[i].duration)
+  }
+  return new AbletonClip(clip.name + "_nnotes", newDuration, nSortedNotes)
+}
+
 // ─────────────────────────────────────────────
 // Symbol  →  Transformation-function registry
 // ─────────────────────────────────────────────
@@ -690,6 +703,13 @@ export const TRANSFORM_REGISTRY: Record<string, ClipTransform> = {
       n => Math.floor(n*24 - 12), // -12 to 12 scale degrees
       n => Math.floor(n*24 - 12), // -12 to 12 scale degrees
     ]
+  },
+
+  nnotes: {
+    name: 'nnotes',
+    transform: (clip, n, start) => nnotes(clip, n, start),
+    argParser: (args: string[]) => [numParse(args[0]), numParse(args[1])],
+    sliderScale: [(n, c) => Math.floor(n * c.notes.length), (n, c) => Math.floor(n * c.notes.length)]
   }
 };
 

@@ -6,7 +6,9 @@
 - transforming text never changes its line structure
 
 ## UI additions
-- when you click on a DSL line, you can click segmented into the line to see progressive transformations
+- have some form of help or autocorrect for the dsl (either in editor or just in vue component)
+- be able to livecode in some way 
+  - just changing the parameters of the dsl lines? not even changing the transforms structure, just the args
 
 state management cleanup suggestions - https://ampcode.com/threads/T-33628815-ed66-462c-b17c-b8d7c8f5d922
 
