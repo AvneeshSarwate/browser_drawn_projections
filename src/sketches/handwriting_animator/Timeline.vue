@@ -151,11 +151,11 @@ const play = async () => {
       currentTime.value = performance.now() - startTime
       
       if (currentTime.value >= duration.value) {
-        currentTime.value = duration.value
+        currentTime.value = 0
         isPlaying.value = false
         props.lockWhileAnimating?.(false) // Unlock UI when animation completes
         animationLoop?.cancel()
-        emit('timeUpdate', duration.value)
+        emit('timeUpdate', 0)
         break
       }
       
@@ -167,7 +167,11 @@ const play = async () => {
 
 const pause = () => {
   isPlaying.value = false
-  props.lockWhileAnimating?.(false) // Unlock UI when paused
+  
+  // Only unlock if timeline is at start position (safe state)
+  const isAtStart = currentTime.value === 0
+  props.lockWhileAnimating?.(!isAtStart)
+  
   animationLoop?.cancel()
 }
 
