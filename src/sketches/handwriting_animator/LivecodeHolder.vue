@@ -302,6 +302,20 @@ const maxHistorySize = 50
 // Track if we're currently in an undo/redo operation to prevent adding to history
 let isUndoRedoOperation = false
 
+// Separate Polygon Undo/Redo system
+interface PolygonCommand {
+  name: string
+  beforeState: string
+  afterState: string
+}
+
+const polygonCommandHistory = ref<PolygonCommand[]>([])
+const polygonHistoryIndex = ref(-1)
+const maxPolygonHistorySize = 50
+
+// Track if we're currently in a polygon undo/redo operation
+let isPolygonUndoRedoOperation = false
+
 // Track if animation is currently playing for UI locking
 const isAnimating = ref(false)
 
@@ -321,7 +335,7 @@ const setAnimatingState = (animating: boolean) => {
   }
 }
 
-// Get current canvas state for undo/redo
+// Get current canvas state for undo/redo (freehand only)
 const getCurrentState = (): string => {
   if (!stage || !layer) return ''
   
@@ -384,7 +398,7 @@ const executeCommand = (commandName: string, action: () => void) => {
   console.log(`Command "${commandName}" added to history. Index: ${historyIndex.value}`)
 }
 
-// Restore state from string
+// Restore state from string (freehand only)
 const restoreState = (stateString: string) => {
   if (!stateString) return
   
@@ -472,6 +486,150 @@ const finishDragTracking = (nodeName: string) => {
   }
   
   dragStartState = null
+}
+
+// Polygon Undo/Redo Functions
+// Get current polygon state for undo/redo
+const getCurrentPolygonState = (): string => {
+  if (!stage || !polygonShapesLayer) return ''
+  
+  try {
+    const layerJson = polygonShapesLayer.toJSON()
+    const layerData = JSON.parse(layerJson)
+    const polygonsData = Array.from(polygonShapes.entries())
+    const polygonGroupsData = Array.from(polygonGroups.entries())
+    
+    const polygonState = {
+      layer: layerData,
+      polygons: polygonsData,
+      polygonGroups: polygonGroupsData,
+    }
+    
+    return JSON.stringify(polygonState)
+  } catch (error) {
+    console.warn('Failed to get current polygon state:', error)
+    return ''
+  }
+}
+
+// Execute a polygon command with undo/redo support
+const executePolygonCommand = (commandName: string, action: () => void) => {
+  if (isPolygonUndoRedoOperation) {
+    // If we're in a polygon undo/redo, just execute the action without tracking
+    action()
+    return
+  }
+  
+  const beforeState = getCurrentPolygonState()
+  if (!beforeState) return
+  
+  // Execute the action
+  action()
+  
+  const afterState = getCurrentPolygonState()
+  if (!afterState || beforeState === afterState) return
+  
+  // Add command to polygon history
+  const command: PolygonCommand = {
+    name: commandName,
+    beforeState,
+    afterState
+  }
+  
+  // Remove any commands after current index (when doing new action after undo)
+  polygonCommandHistory.value = polygonCommandHistory.value.slice(0, polygonHistoryIndex.value + 1)
+  
+  // Add new command
+  polygonCommandHistory.value.push(command)
+  polygonHistoryIndex.value = polygonCommandHistory.value.length - 1
+  
+  // Limit history size
+  if (polygonCommandHistory.value.length > maxPolygonHistorySize) {
+    polygonCommandHistory.value.shift()
+    polygonHistoryIndex.value = polygonCommandHistory.value.length - 1
+  }
+  
+  console.log(`Polygon Command "${commandName}" added to history. Index: ${polygonHistoryIndex.value}`)
+}
+
+// Restore polygon state from string
+const restorePolygonState = (stateString: string) => {
+  if (!stateString) return
+  
+  isPolygonUndoRedoOperation = true
+  try {
+    // Temporarily store the state string
+    const originalState = appState.polygonStateString
+    appState.polygonStateString = stateString
+    
+    // Use existing deserialization logic
+    deserializePolygonState()
+    
+    // Restore original state string for hotreload
+    appState.polygonStateString = originalState
+  } catch (error) {
+    console.warn('Failed to restore polygon state:', error)
+  } finally {
+    isPolygonUndoRedoOperation = false
+  }
+}
+
+// Polygon Undo/Redo functions
+const canPolygonUndo = computed(() => polygonHistoryIndex.value >= 0)
+const canPolygonRedo = computed(() => polygonHistoryIndex.value < polygonCommandHistory.value.length - 1)
+
+const polygonUndo = () => {
+  if (!canPolygonUndo.value) return
+  
+  const command = polygonCommandHistory.value[polygonHistoryIndex.value]
+  console.log(`Undoing polygon command: ${command.name}`)
+  
+  restorePolygonState(command.beforeState)
+  polygonHistoryIndex.value--
+}
+
+const polygonRedo = () => {
+  if (!canPolygonRedo.value) return
+  
+  polygonHistoryIndex.value++
+  const command = polygonCommandHistory.value[polygonHistoryIndex.value]
+  console.log(`Redoing polygon command: ${command.name}`)
+  
+  restorePolygonState(command.afterState)
+}
+
+// Polygon drag tracking for drag operations
+let polygonDragStartState: string | null = null
+
+const startPolygonDragTracking = () => {
+  polygonDragStartState = getCurrentPolygonState()
+}
+
+const finishPolygonDragTracking = (nodeName: string) => {
+  if (!polygonDragStartState) return
+  
+  const endState = getCurrentPolygonState()
+  if (polygonDragStartState !== endState) {
+    // Manually add to polygon history without using executePolygonCommand to avoid double state capture
+    const command: PolygonCommand = {
+      name: `Transform ${nodeName}`,
+      beforeState: polygonDragStartState,
+      afterState: endState
+    }
+    
+    polygonCommandHistory.value = polygonCommandHistory.value.slice(0, polygonHistoryIndex.value + 1)
+    polygonCommandHistory.value.push(command)
+    polygonHistoryIndex.value = polygonCommandHistory.value.length - 1
+    
+    if (polygonCommandHistory.value.length > maxPolygonHistorySize) {
+      polygonCommandHistory.value.shift()
+      polygonHistoryIndex.value = polygonCommandHistory.value.length - 1
+    }
+    
+    console.log(`Polygon transform command added to history. Index: ${polygonHistoryIndex.value}`)
+  }
+  
+  polygonDragStartState = null
 }
 
 // Add this ref near the other refs
@@ -1328,26 +1486,28 @@ const handlePolygonClick = (pos: { x: number, y: number }) => {
         const polygon = polygonShapes.get(polygonId)
         
         if (polygon && polygon.konvaShape) {
-          const points = polygon.points
-          const insertIndex = (result.lineIndex + 1) * 2 // Convert to flat array index
-          
-          // Calculate midpoint of the line segment
-          const p1x = points[result.lineIndex * 2]
-          const p1y = points[result.lineIndex * 2 + 1]
-          const p2x = points[((result.lineIndex + 1) * 2) % points.length]
-          const p2y = points[((result.lineIndex + 1) * 2 + 1) % points.length]
-          
-          const midX = (p1x + p2x) / 2
-          const midY = (p1y + p2y) / 2
-          
-          // Insert the new point
-          polygon.points.splice(insertIndex, 0, midX, midY)
-          
-          // Update the Konva shape and control points
-          polygon.konvaShape.points(polygon.points)
-          updatePolygonControlPoints() // Refresh control points
-          serializePolygonState() // Serialize for hotreload
-          polygonShapesLayer?.batchDraw()
+          executePolygonCommand('Add Polygon Point', () => {
+            const points = polygon.points
+            const insertIndex = (result.lineIndex + 1) * 2 // Convert to flat array index
+            
+            // Calculate midpoint of the line segment
+            const p1x = points[result.lineIndex * 2]
+            const p1y = points[result.lineIndex * 2 + 1]
+            const p2x = points[((result.lineIndex + 1) * 2) % points.length]
+            const p2y = points[((result.lineIndex + 1) * 2 + 1) % points.length]
+            
+            const midX = (p1x + p2x) / 2
+            const midY = (p1y + p2y) / 2
+            
+            // Insert the new point
+            polygon.points.splice(insertIndex, 0, midX, midY)
+            
+            // Update the Konva shape and control points
+            polygon.konvaShape.points(polygon.points)
+            updatePolygonControlPoints() // Refresh control points
+            serializePolygonState() // Serialize for hotreload
+            polygonShapesLayer?.batchDraw()
+          })
         }
       }
     }
@@ -1501,42 +1661,44 @@ const updatePolygonPreview = () => {
 const finishPolygon = () => {
   if (currentPolygonPoints.value.length < 6) return // Need at least 3 points
   
-  const polygonId = `polygon-${Date.now()}`
-  const polygon: PolygonShape = {
-    id: polygonId,
-    points: [...currentPolygonPoints.value],
-    closed: true,
-    creationTime: Date.now()
-  }
-  
-  // Create Konva shape
-  const polygonLine = new Konva.Line({
-    points: polygon.points,
-    stroke: '#000',
-    strokeWidth: 2,
-    fill: 'rgba(0, 100, 255, 0.1)',
-    closed: true,
-    draggable: false, // Will be handled by control points in edit mode
-    id: polygonId
+  executePolygonCommand('Create Polygon', () => {
+    const polygonId = `polygon-${Date.now()}`
+    const polygon: PolygonShape = {
+      id: polygonId,
+      points: [...currentPolygonPoints.value],
+      closed: true,
+      creationTime: Date.now()
+    }
+    
+    // Create Konva shape
+    const polygonLine = new Konva.Line({
+      points: polygon.points,
+      stroke: '#000',
+      strokeWidth: 2,
+      fill: 'rgba(0, 100, 255, 0.1)',
+      closed: true,
+      draggable: false, // Will be handled by control points in edit mode
+      id: polygonId
+    })
+    
+    polygon.konvaShape = polygonLine
+    polygonShapes.set(polygonId, polygon)
+    polygonShapesLayer?.add(polygonLine)
+    
+    // Reset drawing state to allow drawing new shapes
+    isDrawingPolygon.value = false
+    currentPolygonPoints.value = []
+    polygonPreviewLayer?.destroyChildren()
+    
+    // Update control points if in edit mode
+    updatePolygonControlPoints()
+    
+    // Serialize polygon state for hotreload
+    serializePolygonState()
+    
+    polygonShapesLayer?.batchDraw()
+    polygonPreviewLayer?.batchDraw()
   })
-  
-  polygon.konvaShape = polygonLine
-  polygonShapes.set(polygonId, polygon)
-  polygonShapesLayer?.add(polygonLine)
-  
-  // Reset drawing state to allow drawing new shapes
-  isDrawingPolygon.value = false
-  currentPolygonPoints.value = []
-  polygonPreviewLayer?.destroyChildren()
-  
-  // Update control points if in edit mode
-  updatePolygonControlPoints()
-  
-  // Serialize polygon state for hotreload
-  serializePolygonState()
-  
-  polygonShapesLayer?.batchDraw()
-  polygonPreviewLayer?.batchDraw()
 }
 
 // Clear current polygon being drawn
@@ -1590,6 +1752,11 @@ const updatePolygonControlPoints = () => {
           polygonControlsLayer?.batchDraw()
         })
         
+        // Add drag start handler to track initial state
+        controlPoint.on('dragstart', () => {
+          startPolygonDragTracking()
+        })
+        
         // Add drag handler to update polygon points
         controlPoint.on('dragmove', () => {
           // Update the polygon points array
@@ -1602,8 +1769,9 @@ const updatePolygonControlPoints = () => {
           }
         })
         
-        // Add drag end handler to serialize state
+        // Add drag end handler to track final state and serialize
         controlPoint.on('dragend', () => {
+          finishPolygonDragTracking('Polygon Control Point')
           serializePolygonState()
         })
         
@@ -1944,6 +2112,13 @@ onUnmounted(() => {
         </button>
         <button @click="showGrid = !showGrid" :class="{ active: showGrid }" :disabled="isAnimating">
           {{ showGrid ? '⊞ Grid On' : '⊡ Grid Off' }}
+        </button>
+        <span class="separator">|</span>
+        <button @click="polygonUndo" :disabled="!canPolygonUndo || isAnimating" title="Undo (Ctrl/Cmd+Z)">
+          ↶ Undo
+        </button>
+        <button @click="polygonRedo" :disabled="!canPolygonRedo || isAnimating" title="Redo (Ctrl/Cmd+Shift+Z)">
+          ↷ Redo
         </button>
         <span class="separator">|</span>
         <button @click="clearCurrentPolygon" :disabled="!isDrawingPolygon || isAnimating">
