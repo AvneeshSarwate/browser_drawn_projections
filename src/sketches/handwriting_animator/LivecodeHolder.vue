@@ -265,6 +265,25 @@ const maxHistorySize = 50
 // Track if we're currently in an undo/redo operation to prevent adding to history
 let isUndoRedoOperation = false
 
+// Track if animation is currently playing for UI locking
+const isAnimating = ref(false)
+
+// Callback for Timeline to set animation state  
+const setAnimatingState = (animating: boolean) => {
+  isAnimating.value = animating
+  
+  // Block/unblock all stage interactions when animation state changes
+  if (stage) {
+    if (animating) {
+      // Disable all stage interactions
+      stage.listening(false)
+    } else {
+      // Re-enable stage interactions  
+      stage.listening(true)
+    }
+  }
+}
+
 // Get current canvas state for undo/redo
 const getCurrentState = (): string => {
   if (!stage || !layer) return ''
@@ -334,6 +353,11 @@ const restoreState = (stateString: string) => {
   
   isUndoRedoOperation = true
   try {
+    // Reset animation state to prevent interference
+    const wasAnimating = currentPlaybackTime.value > 0
+    currentPlaybackTime.value = 0
+    isAnimating.value = false
+    
     // Temporarily store the state string
     const originalState = appState.konvaStateString
     appState.konvaStateString = stateString
@@ -343,6 +367,11 @@ const restoreState = (stateString: string) => {
     
     // Restore original state string for hotreload
     appState.konvaStateString = originalState
+    
+    // If animation was running, reset it to ensure proper state
+    if (wasAnimating) {
+      handleTimeUpdate(0)
+    }
   } catch (error) {
     console.warn('Failed to restore state:', error)
   } finally {
@@ -1235,51 +1264,6 @@ onMounted(() => {
       currentTimestamps = []
     })
 
-    // Keyboard shortcuts
-    singleKeydownEvent('g', () => {
-      showGrid.value = !showGrid.value
-      drawGrid()
-    })
-    
-    // Group selected strokes (Cmd/Ctrl + G)
-    singleKeydownEvent('g', (ev) => {
-      if (ev.metaKey || ev.ctrlKey) {
-        ev.preventDefault()
-        groupSelectedStrokes()
-      }
-    })
-    
-    // Ungroup selected groups (Cmd/Ctrl + Shift + G)
-    singleKeydownEvent('g', (ev) => {
-      if ((ev.metaKey || ev.ctrlKey) && ev.shiftKey) {
-        ev.preventDefault()
-        ungroupSelectedStrokes()
-      }
-    })
-    
-    singleKeydownEvent('Delete', () => {
-      deleteSelected()
-    })
-    
-    // Undo/Redo keyboard shortcuts
-    singleKeydownEvent('z', (ev) => {
-      if (ev.metaKey || ev.ctrlKey) {
-        ev.preventDefault()
-        if (ev.shiftKey) {
-          redo() // Cmd/Ctrl + Shift + Z for redo
-        } else {
-          undo() // Cmd/Ctrl + Z for undo
-        }
-      }
-    })
-    
-    singleKeydownEvent('y', (ev) => {
-      if (ev.metaKey || ev.ctrlKey) {
-        ev.preventDefault()
-        redo() // Cmd/Ctrl + Y for redo (alternative)
-      }
-    })
-
     // Original p5 setup
     let p5Mouse = { x: 0, y: 0 }
     mousemoveEvent((ev) => {
@@ -1326,28 +1310,28 @@ onUnmounted(() => {
 <template>
   <div class="handwriting-animator-container">
     <div class="control-panel">
-      <button @click="drawMode = !drawMode" :class="{ active: drawMode }">
+      <button @click="drawMode = !drawMode" :class="{ active: drawMode }" :disabled="isAnimating">
         {{ drawMode ? '✏️ Draw' : '👆 Select' }}
       </button>
-      <button @click="showGrid = !showGrid" :class="{ active: showGrid }">
+      <button @click="showGrid = !showGrid" :class="{ active: showGrid }" :disabled="isAnimating">
         {{ showGrid ? '⊞ Grid On' : '⊡ Grid Off' }}
       </button>
       <span class="separator">|</span>
-      <button @click="groupSelectedStrokes" :disabled="!canGroupRef">
+      <button @click="groupSelectedStrokes" :disabled="!canGroupRef || isAnimating">
         Group
       </button>
-      <button @click="ungroupSelectedStrokes" :disabled="!isGroupSelected">
+      <button @click="ungroupSelectedStrokes" :disabled="!isGroupSelected || isAnimating">
         Ungroup
       </button>
       <span class="separator">|</span>
-      <button @click="deleteSelected" :disabled="selectedCount === 0">
+      <button @click="deleteSelected" :disabled="selectedCount === 0 || isAnimating">
         🗑️ Delete
       </button>
       <span class="separator">|</span>
-      <button @click="undo" :disabled="!canUndo" title="Undo (Ctrl/Cmd+Z)">
+      <button @click="undo" :disabled="!canUndo || isAnimating" title="Undo (Ctrl/Cmd+Z)">
         ↶ Undo
       </button>
-      <button @click="redo" :disabled="!canRedo" title="Redo (Ctrl/Cmd+Shift+Z)">
+      <button @click="redo" :disabled="!canRedo || isAnimating" title="Redo (Ctrl/Cmd+Shift+Z)">
         ↷ Redo
       </button>
       <span class="separator">|</span>
@@ -1356,6 +1340,9 @@ onUnmounted(() => {
       </button>
       <span class="separator">|</span>
       <span class="info">{{ selectedCount }} selected</span>
+      <span v-if="isAnimating" class="animation-lock-warning">
+        ⚠️ Timeline has modified elements - press Stop to unlock
+      </span>
     </div>
     <div class="canvas-wrapper">
       <div 
@@ -1373,6 +1360,7 @@ onUnmounted(() => {
       :useRealTiming="useRealTiming"
       :maxInterStrokeDelay="maxInterStrokeDelay"
       :overrideDuration="timelineDuration > 0 ? timelineDuration : undefined"
+      :lockWhileAnimating="setAnimatingState"
       @timeUpdate="handleTimeUpdate"
     />
   </div>
@@ -1435,6 +1423,23 @@ onUnmounted(() => {
 .info {
   color: #666;
   font-size: 14px;
+}
+
+.animation-lock-warning {
+  color: #e67e22;
+  font-size: 14px;
+  font-weight: bold;
+  text-align: center;
+  background: #fef5e7;
+  border: 1px solid #f39c12;
+  border-radius: 4px;
+  padding: 8px 15px;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
 }
 
 .konva-container {

@@ -30,6 +30,7 @@ interface Props {
   useRealTiming: boolean
   maxInterStrokeDelay: number
   overrideDuration?: number
+  lockWhileAnimating?: (animating: boolean) => void
 }
 
 const props = defineProps<Props>()
@@ -141,6 +142,7 @@ const play = async () => {
   if (isPlaying.value || duration.value === 0) return
   
   isPlaying.value = true
+  props.lockWhileAnimating?.(true) // Lock UI during animation
   startTime = performance.now() - currentTime.value
   
   // Use launch for animation loop
@@ -150,7 +152,10 @@ const play = async () => {
       
       if (currentTime.value >= duration.value) {
         currentTime.value = duration.value
-        stop()
+        isPlaying.value = false
+        props.lockWhileAnimating?.(false) // Unlock UI when animation completes
+        animationLoop?.cancel()
+        emit('timeUpdate', duration.value)
         break
       }
       
@@ -162,11 +167,14 @@ const play = async () => {
 
 const pause = () => {
   isPlaying.value = false
+  props.lockWhileAnimating?.(false) // Unlock UI when paused
   animationLoop?.cancel()
 }
 
 const stop = () => {
   isPlaying.value = false
+  isDragging.value = false // Also stop any ongoing drag
+  props.lockWhileAnimating?.(false) // Unlock UI when stopped
   currentTime.value = 0
   animationLoop?.cancel()
   emit('timeUpdate', 0)
@@ -178,6 +186,7 @@ const isDragging = ref(false)
 const startDrag = (event: MouseEvent) => {
   event.preventDefault()
   isDragging.value = true
+  props.lockWhileAnimating?.(true) // Lock UI during scrubbing
   
   const timelineTrack = document.querySelector('.timeline-track')
   if (!timelineTrack) return
@@ -198,6 +207,11 @@ const startDrag = (event: MouseEvent) => {
   
   const handleMouseUp = () => {
     isDragging.value = false
+    
+    // Only unlock if timeline is at start position (safe state)
+    const isAtStart = currentTime.value === 0
+    props.lockWhileAnimating?.(!isAtStart)
+    
     document.removeEventListener('mousemove', handleMouseMove)
     document.removeEventListener('mouseup', handleMouseUp)
   }
@@ -218,6 +232,10 @@ const seek = (event: MouseEvent) => {
     const percentage = x / rect.width
     currentTime.value = percentage * duration.value
     
+    // Lock UI when seeking to non-zero position (modifies canvas state)
+    const isAtStart = currentTime.value === 0
+    props.lockWhileAnimating?.(!isAtStart)
+    
     if (isPlaying.value) {
       startTime = performance.now() - currentTime.value
     }
@@ -228,6 +246,12 @@ const seek = (event: MouseEvent) => {
 
 onUnmounted(() => {
   animationLoop?.cancel()
+  
+  // Clean up any ongoing drag state
+  if (isDragging.value) {
+    isDragging.value = false
+    props.lockWhileAnimating?.(false)
+  }
 })
 </script>
 
