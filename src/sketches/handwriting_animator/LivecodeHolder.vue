@@ -396,14 +396,14 @@ const restoreState = (stateString: string) => {
     isAnimating.value = false
     
     // Temporarily store the state string
-    const originalState = appState.konvaStateString
-    appState.konvaStateString = stateString
+    const originalState = appState.freehandStateString
+    appState.freehandStateString = stateString
     
     // Use existing deserialization logic
     deserializeKonvaState()
     
     // Restore original state string for hotreload
-    appState.konvaStateString = originalState
+    appState.freehandStateString = originalState
     
     // If animation was running, reset it to ensure proper state
     if (wasAnimating) {
@@ -505,7 +505,7 @@ const serializeKonvaState = () => {
       strokeGroups: strokeGroupsData,
     }
     
-    appState.konvaStateString = JSON.stringify(canvasState)
+    appState.freehandStateString = JSON.stringify(canvasState)
     console.log('Serialized canvas state:', { 
       layerChildren: layerData?.children?.length || 0, 
       strokes: strokesData.length,
@@ -517,10 +517,10 @@ const serializeKonvaState = () => {
 }
 
 const deserializeKonvaState = () => {
-  if (!appState.konvaStateString || !stage || !layer) return
+  if (!appState.freehandStateString || !stage || !layer) return
   
   try {
-    const canvasState = JSON.parse(appState.konvaStateString)
+    const canvasState = JSON.parse(appState.freehandStateString)
     console.log('Deserializing canvas state:', { 
       layerChildren: canvasState.layer?.children?.length || 0, 
       strokes: canvasState.strokes?.length || 0,
@@ -635,6 +635,121 @@ const deserializeKonvaState = () => {
     }, 100)
   } catch (error) {
     console.warn('Failed to deserialize Konva state:', error)
+  }
+}
+
+// Polygon state serialization functions
+const serializePolygonState = () => {
+  if (!stage || !polygonShapesLayer) return
+  
+  try {
+    // Serialize only the essential polygon state
+    const layerJson = polygonShapesLayer.toJSON()
+    const layerData = JSON.parse(layerJson)
+    const polygonsData = Array.from(polygonShapes.entries())
+    const polygonGroupsData = Array.from(polygonGroups.entries())
+    
+    const polygonState = {
+      layer: layerData,
+      polygons: polygonsData,
+      polygonGroups: polygonGroupsData,
+    }
+    
+    appState.polygonStateString = JSON.stringify(polygonState)
+    console.log('Serialized polygon state:', { 
+      layerChildren: layerData?.children?.length || 0, 
+      polygons: polygonsData.length,
+      polygonGroups: polygonGroupsData.length 
+    })
+  } catch (error) {
+    console.warn('Failed to serialize polygon state:', error)
+  }
+}
+
+const deserializePolygonState = () => {
+  if (!appState.polygonStateString || !stage || !polygonShapesLayer) return
+  
+  try {
+    const polygonState = JSON.parse(appState.polygonStateString)
+    console.log('Deserializing polygon state:', { 
+      layerChildren: polygonState.layer?.children?.length || 0, 
+      polygons: polygonState.polygons?.length || 0,
+      polygonGroups: polygonState.polygonGroups?.length || 0 
+    })
+    
+    // Clear existing polygon content
+    polygonShapesLayer.destroyChildren()
+    polygonShapes.clear()
+    polygonGroups.clear()
+    selectedPolygons.length = 0
+    
+    // Function to attach handlers to polygon nodes
+    const attachPolygonHandlers = (node: Konva.Line) => {
+      console.log('Attaching polygon handlers to:', node.id())
+      
+      node.draggable(false) // Polygons are not draggable, controlled by control points
+      
+      // Add any polygon-specific event handlers here if needed
+    }
+    
+    // Restore polygon layer content using Konva.Node.create
+    const layerData = polygonState.layer
+    if (layerData && layerData.children) {
+      console.log('Restoring', layerData.children.length, 'polygon shapes')
+      layerData.children.forEach((childData: any, index: number) => {
+        console.log('Creating polygon node', index, 'of type', childData.className)
+        const node = Konva.Node.create(JSON.stringify(childData)) as Konva.Line
+        polygonShapesLayer.add(node)
+        console.log('Added polygon node to layer:', node.id(), node.isVisible())
+        
+        // Attach handlers to this polygon node
+        attachPolygonHandlers(node)
+      })
+    }
+    
+    // Restore polygon data
+    if (polygonState.polygons) {
+      polygonState.polygons.forEach(([id, polygonData]: [string, any]) => {
+        // Use stage.findOne to search for the polygon shape
+        const shape = stage.findOne(`#${id}`) as Konva.Line
+        console.log('Restoring polygon:', id, 'found shape:', !!shape)
+        const polygon: PolygonShape = {
+          id: polygonData.id,
+          points: polygonData.points,
+          closed: polygonData.closed,
+          creationTime: polygonData.creationTime,
+          konvaShape: shape,
+          controlPoints: [], // Will be recreated by updatePolygonControlPoints
+        }
+        polygonShapes.set(id, polygon)
+      })
+    }
+    
+    // Restore polygon groups
+    if (polygonState.polygonGroups) {
+      polygonState.polygonGroups.forEach(([id, groupData]: [string, any]) => {
+        const group: PolygonGroup = {
+          id: groupData.id,
+          polygonIds: groupData.polygonIds,
+          group: stage.findOne(`#${id}`) as Konva.Group,
+        }
+        polygonGroups.set(id, group)
+      })
+    }
+    
+    // Clear any existing control points first
+    polygonControlsLayer?.destroyChildren()
+    
+    // Update polygon control points if in edit mode
+    if (polygonMode.value === 'edit') {
+      updatePolygonControlPoints()
+    }
+    
+    polygonShapesLayer.batchDraw()
+    
+    console.log('Polygon state restored from hotreload')
+  } catch (error) {
+    console.warn('Failed to deserialize polygon state:', error)
   }
 }
 
@@ -1231,6 +1346,7 @@ const handlePolygonClick = (pos: { x: number, y: number }) => {
           // Update the Konva shape and control points
           polygon.konvaShape.points(polygon.points)
           updatePolygonControlPoints() // Refresh control points
+          serializePolygonState() // Serialize for hotreload
           polygonShapesLayer?.batchDraw()
         }
       }
@@ -1416,6 +1532,9 @@ const finishPolygon = () => {
   // Update control points if in edit mode
   updatePolygonControlPoints()
   
+  // Serialize polygon state for hotreload
+  serializePolygonState()
+  
   polygonShapesLayer?.batchDraw()
   polygonPreviewLayer?.batchDraw()
 }
@@ -1481,6 +1600,11 @@ const updatePolygonControlPoints = () => {
             polygon.konvaShape.points(polygon.points)
             polygonShapesLayer?.batchDraw()
           }
+        })
+        
+        // Add drag end handler to serialize state
+        controlPoint.on('dragend', () => {
+          serializePolygonState()
         })
         
         polygon.controlPoints.push(controlPoint)
@@ -1600,6 +1724,7 @@ onMounted(() => {
     
     // Try to restore canvas state from hotreload (after all setup is complete)
     deserializeKonvaState()
+    deserializePolygonState()
 
     // Mouse/touch event handlers
     stage.on('mousedown touchstart', (e) => {
@@ -1754,6 +1879,7 @@ onUnmounted(() => {
   
   // Save state before unmounting (for hot reload)
   serializeKonvaState()
+  serializePolygonState()
   
   shaderGraphEndNode?.disposeAll()
   clearListeners()
