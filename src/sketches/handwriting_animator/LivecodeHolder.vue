@@ -336,12 +336,11 @@ const setAnimatingState = (animating: boolean) => {
 }
 
 // Get current canvas state for undo/redo (freehand only)
-const getCurrentState = (): string => {
-  if (!stage || !layer) return ''
+const getCurrentKonvaState = () => {
+  if (!stage || !layer) return null
   
   try {
-    const layerJson = layer.toJSON()
-    const layerData = JSON.parse(layerJson)
+    const layerData = layer.toObject()
     const strokesData = Array.from(strokes.entries())
     const strokeGroupsData = Array.from(strokeGroups.entries())
     
@@ -351,11 +350,16 @@ const getCurrentState = (): string => {
       strokeGroups: strokeGroupsData,
     }
     
-    return JSON.stringify(canvasState)
+    return canvasState
   } catch (error) {
     console.warn('Failed to get current state:', error)
-    return ''
+    return null
   }
+}
+
+const getCurrentKonvaStateString = (): string => {  
+  const state = getCurrentKonvaState()
+  return JSON.stringify(state)
 }
 
 // Execute a command with undo/redo support
@@ -366,13 +370,13 @@ const executeCommand = (commandName: string, action: () => void) => {
     return
   }
   
-  const beforeState = getCurrentState()
+  const beforeState = getCurrentKonvaStateString()
   if (!beforeState) return
   
   // Execute the action
   action()
   
-  const afterState = getCurrentState()
+  const afterState = getCurrentKonvaStateString()
   if (!afterState || beforeState === afterState) return
   
   // Add command to history
@@ -458,13 +462,13 @@ const redo = () => {
 let dragStartState: string | null = null
 
 const startDragTracking = () => {
-  dragStartState = getCurrentState()
+  dragStartState = getCurrentKonvaStateString()
 }
 
 const finishDragTracking = (nodeName: string) => {
   if (!dragStartState) return
   
-  const endState = getCurrentState()
+  const endState = getCurrentKonvaStateString()
   if (dragStartState !== endState) {
     // Manually add to history without using executeCommand to avoid double state capture
     const command: Command = {
@@ -490,12 +494,11 @@ const finishDragTracking = (nodeName: string) => {
 
 // Polygon Undo/Redo Functions
 // Get current polygon state for undo/redo
-const getCurrentPolygonState = (): string => {
-  if (!stage || !polygonShapesLayer) return ''
+const getCurrentPolygonState = () => {
+  if (!stage || !polygonShapesLayer) return null
   
   try {
-    const layerJson = polygonShapesLayer.toJSON()
-    const layerData = JSON.parse(layerJson)
+    const layerData = polygonShapesLayer.toObject()
     const polygonsData = Array.from(polygonShapes.entries())
     const polygonGroupsData = Array.from(polygonGroups.entries())
     
@@ -505,11 +508,16 @@ const getCurrentPolygonState = (): string => {
       polygonGroups: polygonGroupsData,
     }
     
-    return JSON.stringify(polygonState)
+    return polygonState
   } catch (error) {
     console.warn('Failed to get current polygon state:', error)
-    return ''
+    return null
   }
+}
+
+const getCurrentPolygonStateString = (): string => {
+  const state = getCurrentPolygonState()
+  return JSON.stringify(state)
 }
 
 // Execute a polygon command with undo/redo support
@@ -520,13 +528,13 @@ const executePolygonCommand = (commandName: string, action: () => void) => {
     return
   }
   
-  const beforeState = getCurrentPolygonState()
+  const beforeState = getCurrentPolygonStateString()
   if (!beforeState) return
   
   // Execute the action
   action()
   
-  const afterState = getCurrentPolygonState()
+  const afterState = getCurrentPolygonStateString()
   if (!afterState || beforeState === afterState) return
   
   // Add command to polygon history
@@ -602,13 +610,13 @@ const polygonRedo = () => {
 let polygonDragStartState: string | null = null
 
 const startPolygonDragTracking = () => {
-  polygonDragStartState = getCurrentPolygonState()
+  polygonDragStartState = getCurrentPolygonStateString()
 }
 
 const finishPolygonDragTracking = (nodeName: string) => {
   if (!polygonDragStartState) return
   
-  const endState = getCurrentPolygonState()
+  const endState = getCurrentPolygonStateString()
   if (polygonDragStartState !== endState) {
     // Manually add to polygon history without using executePolygonCommand to avoid double state capture
     const command: PolygonCommand = {
@@ -651,23 +659,13 @@ const serializeKonvaState = () => {
   if (!stage || !layer) return
   
   try {
-    // Serialize only the essential canvas state
-    const layerJson = layer.toJSON()
-    const layerData = JSON.parse(layerJson)
-    const strokesData = Array.from(strokes.entries())
-    const strokeGroupsData = Array.from(strokeGroups.entries())
-    
-    const canvasState = {
-      layer: layerData,
-      strokes: strokesData,
-      strokeGroups: strokeGroupsData,
-    }
+    const canvasState = getCurrentKonvaState()
     
     appState.freehandStateString = JSON.stringify(canvasState)
     console.log('Serialized canvas state:', { 
-      layerChildren: layerData?.children?.length || 0, 
-      strokes: strokesData.length,
-      strokeGroups: strokeGroupsData.length 
+      layerChildren: canvasState.layer?.children?.length || 0, 
+      strokes: canvasState.strokes.length,
+      strokeGroups: canvasState.strokeGroups.length 
     })
   } catch (error) {
     console.warn('Failed to serialize Konva state:', error)
@@ -802,22 +800,14 @@ const serializePolygonState = () => {
   
   try {
     // Serialize only the essential polygon state
-    const layerJson = polygonShapesLayer.toJSON()
-    const layerData = JSON.parse(layerJson)
-    const polygonsData = Array.from(polygonShapes.entries())
-    const polygonGroupsData = Array.from(polygonGroups.entries())
+    const polygonState = getCurrentPolygonState()
     
-    const polygonState = {
-      layer: layerData,
-      polygons: polygonsData,
-      polygonGroups: polygonGroupsData,
-    }
     
     appState.polygonStateString = JSON.stringify(polygonState)
     console.log('Serialized polygon state:', { 
-      layerChildren: layerData?.children?.length || 0, 
-      polygons: polygonsData.length,
-      polygonGroups: polygonGroupsData.length 
+      layerChildren: polygonState.layer?.children?.length || 0, 
+      polygons: polygonState.polygons.length,
+      polygonGroups: polygonState.polygonGroups.length 
     })
   } catch (error) {
     console.warn('Failed to serialize polygon state:', error)
