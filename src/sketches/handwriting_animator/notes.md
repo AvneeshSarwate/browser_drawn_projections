@@ -1,7 +1,14 @@
 
 
 ## prompt for recreating p5 projection mapping polygon tool with konva
-Currently, there is a single layer in the konva sketch that allows for drawing and animation freehand lines. I want to create a second layer that allows for drawing and editing polygons. I should be able to draw a polygon point by point, and then edit the polygon by adding, removing, or moving points. This should effectively be a separate tool lives in the same sketch, with it's own state and UI, but is rendered in the same canvas. Using konva layers allows for "background" click handling to be isolated per layer for the different tools. add a 
+Currently, there is a single layer in the konva sketch that allows for drawing and animation freehand lines. I want to create a second layer that allows for drawing and editing polygons. I should be able to draw a polygon point by point, and then edit the polygon by adding, removing, or moving points. This should effectively be a separate tool lives in the same sketch, with it's own state and UI, but is rendered in the same canvas. Using konva layers allows for "background" click handling to be isolated per layer for the different tools. 
+
+- refactor the freehand drawing code as necessary to prepare for a "multiple parallel tools" implementation where there is a different tool for each layer each with it's own toolbar and undo/redo functionality
+- add a UI elemnt to switch between different tool/layer modes
+- add the new polygon tool including
+  - it's own toolbar with buttons for adding, removing, and moving points, and moving the polygon as a whole
+  - it's own serialization to appState.ts to support hot reload
+  - it's own undo/redo functionality (buttons in the toolbar only, no keyboard shortcuts)
 
 
 

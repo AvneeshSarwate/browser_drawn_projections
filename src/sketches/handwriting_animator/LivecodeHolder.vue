@@ -9,6 +9,7 @@ import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN
 import Konva from 'konva';
 import { getStroke } from 'perfect-freehand';
 import Timeline from './Timeline.vue';
+import { findClosestPolygonLineAtPoint, lineToPointDistance } from '@/creativeAlgs/shapeHelpers';
 
 
 const appState = inject<TemplateAppState>(appStateName)!!
@@ -21,6 +22,12 @@ let layer: Konva.Layer | undefined = undefined
 let gridLayer: Konva.Layer | undefined = undefined
 let drawingLayer: Konva.Layer | undefined = undefined
 let selectionLayer: Konva.Layer | undefined = undefined
+
+// Polygon tool layers
+let polygonShapesLayer: Konva.Layer | undefined = undefined
+let polygonPreviewLayer: Konva.Layer | undefined = undefined
+let polygonControlsLayer: Konva.Layer | undefined = undefined
+let polygonSelectionLayer: Konva.Layer | undefined = undefined
 
 // Drawing state
 let isDrawing = false
@@ -233,10 +240,31 @@ interface StrokeGroup {
   group?: Konva.Group
 }
 
+// Polygon data structures
+interface PolygonShape {
+  id: string
+  points: number[] // [x1, y1, x2, y2, ...]
+  closed: boolean
+  konvaShape?: Konva.Line
+  controlPoints?: Konva.Circle[]
+  creationTime: number
+}
+
+interface PolygonGroup {
+  id: string
+  polygonIds: string[]
+  group?: Konva.Group
+}
+
 const strokes = new Map<string, Stroke>()
 const strokeGroups = new Map<string, StrokeGroup>()
 // Selection state - plain array like working example (no ref to avoid proxy issues)
 const selected: Konva.Node[] = []
+
+// Polygon tool state
+const polygonShapes = new Map<string, PolygonShape>()
+const polygonGroups = new Map<string, PolygonGroup>()
+const selectedPolygons: Konva.Node[] = []
 
 // Separate refs for UI state
 const selectedCount = ref(0)
@@ -250,6 +278,15 @@ const currentPlaybackTime = ref(0)
 const drawMode = ref(true) // true = draw mode, false = select mode
 const useRealTiming = ref(false) // false = use max threshold, true = use actual timing
 const maxInterStrokeDelay = 300 // 0.3 seconds max gap between strokes
+
+// Tool switching
+const activeTool = ref<'freehand' | 'polygon'>('freehand')
+
+// Polygon drawing state
+const isDrawingPolygon = ref(false)
+const currentPolygonPoints = ref<number[]>([])
+const polygonMode = ref<'draw' | 'edit'>('draw')
+const polygonProximityThreshold = 10 // pixels
 
 // Undo/Redo system
 interface Command {
@@ -643,6 +680,38 @@ watch(drawMode, () => {
   if (drawMode.value) {
     clearSelection()
   }
+})
+
+// Watch for tool changes to manage layer interactivity (not visibility)
+watch(activeTool, (newTool) => {
+  if (newTool === 'freehand') {
+    // Enable freehand layers interaction, disable polygon layers interaction
+    layer?.listening(true)
+    drawingLayer?.listening(true)
+    selectionLayer?.listening(true)
+    
+    polygonShapesLayer?.listening(false)
+    polygonPreviewLayer?.listening(false)
+    polygonControlsLayer?.listening(false)
+    polygonSelectionLayer?.listening(false)
+  } else if (newTool === 'polygon') {
+    // Disable freehand layers interaction, enable polygon layers interaction
+    layer?.listening(false)
+    drawingLayer?.listening(false)
+    selectionLayer?.listening(false)
+    
+    polygonShapesLayer?.listening(true)
+    polygonPreviewLayer?.listening(true)
+    polygonControlsLayer?.listening(true)
+    polygonSelectionLayer?.listening(true)
+  }
+  
+  // Clear selections when switching tools
+  clearSelection()
+  selectedPolygons.length = 0
+  
+  // Redraw stage
+  stage?.batchDraw()
 })
 
 // Cursor update function (will be defined in onMounted)
@@ -1102,6 +1171,343 @@ const handleTimeUpdate = (time: number) => {
   layer?.batchDraw()
 }
 
+// Polygon tool functions
+const handlePolygonClick = (pos: { x: number, y: number }) => {
+  if (!polygonShapesLayer) return
+  
+  if (polygonMode.value === 'draw') {
+    // New shape mode - point-by-point drawing
+    if (!isDrawingPolygon.value) {
+      // Start new polygon
+      isDrawingPolygon.value = true
+      currentPolygonPoints.value = [pos.x, pos.y]
+    } else {
+      // Check if close to first point (close polygon)
+      const firstX = currentPolygonPoints.value[0]
+      const firstY = currentPolygonPoints.value[1]
+      const distance = Math.sqrt((pos.x - firstX) ** 2 + (pos.y - firstY) ** 2)
+      
+      if (distance < polygonProximityThreshold && currentPolygonPoints.value.length >= 6) {
+        // Close the polygon
+        finishPolygon()
+      } else {
+        // Add new point
+        currentPolygonPoints.value.push(pos.x, pos.y)
+        updatePolygonPreview()
+      }
+    }
+    updatePolygonPreview()
+  } else if (polygonMode.value === 'edit') {
+    // Edit shape mode - add points to existing polygons only if not clicking on a control point
+    const polygonArray = Array.from(polygonShapes.values()).map(p => ({ 
+      points: p.points.map((val, idx) => idx % 2 === 0 ? { x: val, y: p.points[idx + 1] } : null)
+        .filter(p => p !== null) as { x: number, y: number }[] 
+    }))
+    
+    if (polygonArray.length > 0) {
+      const result = findClosestPolygonLineAtPoint(polygonArray, pos)
+      
+      if (result.polygonIndex >= 0 && result.distance < 20) {
+        // Add point to the middle of the closest line segment
+        const polygonId = Array.from(polygonShapes.keys())[result.polygonIndex]
+        const polygon = polygonShapes.get(polygonId)
+        
+        if (polygon && polygon.konvaShape) {
+          const points = polygon.points
+          const insertIndex = (result.lineIndex + 1) * 2 // Convert to flat array index
+          
+          // Calculate midpoint of the line segment
+          const p1x = points[result.lineIndex * 2]
+          const p1y = points[result.lineIndex * 2 + 1]
+          const p2x = points[((result.lineIndex + 1) * 2) % points.length]
+          const p2y = points[((result.lineIndex + 1) * 2 + 1) % points.length]
+          
+          const midX = (p1x + p2x) / 2
+          const midY = (p1y + p2y) / 2
+          
+          // Insert the new point
+          polygon.points.splice(insertIndex, 0, midX, midY)
+          
+          // Update the Konva shape and control points
+          polygon.konvaShape.points(polygon.points)
+          updatePolygonControlPoints() // Refresh control points
+          polygonShapesLayer?.batchDraw()
+        }
+      }
+    }
+  }
+}
+
+const handlePolygonMouseMove = () => {
+  if (!isDrawingPolygon.value || polygonMode.value !== 'draw') return
+  updatePolygonPreview()
+}
+
+const handlePolygonEditMouseMove = () => {
+  if (!polygonPreviewLayer || !stage || polygonShapes.size === 0) return
+  
+  const mousePos = stage.getPointerPosition()
+  if (!mousePos) return
+  
+  // Check if mouse is over a control point - if so, don't show edge preview
+  const mouseTarget = stage.getIntersection(mousePos)
+  if (mouseTarget && mouseTarget.getParent() === polygonControlsLayer) {
+    // Mouse is over a control point, clear preview
+    polygonPreviewLayer.destroyChildren()
+    polygonPreviewLayer.batchDraw()
+    return
+  }
+  
+  // Find the closest polygon edge
+  const polygonArray = Array.from(polygonShapes.values()).map(p => ({ 
+    points: p.points.map((val, idx) => idx % 2 === 0 ? { x: val, y: p.points[idx + 1] } : null)
+      .filter(p => p !== null) as { x: number, y: number }[] 
+  }))
+  
+  if (polygonArray.length > 0) {
+    const result = findClosestPolygonLineAtPoint(polygonArray, mousePos)
+    
+    polygonPreviewLayer.destroyChildren()
+    
+    if (result.polygonIndex >= 0 && result.distance < 20) {
+      const polygon = Array.from(polygonShapes.values())[result.polygonIndex]
+      const points = polygon.points
+      
+      // Get the edge endpoints
+      const p1x = points[result.lineIndex * 2]
+      const p1y = points[result.lineIndex * 2 + 1]
+      const p2x = points[((result.lineIndex + 1) * 2) % points.length]
+      const p2y = points[((result.lineIndex + 1) * 2 + 1) % points.length]
+      
+      // Calculate midpoint
+      const midX = (p1x + p2x) / 2
+      const midY = (p1y + p2y) / 2
+      
+      // Highlight the edge
+      const edgeLine = new Konva.Line({
+        points: [p1x, p1y, p2x, p2y],
+        stroke: '#00ff00',
+        strokeWidth: 4,
+        opacity: 0.8
+      })
+      polygonPreviewLayer.add(edgeLine)
+      
+      // Show midpoint where new point would be added
+      const midpointCircle = new Konva.Circle({
+        x: midX,
+        y: midY,
+        radius: 5,
+        fill: '#00ff00',
+        stroke: '#00aa00',
+        strokeWidth: 2,
+        opacity: 0.9
+      })
+      polygonPreviewLayer.add(midpointCircle)
+    }
+    
+    polygonPreviewLayer.batchDraw()
+  }
+}
+
+const updatePolygonPreview = () => {
+  if (!polygonPreviewLayer || !stage) return
+  
+  polygonPreviewLayer.destroyChildren()
+  
+  if (currentPolygonPoints.value.length < 4) {
+    // If we only have one point, just show that point as a circle
+    if (currentPolygonPoints.value.length === 2) {
+      const pointCircle = new Konva.Circle({
+        x: currentPolygonPoints.value[0],
+        y: currentPolygonPoints.value[1],
+        radius: 4,
+        fill: '#0066ff',
+        stroke: '#004499',
+        strokeWidth: 1
+      })
+      polygonPreviewLayer.add(pointCircle)
+    }
+    polygonPreviewLayer.batchDraw()
+    return
+  }
+  
+  const mousePos = stage.getPointerPosition()
+  if (!mousePos) return
+  
+  // Draw all current points as circles
+  for (let i = 0; i < currentPolygonPoints.value.length; i += 2) {
+    const pointCircle = new Konva.Circle({
+      x: currentPolygonPoints.value[i],
+      y: currentPolygonPoints.value[i + 1],
+      radius: 4,
+      fill: '#0066ff',
+      stroke: '#004499',
+      strokeWidth: 1
+    })
+    polygonPreviewLayer.add(pointCircle)
+  }
+  
+  // Create preview line from current points to mouse position
+  const previewPoints = [...currentPolygonPoints.value, mousePos.x, mousePos.y]
+  
+  const previewLine = new Konva.Line({
+    points: previewPoints,
+    stroke: '#999',
+    strokeWidth: 2,
+    fill: 'rgba(153, 153, 153, 0.1)',
+    closed: false,
+    dash: [5, 5]
+  })
+  
+  polygonPreviewLayer.add(previewLine)
+  
+  // Show first point indicator for closing
+  if (currentPolygonPoints.value.length >= 6) {
+    const firstX = currentPolygonPoints.value[0]
+    const firstY = currentPolygonPoints.value[1]
+    const distance = Math.sqrt((mousePos.x - firstX) ** 2 + (mousePos.y - firstY) ** 2)
+    
+    const firstPointIndicator = new Konva.Circle({
+      x: firstX,
+      y: firstY,
+      radius: polygonProximityThreshold,
+      stroke: distance < polygonProximityThreshold ? '#00ff00' : '#ff0000',
+      strokeWidth: 2,
+      fill: 'transparent'
+    })
+    
+    polygonPreviewLayer.add(firstPointIndicator)
+  }
+  
+  polygonPreviewLayer.batchDraw()
+}
+
+const finishPolygon = () => {
+  if (currentPolygonPoints.value.length < 6) return // Need at least 3 points
+  
+  const polygonId = `polygon-${Date.now()}`
+  const polygon: PolygonShape = {
+    id: polygonId,
+    points: [...currentPolygonPoints.value],
+    closed: true,
+    creationTime: Date.now()
+  }
+  
+  // Create Konva shape
+  const polygonLine = new Konva.Line({
+    points: polygon.points,
+    stroke: '#000',
+    strokeWidth: 2,
+    fill: 'rgba(0, 100, 255, 0.1)',
+    closed: true,
+    draggable: false, // Will be handled by control points in edit mode
+    id: polygonId
+  })
+  
+  polygon.konvaShape = polygonLine
+  polygonShapes.set(polygonId, polygon)
+  polygonShapesLayer?.add(polygonLine)
+  
+  // Reset drawing state to allow drawing new shapes
+  isDrawingPolygon.value = false
+  currentPolygonPoints.value = []
+  polygonPreviewLayer?.destroyChildren()
+  
+  // Update control points if in edit mode
+  updatePolygonControlPoints()
+  
+  polygonShapesLayer?.batchDraw()
+  polygonPreviewLayer?.batchDraw()
+}
+
+// Clear current polygon being drawn
+const clearCurrentPolygon = () => {
+  isDrawingPolygon.value = false
+  currentPolygonPoints.value = []
+  polygonPreviewLayer?.destroyChildren()
+  polygonPreviewLayer?.batchDraw()
+}
+
+// Show/hide control points for polygon editing
+const updatePolygonControlPoints = () => {
+  if (!polygonControlsLayer) return
+  
+  // Clear existing control points
+  polygonControlsLayer.destroyChildren()
+  
+  if (polygonMode.value === 'edit') {
+    // Show control points for all polygons
+    polygonShapes.forEach((polygon) => {
+      // Clear existing control points array
+      polygon.controlPoints = []
+      
+      // Create control points for each vertex
+      for (let i = 0; i < polygon.points.length; i += 2) {
+        const pointIndex = i // Capture the index for the closure
+        const x = polygon.points[pointIndex]
+        const y = polygon.points[pointIndex + 1]
+        
+        const controlPoint = new Konva.Circle({
+          x: x,
+          y: y,
+          radius: 6,
+          fill: '#ff6600',
+          stroke: '#ff4400',
+          strokeWidth: 2,
+          draggable: true,
+          id: `${polygon.id}-control-${pointIndex/2}`
+        })
+        
+        // Add hover effects
+        controlPoint.on('mouseenter', () => {
+          controlPoint.fill('#ffaa00')
+          controlPoint.radius(8)
+          polygonControlsLayer?.batchDraw()
+        })
+        
+        controlPoint.on('mouseleave', () => {
+          controlPoint.fill('#ff6600')
+          controlPoint.radius(6)
+          polygonControlsLayer?.batchDraw()
+        })
+        
+        // Add drag handler to update polygon points
+        controlPoint.on('dragmove', () => {
+          // Update the polygon points array
+          polygon.points[pointIndex] = controlPoint.x()
+          polygon.points[pointIndex + 1] = controlPoint.y()
+          // Update the Konva shape
+          if (polygon.konvaShape) {
+            polygon.konvaShape.points(polygon.points)
+            polygonShapesLayer?.batchDraw()
+          }
+        })
+        
+        polygon.controlPoints.push(controlPoint)
+        polygonControlsLayer.add(controlPoint)
+      }
+    })
+  }
+  
+  polygonControlsLayer.batchDraw()
+}
+
+// Watch for polygon mode changes to update control points and reset state
+watch(polygonMode, (newMode) => {
+  if (newMode === 'draw') {
+    // When switching to draw mode, clear any current drawing state
+    isDrawingPolygon.value = false
+    currentPolygonPoints.value = []
+    polygonPreviewLayer?.destroyChildren()
+    polygonPreviewLayer?.batchDraw()
+  } else if (newMode === 'edit') {
+    // When switching to edit mode, clear any drawing preview
+    polygonPreviewLayer?.destroyChildren()
+    polygonPreviewLayer?.batchDraw()
+  }
+  updatePolygonControlPoints()
+})
+
 onMounted(() => {
   try {
     const p5i = appState.p5Instance!!
@@ -1135,10 +1541,32 @@ onMounted(() => {
     drawingLayer = new Konva.Layer()
     selectionLayer = new Konva.Layer()
     
+    // Create polygon layers
+    polygonShapesLayer = new Konva.Layer()
+    polygonPreviewLayer = new Konva.Layer()
+    polygonControlsLayer = new Konva.Layer()
+    polygonSelectionLayer = new Konva.Layer()
+    
     stage.add(gridLayer)
     stage.add(layer)
     stage.add(drawingLayer)
     stage.add(selectionLayer)
+    stage.add(polygonShapesLayer)
+    stage.add(polygonPreviewLayer)
+    stage.add(polygonControlsLayer)
+    stage.add(polygonSelectionLayer)
+    
+    // Set initial listening states based on active tool
+    if (activeTool.value === 'freehand') {
+      polygonShapesLayer.listening(false)
+      polygonPreviewLayer.listening(false)
+      polygonControlsLayer.listening(false)
+      polygonSelectionLayer.listening(false)
+    } else {
+      layer.listening(false)
+      drawingLayer.listening(false)
+      selectionLayer.listening(false)
+    }
 
     // Create transformers like working example
     selTr = new Konva.Transformer({ 
@@ -1163,6 +1591,9 @@ onMounted(() => {
     // Initial grid draw
     drawGrid()
     
+    // Initialize polygon control points if needed  
+    updatePolygonControlPoints()
+    
     // Start in select mode for testing
     drawMode.value = false
     updateCursor()
@@ -1175,53 +1606,67 @@ onMounted(() => {
       const pos = stage.getPointerPosition()
       if (!pos) return
       
-      if (drawMode.value) {
-        // Drawing mode
-        if (e.target !== stage) return
-        
-        isDrawing = true
-        currentPoints = [pos.x, pos.y]
-        drawingStartTime = performance.now()
-        currentTimestamps = [0]
-        
-        // Clear selection when starting to draw
-        clearSelection()
-      } else {
-        // Selection mode
-        if (e.target === stage) {
-          // Clicked on empty space - clear selection
+      if (activeTool.value === 'freehand') {
+        // Freehand tool logic
+        if (drawMode.value) {
+          // Drawing mode
+          if (e.target !== stage) return
+          
+          isDrawing = true
+          currentPoints = [pos.x, pos.y]
+          drawingStartTime = performance.now()
+          currentTimestamps = [0]
+          
+          // Clear selection when starting to draw
           clearSelection()
+        } else {
+          // Selection mode
+          if (e.target === stage) {
+            // Clicked on empty space - clear selection
+            clearSelection()
+          }
+        }
+      } else if (activeTool.value === 'polygon') {
+        // Polygon tool logic - handle draw and edit modes only
+        if (e.target === stage || (polygonMode.value === 'edit' && e.target.getParent() !== polygonControlsLayer)) {
+          // Handle clicks on canvas or polygon shapes (but not control points)
+          handlePolygonClick(pos)
         }
       }
     })
 
     stage.on('mousemove touchmove', (e) => {
-      if (!isDrawing) return
-      
-      const pos = stage.getPointerPosition()
-      if (!pos) return
-      
-      currentPoints.push(pos.x, pos.y)
-      currentTimestamps.push(performance.now() - drawingStartTime)
-      
-      // Update preview
-      drawingLayer?.destroyChildren()
-      const previewPath = new Konva.Path({
-        data: getStrokePath(currentPoints),
-        fill: '#666',
-        strokeWidth: 0,
-      })
-      drawingLayer?.add(previewPath)
-      drawingLayer?.batchDraw()
+      if (activeTool.value === 'freehand' && isDrawing) {
+        const pos = stage.getPointerPosition()
+        if (!pos) return
+        
+        currentPoints.push(pos.x, pos.y)
+        currentTimestamps.push(performance.now() - drawingStartTime)
+        
+        // Update preview
+        drawingLayer?.destroyChildren()
+        const previewPath = new Konva.Path({
+          data: getStrokePath(currentPoints),
+          fill: '#666',
+          strokeWidth: 0,
+        })
+        drawingLayer?.add(previewPath)
+        drawingLayer?.batchDraw()
+      } else if (activeTool.value === 'polygon') {
+        if (polygonMode.value === 'draw' && isDrawingPolygon.value) {
+          handlePolygonMouseMove()
+        } else if (polygonMode.value === 'edit') {
+          handlePolygonEditMouseMove()
+        }
+      }
     })
 
     stage.on('mouseup touchend', () => {
-      if (!isDrawing) return
-      
-      isDrawing = false
-      drawingLayer?.destroyChildren()
-      
-      if (currentPoints.length > 2) {
+      if (activeTool.value === 'freehand' && isDrawing) {
+        isDrawing = false
+        drawingLayer?.destroyChildren()
+        
+        if (currentPoints.length > 2) {
         executeCommand('Draw Stroke', () => {
           // Create new stroke
           const creationTime = Date.now()
@@ -1258,10 +1703,11 @@ onMounted(() => {
           updateTimelineState() // Update timeline state when new stroke is added
           layer?.batchDraw()
         })
+        }
+        
+        currentPoints = []
+        currentTimestamps = []
       }
-      
-      currentPoints = []
-      currentTimestamps = []
     })
 
     // Original p5 setup
@@ -1281,6 +1727,19 @@ onMounted(() => {
     appState.shaderDrawFunc = () => shaderGraphEndNode!!.renderAll(appState.threeRenderer!!)
     
     singleKeydownEvent('p', (ev) => { appState.paused = !appState.paused })
+    
+    // Escape key handling for polygon tool
+    singleKeydownEvent('Escape', (ev) => {
+      if (activeTool.value === 'polygon' && isDrawingPolygon.value) {
+        // Auto-close the current polygon if it has at least 3 points
+        if (currentPolygonPoints.value.length >= 6) {
+          finishPolygon()
+        } else {
+          // Just cancel if not enough points
+          clearCurrentPolygon()
+        }
+      }
+    })
 
   } catch (e) {
     console.warn(e)
@@ -1310,34 +1769,62 @@ onUnmounted(() => {
 <template>
   <div class="handwriting-animator-container">
     <div class="control-panel">
-      <button @click="drawMode = !drawMode" :class="{ active: drawMode }" :disabled="isAnimating">
-        {{ drawMode ? '✏️ Draw' : '👆 Select' }}
-      </button>
-      <button @click="showGrid = !showGrid" :class="{ active: showGrid }" :disabled="isAnimating">
-        {{ showGrid ? '⊞ Grid On' : '⊡ Grid Off' }}
-      </button>
+      <!-- Tool Switcher Dropdown -->
+      <select v-model="activeTool" :disabled="isAnimating" class="tool-dropdown">
+        <option value="freehand">✏️ Freehand</option>
+        <option value="polygon">⬟ Polygon</option>
+      </select>
       <span class="separator">|</span>
-      <button @click="groupSelectedStrokes" :disabled="!canGroupRef || isAnimating">
-        Group
-      </button>
-      <button @click="ungroupSelectedStrokes" :disabled="!isGroupSelected || isAnimating">
-        Ungroup
-      </button>
-      <span class="separator">|</span>
-      <button @click="deleteSelected" :disabled="selectedCount === 0 || isAnimating">
-        🗑️ Delete
-      </button>
-      <span class="separator">|</span>
-      <button @click="undo" :disabled="!canUndo || isAnimating" title="Undo (Ctrl/Cmd+Z)">
-        ↶ Undo
-      </button>
-      <button @click="redo" :disabled="!canRedo || isAnimating" title="Redo (Ctrl/Cmd+Shift+Z)">
-        ↷ Redo
-      </button>
-      <span class="separator">|</span>
-      <button @click="useRealTiming = !useRealTiming" :class="{ active: useRealTiming }">
-        {{ useRealTiming ? '⏱️ Real Time' : '⏱️ Max 0.3s' }}
-      </button>
+      
+      <!-- Freehand Tool Toolbar -->
+      <template v-if="activeTool === 'freehand'">
+        <button @click="drawMode = !drawMode" :class="{ active: drawMode }" :disabled="isAnimating">
+          {{ drawMode ? '✏️ Draw' : '👆 Select' }}
+        </button>
+        <button @click="showGrid = !showGrid" :class="{ active: showGrid }" :disabled="isAnimating">
+          {{ showGrid ? '⊞ Grid On' : '⊡ Grid Off' }}
+        </button>
+        <span class="separator">|</span>
+        <button @click="groupSelectedStrokes" :disabled="!canGroupRef || isAnimating">
+          Group
+        </button>
+        <button @click="ungroupSelectedStrokes" :disabled="!isGroupSelected || isAnimating">
+          Ungroup
+        </button>
+        <span class="separator">|</span>
+        <button @click="deleteSelected" :disabled="selectedCount === 0 || isAnimating">
+          🗑️ Delete
+        </button>
+        <span class="separator">|</span>
+        <button @click="undo" :disabled="!canUndo || isAnimating" title="Undo (Ctrl/Cmd+Z)">
+          ↶ Undo
+        </button>
+        <button @click="redo" :disabled="!canRedo || isAnimating" title="Redo (Ctrl/Cmd+Shift+Z)">
+          ↷ Redo
+        </button>
+        <span class="separator">|</span>
+        <button @click="useRealTiming = !useRealTiming" :class="{ active: useRealTiming }">
+          {{ useRealTiming ? '⏱️ Real Time' : '⏱️ Max 0.3s' }}
+        </button>
+      </template>
+      
+      <!-- Polygon Tool Toolbar -->
+      <template v-if="activeTool === 'polygon'">
+        <button @click="polygonMode = 'draw'" :class="{ active: polygonMode === 'draw' }" :disabled="isAnimating">
+          ✏️ New Shape
+        </button>
+        <button @click="polygonMode = 'edit'" :class="{ active: polygonMode === 'edit' }" :disabled="isAnimating">
+          ✏️ Edit Shape
+        </button>
+        <button @click="showGrid = !showGrid" :class="{ active: showGrid }" :disabled="isAnimating">
+          {{ showGrid ? '⊞ Grid On' : '⊡ Grid Off' }}
+        </button>
+        <span class="separator">|</span>
+        <button @click="clearCurrentPolygon" :disabled="!isDrawingPolygon || isAnimating">
+          🗑️ Cancel Shape
+        </button>
+        <span v-if="isDrawingPolygon" class="info">Drawing: {{ currentPolygonPoints.length / 2 }} points</span>
+      </template>
       <span class="separator">|</span>
       <span class="info">{{ selectedCount }} selected</span>
       <span v-if="isAnimating" class="animation-lock-warning">
@@ -1412,6 +1899,25 @@ onUnmounted(() => {
 }
 
 .control-panel button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.tool-dropdown {
+  background: #f0f0f0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 5px 10px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tool-dropdown:hover {
+  background: #e0e0e0;
+}
+
+.tool-dropdown:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
