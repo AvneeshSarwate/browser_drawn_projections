@@ -1340,6 +1340,22 @@ const serializePolygonState = () => {
   }
 }
 
+// Function to attach handlers to polygon nodes
+const attachPolygonHandlers = (node: Konva.Line) => {
+  console.log('Attaching polygon handlers to:', node.id())
+  
+  node.draggable(false) // Polygons are not draggable, controlled by control points
+
+  // Add any polygon-specific event handlers here if needed
+  node.on('click', () => {
+    if(polygonMode.value === 'draw') {
+      console.log('Polygon clicked draw:', node.id())
+    } else if(polygonMode.value === 'edit') {
+      console.log('Polygon clicked edit:', node.id())
+    }
+  })
+}
+
 const deserializePolygonState = () => {
   if (!appState.polygonStateString || !stage || !polygonShapesLayer) return
   
@@ -1356,15 +1372,6 @@ const deserializePolygonState = () => {
     polygonShapes.clear()
     polygonGroups.clear()
     selectedPolygons.length = 0
-    
-    // Function to attach handlers to polygon nodes
-    const attachPolygonHandlers = (node: Konva.Line) => {
-      console.log('Attaching polygon handlers to:', node.id())
-      
-      node.draggable(false) // Polygons are not draggable, controlled by control points
-      
-      // Add any polygon-specific event handlers here if needed
-    }
     
     // Restore polygon layer content using Konva.Node.create
     const layerData = polygonState.layer
@@ -1681,6 +1688,8 @@ const finishPolygon = () => {
       draggable: false, // Will be handled by control points in edit mode
       id: polygonId
     })
+
+    attachPolygonHandlers(polygonLine)
     
     polygon.konvaShape = polygonLine
     polygonShapes.set(polygonId, polygon)
