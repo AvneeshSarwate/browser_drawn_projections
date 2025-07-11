@@ -634,7 +634,7 @@ onMounted(async() => {
     console.log('pre launch loop')
 
     launchLoop(async (ctx) => {
-
+      ctx.bpm = 120
       console.log('launch loop')
 
       // eslint-disable-next-line no-constant-condition
