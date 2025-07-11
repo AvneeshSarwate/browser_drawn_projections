@@ -55,7 +55,6 @@ export function evaluateSliderExpression(
 export function buildClipFromLine(
   clipLine: string,
   sliders: number[],
-  skipClipTransform = false,
 ): { clip: AbletonClip | undefined; updatedClipLine: string } {
   const { srcName, commandStrings } = splitTransformChainToCommandStrings(clipLine)
   
@@ -66,18 +65,23 @@ export function buildClipFromLine(
   if (!commandStrings.length) return { clip: srcClip.clone(), updatedClipLine: clipLine }
 
   let curClip = srcClip.clone()
-  const origClip = srcClip.clone()
   const updatedTokens: string[] = [srcName]
 
   commandStrings.forEach((cmdString) => {
     const { symbol, params } = parseCommandString(cmdString)
     const tf = TRANSFORM_REGISTRY[symbol as keyof typeof TRANSFORM_REGISTRY]
+    
+    if (!tf) {
+      console.warn(`Unknown transform: ${symbol}`)
+      return
+    }
+    
     const parsedParams = tf.argParser(params)
     const updatedParams = [...params]
 
     parsedParams.forEach((param, idx) => {
       if (paramUsesSliderExpression(param)) {
-        const res = evaluateSliderExpression(param, tf.sliderScale[idx], origClip, sliders)
+        const res = evaluateSliderExpression(param, tf.sliderScale[idx], curClip, sliders)
         if (res.success) {
           parsedParams[idx] = res.value
           updatedParams[idx] = `${res.value.toFixed(2)}-${Array.from(res.usedSliders).join('')}`
@@ -85,7 +89,7 @@ export function buildClipFromLine(
       }
     })
 
-    if (tf && !skipClipTransform) curClip = tf.transform(curClip, ...(parsedParams as any))
+    curClip = tf.transform(curClip, ...(parsedParams as any))
     updatedTokens.push(`${symbol} ${updatedParams.join(' ')}`)
   })
 
@@ -331,7 +335,7 @@ export const resolveSliderExpressionsInJavaScript = (jsCode: string, sliders: nu
       
       if (mainClipLine) {
         // Transform only the main clip line
-        const { updatedClipLine } = buildClipFromLine(mainClipLine.content, sliders, true)
+        const { updatedClipLine } = buildClipFromLine(mainClipLine.content, sliders)
         
         // Replace just the main clip line in the original code, leaving modifiers unchanged
         const beforeMainLine = sliderResolvedCode.substring(0, mainClipLine.startIndex)
@@ -356,7 +360,7 @@ export const computeDisplayTextForVoice = (voice: VoiceState, appState: SonarApp
   const lines: string[] = []
 
   groups.forEach(group => {
-    const { updatedClipLine } = buildClipFromLine(group.clipLine, appState.sliders, true)
+    const { updatedClipLine } = buildClipFromLine(group.clipLine, appState.sliders)
     if (group.rampLines.length) {
       lines.push(updatedClipLine, ...group.rampLines)
     } else {

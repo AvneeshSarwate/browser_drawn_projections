@@ -566,6 +566,16 @@ const numParse = (n: string) => {
   }
   return num
 }
+
+
+const scaleMap = {
+  'C': new Scale(),
+  'dR7': new Scale([0, 1, 4, 6, 7, 9, 11, 12], 62),
+  'dR5': new Scale([0, 4, 6, 9, 11, 12], 62),
+  'ebR7': new Scale([0, 3, 4, 5, 6, 9, 11, 12], 63),
+  'ebR5': new Scale([0, 4, 6, 9, 11, 12], 63),
+}
+
 /**
  *  Registry that is used by the live-coding text parser.
  *  The first argument is **always** the current clip, the rest are the
@@ -581,8 +591,8 @@ export const TRANSFORM_REGISTRY: Record<string, ClipTransform> = {
 
   s_tr: {
     name: 's_tr',
-    transform: (clip, degree, scale: Scale = new Scale()) => scaleTranspose(clip, degree, scale),
-    argParser: (args: string[]) => [numParse(args[0])],
+    transform: (clip, degree, scaleKey = 'C') => scaleTranspose(clip, degree, scaleMap[scaleKey]),
+    argParser: (args: string[]) => [numParse(args[0]), args[1] || 'C'],
     sliderScale: [n => Math.floor(n*16 - 8)]
   },
 
@@ -595,8 +605,8 @@ export const TRANSFORM_REGISTRY: Record<string, ClipTransform> = {
 
   transpose: {
     name: 'transpose',
-    transform: (clip, degree, scale: Scale = new Scale()) => scaleTranspose(clip, degree, scale),
-    argParser: (args: string[]) => [numParse(args[0])],
+    transform: (clip, degree, scaleKey = 'C') => scaleTranspose(clip, degree, scaleMap[scaleKey]),
+    argParser: (args: string[]) => [numParse(args[0]), args[1] || 'C'],
     sliderScale: [n => Math.floor(n*16 - 8)]
   },
 
@@ -661,7 +671,7 @@ export const TRANSFORM_REGISTRY: Record<string, ClipTransform> = {
       args[2] ? numParse(args[2]) : undefined,
     ],
     sliderScale: [
-      (n, clip) => Math.round(n * (clip.notes.length - 1)), // 0-31, for clips up to 32 notes
+      (n, clip) => Math.round(n * (clip.notes.length - 1)), 
       n => 1 + n * 3, // 1-4
       n => 1 + n * 3, // 1-4
     ]

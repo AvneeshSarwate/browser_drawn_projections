@@ -8,7 +8,21 @@ import { defineStore, acceptHMRUpdate } from 'pinia'
 import { ref } from 'vue'
 
 
+type FlattenedStroke = {
+  points: { x: number, y: number, ts: number }[]
+}
 
+type FlattenedStrokeGroup = {
+  children: (FlattenedStroke | FlattenedStrokeGroup)[]
+}
+
+type FreehandRenderData = {
+  strokes: FlattenedStrokeGroup[]
+}[]
+
+type PolygonRenderData = {
+  points: { x: number, y: number }[]
+}[]
 
 export type TemplateAppState = {
   p5Instance: p5 | undefined
@@ -23,7 +37,9 @@ export type TemplateAppState = {
   paused: boolean
   drawing: boolean
   freehandStateString: string
+  freehandRenderData: FreehandRenderData
   polygonStateString: string
+  polygonRenderData: PolygonRenderData
 }
 
 export const appState: TemplateAppState = {
@@ -39,7 +55,9 @@ export const appState: TemplateAppState = {
   paused: false,
   drawing: false,
   freehandStateString: '',
+  freehandRenderData: [],
   polygonStateString: '',
+  polygonRenderData: [],
 } 
 
 export const appStateName = 'templateAppState'
