@@ -1589,7 +1589,8 @@ const updatePolygonPreview = () => {
         radius: 4,
         fill: '#0066ff',
         stroke: '#004499',
-        strokeWidth: 1
+        strokeWidth: 1,
+        listening: false
       })
       polygonPreviewLayer.add(pointCircle)
     }
@@ -1608,7 +1609,8 @@ const updatePolygonPreview = () => {
       radius: 4,
       fill: '#0066ff',
       stroke: '#004499',
-      strokeWidth: 1
+      strokeWidth: 1,
+      listening: false
     })
     polygonPreviewLayer.add(pointCircle)
   }
@@ -1622,7 +1624,8 @@ const updatePolygonPreview = () => {
     strokeWidth: 2,
     fill: 'rgba(153, 153, 153, 0.1)',
     closed: false,
-    dash: [5, 5]
+    dash: [5, 5],
+    listening: false
   })
   
   polygonPreviewLayer.add(previewLine)
@@ -1639,7 +1642,8 @@ const updatePolygonPreview = () => {
       radius: polygonProximityThreshold,
       stroke: distance < polygonProximityThreshold ? '#00ff00' : '#ff0000',
       strokeWidth: 2,
-      fill: 'transparent'
+      fill: 'transparent',
+      listening: false
     })
     
     polygonPreviewLayer.add(firstPointIndicator)
