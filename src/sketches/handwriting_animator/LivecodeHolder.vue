@@ -11,23 +11,111 @@ import { getStroke } from 'perfect-freehand';
 import Timeline from './Timeline.vue';
 import { findClosestPolygonLineAtPoint, lineToPointDistance } from '@/creativeAlgs/shapeHelpers';
 
-
+// ==================== common stuff ====================
 const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
 let timeLoops: CancelablePromisePoxy<any>[] = []
 
-// freehand layers
 let stage: Konva.Stage | undefined = undefined
-let freehandShapeLayer: Konva.Layer | undefined = undefined
+
+// Tool switching
+const activeTool = ref<'freehand' | 'polygon'>('freehand')
+
+// Callback for Timeline to set animation state  
+const setAnimatingState = (animating: boolean) => {
+  isAnimating.value = animating
+  
+  // Block/unblock all stage interactions when animation state changes
+  if (stage) {
+    if (animating) {
+      // Disable all stage interactions
+      stage.listening(false)
+    } else {
+      // Re-enable stage interactions  
+      stage.listening(true)
+    }
+  }
+}
+
+// Add this ref near the other refs
+const konvaContainer = ref<HTMLDivElement>()
+
 let gridLayer: Konva.Layer | undefined = undefined
+
+// Draw grid
+const drawGrid = () => {
+  if (!gridLayer || !stage) return
+  
+  gridLayer.destroyChildren()
+  
+  if (!showGrid.value) {
+    gridLayer.batchDraw()
+    return
+  }
+  
+  const width = stage.width()
+  const height = stage.height()
+  
+  // Vertical lines
+  for (let x = 0; x <= width; x += gridSize) {
+    gridLayer.add(new Konva.Line({
+      points: [x, 0, x, height],
+      stroke: '#ddd',
+      strokeWidth: 1,
+    }))
+  }
+  
+  // Horizontal lines
+  for (let y = 0; y <= height; y += gridSize) {
+    gridLayer.add(new Konva.Line({
+      points: [0, y, width, y],
+      stroke: '#ddd',
+      strokeWidth: 1,
+    }))
+  }
+
+  
+  gridLayer.batchDraw()
+}
+
+// Watch for tool changes to manage layer interactivity (not visibility)
+watch(activeTool, (newTool) => {
+  if (newTool === 'freehand') {
+    // Enable freehand layers interaction, disable polygon layers interaction
+    freehandShapeLayer?.listening(true)
+    freehandDrawingLayer?.listening(true)
+    freehandSelectionLayer?.listening(true)
+    
+    polygonShapesLayer?.listening(false)
+    polygonPreviewLayer?.listening(false)
+    polygonControlsLayer?.listening(false)
+    polygonSelectionLayer?.listening(false)
+  } else if (newTool === 'polygon') {
+    // Disable freehand layers interaction, enable polygon layers interaction
+    freehandShapeLayer?.listening(false)
+    freehandDrawingLayer?.listening(false)
+    freehandSelectionLayer?.listening(false)
+    
+    polygonShapesLayer?.listening(true)
+    polygonPreviewLayer?.listening(true)
+    polygonControlsLayer?.listening(true)
+    polygonSelectionLayer?.listening(true)
+  }
+  
+  // Clear selections when switching tools
+  clearFreehandSelection()
+  selectedPolygons.length = 0
+  
+  // Redraw stage
+  stage?.batchDraw()
+})
+
+
+// ================  freehand stuff ====================
+
+let freehandShapeLayer: Konva.Layer | undefined = undefined
 let freehandDrawingLayer: Konva.Layer | undefined = undefined
 let freehandSelectionLayer: Konva.Layer | undefined = undefined
-
-// Polygon tool layers
-let polygonShapesLayer: Konva.Layer | undefined = undefined
-let polygonPreviewLayer: Konva.Layer | undefined = undefined
-let polygonControlsLayer: Konva.Layer | undefined = undefined
-let polygonSelectionLayer: Konva.Layer | undefined = undefined
 
 // Drawing state
 let isDrawing = false
@@ -240,31 +328,10 @@ interface FreehandStrokeGroup {
   group?: Konva.Group
 }
 
-// Polygon data structures
-interface PolygonShape {
-  id: string
-  points: number[] // [x1, y1, x2, y2, ...]
-  closed: boolean
-  konvaShape?: Konva.Line
-  controlPoints?: Konva.Circle[]
-  creationTime: number
-}
-
-interface PolygonGroup {
-  id: string
-  polygonIds: string[]
-  group?: Konva.Group
-}
-
 const freehandStrokes = new Map<string, FreehandStroke>()
 const freehandStrokeGroups = new Map<string, FreehandStrokeGroup>()
 // Selection state - plain array like working example (no ref to avoid proxy issues)
 const selected: Konva.Node[] = []
-
-// Polygon tool state
-const polygonShapes = new Map<string, PolygonShape>()
-const polygonGroups = new Map<string, PolygonGroup>()
-const selectedPolygons: Konva.Node[] = []
 
 // Separate refs for UI state for freehand
 const freehandSelectedCount = ref(0)
@@ -278,15 +345,6 @@ const currentPlaybackTime = ref(0)
 const freehandDrawMode = ref(true) // true = draw mode, false = select mode
 const useRealTiming = ref(false) // false = use max threshold, true = use actual timing
 const maxInterStrokeDelay = 300 // 0.3 seconds max gap between strokes
-
-// Tool switching
-const activeTool = ref<'freehand' | 'polygon'>('freehand')
-
-// Polygon drawing state
-const isDrawingPolygon = ref(false)
-const currentPolygonPoints = ref<number[]>([])
-const polygonMode = ref<'draw' | 'edit'>('draw')
-const polygonProximityThreshold = 10 // pixels
 
 // Undo/Redo system for freehand
 interface FreehandCommand {
@@ -302,38 +360,10 @@ const maxHistorySize = 50
 // Track if we're currently in an undo/redo operation to prevent adding to history
 let isUndoRedoOperation = false
 
-// Separate Polygon Undo/Redo system
-interface PolygonCommand {
-  name: string
-  beforeState: string
-  afterState: string
-}
-
-const polygonCommandHistory = ref<PolygonCommand[]>([])
-const polygonHistoryIndex = ref(-1)
-const maxPolygonHistorySize = 50
-
-// Track if we're currently in a polygon undo/redo operation
-let isPolygonUndoRedoOperation = false
-
 // Track if animation is currently playing for UI locking
 const isAnimating = ref(false)
 
-// Callback for Timeline to set animation state  
-const setAnimatingState = (animating: boolean) => {
-  isAnimating.value = animating
-  
-  // Block/unblock all stage interactions when animation state changes
-  if (stage) {
-    if (animating) {
-      // Disable all stage interactions
-      stage.listening(false)
-    } else {
-      // Re-enable stage interactions  
-      stage.listening(true)
-    }
-  }
-}
+
 
 // Get current canvas state for undo/redo (freehand only)
 const getCurrentFreehandState = () => {
@@ -492,157 +522,6 @@ const finishFreehandDragTracking = (nodeName: string) => {
   freehandDragStartState = null
 }
 
-// Polygon Undo/Redo Functions
-// Get current polygon state for undo/redo
-const getCurrentPolygonState = () => {
-  if (!stage || !polygonShapesLayer) return null
-  
-  try {
-    const layerData = polygonShapesLayer.toObject()
-    const polygonsData = Array.from(polygonShapes.entries())
-    const polygonGroupsData = Array.from(polygonGroups.entries())
-    
-    const polygonState = {
-      layer: layerData,
-      polygons: polygonsData,
-      polygonGroups: polygonGroupsData,
-    }
-    
-    return polygonState
-  } catch (error) {
-    console.warn('Failed to get current polygon state:', error)
-    return null
-  }
-}
-
-const getCurrentPolygonStateString = (): string => {
-  const state = getCurrentPolygonState()
-  return JSON.stringify(state)
-}
-
-// Execute a polygon command with undo/redo support
-const executePolygonCommand = (commandName: string, action: () => void) => {
-  if (isPolygonUndoRedoOperation) {
-    // If we're in a polygon undo/redo, just execute the action without tracking
-    action()
-    return
-  }
-  
-  const beforeState = getCurrentPolygonStateString()
-  if (!beforeState) return
-  
-  // Execute the action
-  action()
-  
-  const afterState = getCurrentPolygonStateString()
-  if (!afterState || beforeState === afterState) return
-  
-  // Add command to polygon history
-  const command: PolygonCommand = {
-    name: commandName,
-    beforeState,
-    afterState
-  }
-  
-  // Remove any commands after current index (when doing new action after undo)
-  polygonCommandHistory.value = polygonCommandHistory.value.slice(0, polygonHistoryIndex.value + 1)
-  
-  // Add new command
-  polygonCommandHistory.value.push(command)
-  polygonHistoryIndex.value = polygonCommandHistory.value.length - 1
-  
-  // Limit history size
-  if (polygonCommandHistory.value.length > maxPolygonHistorySize) {
-    polygonCommandHistory.value.shift()
-    polygonHistoryIndex.value = polygonCommandHistory.value.length - 1
-  }
-  
-  console.log(`Polygon Command "${commandName}" added to history. Index: ${polygonHistoryIndex.value}`)
-}
-
-// Restore polygon state from string
-const restorePolygonState = (stateString: string) => {
-  if (!stateString) return
-  
-  isPolygonUndoRedoOperation = true
-  try {
-    // Temporarily store the state string
-    const originalState = appState.polygonStateString
-    appState.polygonStateString = stateString
-    
-    // Use existing deserialization logic
-    deserializePolygonState()
-    
-    // Restore original state string for hotreload
-    appState.polygonStateString = originalState
-  } catch (error) {
-    console.warn('Failed to restore polygon state:', error)
-  } finally {
-    isPolygonUndoRedoOperation = false
-  }
-}
-
-// Polygon Undo/Redo functions
-const canPolygonUndo = computed(() => polygonHistoryIndex.value >= 0)
-const canPolygonRedo = computed(() => polygonHistoryIndex.value < polygonCommandHistory.value.length - 1)
-
-const polygonUndo = () => {
-  if (!canPolygonUndo.value) return
-  
-  const command = polygonCommandHistory.value[polygonHistoryIndex.value]
-  console.log(`Undoing polygon command: ${command.name}`)
-  
-  restorePolygonState(command.beforeState)
-  polygonHistoryIndex.value--
-}
-
-const polygonRedo = () => {
-  if (!canPolygonRedo.value) return
-  
-  polygonHistoryIndex.value++
-  const command = polygonCommandHistory.value[polygonHistoryIndex.value]
-  console.log(`Redoing polygon command: ${command.name}`)
-  
-  restorePolygonState(command.afterState)
-}
-
-// Polygon drag tracking for drag operations
-let polygonDragStartState: string | null = null
-
-const startPolygonDragTracking = () => {
-  polygonDragStartState = getCurrentPolygonStateString()
-}
-
-const finishPolygonDragTracking = (nodeName: string) => {
-  if (!polygonDragStartState) return
-  
-  const endState = getCurrentPolygonStateString()
-  if (polygonDragStartState !== endState) {
-    // Manually add to polygon history without using executePolygonCommand to avoid double state capture
-    const command: PolygonCommand = {
-      name: `Transform ${nodeName}`,
-      beforeState: polygonDragStartState,
-      afterState: endState
-    }
-    
-    polygonCommandHistory.value = polygonCommandHistory.value.slice(0, polygonHistoryIndex.value + 1)
-    polygonCommandHistory.value.push(command)
-    polygonHistoryIndex.value = polygonCommandHistory.value.length - 1
-    
-    if (polygonCommandHistory.value.length > maxPolygonHistorySize) {
-      polygonCommandHistory.value.shift()
-      polygonHistoryIndex.value = polygonCommandHistory.value.length - 1
-    }
-    
-    console.log(`Polygon transform command added to history. Index: ${polygonHistoryIndex.value}`)
-  }
-  
-  polygonDragStartState = null
-}
-
-// Add this ref near the other refs
-const konvaContainer = ref<HTMLDivElement>()
-
 // Function to refresh stroke-shape connections
 const refreshStrokeConnections = () => {
   freehandStrokes.forEach((stroke, id) => {
@@ -794,113 +673,6 @@ const deserializeFreehandState = () => {
   }
 }
 
-// Polygon state serialization functions
-const serializePolygonState = () => {
-  if (!stage || !polygonShapesLayer) return
-  
-  try {
-    // Serialize only the essential polygon state
-    const polygonState = getCurrentPolygonState()
-    
-    
-    appState.polygonStateString = JSON.stringify(polygonState)
-    console.log('Serialized polygon state:', { 
-      layerChildren: polygonState.layer?.children?.length || 0, 
-      polygons: polygonState.polygons.length,
-      polygonGroups: polygonState.polygonGroups.length 
-    })
-  } catch (error) {
-    console.warn('Failed to serialize polygon state:', error)
-  }
-}
-
-const deserializePolygonState = () => {
-  if (!appState.polygonStateString || !stage || !polygonShapesLayer) return
-  
-  try {
-    const polygonState = JSON.parse(appState.polygonStateString)
-    console.log('Deserializing polygon state:', { 
-      layerChildren: polygonState.layer?.children?.length || 0, 
-      polygons: polygonState.polygons?.length || 0,
-      polygonGroups: polygonState.polygonGroups?.length || 0 
-    })
-    
-    // Clear existing polygon content
-    polygonShapesLayer.destroyChildren()
-    polygonShapes.clear()
-    polygonGroups.clear()
-    selectedPolygons.length = 0
-    
-    // Function to attach handlers to polygon nodes
-    const attachPolygonHandlers = (node: Konva.Line) => {
-      console.log('Attaching polygon handlers to:', node.id())
-      
-      node.draggable(false) // Polygons are not draggable, controlled by control points
-      
-      // Add any polygon-specific event handlers here if needed
-    }
-    
-    // Restore polygon layer content using Konva.Node.create
-    const layerData = polygonState.layer
-    if (layerData && layerData.children) {
-      console.log('Restoring', layerData.children.length, 'polygon shapes')
-      layerData.children.forEach((childData: any, index: number) => {
-        console.log('Creating polygon node', index, 'of type', childData.className)
-        const node = Konva.Node.create(JSON.stringify(childData)) as Konva.Line
-        polygonShapesLayer.add(node)
-        console.log('Added polygon node to layer:', node.id(), node.isVisible())
-        
-        // Attach handlers to this polygon node
-        attachPolygonHandlers(node)
-      })
-    }
-    
-    // Restore polygon data
-    if (polygonState.polygons) {
-      polygonState.polygons.forEach(([id, polygonData]: [string, any]) => {
-        // Use stage.findOne to search for the polygon shape
-        const shape = stage.findOne(`#${id}`) as Konva.Line
-        console.log('Restoring polygon:', id, 'found shape:', !!shape)
-        const polygon: PolygonShape = {
-          id: polygonData.id,
-          points: polygonData.points,
-          closed: polygonData.closed,
-          creationTime: polygonData.creationTime,
-          konvaShape: shape,
-          controlPoints: [], // Will be recreated by updatePolygonControlPoints
-        }
-        polygonShapes.set(id, polygon)
-      })
-    }
-    
-    // Restore polygon groups
-    if (polygonState.polygonGroups) {
-      polygonState.polygonGroups.forEach(([id, groupData]: [string, any]) => {
-        const group: PolygonGroup = {
-          id: groupData.id,
-          polygonIds: groupData.polygonIds,
-          group: stage.findOne(`#${id}`) as Konva.Group,
-        }
-        polygonGroups.set(id, group)
-      })
-    }
-    
-    // Clear any existing control points first
-    polygonControlsLayer?.destroyChildren()
-    
-    // Update polygon control points if in edit mode
-    if (polygonMode.value === 'edit') {
-      updatePolygonControlPoints()
-    }
-    
-    polygonShapesLayer.batchDraw()
-    
-    console.log('Polygon state restored from hotreload')
-  } catch (error) {
-    console.warn('Failed to deserialize polygon state:', error)
-  }
-}
-
 // Function to update draggable state based on mode and group membership
 const updateFreehandDraggableStates = () => {
   console.log('updateDraggableStates called, drawMode:', freehandDrawMode.value, 'strokes count:', freehandStrokes.size)
@@ -930,65 +702,6 @@ const updateFreehandDraggableStates = () => {
       }
     })
   }
-}
-
-// Watch for draw mode changes - simplified based on working example
-watch(freehandDrawMode, () => {
-  updateCursor?.()
-  
-  // Update draggable states when mode changes
-  updateFreehandDraggableStates()
-  
-  // Clear selection when switching to draw mode
-  if (freehandDrawMode.value) {
-    clearFreehandSelection()
-  }
-})
-
-// Watch for tool changes to manage layer interactivity (not visibility)
-watch(activeTool, (newTool) => {
-  if (newTool === 'freehand') {
-    // Enable freehand layers interaction, disable polygon layers interaction
-    freehandShapeLayer?.listening(true)
-    freehandDrawingLayer?.listening(true)
-    freehandSelectionLayer?.listening(true)
-    
-    polygonShapesLayer?.listening(false)
-    polygonPreviewLayer?.listening(false)
-    polygonControlsLayer?.listening(false)
-    polygonSelectionLayer?.listening(false)
-  } else if (newTool === 'polygon') {
-    // Disable freehand layers interaction, enable polygon layers interaction
-    freehandShapeLayer?.listening(false)
-    freehandDrawingLayer?.listening(false)
-    freehandSelectionLayer?.listening(false)
-    
-    polygonShapesLayer?.listening(true)
-    polygonPreviewLayer?.listening(true)
-    polygonControlsLayer?.listening(true)
-    polygonSelectionLayer?.listening(true)
-  }
-  
-  // Clear selections when switching tools
-  clearFreehandSelection()
-  selectedPolygons.length = 0
-  
-  // Redraw stage
-  stage?.batchDraw()
-})
-
-// Cursor update function (will be defined in onMounted)
-let updateCursor: (() => void) | undefined
-
-const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromisePoxy<any> => {
-  const loop = launch(block)
-  timeLoops.push(loop)
-  return loop
-}
-
-const clearDrawFuncs = () => {
-  appState.drawFunctions = []
-  appState.drawFuncMap = new Map()
 }
 
 // Helper function to convert points to perfect-freehand stroke
@@ -1036,7 +749,6 @@ const getStrokePath = (points: number[], normalize: boolean = false): string => 
   return `${d} Z`
 }
 
-// Helper to get bounds of points
 const getPointsBounds = (points: number[]): { minX: number, minY: number, maxX: number, maxY: number } => {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
   for (let i = 0; i < points.length; i += 2) {
@@ -1103,42 +815,6 @@ const handleClick = (target: Konva.Node, shiftKey: boolean) => {
   
   if (shiftKey) freehandToggleSelection(nodeToSelect) 
   else { clearFreehandSelection(); freehandAddSelection(nodeToSelect) }
-}
-
-// Draw grid
-const drawGrid = () => {
-  if (!gridLayer || !stage) return
-  
-  gridLayer.destroyChildren()
-  
-  if (!showGrid.value) {
-    gridLayer.batchDraw()
-    return
-  }
-  
-  const width = stage.width()
-  const height = stage.height()
-  
-  // Vertical lines
-  for (let x = 0; x <= width; x += gridSize) {
-    gridLayer.add(new Konva.Line({
-      points: [x, 0, x, height],
-      stroke: '#ddd',
-      strokeWidth: 1,
-    }))
-  }
-  
-  // Horizontal lines
-  for (let y = 0; y <= height; y += gridSize) {
-    gridLayer.add(new Konva.Line({
-      points: [0, y, width, y],
-      stroke: '#ddd',
-      strokeWidth: 1,
-    }))
-  }
-
-  
-  gridLayer.batchDraw()
 }
 
 // Group selected strokes - simplified from working example  
@@ -1432,6 +1108,337 @@ const handleTimeUpdate = (time: number) => {
   freehandVisibleGroups.forEach(group => group.show())
   
   freehandShapeLayer?.batchDraw()
+}
+
+// Watch for draw mode changes - simplified based on working example
+watch(freehandDrawMode, () => {
+  updateCursor?.()
+  
+  // Update draggable states when mode changes
+  updateFreehandDraggableStates()
+  
+  // Clear selection when switching to draw mode
+  if (freehandDrawMode.value) {
+    clearFreehandSelection()
+  }
+})
+
+// ================  polygon stuff ====================
+let polygonShapesLayer: Konva.Layer | undefined = undefined
+let polygonPreviewLayer: Konva.Layer | undefined = undefined
+let polygonControlsLayer: Konva.Layer | undefined = undefined
+let polygonSelectionLayer: Konva.Layer | undefined = undefined
+
+// Polygon data structures
+interface PolygonShape {
+  id: string
+  points: number[] // [x1, y1, x2, y2, ...]
+  closed: boolean
+  konvaShape?: Konva.Line
+  controlPoints?: Konva.Circle[]
+  creationTime: number
+}
+
+interface PolygonGroup {
+  id: string
+  polygonIds: string[]
+  group?: Konva.Group
+}
+
+
+// Polygon tool state
+const polygonShapes = new Map<string, PolygonShape>()
+const polygonGroups = new Map<string, PolygonGroup>()
+const selectedPolygons: Konva.Node[] = []
+
+
+// Polygon drawing state
+const isDrawingPolygon = ref(false)
+const currentPolygonPoints = ref<number[]>([])
+const polygonMode = ref<'draw' | 'edit'>('draw')
+const polygonProximityThreshold = 10 // pixels
+
+// Separate Polygon Undo/Redo system
+interface PolygonCommand {
+  name: string
+  beforeState: string
+  afterState: string
+}
+
+const polygonCommandHistory = ref<PolygonCommand[]>([])
+const polygonHistoryIndex = ref(-1)
+const maxPolygonHistorySize = 50
+
+// Track if we're currently in a polygon undo/redo operation
+let isPolygonUndoRedoOperation = false
+
+// Polygon Undo/Redo Functions
+// Get current polygon state for undo/redo
+const getCurrentPolygonState = () => {
+  if (!stage || !polygonShapesLayer) return null
+  
+  try {
+    const layerData = polygonShapesLayer.toObject()
+    const polygonsData = Array.from(polygonShapes.entries())
+    const polygonGroupsData = Array.from(polygonGroups.entries())
+    
+    const polygonState = {
+      layer: layerData,
+      polygons: polygonsData,
+      polygonGroups: polygonGroupsData,
+    }
+    
+    return polygonState
+  } catch (error) {
+    console.warn('Failed to get current polygon state:', error)
+    return null
+  }
+}
+
+const getCurrentPolygonStateString = (): string => {
+  const state = getCurrentPolygonState()
+  return JSON.stringify(state)
+}
+
+// Execute a polygon command with undo/redo support
+const executePolygonCommand = (commandName: string, action: () => void) => {
+  if (isPolygonUndoRedoOperation) {
+    // If we're in a polygon undo/redo, just execute the action without tracking
+    action()
+    return
+  }
+  
+  const beforeState = getCurrentPolygonStateString()
+  if (!beforeState) return
+  
+  // Execute the action
+  action()
+  
+  const afterState = getCurrentPolygonStateString()
+  if (!afterState || beforeState === afterState) return
+  
+  // Add command to polygon history
+  const command: PolygonCommand = {
+    name: commandName,
+    beforeState,
+    afterState
+  }
+  
+  // Remove any commands after current index (when doing new action after undo)
+  polygonCommandHistory.value = polygonCommandHistory.value.slice(0, polygonHistoryIndex.value + 1)
+  
+  // Add new command
+  polygonCommandHistory.value.push(command)
+  polygonHistoryIndex.value = polygonCommandHistory.value.length - 1
+  
+  // Limit history size
+  if (polygonCommandHistory.value.length > maxPolygonHistorySize) {
+    polygonCommandHistory.value.shift()
+    polygonHistoryIndex.value = polygonCommandHistory.value.length - 1
+  }
+  
+  console.log(`Polygon Command "${commandName}" added to history. Index: ${polygonHistoryIndex.value}`)
+}
+
+// Restore polygon state from string
+const restorePolygonState = (stateString: string) => {
+  if (!stateString) return
+  
+  isPolygonUndoRedoOperation = true
+  try {
+    // Temporarily store the state string
+    const originalState = appState.polygonStateString
+    appState.polygonStateString = stateString
+    
+    // Use existing deserialization logic
+    deserializePolygonState()
+    
+    // Restore original state string for hotreload
+    appState.polygonStateString = originalState
+  } catch (error) {
+    console.warn('Failed to restore polygon state:', error)
+  } finally {
+    isPolygonUndoRedoOperation = false
+  }
+}
+
+// Polygon Undo/Redo functions
+const canPolygonUndo = computed(() => polygonHistoryIndex.value >= 0)
+const canPolygonRedo = computed(() => polygonHistoryIndex.value < polygonCommandHistory.value.length - 1)
+
+const polygonUndo = () => {
+  if (!canPolygonUndo.value) return
+  
+  const command = polygonCommandHistory.value[polygonHistoryIndex.value]
+  console.log(`Undoing polygon command: ${command.name}`)
+  
+  restorePolygonState(command.beforeState)
+  polygonHistoryIndex.value--
+}
+
+const polygonRedo = () => {
+  if (!canPolygonRedo.value) return
+  
+  polygonHistoryIndex.value++
+  const command = polygonCommandHistory.value[polygonHistoryIndex.value]
+  console.log(`Redoing polygon command: ${command.name}`)
+  
+  restorePolygonState(command.afterState)
+}
+
+// Polygon drag tracking for drag operations
+let polygonDragStartState: string | null = null
+
+const startPolygonDragTracking = () => {
+  polygonDragStartState = getCurrentPolygonStateString()
+}
+
+const finishPolygonDragTracking = (nodeName: string) => {
+  if (!polygonDragStartState) return
+  
+  const endState = getCurrentPolygonStateString()
+  if (polygonDragStartState !== endState) {
+    // Manually add to polygon history without using executePolygonCommand to avoid double state capture
+    const command: PolygonCommand = {
+      name: `Transform ${nodeName}`,
+      beforeState: polygonDragStartState,
+      afterState: endState
+    }
+    
+    polygonCommandHistory.value = polygonCommandHistory.value.slice(0, polygonHistoryIndex.value + 1)
+    polygonCommandHistory.value.push(command)
+    polygonHistoryIndex.value = polygonCommandHistory.value.length - 1
+    
+    if (polygonCommandHistory.value.length > maxPolygonHistorySize) {
+      polygonCommandHistory.value.shift()
+      polygonHistoryIndex.value = polygonCommandHistory.value.length - 1
+    }
+    
+    console.log(`Polygon transform command added to history. Index: ${polygonHistoryIndex.value}`)
+  }
+  
+  polygonDragStartState = null
+}
+
+// Polygon state serialization functions
+const serializePolygonState = () => {
+  if (!stage || !polygonShapesLayer) return
+  
+  try {
+    // Serialize only the essential polygon state
+    const polygonState = getCurrentPolygonState()
+    
+    
+    appState.polygonStateString = JSON.stringify(polygonState)
+    console.log('Serialized polygon state:', { 
+      layerChildren: polygonState.layer?.children?.length || 0, 
+      polygons: polygonState.polygons.length,
+      polygonGroups: polygonState.polygonGroups.length 
+    })
+  } catch (error) {
+    console.warn('Failed to serialize polygon state:', error)
+  }
+}
+
+const deserializePolygonState = () => {
+  if (!appState.polygonStateString || !stage || !polygonShapesLayer) return
+  
+  try {
+    const polygonState = JSON.parse(appState.polygonStateString)
+    console.log('Deserializing polygon state:', { 
+      layerChildren: polygonState.layer?.children?.length || 0, 
+      polygons: polygonState.polygons?.length || 0,
+      polygonGroups: polygonState.polygonGroups?.length || 0 
+    })
+    
+    // Clear existing polygon content
+    polygonShapesLayer.destroyChildren()
+    polygonShapes.clear()
+    polygonGroups.clear()
+    selectedPolygons.length = 0
+    
+    // Function to attach handlers to polygon nodes
+    const attachPolygonHandlers = (node: Konva.Line) => {
+      console.log('Attaching polygon handlers to:', node.id())
+      
+      node.draggable(false) // Polygons are not draggable, controlled by control points
+      
+      // Add any polygon-specific event handlers here if needed
+    }
+    
+    // Restore polygon layer content using Konva.Node.create
+    const layerData = polygonState.layer
+    if (layerData && layerData.children) {
+      console.log('Restoring', layerData.children.length, 'polygon shapes')
+      layerData.children.forEach((childData: any, index: number) => {
+        console.log('Creating polygon node', index, 'of type', childData.className)
+        const node = Konva.Node.create(JSON.stringify(childData)) as Konva.Line
+        polygonShapesLayer.add(node)
+        console.log('Added polygon node to layer:', node.id(), node.isVisible())
+        
+        // Attach handlers to this polygon node
+        attachPolygonHandlers(node)
+      })
+    }
+    
+    // Restore polygon data
+    if (polygonState.polygons) {
+      polygonState.polygons.forEach(([id, polygonData]: [string, any]) => {
+        // Use stage.findOne to search for the polygon shape
+        const shape = stage.findOne(`#${id}`) as Konva.Line
+        console.log('Restoring polygon:', id, 'found shape:', !!shape)
+        const polygon: PolygonShape = {
+          id: polygonData.id,
+          points: polygonData.points,
+          closed: polygonData.closed,
+          creationTime: polygonData.creationTime,
+          konvaShape: shape,
+          controlPoints: [], // Will be recreated by updatePolygonControlPoints
+        }
+        polygonShapes.set(id, polygon)
+      })
+    }
+    
+    // Restore polygon groups
+    if (polygonState.polygonGroups) {
+      polygonState.polygonGroups.forEach(([id, groupData]: [string, any]) => {
+        const group: PolygonGroup = {
+          id: groupData.id,
+          polygonIds: groupData.polygonIds,
+          group: stage.findOne(`#${id}`) as Konva.Group,
+        }
+        polygonGroups.set(id, group)
+      })
+    }
+    
+    // Clear any existing control points first
+    polygonControlsLayer?.destroyChildren()
+    
+    // Update polygon control points if in edit mode
+    if (polygonMode.value === 'edit') {
+      updatePolygonControlPoints()
+    }
+    
+    polygonShapesLayer.batchDraw()
+    
+    console.log('Polygon state restored from hotreload')
+  } catch (error) {
+    console.warn('Failed to deserialize polygon state:', error)
+  }
+}
+
+// Cursor update function (will be defined in onMounted)
+let updateCursor: (() => void) | undefined
+
+const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromisePoxy<any> => {
+  const loop = launch(block)
+  timeLoops.push(loop)
+  return loop
+}
+
+const clearDrawFuncs = () => {
+  appState.drawFunctions = []
+  appState.drawFuncMap = new Map()
 }
 
 // Polygon tool functions
@@ -1793,6 +1800,10 @@ watch(polygonMode, (newMode) => {
   }
   updatePolygonControlPoints()
 })
+
+
+
+// ====================  main ====================
 
 onMounted(() => {
   try {
