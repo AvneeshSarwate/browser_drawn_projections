@@ -1151,6 +1151,48 @@ const polygonShapes = new Map<string, PolygonShape>()
 const polygonGroups = new Map<string, PolygonGroup>()
 const selectedPolygons: Konva.Node[] = []
 
+// Selection state tracking for visual feedback
+const polygonOriginalStyles = new Map<string, { stroke: string, strokeWidth: number }>()
+
+// Function to toggle polygon selection
+const togglePolygonSelection = (polygonId: string) => {
+  const polygon = stage?.findOne(`#${polygonId}`) as Konva.Line
+  if (!polygon) return
+
+  // Clear previous selection
+  clearPolygonSelection()
+
+  // Select the clicked polygon
+  selectedPolygons.push(polygon)
+  
+  // Store original styling
+  polygonOriginalStyles.set(polygonId, {
+    stroke: polygon.stroke() as string,
+    strokeWidth: polygon.strokeWidth()
+  })
+  
+  // Apply highlight styling
+  polygon.stroke('#ff6b35') // Orange highlight
+  polygon.strokeWidth(4)
+  
+  polygonShapesLayer?.batchDraw()
+}
+
+// Function to clear polygon selection
+const clearPolygonSelection = () => {
+  selectedPolygons.forEach(node => {
+    const polygon = node as Konva.Line
+    const originalStyle = polygonOriginalStyles.get(polygon.id())
+    if (originalStyle) {
+      polygon.stroke(originalStyle.stroke)
+      polygon.strokeWidth(originalStyle.strokeWidth)
+    }
+  })
+  
+  selectedPolygons.length = 0
+  polygonOriginalStyles.clear()
+  polygonShapesLayer?.batchDraw()
+}
 
 // Polygon drawing state
 const isDrawingPolygon = ref(false)
@@ -1352,6 +1394,7 @@ const attachPolygonHandlers = (node: Konva.Line) => {
       console.log('Polygon clicked draw:', node.id())
     } else if(polygonMode.value === 'edit') {
       console.log('Polygon clicked edit:', node.id())
+      togglePolygonSelection(node.id())
     }
   })
 }
@@ -1796,6 +1839,9 @@ const updatePolygonControlPoints = () => {
 
 // Watch for polygon mode changes to update control points and reset state
 watch(polygonMode, (newMode) => {
+  // Clear selection when switching modes
+  clearPolygonSelection()
+  
   if (newMode === 'draw') {
     // When switching to draw mode, clear any current drawing state
     isDrawingPolygon.value = false
@@ -1936,6 +1982,7 @@ onMounted(() => {
       } else if (activeTool.value === 'polygon') {
         // Polygon tool logic - handle draw and edit modes only
         if (e.target === stage || (polygonMode.value === 'edit' && e.target.getParent() !== polygonControlsLayer)) {
+          //todo - maybe allow clicking on polygon in draw mode?
           // Handle clicks on canvas or polygon shapes (but not control points)
           handlePolygonClick(pos)
         }
