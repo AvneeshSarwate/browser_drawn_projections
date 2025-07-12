@@ -104,7 +104,7 @@ watch(activeTool, (newTool) => {
   
   // Clear selections when switching tools
   clearFreehandSelection()
-  selectedPolygons.length = 0
+  clearPolygonSelection()
   
   // Redraw stage
   stage?.batchDraw()
@@ -1854,6 +1854,7 @@ watch(polygonMode, (newMode) => {
     polygonPreviewLayer?.batchDraw()
   }
   updatePolygonControlPoints()
+  clearPolygonSelection()
 })
 
 
@@ -2189,9 +2190,6 @@ onUnmounted(() => {
       </template>
       <span class="separator">|</span>
       <span class="info">{{ freehandSelectedCount }} selected</span>
-      <span v-if="isAnimating" class="animation-lock-warning">
-        ⚠️ Timeline has modified elements - press Stop to unlock
-      </span>
     </div>
     <div class="canvas-wrapper">
       <div 
@@ -2212,6 +2210,9 @@ onUnmounted(() => {
       :lockWhileAnimating="setAnimatingState"
       @timeUpdate="handleTimeUpdate"
     />
+    <div v-if="isAnimating" class="animation-lock-warning">
+      ⚠️ Timeline has modified elements - press Stop to unlock
+    </div>
   </div>
 </template>
 
