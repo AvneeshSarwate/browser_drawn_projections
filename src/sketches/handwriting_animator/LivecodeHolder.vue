@@ -1,7 +1,7 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
 import { type TemplateAppState, appStateName, resolution } from './appState';
-import { inject, onMounted, onUnmounted, ref, watch, computed } from 'vue';
+import { inject, onMounted, onUnmounted, ref, watch, computed, shallowReactive, type ShallowReactive, shallowRef } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
@@ -109,6 +109,47 @@ watch(activeTool, (newTool) => {
   // Redraw stage
   stage?.batchDraw()
 })
+
+
+// Metadata editing state
+const activeNode = shallowRef<Konva.Node | null>(null)
+const metadataText = ref('')
+const showMetadataEditor = ref(false)
+
+// Helper function to get the currently active single node for metadata editing
+const getActiveSingleNode = (): Konva.Node | null => {
+  // freehand Path (single selection only)
+  if (selected.length === 1 && selected[0] instanceof Konva.Path) {
+    return selected[0]
+  }
+  // polygon Line (already single selection)
+  if (selectedPolygons.length === 1) {
+    return selectedPolygons[0]
+  }
+  return null
+}
+
+// Function to apply metadata changes
+const applyMetadata = () => {
+  if (!activeNode.value) return
+  try {
+    const obj = JSON.parse(metadataText.value || '{}')
+    activeNode.value.setAttr('metadata', obj)
+    
+    // Add to undo history
+    if (selectedPolygons.some(node => node.id() === activeNode.value?.id())) {
+      // For polygons - need to implement polygon command history if not exists
+      console.log('Polygon metadata updated')
+    } else {
+      // For freehand shapes
+      executeFreehandCommand('Edit Metadata', () => {
+        // The actual change has already been applied above
+      })
+    }
+  } catch (e) {
+    alert('Invalid JSON format')
+  }
+}
 
 
 // ================  freehand stuff ====================
@@ -331,7 +372,7 @@ interface FreehandStrokeGroup {
 const freehandStrokes = new Map<string, FreehandStroke>()
 const freehandStrokeGroups = new Map<string, FreehandStrokeGroup>()
 // Selection state - plain array like working example (no ref to avoid proxy issues)
-const selected: Konva.Node[] = []
+const selected: ShallowReactive<Konva.Node[]> = shallowReactive([])
 
 // Separate refs for UI state for freehand
 const freehandSelectedCount = ref(0)
@@ -1149,7 +1190,7 @@ interface PolygonGroup {
 // Polygon tool state
 const polygonShapes = new Map<string, PolygonShape>()
 const polygonGroups = new Map<string, PolygonGroup>()
-const selectedPolygons: Konva.Node[] = []
+const selectedPolygons: ShallowReactive<Konva.Node[]> = shallowReactive([])
 
 // Selection state tracking for visual feedback
 const polygonOriginalStyles = new Map<string, { stroke: string, strokeWidth: number }>()
@@ -1857,6 +1898,21 @@ watch(polygonMode, (newMode) => {
   clearPolygonSelection()
 })
 
+// Watch for selection changes to update metadata editor
+watch([() => selected.length, () => selectedPolygons.length, activeNode], () => {
+  const newActiveNode = getActiveSingleNode()
+  activeNode.value = newActiveNode
+  
+  if (newActiveNode) {
+    const metadata = newActiveNode.getAttr('metadata') ?? {}
+    metadataText.value = JSON.stringify(metadata, null, 2)
+    showMetadataEditor.value = true
+  } else {
+    metadataText.value = ''
+    showMetadataEditor.value = false
+  }
+})
+
 
 
 // ====================  main ====================
@@ -2162,6 +2218,14 @@ onUnmounted(() => {
         <button @click="useRealTiming = !useRealTiming" :class="{ active: useRealTiming }">
           {{ useRealTiming ? '⏱️ Real Time' : '⏱️ Max 0.3s' }}
         </button>
+        <span class="separator">|</span>
+        <button 
+          @click="showMetadataEditor = !showMetadataEditor" 
+          :class="{ active: showMetadataEditor }"
+          :disabled="isAnimating"
+        >
+          📝 Metadata
+        </button>
       </template>
       
       <!-- Polygon Tool Toolbar -->
@@ -2186,6 +2250,14 @@ onUnmounted(() => {
         <button @click="clearCurrentPolygon" :disabled="!isDrawingPolygon || isAnimating">
           🗑️ Cancel Shape
         </button>
+        <span class="separator">|</span>
+        <button 
+          @click="showMetadataEditor = !showMetadataEditor" 
+          :class="{ active: showMetadataEditor }"
+          :disabled="isAnimating"
+        >
+          📝 Metadata
+        </button>
         <span v-if="isDrawingPolygon" class="info">Drawing: {{ currentPolygonPoints.length / 2 }} points</span>
       </template>
       <span class="separator">|</span>
@@ -2201,6 +2273,29 @@ onUnmounted(() => {
         }"
       ></div>
     </div>
+    
+    <!-- Metadata Editor -->
+    <div v-if="showMetadataEditor" class="metadata-panel">
+      <div v-if="activeNode" class="metadata-editor">
+        <h3>Shape Metadata</h3>
+        <p class="metadata-help">Edit JSON metadata for the selected shape:</p>
+        <textarea 
+          v-model="metadataText" 
+          class="metadata-textarea"
+          rows="8" 
+          placeholder="Enter JSON metadata..."
+        ></textarea>
+        <div class="metadata-buttons">
+          <button @click="applyMetadata" class="save-button">Save Metadata</button>
+          <button @click="showMetadataEditor = false" class="cancel-button">Close</button>
+        </div>
+      </div>
+      <div v-else-if="selected.length > 1 || selectedPolygons.length > 1" class="multi-select-warning">
+        <p>⚠️ Can only edit metadata for one shape at a time</p>
+        <p>Please select a single shape to edit its metadata.</p>
+      </div>
+    </div>
+    
     <Timeline 
       :strokes="freehandStrokes"
       :selectedStrokes="selectedStrokesForTimeline"
@@ -2314,5 +2409,93 @@ onUnmounted(() => {
 .konva-container {
   background-color: white;
   border: 1px solid black;
+}
+
+.metadata-panel {
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  padding: 20px;
+  margin-top: 20px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  max-width: 600px;
+  width: 100%;
+}
+
+.metadata-editor h3 {
+  margin: 0 0 10px 0;
+  color: #333;
+}
+
+.metadata-help {
+  margin: 0 0 15px 0;
+  color: #666;
+  font-size: 14px;
+}
+
+.metadata-textarea {
+  width: 100%;
+  min-height: 200px;
+  padding: 12px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-family: 'Monaco', 'Consolas', monospace;
+  font-size: 13px;
+  line-height: 1.4;
+  resize: vertical;
+  margin-bottom: 15px;
+}
+
+.metadata-textarea:focus {
+  outline: none;
+  border-color: #0066ff;
+  box-shadow: 0 0 0 2px rgba(0, 102, 255, 0.2);
+}
+
+.metadata-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.save-button {
+  background: #28a745;
+  color: white;
+  border: 1px solid #28a745;
+  border-radius: 4px;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.save-button:hover {
+  background: #218838;
+  border-color: #218838;
+}
+
+.cancel-button {
+  background: #6c757d;
+  color: white;
+  border: 1px solid #6c757d;
+  border-radius: 4px;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.cancel-button:hover {
+  background: #5a6268;
+  border-color: #5a6268;
+}
+
+.multi-select-warning {
+  text-align: center;
+  color: #e67e22;
+  padding: 20px;
+}
+
+.multi-select-warning p {
+  margin: 5px 0;
 }
 </style>
