@@ -1,6 +1,6 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
-import { type TemplateAppState, appStateName, resolution, type FreehandRenderData, type FlattenedStroke, type FlattenedStrokeGroup } from './appState';
+import { type TemplateAppState, appStateName, resolution, type FreehandRenderData, type FlattenedStroke, type FlattenedStrokeGroup, type PolygonRenderData, type FlattenedPolygon } from './appState';
 import { inject, onMounted, onUnmounted, ref, watch, computed, shallowReactive, type ShallowReactive, shallowRef } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
@@ -931,8 +931,8 @@ const ungroupSelectedStrokes = () => {
   })
 }
 
-// Delete selected items - simplified from working example
-const deleteSelected = () => {
+// Delete selected freehand strokes/groups
+const deleteFreehandSelected = () => {
   if (selected.length === 0) return
   
   executeFreehandCommand('Delete Selected', () => {
@@ -1328,6 +1328,52 @@ const updateBakedStrokeData = () => {
   appState.freehandRenderData = generateBakedStrokeData()
 }
 
+// Function to generate baked polygon data for external rendering (p5, three.js, etc.)
+const generateBakedPolygonData = (): PolygonRenderData => {
+  if (!polygonShapesLayer) return []
+
+  const bakedPolygons: FlattenedPolygon[] = []
+
+  // Helper function to transform points using world transform
+  const transformPolygonPoints = (points: number[], node: Konva.Node): { x: number, y: number }[] => {
+    const transformedPoints: { x: number, y: number }[] = []
+    const transform = node.getAbsoluteTransform()
+    
+    for (let i = 0; i < points.length; i += 2) {
+      const point = transform.point({ x: points[i], y: points[i + 1] })
+      transformedPoints.push({ x: point.x, y: point.y })
+    }
+    
+    return transformedPoints
+  }
+
+  // Process all polygon nodes in the layer
+  polygonShapesLayer.getChildren().forEach(child => {
+    if (child instanceof Konva.Line) {
+      // Get the original points from the line
+      const originalPoints = child.points()
+      
+      // Transform points to world coordinates
+      const transformedPoints = transformPolygonPoints(originalPoints, child)
+      
+      // Extract metadata from the Konva node
+      const metadata = child.getAttr('metadata')
+      
+      bakedPolygons.push({
+        points: transformedPoints,
+        ...(metadata && { metadata }) // Only include metadata if it exists
+      })
+    }
+  })
+
+  return bakedPolygons
+}
+
+// Function to update baked polygon data in app state
+const updateBakedPolygonData = () => {
+  appState.polygonRenderData = generateBakedPolygonData()
+}
+
 // Polygon drawing state
 const isDrawingPolygon = ref(false)
 const currentPolygonPoints = ref<number[]>([])
@@ -1491,6 +1537,7 @@ const finishPolygonDragTracking = (nodeName: string) => {
     }
     
     console.log(`Polygon transform command added to history. Index: ${polygonHistoryIndex.value}`)
+    updateBakedPolygonData() // Update baked data after polygon transformation
   }
   
   polygonDragStartState = null
@@ -1604,6 +1651,7 @@ const deserializePolygonState = () => {
     }
     
     polygonShapesLayer.batchDraw()
+    updateBakedPolygonData() // Update baked data after deserialization
     
     console.log('Polygon state restored from hotreload')
   } catch (error) {
@@ -1885,6 +1933,7 @@ const finishPolygon = () => {
     
     polygonShapesLayer?.batchDraw()
     polygonPreviewLayer?.batchDraw()
+    updateBakedPolygonData() // Update baked data after creating polygon
   })
 }
 
@@ -1894,6 +1943,23 @@ const clearCurrentPolygon = () => {
   currentPolygonPoints.value = []
   polygonPreviewLayer?.destroyChildren()
   polygonPreviewLayer?.batchDraw()
+}
+
+// Delete selected polygon
+const deleteSelectedPolygon = () => {
+  if (selectedPolygons.length === 0) return
+  
+  executePolygonCommand('Delete Selected Polygon', () => {
+    selectedPolygons.forEach(node => {
+      const polygonId = node.id()
+      node.destroy()
+      // Remove from polygons map
+      polygonShapes.delete(polygonId)
+    })
+    clearPolygonSelection()
+    polygonShapesLayer?.batchDraw()
+    updateBakedPolygonData() // Update baked data after polygon deletion
+  })
 }
 
 // Show/hide control points for polygon editing
@@ -2298,7 +2364,7 @@ onUnmounted(() => {
           Ungroup
         </button>
         <span class="separator">|</span>
-        <button @click="deleteSelected" :disabled="freehandSelectedCount === 0 || isAnimating">
+        <button @click="deleteFreehandSelected" :disabled="freehandSelectedCount === 0 || isAnimating">
           🗑️ Delete
         </button>
         <span class="separator">|</span>
@@ -2343,6 +2409,9 @@ onUnmounted(() => {
         <span class="separator">|</span>
         <button @click="clearCurrentPolygon" :disabled="!isDrawingPolygon || isAnimating">
           🗑️ Cancel Shape
+        </button>
+        <button @click="deleteSelectedPolygon" :disabled="selectedPolygons.length === 0 || isAnimating">
+          🗑️ Delete
         </button>
         <span class="separator">|</span>
         <button 

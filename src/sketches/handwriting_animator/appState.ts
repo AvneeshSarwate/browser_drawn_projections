@@ -22,9 +22,12 @@ export type FreehandRenderData = {
   strokes: FlattenedStrokeGroup[]
 }[]
 
-type PolygonRenderData = {
+export type FlattenedPolygon = {
   points: { x: number, y: number }[]
-}[]
+  metadata?: any
+}
+
+export type PolygonRenderData = FlattenedPolygon[]
 
 export type TemplateAppState = {
   p5Instance: p5 | undefined
