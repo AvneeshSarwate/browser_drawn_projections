@@ -1,6 +1,6 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
-import { type TemplateAppState, appStateName, resolution, type FreehandRenderData, type FlattenedStroke, type FlattenedStrokeGroup, type PolygonRenderData, type FlattenedPolygon } from './appState';
+import { type TemplateAppState, appStateName, resolution, type FreehandRenderData, type FlattenedStroke, type FlattenedStrokeGroup, type PolygonRenderData, type FlattenedPolygon, drawFlattenedStrokeGroup } from './appState';
 import { inject, onMounted, onUnmounted, ref, watch, computed, shallowReactive, type ShallowReactive, shallowRef } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
@@ -872,6 +872,15 @@ const groupSelectedStrokes = () => {
     const superGroup = new Konva.Group({ draggable: true })
     commonParent?.add(superGroup)
 
+    // Add drag tracking handlers to the group
+    superGroup.on('dragstart', () => {
+      startFreehandDragTracking()
+    })
+    
+    superGroup.on('dragend', () => {
+      finishFreehandDragTracking('Group')
+    })
+
     if (selTr) selTr.nodes([])
     if (grpTr) grpTr.nodes([])
 
@@ -1245,12 +1254,25 @@ const generateBakedStrokeData = (): FreehandRenderData => {
   if (!freehandShapeLayer) return []
   
   // Helper function to transform points using world transform
+  // Replicates the full normalization flow: raw coords → normalized → transformed
   const transformPoints = (points: number[], node: Konva.Node): { x: number, y: number }[] => {
-    const transformedPoints: { x: number, y: number }[] = []
-    const transform = node.getAbsoluteTransform()
+    // Step 1: Get bounds from raw world coordinates (same as stroke creation)
+    const bounds = getPointsBounds(points)
     
+    // Step 2: Create normalized points (same as createStrokeShape)
+    const normalizedPoints: number[] = []
     for (let i = 0; i < points.length; i += 2) {
-      const point = transform.point({ x: points[i], y: points[i + 1] })
+      normalizedPoints.push(points[i] - bounds.minX)
+      normalizedPoints.push(points[i + 1] - bounds.minY)
+    }
+    
+    // Step 3: Apply full absolute transform to normalized coordinates
+    // (This is what Konva does internally when rendering)
+    const transform = node.getAbsoluteTransform()
+    const transformedPoints: { x: number, y: number }[] = []
+    
+    for (let i = 0; i < normalizedPoints.length; i += 2) {
+      const point = transform.point({ x: normalizedPoints[i], y: normalizedPoints[i + 1] })
       transformedPoints.push({ x: point.x, y: point.y })
     }
     
@@ -1320,7 +1342,7 @@ const generateBakedStrokeData = (): FreehandRenderData => {
   })
 
   // Return as FreehandRenderData format
-  return [{ strokes: strokeGroups }]
+  return strokeGroups
 }
 
 // Function to update baked data in app state
@@ -2287,8 +2309,38 @@ onMounted(() => {
       p5Mouse = targetToP5Coords(ev, p5i, threeCanvas)
     }, threeCanvas)
 
+    const rand = (n: number) => sinN(n*123.23)
+
+    const randColor = (seed: number) => {
+      return {
+        r: rand(seed) * 255,
+        g: rand(seed + 1) * 255,
+        b: rand(seed + 2) * 255,
+        a: 1
+      }
+    }
+
     appState.drawFunctions.push((p: p5) => {
       // console.log("drawing circles", appState.circles.list.length)
+
+      if (appState.polygonRenderData.length > 0) {
+        p.push()
+        appState.polygonRenderData.forEach((polygon, idx) => {
+          const color = randColor(idx)
+          p.fill(color.r, color.g, color.b, color.a)
+          p.noStroke()
+          p.beginShape()
+          polygon.points.forEach(point => {
+            p.vertex(point.x, point.y)
+          })
+          p.endShape()
+        })
+        p.pop()
+      }
+
+      if(appState.freehandRenderData.length > 0) {
+        drawFlattenedStrokeGroup(p, appState.freehandRenderData)
+      }
     })
 
     const passthru = new Passthru({ src: p5Canvas })

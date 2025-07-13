@@ -18,9 +18,7 @@ export type FlattenedStrokeGroup = {
   metadata?: any
 }
 
-export type FreehandRenderData = {
-  strokes: FlattenedStrokeGroup[]
-}[]
+export type FreehandRenderData = FlattenedStrokeGroup[]
 
 export type FlattenedPolygon = {
   points: { x: number, y: number }[]
@@ -86,3 +84,30 @@ export const globalStore = defineStore(appStateName, () => {
 if (import.meta.hot) {
   import.meta.hot.accept(acceptHMRUpdate(globalStore, import.meta.hot))
 } 
+
+
+export const drawFlattenedStrokeGroup = (p: p5, data: FreehandRenderData) => {
+  p.push()
+  //no stroke fill white
+  p.noStroke()
+  p.fill(255)
+  data.forEach((g, i) => {
+    recursiveDrawStrokeGroups(p, g)
+  })
+  p.pop()
+}
+
+export const recursiveDrawStrokeGroups = (p: p5, item: FlattenedStrokeGroup | FlattenedStroke) => {
+  if('points' in item && item.points.length > 0) {
+    p.beginShape()
+    item.points.forEach((point) => {
+      p.vertex(point.x, point.y)
+    })
+    p.endShape(p.CLOSE)
+  }
+  if('children' in item && item.children.length > 0) {
+    item.children.forEach((child) => {
+      recursiveDrawStrokeGroups(p, child)
+    })
+  }
+}
