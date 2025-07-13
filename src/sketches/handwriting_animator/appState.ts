@@ -8,15 +8,17 @@ import { defineStore, acceptHMRUpdate } from 'pinia'
 import { ref } from 'vue'
 
 
-type FlattenedStroke = {
+export type FlattenedStroke = {
   points: { x: number, y: number, ts: number }[]
+  metadata?: any
 }
 
-type FlattenedStrokeGroup = {
+export type FlattenedStrokeGroup = {
   children: (FlattenedStroke | FlattenedStrokeGroup)[]
+  metadata?: any
 }
 
-type FreehandRenderData = {
+export type FreehandRenderData = {
   strokes: FlattenedStrokeGroup[]
 }[]
 

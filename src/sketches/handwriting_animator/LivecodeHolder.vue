@@ -1,6 +1,6 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
-import { type TemplateAppState, appStateName, resolution } from './appState';
+import { type TemplateAppState, appStateName, resolution, type FreehandRenderData, type FlattenedStroke, type FlattenedStrokeGroup } from './appState';
 import { inject, onMounted, onUnmounted, ref, watch, computed, shallowReactive, type ShallowReactive, shallowRef } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
@@ -558,6 +558,7 @@ const finishFreehandDragTracking = (nodeName: string) => {
     }
     
     console.log(`Transform command added to history. Index: ${freehandHistoryIndex.value}`)
+    updateBakedStrokeData() // Update baked data after transformation
   }
   
   freehandDragStartState = null
@@ -708,6 +709,7 @@ const deserializeFreehandState = () => {
     // Force a redraw to make sure everything is visible
     setTimeout(() => {
       freehandShapeLayer.batchDraw()
+      updateBakedStrokeData() // Update baked data after deserialization
     }, 30)
   } catch (error) {
     console.warn('Failed to deserialize Konva state:', error)
@@ -891,6 +893,7 @@ const groupSelectedStrokes = () => {
     freehandRefreshUI()
     updateFreehandDraggableStates() // Update draggable states after grouping
     freehandShapeLayer?.batchDraw()
+    updateBakedStrokeData() // Update baked data after grouping
   })
 }
 
@@ -924,6 +927,7 @@ const ungroupSelectedStrokes = () => {
     clearFreehandSelection()
     updateFreehandDraggableStates() // Update draggable states after ungrouping
     freehandShapeLayer?.batchDraw()
+    updateBakedStrokeData() // Update baked data after ungrouping
   })
 }
 
@@ -944,6 +948,7 @@ const deleteSelected = () => {
     clearFreehandSelection()
     updateTimelineState() // Update timeline state after deletion
     freehandShapeLayer?.batchDraw()
+    updateBakedStrokeData() // Update baked data after deletion
   })
 }
 
@@ -1233,6 +1238,94 @@ const clearPolygonSelection = () => {
   selectedPolygons.length = 0
   polygonOriginalStyles.clear()
   polygonShapesLayer?.batchDraw()
+}
+
+// Function to generate baked stroke data for external rendering (p5, three.js, etc.)
+const generateBakedStrokeData = (): FreehandRenderData => {
+  if (!freehandShapeLayer) return []
+  
+  // Helper function to transform points using world transform
+  const transformPoints = (points: number[], node: Konva.Node): { x: number, y: number }[] => {
+    const transformedPoints: { x: number, y: number }[] = []
+    const transform = node.getAbsoluteTransform()
+    
+    for (let i = 0; i < points.length; i += 2) {
+      const point = transform.point({ x: points[i], y: points[i + 1] })
+      transformedPoints.push({ x: point.x, y: point.y })
+    }
+    
+    return transformedPoints
+  }
+
+  // Helper function to process a Konva node recursively
+  const processNode = (node: Konva.Node): FlattenedStroke | FlattenedStrokeGroup | null => {
+    if (node instanceof Konva.Path) {
+      // Find the corresponding stroke data
+      const stroke = Array.from(freehandStrokes.values()).find(s => s.shape === node)
+      if (!stroke) return null
+
+      const transformedPoints = transformPoints(stroke.points, node)
+      const flattenedPoints = transformedPoints.map((point, index) => ({
+        x: point.x,
+        y: point.y,
+        ts: stroke.timestamps[Math.floor(index / 2)] || 0 // Match timestamp to point pair
+      }))
+
+      // Extract metadata from the Konva node
+      const metadata = node.getAttr('metadata')
+
+      return {
+        points: flattenedPoints,
+        ...(metadata && { metadata }) // Only include metadata if it exists
+      } as FlattenedStroke
+    } else if (node instanceof Konva.Group) {
+      // Process group children recursively
+      const children: (FlattenedStroke | FlattenedStrokeGroup)[] = []
+      
+      node.getChildren().forEach(child => {
+        const processed = processNode(child)
+        if (processed) {
+          children.push(processed)
+        }
+      })
+
+      if (children.length === 0) return null
+
+      // Extract metadata from the group node
+      const metadata = node.getAttr('metadata')
+
+      return {
+        children,
+        ...(metadata && { metadata }) // Only include metadata if it exists
+      } as FlattenedStrokeGroup
+    }
+    
+    return null
+  }
+
+  // Collect all processed strokes/groups
+  const strokeGroups: FlattenedStrokeGroup[] = []
+  
+  freehandShapeLayer.getChildren().forEach(child => {
+    const processed = processNode(child)
+    if (processed) {
+      if ('points' in processed) {
+        // Single stroke - wrap in a group
+        strokeGroups.push({ children: [processed] })
+      } else {
+        // Already a group
+        strokeGroups.push(processed)
+      }
+    }
+  })
+
+  // Return as FreehandRenderData format
+  return [{ strokes: strokeGroups }]
+}
+
+// Function to update baked data in app state
+const updateBakedStrokeData = () => {
+  appState.freehandRenderData = generateBakedStrokeData()
 }
 
 // Polygon drawing state
@@ -2113,6 +2206,7 @@ onMounted(() => {
           updateFreehandDraggableStates() // Update draggable state for new stroke
           updateTimelineState() // Update timeline state when new stroke is added
           freehandShapeLayer?.batchDraw()
+          updateBakedStrokeData() // Update baked data after new stroke
         })
         }
         
