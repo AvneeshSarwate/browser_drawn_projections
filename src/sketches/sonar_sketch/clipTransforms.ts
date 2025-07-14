@@ -181,9 +181,16 @@ export function retrogradeClip(clip: AbletonClip): AbletonClip {
     return clip.clone();
   }
 
-  const newNotes: AbletonNote[] = clip.notes.map(note => ({
+  const timeToNextEvt: number[] = clip.notes.map((note, i) => {
+    if(i === clip.notes.length - 1) {
+      return clip.duration - note.position
+    }
+    return clip.notes[i+1].position - clip.notes[i].position
+  })
+
+  const newNotes: AbletonNote[] = clip.notes.map((note, i) => ({
     ...note,
-    position: clip.duration - (note.position + note.duration),
+    position: clip.duration - (note.position + timeToNextEvt[i]),
   }));
 
   // Ensure notes are sorted by their new positions
@@ -465,6 +472,10 @@ export function harmonizeClip(
     return clip.clone();
   }
 
+  if(!scale) {
+    scale = new Scale()
+  }
+
   // Start with the original clip
   const harmonizedNotes: AbletonNote[] = [...clip.notes.map(n => ({ ...n }))];
 
@@ -532,6 +543,18 @@ export function stacatto(clip: AbletonClip, duration: number): AbletonClip {
   })
   return newClip
 }
+
+export function scaleSwap(clip: AbletonClip, scale1: Scale, scale2: Scale): AbletonClip {
+  if(!scale1 || !scale2) {
+    return clip.clone()
+  }
+  const newClip = clip.clone()
+  newClip.notes.forEach(note => {
+    note.pitch = scale2.getByIndex(scale1.getIndFromPitch(note.pitch))
+  })
+  return newClip
+}
+
 
 export function nnotes(clip: AbletonClip, n: number, start: number = 0): AbletonClip {
   const nSortedNotes = clip.notes.map(n => ({ ...n })).sort((a, b) => a.position - b.position).slice(start, start + n)
@@ -677,6 +700,13 @@ export const TRANSFORM_REGISTRY: Record<string, ClipTransform> = {
     ]
   },
 
+  scSwap: {
+    name: 'scSwap',
+    transform: (clip, scale1, scale2) => scaleSwap(clip, scale1, scale2),
+    argParser: (args: string[]) => [args[0] || 'C', args[1] || 'C'],
+    sliderScale: [n => Math.floor(n*16 - 8), n => Math.floor(n*16 - 8)]
+  },
+
   arp: {
     name: 'arp',
     transform: (clip, pattern = 'up', subdivision = 0.25, gate = 0.9, distance = 0, steps = 1) => 
@@ -699,13 +729,14 @@ export const TRANSFORM_REGISTRY: Record<string, ClipTransform> = {
 
   harm: {
     name: 'harm',
-    transform: (clip, degree1, degree2, degree3, degree4, scale: Scale = new Scale()) => 
-      harmonizeClip(clip, degree1, degree2, degree3, degree4, scale),
+    transform: (clip, scale, degree1, degree2, degree3, degree4) => 
+      harmonizeClip(clip, degree1, degree2, degree3, degree4, scaleMap[scale]),
     argParser: (args: string[]) => [
-      args[0] ? numParse(args[0]) : undefined,
+      args[0] || 'C',
       args[1] ? numParse(args[1]) : undefined,
       args[2] ? numParse(args[2]) : undefined,
       args[3] ? numParse(args[3]) : undefined,
+      args[4] ? numParse(args[4]) : undefined,
     ],
     sliderScale: [
       n => Math.floor(n*24 - 12), // -12 to 12 scale degrees
