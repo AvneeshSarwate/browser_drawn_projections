@@ -702,7 +702,7 @@ export const TRANSFORM_REGISTRY: Record<string, ClipTransform> = {
 
   scSwap: {
     name: 'scSwap',
-    transform: (clip, scale1, scale2) => scaleSwap(clip, scale1, scale2),
+    transform: (clip, scale1, scale2) => scaleSwap(clip, scaleMap[scale1], scaleMap[scale2]),
     argParser: (args: string[]) => [args[0] || 'C', args[1] || 'C'],
     sliderScale: [n => Math.floor(n*16 - 8), n => Math.floor(n*16 - 8)]
   },
