@@ -35,6 +35,10 @@ export type ToggleBanks = {
   topLevel: boolean[][]; // 8 banks of 8 toggles each
 }
 
+export type OneShotBanks = {
+  topLevel: boolean[][]; // 8 banks of 8 one-shots each
+}
+
 export type SonarAppState = {
   p5Instance: p5 | undefined
   threeRenderer: THREE.WebGLRenderer | undefined
@@ -50,15 +54,19 @@ export type SonarAppState = {
   voices: VoiceState[]
   sliders: number[]
   toggles: boolean[]
+  oneShots: boolean[]
   sliderBanks: SliderBanks
   toggleBanks: ToggleBanks
+  oneShotBanks: OneShotBanks
   currentTopLevelBank: number
   snapshots: Array<{
     sliders: number[]
     toggles: boolean[]
+    oneShots: boolean[]
     voices: SaveableProperties[]
     sliderBanks: SliderBanks
     toggleBanks: ToggleBanks
+    oneShotBanks: OneShotBanks
   }>
   autoSaveInterval?: number
 }
@@ -97,15 +105,26 @@ export const appState: SonarAppState = {
   })),
   sliders: Array.from({ length: 8 }, (): number => 0),
   toggles: Array.from({ length: 8 }, (): boolean => false),
+  oneShots: Array.from({ length: 8 }, (): boolean => false),
   sliderBanks: {
     topLevel: Array.from({ length: 8 }, () => Array.from({ length: 8 }, () => 0)),
   },
   toggleBanks: {
     topLevel: Array.from({ length: 8 }, () => Array.from({ length: 8 }, () => false)),
   },
+  oneShotBanks: {
+    topLevel: Array.from({ length: 8 }, () => Array.from({ length: 8 }, () => false)),
+  },
   currentTopLevelBank: 0,
   snapshots: [],
 } 
+
+export const oneshotCall = (idx: number, oneShots: boolean[]): boolean => {
+  if (idx < 0 || idx >= oneShots.length) return false
+  const result = oneShots[idx]
+  oneShots[idx] = false
+  return result
+}
 
 export const appStateName = 'sonarAppState'
 

@@ -3,7 +3,7 @@
 import { AbletonClip, clipMap } from '@/io/abletonClips'
 import { TRANSFORM_REGISTRY } from '../clipTransforms'
 import { evaluate } from '../sliderExprParser'
-import type { SonarAppState, VoiceState } from '../appState'
+import { oneshotCall, type SonarAppState, type VoiceState } from '../appState'
 
 /** Split a full transform chain line into the source clip name and an array of command strings */
 export const splitTransformChainToCommandStrings = (line: string) => {
@@ -302,7 +302,7 @@ export const createExecutableFunction = (visualizeCode: string, mappings: UUIDMa
     const runtimeCode = transformToRuntime(visualizeCode, voiceIndex)
     
     // Create async function with proper context  
-    const executableFunc = new Function('ctx', 'runLine', 'flags', `
+    const executableFunc = new Function('ctx', 'runLine', 'flags', 'oneShot', `
       async function execute() {
         ${runtimeCode}
       }
@@ -397,10 +397,12 @@ export const analyzeExecutableLines = (jsCode: string, voiceIndex: number, appSt
     }
     
     // Create and execute the visualize-time function
-    const visualizeFunc = new Function('line', 'flags', visualizeCode)
+    const visualizeFunc = new Function('line', 'flags', 'oneShot', visualizeCode)
     
     // Execute with the line function to see which UUIDs would be called
-    visualizeFunc(line, appState.toggles)
+    const oneshotValsSnapshot = appState.oneShots.map(o => o ? true : false)
+    const oneShot = (idx: number) => oneshotCall(idx, oneshotValsSnapshot)
+    visualizeFunc(line, appState.toggles, oneShot)
     console.log("executedUUIDs", voiceIndex, executedUUIDs)
     return { executedUUIDs, mappings, visualizeCode } // Return UUIDs of lines that will execute
     

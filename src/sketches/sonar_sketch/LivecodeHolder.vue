@@ -1,7 +1,7 @@
 <!-- eslint-disable no-debugger -->
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
-import { type SonarAppState, appStateName, type VoiceState, globalStore, type SaveableProperties } from './appState';
+import { type SonarAppState, appStateName, type VoiceState, globalStore, type SaveableProperties, oneshotCall } from './appState';
 import { inject, onMounted, onUnmounted, reactive, ref, computed, watch, nextTick } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
@@ -19,7 +19,7 @@ import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
 import TsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
 import { buildClipFromLine, splitTextToGroups, generateUUID, findLineCallMatches, preprocessJavaScript, transformToRuntime, createExecutableFunction, resolveSliderExpressionsInJavaScript, type UUIDMapping, computeDisplayTextForVoice, parseRampLine, analyzeExecutableLines } from './utils/transformHelpers'
 import { monacoEditors, codeMirrorEditors, setCodeMirrorContent, highlightCurrentLine, highlightScheduledLines, initializeMonacoEditorComplete, initializeCodeMirrorEditorComplete, highlightCurrentLineByUUID, applyScheduledHighlightByUUID, handleDslLineClick, setPianoRollFromDslLine, clickedDslRanges, highlightClickedDsl, updateDslOutlines, clearPianoRoll, clickedDslOriginalText, clearAllDslHighlights, extractDslFromLine, clickedDslSegmentCounts } from './utils/editorManager'
-import { saveSnapshot as saveSnapshotSM, loadSnapshotStateOnly as loadSnapshotStateOnlySM, downloadSnapshotsFile, loadSnapshotsFromFile as loadSnapshotsFromFileSM, saveToLocalStorage as saveToLocalStorageSM, loadFromLocalStorage as loadFromLocalStorageSM, saveBank, loadBank, makeBankClickHandler, saveTopLevelSliderBank as saveTopLevelSliderBankSM, loadTopLevelSliderBank as loadTopLevelSliderBankSM, saveFxSliderBank as saveFxSliderBankSM, loadFxSliderBank as loadFxSliderBankSM, saveTopLevelToggleBank as saveTopLevelToggleBankSM, loadTopLevelToggleBank as loadTopLevelToggleBankSM } from './utils/snapshotManager'
+import { saveSnapshot as saveSnapshotSM, loadSnapshotStateOnly as loadSnapshotStateOnlySM, downloadSnapshotsFile, loadSnapshotsFromFile as loadSnapshotsFromFileSM, saveToLocalStorage as saveToLocalStorageSM, loadFromLocalStorage as loadFromLocalStorageSM, saveBank, loadBank, makeBankClickHandler, saveTopLevelSliderBank as saveTopLevelSliderBankSM, loadTopLevelSliderBank as loadTopLevelSliderBankSM, saveFxSliderBank as saveFxSliderBankSM, loadFxSliderBank as loadFxSliderBankSM, saveTopLevelToggleBank as saveTopLevelToggleBankSM, loadTopLevelToggleBank as loadTopLevelToggleBankSM, saveTopLevelOneShotBank as saveTopLevelOneShotBankSM, loadTopLevelOneShotBank as loadTopLevelOneShotBankSM } from './utils/snapshotManager'
 
 // Monaco environment setup
 self.MonacoEnvironment = {
@@ -67,7 +67,11 @@ const loadTopLevelSliderBank = (idx:number)=> loadTopLevelSliderBankSM(appState,
 
 // Toggle bank management wrappers
 const saveTopLevelToggleBank = (idx:number)=> saveTopLevelToggleBankSM(appState, idx)
-const loadTopLevelToggleBank = (idx:number)=> loadTopLevelToggleBankSM(appState, idx)
+const loadTopLevelToggleBank = (idx: number) => loadTopLevelToggleBankSM(appState, idx)
+
+// One-shot bank management wrappers
+const saveTopLevelOneShotBank = (idx:number)=> saveTopLevelOneShotBankSM(appState, idx)
+const loadTopLevelOneShotBank = (idx:number)=> loadTopLevelOneShotBankSM(appState, idx)
 
 const saveFxSliderBank = (voiceIdx:number, bankIdx:number)=> saveFxSliderBankSM(appState, voiceIdx, bankIdx)
 const loadFxSliderBank = (voiceIdx:number, bankIdx:number)=> loadFxSliderBankSM(appState, voiceIdx, bankIdx, updateFxParams)
@@ -84,10 +88,12 @@ const handleTopLevelBankClick = makeBankClickHandler(
   (idx) => {
     saveTopLevelSliderBank(idx)
     saveTopLevelToggleBank(idx)
+    saveTopLevelOneShotBank(idx)
   },
   (idx) => {
     loadTopLevelSliderBank(idx)
     loadTopLevelToggleBank(idx)
+    loadTopLevelOneShotBank(idx)
   },
   (idx) => appState.currentTopLevelBank = idx,
 )
@@ -275,15 +281,19 @@ const runLine = async (lineText: string, ctx: TimeContext, uuid: string, voiceIn
     if (!groups.length) return
     
     const group = groups[0] // runLine handles one group at a time
-    const { clip: curClip, updatedClipLine } = buildClipFromLine(group.clipLine, appState.sliders)
-    if (!curClip) return
+    const { clip, updatedClipLine } = buildClipFromLine(group.clipLine, appState.sliders)
+    if (!clip) return
     
     // Execute the clip similar to existing playClips logic
-    const notes = curClip.noteBuffer()
+    const notes = clip.noteBuffer()
     const ramps = group.rampLines.map(parseRampLine).map(r => 
-      launchParamRamp(r.paramName, r.startVal, r.endVal, curClip.duration, voiceIndex, ctx)
+      launchParamRamp(r.paramName, r.startVal, r.endVal, clip.duration, voiceIndex, ctx)
     )
-    
+
+    if (notes.length === 0 && clip.duration > 0) {
+      await ctx.wait(clip.duration)
+    }
+
     // Play the notes
     for (const nextNote of notes) {
       await ctx.wait(nextNote.preDelta)
@@ -351,7 +361,8 @@ const startVoice = (voiceIdx: number) => {
       
       try {
         // Execute the JavaScript code with proper context
-        await voiceExecutableFuncs.get(voiceIdx.toString())(ctx, runLine, appState.toggles) 
+        const oneShot = (idx: number) => oneshotCall(idx, appState.oneShots)
+        await voiceExecutableFuncs.get(voiceIdx.toString())(ctx, runLine, appState.toggles, oneShot) 
       } catch (error) {
         console.error('Error executing JavaScript code:', error)
       }
@@ -815,6 +826,13 @@ appState.voices.forEach((voice, vIdx) => {
     () => updateVoiceOnToggleChange(vIdx),
     { deep: true }
   )
+
+  // …and to any change in the global one-shot array
+  watch(
+    () => appState.oneShots,
+    () => updateVoiceOnToggleChange(vIdx),
+    { deep: true }
+  )
 })
 
 // Update FX parameters for all voices
@@ -872,6 +890,14 @@ appState.voices.forEach((_, idx) => updateFxParams(idx))
       <div>{{ appState.toggles[idx] ? 'ON' : 'OFF' }}</div>
       <input type="checkbox" v-model="appState.toggles[idx]" />
       <label>toggle {{ idx + 1 }}</label>
+    </div>
+  </div>
+
+  <div class="toggles-row" id="one-shots-row">
+    <div class="toggle-column" v-for="(oneShot, idx) in appState.oneShots" :key="idx">
+      <div>{{ appState.oneShots[idx] ? 'ON' : 'OFF' }}</div>
+      <input type="checkbox" v-model="appState.oneShots[idx]" />
+      <label>one-shot {{ idx + 1 }}</label>
     </div>
   </div>
   

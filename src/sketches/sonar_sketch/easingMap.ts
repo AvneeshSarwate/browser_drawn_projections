@@ -1,4 +1,5 @@
 // coppied from https://github.com/bameyrick/js-easing-functions/tree/master
+// https://easings.net/
 
 export function easeInQuad(elapsed: number, initialValue: number, amountOfChange: number, duration: number): number {
 	return amountOfChange * (elapsed /= duration) * elapsed + initialValue;

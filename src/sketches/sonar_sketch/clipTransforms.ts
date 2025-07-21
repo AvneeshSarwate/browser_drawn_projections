@@ -619,6 +619,9 @@ const numParse = (n: string) => {
   return num
 }
 
+const silenceClip = (clip: AbletonClip, duration: number) => {
+  return new AbletonClip(clip.name + "_silence", duration, [])
+}
 
 const scaleMap = {
   'C': new Scale(),
@@ -745,6 +748,13 @@ export const TRANSFORM_REGISTRY: Record<string, ClipTransform> = {
       n => 1 + n * 3, // 1-4
       n => 1 + n * 3, // 1-4
     ]
+  },
+
+  silence: {
+    name: 'silence',
+    transform: (clip, duration) => silenceClip(clip, duration),
+    argParser: (args: string[]) => [numParse(args[0])],
+    sliderScale: [n => n]
   },
 
   scSwap: {

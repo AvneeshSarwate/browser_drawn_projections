@@ -76,11 +76,13 @@ export function loadFromLocalStorage(app: SonarAppState) {
       const state = JSON.parse(stateStr)
       if (Array.isArray(state.sliders)) app.sliders = [...state.sliders]
       if (Array.isArray(state.toggles)) app.toggles = [...state.toggles]
+      if (Array.isArray(state.oneShots)) app.oneShots = [...state.oneShots]
       if (Array.isArray(state.voices)) state.voices.forEach((sv:SaveableProperties,i:number)=>{
         if (i<app.voices.length) app.voices[i].saveable = sv
       })
       if (state.sliderBanks?.topLevel) app.sliderBanks.topLevel = state.sliderBanks.topLevel.map((b:number[])=>[...b])
-      if (state.toggleBanks?.topLevel) app.toggleBanks.topLevel = state.toggleBanks.topLevel.map((b:boolean[])=>[...b])
+      if (state.toggleBanks?.topLevel) app.toggleBanks.topLevel = state.toggleBanks.topLevel.map((b: boolean[]) => [...b])
+      if (state.oneShotBanks?.topLevel) app.oneShotBanks.topLevel = state.oneShotBanks.topLevel.map((b: boolean[]) => [...b])
       if (typeof state.currentTopLevelBank==='number') app.currentTopLevelBank = state.currentTopLevelBank
     }
   } catch (e) { console.error('localStorage load error', e) }
@@ -98,12 +100,16 @@ export function loadSnapshotStateOnly(app: SonarAppState, index:number, updateFx
   const snap = app.snapshots[index]
   app.sliders = [...snap.sliders]
   if (snap.toggles) app.toggles = [...snap.toggles]
+  if (snap.oneShots) app.oneShots = [...snap.oneShots]
   app.voices.forEach((v,i)=>{ v.saveable = deepClone(snap.voices[i]) })
   if (snap.sliderBanks) {
     app.sliderBanks = { topLevel: snap.sliderBanks.topLevel.map((b:number[])=>[...b]) }
   }
   if (snap.toggleBanks) {
     app.toggleBanks = { topLevel: snap.toggleBanks.topLevel.map((b:boolean[])=>[...b]) }
+  }
+  if (snap.oneShotBanks) {
+    app.oneShotBanks = { topLevel: snap.oneShotBanks.topLevel.map((b:boolean[])=>[...b]) }
   }
   app.voices.forEach((_,i)=>updateFxParams(i))
 }
@@ -112,9 +118,11 @@ function buildCurrentLiveState(app: SonarAppState) {
   return {
     sliders: [...app.sliders],
     toggles: [...app.toggles],
+    oneShots: [...app.oneShots],
     voices : app.voices.map(v=> deepClone(v.saveable) as SaveableProperties),
     sliderBanks: { topLevel: app.sliderBanks.topLevel.map(b => [...b]) },
     toggleBanks: { topLevel: app.toggleBanks.topLevel.map(b => [...b]) },
+    oneShotBanks: { topLevel: app.oneShotBanks.topLevel.map(b => [...b]) },
     currentTopLevelBank: app.currentTopLevelBank
   }
 }
@@ -191,6 +199,22 @@ export function loadTopLevelToggleBank(app: SonarAppState, bankIndex:number) {
   if (!bank) return
   bank.forEach((t, i) => {
     if (i < app.toggles.length) app.toggles[i] = t
+  })
+  app.currentTopLevelBank = bankIndex
+}
+
+// ---------------------------------------------------------------------------
+//  One-shot-bank save / load helpers (top-level)  -----------------------------
+// ---------------------------------------------------------------------------
+export function saveTopLevelOneShotBank(app: SonarAppState, bankIndex:number) {
+  saveBank(app.oneShotBanks.topLevel, bankIndex, [...app.oneShots])
+}
+
+export function loadTopLevelOneShotBank(app: SonarAppState, bankIndex:number) {
+  const bank = loadBank(app.oneShotBanks.topLevel, bankIndex)
+  if (!bank) return
+  bank.forEach((o, i) => {
+    if (i < app.oneShots.length) app.oneShots[i] = o
   })
   app.currentTopLevelBank = bankIndex
 }
