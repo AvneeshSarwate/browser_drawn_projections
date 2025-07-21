@@ -1,5 +1,6 @@
 import { AbletonClip, type AbletonNote } from '@/io/abletonClips';
 import { Scale } from '@/music/scale';
+import { easingMap } from './easingMap';
 
 export type MarkerSegmentResult = {
   marker: AbletonNote;
@@ -299,6 +300,15 @@ export function scaleTranspose(clip: AbletonClip, transpose: number, scale?: Sca
   return clip.scaleTranspose(transpose, scale);
 }
 
+export function scaleTransposeOneNote(clip: AbletonClip, transpose: number, noteInd: number, scale?: Scale): AbletonClip {
+  if(!scale) {
+    scale = new Scale();
+  }
+  const newClip = clip.clone();
+  newClip.notes[noteInd].pitch = scale.getByIndex(scale.getIndFromPitch(newClip.notes[noteInd].pitch) + transpose);
+  return newClip;
+}
+
 //note - input clips need to have exactly blocked chords. no slight start time deviation allowed
 //"chords" are grouped by start time, and last as long as the longest note in the group
 const arpeggioPatterns = ['up', 'down', 'updown', 'downup', 'converge', 'diverge', 'random', 'chord'];
@@ -569,6 +579,25 @@ export function nnotes(clip: AbletonClip, n: number, start: number = 0): Ableton
   return new AbletonClip(clip.name + "_nnotes", newDuration, nSortedNotes)
 }
 
+
+const mix = (a: number, b: number, amount: number) => {
+  return a * (1 - amount) + b * amount
+}
+
+export function ease(clip: AbletonClip, easeType: string, amount: number = 1): AbletonClip {
+  const newClip = clip.clone()
+  const duration = newClip.duration
+  newClip.notes.forEach(note => {
+    const posNorm = note.position / duration
+    const endNorm = (note.position + note.duration)/duration
+    note.position = mix(posNorm, easingMap[easeType](posNorm), amount) * duration
+    const endTime = mix(endNorm, easingMap[easeType](endNorm), amount) * duration
+    note.duration = endTime - note.position
+  })
+  return newClip
+}
+
+
 // ─────────────────────────────────────────────
 // Symbol  →  Transformation-function registry
 // ─────────────────────────────────────────────
@@ -618,6 +647,20 @@ export const TRANSFORM_REGISTRY: Record<string, ClipTransform> = {
     argParser: (args: string[]) => [numParse(args[0]), args[1] || 'C'],
     sliderScale: [n => Math.floor(n*16 - 8)]
   },
+  
+  s_tr_i: {
+    name: 's_tr_i',
+    transform: (clip, degree, scaleKey = 'C', noteInd) => scaleTransposeOneNote(clip, degree, noteInd, scaleMap[scaleKey]),
+    argParser: (args: string[]) => [numParse(args[0]),  numParse(args[2]), args[1] || 'C'],
+    sliderScale: [n => Math.floor(n*16 - 8), (n, c) => Math.floor(n * (c.notes.length - 1))]
+  },
+
+  ease: {
+    name: 'ease',
+    transform: (clip, easeType, amount) => ease(clip, easeType, amount),
+    argParser: (args: string[]) => [args[0], numParse(args[1])],
+    sliderScale: [n => n, n => n]
+  },
 
   tr: {
     name: 'tr',
@@ -660,24 +703,28 @@ export const TRANSFORM_REGISTRY: Record<string, ClipTransform> = {
     argParser: (args: string[]) => [numParse(args[0])],
     sliderScale: [n => n] //no scaling
   },
+
   sl: {
     name: 'sl',
     transform: (clip, start, end) => timeSlice(clip, start, end),
     argParser: (args: string[]) => [numParse(args[0]), numParse(args[1])],
     sliderScale: [(n, c) => n * c.duration, (n, c) => n * c.duration] 
   },
+
   dsl: {
     name: 'dsl',
     transform: (clip, start, duration) => durSlice(clip, start, duration),
     argParser: (args: string[]) => [numParse(args[0]), numParse(args[1])],
     sliderScale: [(n, c) => n * c.duration, (n, c) => n * c.duration]
   },
+
   rev: {
     name: 'rev',
     transform: (clip) => retrogradeClip(clip),
     argParser: (args: string[]) => [],
     sliderScale: [n => n] //no scaling
   },
+  
   inv: {
     name: 'inv',
     transform: (clip, axis) => invertClip(clip, new Scale(), axis),
