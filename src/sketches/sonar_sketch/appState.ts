@@ -23,8 +23,6 @@ export type VoiceState = {
   playingLockedSourceText: string;
   loopHandle: LoopHandle | null;
   queue: Array<(ctx: TimeContext) => Promise<void>>;
-  playingText: string;
-  playingLineIdx: number;
   currentFxBank: number; // current active FX bank for this voice
 };
 
@@ -99,10 +97,6 @@ export const appState: SonarAppState = {
     playingLockedSourceText: '',
     loopHandle: null,
     queue: [],
-    /** copy of the slice text with resolved slider values */
-    playingText: '',
-    /** line index that is currently sounding ( –1  means "none")  */
-    playingLineIdx: -1,
     currentFxBank: 0,
   })),
   sliders: Array.from({ length: 8 }, (): number => 0),

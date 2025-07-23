@@ -9,7 +9,7 @@ import { StateField, StateEffect } from '@codemirror/state'
 import { javascript } from '@codemirror/lang-javascript'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { ViewPlugin, type ViewUpdate } from '@codemirror/view'
-import { buildClipFromLine, findLineCallMatches, splitTextToGroups, type UUIDMapping, resolveSliderExpressionsInJavaScript } from './transformHelpers'
+import { buildClipFromLine, findLineCallMatches, type UUIDMapping } from './transformHelpers'
 import type { NoteInfo, PianoRoll } from '@/music/pianoRoll'
 import type { SonarAppState } from '../appState'
 

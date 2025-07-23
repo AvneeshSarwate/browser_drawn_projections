@@ -353,25 +353,6 @@ export const resolveSliderExpressionsInJavaScript = (jsCode: string, sliders: nu
   return { sliderResolvedCode, clipLineReplacements }
 } 
 
-
-// Produce the fully-resolved slice text (slider expressions evaluated)
-export const computeDisplayTextForVoice = (voice: VoiceState, appState: SonarAppState): string => {
-  const sourceText = voice.isPlaying ? voice.playingLockedSourceText : voice.saveable.sliceText
-  const groups = splitTextToGroups(sourceText)
-  const lines: string[] = []
-
-  groups.forEach(group => {
-    const { updatedClipLine } = buildClipFromLine(group.clipLine, appState.sliders)
-    if (group.rampLines.length) {
-      lines.push(updatedClipLine, ...group.rampLines)
-    } else {
-      lines.push(updatedClipLine)
-    }
-  })
-
-  return lines.join('\n')
-}
-
 export const parseRampLine = (rampLine: string) => {
   const parts = rampLine.split(/\s+/).filter(Boolean) //[=>, param, startVal, endVal]
   const paramName = parts[1]

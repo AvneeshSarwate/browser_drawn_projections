@@ -17,7 +17,7 @@ import { PianoRoll, type NoteInfo } from '@/music/pianoRoll'
 import * as Tone from 'tone'
 import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
 import TsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
-import { buildClipFromLine, splitTextToGroups, generateUUID, findLineCallMatches, preprocessJavaScript, transformToRuntime, createExecutableFunction, resolveSliderExpressionsInJavaScript, type UUIDMapping, computeDisplayTextForVoice, parseRampLine, analyzeExecutableLines } from './utils/transformHelpers'
+import { buildClipFromLine, splitTextToGroups, generateUUID, findLineCallMatches, preprocessJavaScript, transformToRuntime, createExecutableFunction, resolveSliderExpressionsInJavaScript, type UUIDMapping, parseRampLine, analyzeExecutableLines } from './utils/transformHelpers'
 import { monacoEditors, codeMirrorEditors, setCodeMirrorContent, highlightCurrentLine, highlightScheduledLines, initializeMonacoEditorComplete, initializeCodeMirrorEditorComplete, highlightCurrentLineByUUID, applyScheduledHighlightByUUID, handleDslLineClick, setPianoRollFromDslLine, clickedDslRanges, highlightClickedDsl, updateDslOutlines, clearPianoRoll, clickedDslOriginalText, clearAllDslHighlights, extractDslFromLine, clickedDslSegmentCounts } from './utils/editorManager'
 import { saveSnapshot as saveSnapshotSM, loadSnapshotStateOnly as loadSnapshotStateOnlySM, downloadSnapshotsFile, loadSnapshotsFromFile as loadSnapshotsFromFileSM, saveToLocalStorage as saveToLocalStorageSM, loadFromLocalStorage as loadFromLocalStorageSM, saveBank, loadBank, makeBankClickHandler, saveTopLevelSliderBank as saveTopLevelSliderBankSM, loadTopLevelSliderBank as loadTopLevelSliderBankSM, saveFxSliderBank as saveFxSliderBankSM, loadFxSliderBank as loadFxSliderBankSM, saveTopLevelToggleBank as saveTopLevelToggleBankSM, loadTopLevelToggleBank as loadTopLevelToggleBankSM, saveTopLevelOneShotBank as saveTopLevelOneShotBankSM, loadTopLevelOneShotBank as loadTopLevelOneShotBankSM } from './utils/snapshotManager'
 
@@ -35,8 +35,6 @@ const appState = inject<SonarAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
 let timeLoops: CancelablePromisePoxy<any>[] = []
 
-// Editor state - arrays to handle multiple voices
-const isJavascriptMode = ref(true)
 const showInputEditor = ref([true, true, true, true]) // Per-voice input editor visibility
 
 
@@ -103,27 +101,6 @@ const saveSnapshot = () => saveSnapshotSM(appState)
 
 const loadSnapshotStateOnly = (ind:number)=> loadSnapshotStateOnlySM(appState, ind, updateFxParams)
 
-const testTransform = () => {
-  // For testing, just use the first group's clipLine
-  const groups = splitTextToGroups(testTransformInput.value)
-  if (!groups.length) return
-  
-  const { clip } = buildClipFromLine(groups[0].clipLine, appState.sliders)
-  if (!clip || !testPianoRoll) return
-
-  // Convert AbletonClip to PianoRoll NoteInfo format
-  const noteInfos: NoteInfo<{}>[] = clip.notes.map(note => ({
-    pitch: note.pitch,
-    position: note.position,
-    duration: note.duration,
-    velocity: note.velocity,
-    metadata: {}
-  }))
-
-  testPianoRoll.setNoteData(noteInfos)
-  testPianoRoll.setViewportToShowAllNotes()
-}
-
 
 const launchParamRamp = (paramName: string, startVal: number, endVal: number, duration: number, voiceIdx: number, ctx: TimeContext) => {
   const startBeats = ctx.beats
@@ -144,63 +121,6 @@ const launchParamRamp = (paramName: string, startVal: number, endVal: number, du
     }
   })
   return ramp
-}
-
-const playClips = async (
-  groups: { clipLine: string, rampLines: string[] }[],
-  ctx: TimeContext,
-  voiceIdx: number,
-  voiceState: VoiceState,
-  firstLoop: boolean
-) => {
-  const displayGroups = groups.map(g => ({...g}))
-  voiceState.playingText = computeDisplayTextForVoice(voiceState, appState)
-
-  // Build map of group index to clipLine display index once before the loop
-  const buildGroupToLineIndexMap = (groups: { clipLine: string, rampLines: string[] }[]) => {
-    const map = new Map<number, number>();
-    let lineIndex = 0;
-    for (let i = 0; i < groups.length; i++) {
-      map.set(i, lineIndex);
-      lineIndex += 1; // for the clipLine
-      lineIndex += groups[i].rampLines.length; // for the rampLines
-    }
-    return map;
-  }
-
-  let groupToLineIndexMap = buildGroupToLineIndexMap(displayGroups);
-
-  for (const [idx, group] of groups.entries()) {
-    if (firstLoop && idx < voiceState.saveable.startPhraseIdx) continue //note this comes from a v-model.number on a text input, could have wierd edge cases
-
-    if (!voiceState.isPlaying) break
-    
-    // Look up the display line index from the pre-built map
-    voiceState.playingLineIdx = groupToLineIndexMap.get(idx)!
-
-    const { clip: curClip, updatedClipLine } = buildClipFromLine(group.clipLine, appState.sliders)
-    if (!curClip) continue
-
-    // Update the display group with the processed clip line
-    displayGroups[idx] = { clipLine: updatedClipLine, rampLines: group.rampLines }
-
-    const notes = curClip.noteBuffer()
-    const ramps = group.rampLines.map(parseRampLine).map(r => launchParamRamp(r.paramName, r.startVal, r.endVal, curClip.duration, voiceIdx, ctx))
-    for (const nextNote of notes) {
-      await ctx.wait(nextNote.preDelta)
-      if (!voiceState.isPlaying) {
-        ramps.forEach(r => r.cancel())
-        break
-      }
-      playNote(nextNote.note.pitch, nextNote.note.velocity, ctx, nextNote.note.duration, voiceIdx)
-      if (nextNote.postDelta) await ctx.wait(nextNote.postDelta)
-    }
-    if (!voiceState.isPlaying) {
-      ramps.forEach(r => r.cancel())
-      break
-    }
-  }
-  voiceState.playingLineIdx = -1
 }
 
 // Editor initialization wrappers
@@ -329,45 +249,37 @@ const startVoice = (voiceIdx: number) => {
   v.playingLockedSourceText = appState.voices[voiceIdx].saveable.jsCode
 
   const playOnce = async (ctx: TimeContext, firstLoop: boolean) => {
-    if (isJavascriptMode.value) {
+    // Switch to visualize mode when starting playback
+    if (firstLoop) {
+      switchToVisualizeMode(voiceIdx)
       
-      // Switch to visualize mode when starting playback
-      if (firstLoop) {
-        switchToVisualizeMode(voiceIdx)
-        
-        
-        const { sliderResolvedCode } = resolveSliderExpressionsInJavaScript(v.playingLockedSourceText, appState.sliders)
-        setCodeMirrorContent(voiceIdx, sliderResolvedCode)
+      
+      const { sliderResolvedCode } = resolveSliderExpressionsInJavaScript(v.playingLockedSourceText, appState.sliders)
+      setCodeMirrorContent(voiceIdx, sliderResolvedCode)
 
-        // Analyze and highlight scheduled lines (returns UUIDs)
-        //todo - using a seeded random number generator here would make this work properly with "randomness"
-        const { executedUUIDs, mappings, visualizeCode } = analyzeExecutableLines(v.playingLockedSourceText, voiceIdx, appState, uuidMappings)
-        applyScheduledHighlightByUUID(voiceIdx, Array.from(executedUUIDs), voiceScheduledUUIDs, getMappingsForVoice)
-        // Create executable function
-        const { executableFunc } = createExecutableFunction(visualizeCode, mappings, voiceIdx)
-        if (!executableFunc) {
-          console.error('Failed to create executable function for voice', voiceIdx)
-          return
-        }
-        voiceExecutableFuncs.set(voiceIdx.toString(), executableFunc)
+      // Analyze and highlight scheduled lines (returns UUIDs)
+      //todo - using a seeded random number generator here would make this work properly with "randomness"
+      const { executedUUIDs, mappings, visualizeCode } = analyzeExecutableLines(v.playingLockedSourceText, voiceIdx, appState, uuidMappings)
+      applyScheduledHighlightByUUID(voiceIdx, Array.from(executedUUIDs), voiceScheduledUUIDs, getMappingsForVoice)
+      // Create executable function
+      const { executableFunc } = createExecutableFunction(visualizeCode, mappings, voiceIdx)
+      if (!executableFunc) {
+        console.error('Failed to create executable function for voice', voiceIdx)
+        return
       }
-      
-      
-      
-      try {
-        // Execute the JavaScript code with proper context
-        const oneShot = (idx: number) => oneshotCall(idx, appState.oneShots)
-        await voiceExecutableFuncs.get(voiceIdx.toString())(ctx, runLine, appState.toggles, oneShot) 
-      } catch (error) {
-        console.error('Error executing JavaScript code:', error)
-      }
-      
-    } else {
-      // Original text mode execution
-      const groups = splitTextToGroups(v.saveable.sliceText)
-      if (!groups.length || !midiOuts[voiceIdx]) return
-      await playClips(groups, ctx, voiceIdx, v, firstLoop)
+      voiceExecutableFuncs.set(voiceIdx.toString(), executableFunc)
     }
+    
+    
+    
+    try {
+      // Execute the JavaScript code with proper context
+      const oneShot = (idx: number) => oneshotCall(idx, appState.oneShots)
+      await voiceExecutableFuncs.get(voiceIdx.toString())(ctx, runLine, appState.toggles, oneShot) 
+    } catch (error) {
+      console.error('Error executing JavaScript code:', error)
+    }
+      
   }
 
   if (v.isLooping) {
@@ -397,21 +309,16 @@ const stopVoice = (voiceIdx: number) => {
   v.isPlaying = false
   v.loopHandle?.cancel()//todo - check if this is needed - do note play functions end their notes properly?
   v.loopHandle = null
-  v.playingLineIdx = -1
-  v.playingText = ''
-  
-  // Switch back to input mode when stopping in JavaScript mode
-  if (isJavascriptMode.value) {
-    switchToInputMode(voiceIdx)
-    // Clear all highlighting
-    applyScheduledHighlightByUUID(voiceIdx, [], voiceScheduledUUIDs, getMappingsForVoice)
-    highlightCurrentLineByUUID(voiceIdx, null, voiceActiveUUIDs, getMappingsForVoice)
-    // Clear clicked DSL highlighting, stored text, and piano roll
-    clickedDslRanges.set(voiceIdx.toString(), null)
-    clickedDslOriginalText.set(voiceIdx.toString(), null)
-    highlightClickedDsl(voiceIdx, null)
-    clearPianoRoll(voiceIdx, debugPianoRolls)
-  }
+
+  switchToInputMode(voiceIdx)
+  // Clear all highlighting
+  applyScheduledHighlightByUUID(voiceIdx, [], voiceScheduledUUIDs, getMappingsForVoice)
+  highlightCurrentLineByUUID(voiceIdx, null, voiceActiveUUIDs, getMappingsForVoice)
+  // Clear clicked DSL highlighting, stored text, and piano roll
+  clickedDslRanges.set(voiceIdx.toString(), null)
+  clickedDslOriginalText.set(voiceIdx.toString(), null)
+  highlightClickedDsl(voiceIdx, null)
+  clearPianoRoll(voiceIdx, debugPianoRolls)
 }
 
 const togglePlay = (voiceIdx: number) => {
@@ -715,12 +622,9 @@ function debounce<T extends (...args: any[]) => void>(fn: T, waitMs: number): T 
 const updateVoiceOnSliderChange = (voiceIndex: number) => {
   const voice = appState.voices[voiceIndex]
   
-  // Update the old text display (for non-JavaScript mode)
-  voice.playingText = computeDisplayTextForVoice(voice, appState)
-  
   // Update CodeMirror editor if in JavaScript mode and it exists
   const codeMirrorEditor = codeMirrorEditors[voiceIndex]
-  if (codeMirrorEditor && isJavascriptMode.value) {
+  if (codeMirrorEditor) {
     const jsSourceText = voice.isPlaying ? voice.playingLockedSourceText : appState.voices[voiceIndex].saveable.jsCode;
     
     // Resolve slider expressions in the JavaScript code
@@ -837,23 +741,6 @@ appState.voices.forEach((_, idx) => updateFxParams(idx))
 <template>
   <div class="break-row"></div>
   
-  <!-- Transform Test Section -->
-  <div class="test-section">
-    <h3>Transform Test</h3>
-    <div class="test-controls">
-      <input 
-        type="text" 
-        v-model="testTransformInput" 
-        placeholder="clipName : transform args"
-        class="test-input"
-      />
-      <button @click="testTransform" class="test-button">Test Transform</button>
-    </div>
-    <div class="test-piano-roll">
-      <div id="testPianoRollHolder"></div>
-    </div>
-  </div>
-  
   <!-- Top Level Slider & Toggle Banks -->
   <div class="slider-banks-section">
     <h4>Top Level Banks (Click: Load, Shift+Click: Save) - Saves/Loads Both Sliders & Toggles</h4>
@@ -936,50 +823,25 @@ appState.voices.forEach((_, idx) => updateFxParams(idx))
       <details open class="text-display">
         <summary>Slice Editor</summary>
         <div class="editor-mode-toggle">
-          <button @click="isJavascriptMode = !isJavascriptMode" :class="{ active: isJavascriptMode }">
-            {{ isJavascriptMode ? 'Switch to Text Mode' : 'Switch to JavaScript Mode' }}
-          </button>
-          <button v-if="isJavascriptMode" @click="switchToInputMode(idx)" :class="{ active: showInputEditor[idx] }">
+          <button @click="switchToInputMode(idx)" :class="{ active: showInputEditor[idx] }">
             Input Mode
           </button>
-          <button v-if="isJavascriptMode" @click="switchToVisualizeMode(idx)" :class="{ active: !showInputEditor[idx] }">
+          <button @click="switchToVisualizeMode(idx)" :class="{ active: !showInputEditor[idx] }">
             Visualize Mode
           </button>
         </div>
-        
-        <div v-if="!isJavascriptMode">
-          <textarea
-            v-if="!voice.isPlaying"
-            v-model="voice.saveable.sliceText"
-            placeholder="clipName : seg 1 : s_tr 2 : str 0.5 : q 1"
-            rows="10"
-          />
-          
-          <!-- Simple text playhead display for non-JavaScript mode -->
-          <details v-if="voice.isPlaying" open class="text-display">
-            <summary>Now Playing</summary>
-            <div class="display-text">
-              <div
-                v-for="(line, lIdx) in voice.playingText.split('\n')"
-                :key="lIdx"
-                :class="{ highlight: lIdx === voice.playingLineIdx }"
-              >
-                {{ line }}
-              </div>
-            </div>
-          </details>
+
+        <!-- Monaco Editor (Input) -->
+        <div class="editor-container" :class="{ 'editor-hidden-opacity': !showInputEditor[idx] }">
+          <div class="editor-header">Input Editor (JavaScript)</div>
+          <div :id="`monacoEditorContainer-${idx}`" class="monaco-editor"></div>
         </div>
-          <!-- Monaco Editor (Input) -->
-          <div class="editor-container" :class="{ 'editor-hidden-opacity': !isJavascriptMode || !showInputEditor[idx] }">
-            <div class="editor-header">Input Editor (JavaScript)</div>
-            <div :id="`monacoEditorContainer-${idx}`" class="monaco-editor"></div>
-          </div>
-          
-          <!-- CodeMirror Editor (Visualize) -->
-          <div class="editor-container" :class="{ 'editor-hidden-opacity': !isJavascriptMode || showInputEditor[idx] }">
-            <div class="editor-header">Visualize Editor (Playback)</div>
-            <div :id="`codeMirrorEditorContainer-${idx}`" class="codemirror-editor"></div>
-          </div>
+        
+        <!-- CodeMirror Editor (Visualize) -->
+        <div class="editor-container" :class="{ 'editor-hidden-opacity': showInputEditor[idx] }">
+          <div class="editor-header">Visualize Editor (Playback)</div>
+          <div :id="`codeMirrorEditorContainer-${idx}`" class="codemirror-editor"></div>
+        </div>
       </details>
       
       <details open class="fx-controls">
