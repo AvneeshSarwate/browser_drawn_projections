@@ -78,7 +78,13 @@ export function loadFromLocalStorage(app: SonarAppState) {
       if (Array.isArray(state.toggles)) app.toggles = [...state.toggles]
       if (Array.isArray(state.oneShots)) app.oneShots = [...state.oneShots]
       if (Array.isArray(state.voices)) state.voices.forEach((sv:SaveableProperties,i:number)=>{
-        if (i<app.voices.length) app.voices[i].saveable = sv
+        if (i<app.voices.length) {
+          // Backfill jsCodeBanks if it doesn't exist (for backward compatibility)
+          if (!sv.jsCodeBanks) {
+            sv.jsCodeBanks = Array.from({ length: 8 }, () => '')
+          }
+          app.voices[i].saveable = sv
+        }
       })
       if (state.sliderBanks?.topLevel) app.sliderBanks.topLevel = state.sliderBanks.topLevel.map((b:number[])=>[...b])
       if (state.toggleBanks?.topLevel) app.toggleBanks.topLevel = state.toggleBanks.topLevel.map((b: boolean[]) => [...b])
@@ -101,7 +107,14 @@ export function loadSnapshotStateOnly(app: SonarAppState, index:number, updateFx
   app.sliders = [...snap.sliders]
   if (snap.toggles) app.toggles = [...snap.toggles]
   if (snap.oneShots) app.oneShots = [...snap.oneShots]
-  app.voices.forEach((v,i)=>{ v.saveable = deepClone(snap.voices[i]) })
+  app.voices.forEach((v,i)=>{ 
+    const saveableData = deepClone(snap.voices[i])
+    // Backfill jsCodeBanks if it doesn't exist (for backward compatibility)
+    if (!saveableData.jsCodeBanks) {
+      saveableData.jsCodeBanks = Array.from({ length: 8 }, () => '')
+    }
+    v.saveable = saveableData
+  })
   if (snap.sliderBanks) {
     app.sliderBanks = { topLevel: snap.sliderBanks.topLevel.map((b:number[])=>[...b]) }
   }
@@ -186,6 +199,25 @@ export function loadFxSliderBank(app: SonarAppState, voiceIndex:number, bankInde
   voice.currentFxBank = bankIndex
   updateFxParams(voiceIndex)
 } 
+
+// ---------------------------------------------------------------------------
+//  JS Code bank save / load helpers  ----------------------------------------
+// ---------------------------------------------------------------------------
+export function saveJsCodeBank(app: SonarAppState, voiceIndex:number, bankIndex:number) {
+  if (voiceIndex<0 || voiceIndex>=app.voices.length) return
+  const voice = app.voices[voiceIndex]
+  saveBank(voice.saveable.jsCodeBanks, bankIndex, voice.saveable.jsCode)
+}
+
+export function loadJsCodeBank(app: SonarAppState, voiceIndex:number, bankIndex:number) {
+  if (voiceIndex<0 || voiceIndex>=app.voices.length) return
+  const voice = app.voices[voiceIndex]
+  const code = loadBank(voice.saveable.jsCodeBanks, bankIndex)
+  if (code === undefined) return
+  
+  voice.currentJsBank = bankIndex
+  return code
+}
 
 // ---------------------------------------------------------------------------
 //  Toggle-bank save / load helpers (top-level)  -----------------------------

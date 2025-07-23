@@ -9,6 +9,7 @@ import type { LoopHandle } from '@/channels/base_time_context'
 export type SaveableProperties = {
   fxParams: Record<string, number>;
   fxBanks: Record<string, number>[]; // 8 banks of FX parameters for this voice
+  jsCodeBanks: string[]; // 8 banks of JavaScript code for this voice
   /** JavaScript livecoding source for this voice (Monaco input editor) */
   jsCode: string;
 }
@@ -23,6 +24,7 @@ export type VoiceState = {
   loopHandle: LoopHandle | null;
   queue: Array<(ctx: TimeContext) => Promise<void>>;
   currentFxBank: number; // current active FX bank for this voice
+  currentJsBank: number; // current active JS code bank for this voice
 };
 
 export type SliderBanks = {
@@ -85,6 +87,7 @@ export const appState: SonarAppState = {
     saveable: {
       fxParams: {},
       fxBanks: Array.from({ length: 8 }, () => ({} as Record<string, number>)),
+      jsCodeBanks: Array.from({ length: 8 }, () => ''),
       jsCode: ''
     },
     /** true while the voice is actively playing (Play-button ON) */
@@ -96,6 +99,7 @@ export const appState: SonarAppState = {
     loopHandle: null,
     queue: [],
     currentFxBank: 0,
+    currentJsBank: 0,
   })),
   sliders: Array.from({ length: 8 }, (): number => 0),
   toggles: Array.from({ length: 8 }, (): boolean => false),

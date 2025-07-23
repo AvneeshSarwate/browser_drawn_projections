@@ -19,7 +19,7 @@ import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
 import TsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
 import { buildClipFromLine, splitTextToGroups, generateUUID, findLineCallMatches, preprocessJavaScript, transformToRuntime, createExecutableFunction, resolveSliderExpressionsInJavaScript, type UUIDMapping, parseRampLine, analyzeExecutableLines } from './utils/transformHelpers'
 import { monacoEditors, codeMirrorEditors, setCodeMirrorContent, highlightCurrentLine, highlightScheduledLines, initializeMonacoEditorComplete, initializeCodeMirrorEditorComplete, highlightCurrentLineByUUID, applyScheduledHighlightByUUID, handleDslLineClick, setPianoRollFromDslLine, clickedDslRanges, highlightClickedDsl, updateDslOutlines, clearPianoRoll, clickedDslOriginalText, clearAllDslHighlights, extractDslFromLine, clickedDslSegmentCounts } from './utils/editorManager'
-import { saveSnapshot as saveSnapshotSM, loadSnapshotStateOnly as loadSnapshotStateOnlySM, downloadSnapshotsFile, loadSnapshotsFromFile as loadSnapshotsFromFileSM, saveToLocalStorage as saveToLocalStorageSM, loadFromLocalStorage as loadFromLocalStorageSM, saveBank, loadBank, makeBankClickHandler, saveTopLevelSliderBank as saveTopLevelSliderBankSM, loadTopLevelSliderBank as loadTopLevelSliderBankSM, saveFxSliderBank as saveFxSliderBankSM, loadFxSliderBank as loadFxSliderBankSM, saveTopLevelToggleBank as saveTopLevelToggleBankSM, loadTopLevelToggleBank as loadTopLevelToggleBankSM, saveTopLevelOneShotBank as saveTopLevelOneShotBankSM, loadTopLevelOneShotBank as loadTopLevelOneShotBankSM } from './utils/snapshotManager'
+import { saveSnapshot as saveSnapshotSM, loadSnapshotStateOnly as loadSnapshotStateOnlySM, downloadSnapshotsFile, loadSnapshotsFromFile as loadSnapshotsFromFileSM, saveToLocalStorage as saveToLocalStorageSM, loadFromLocalStorage as loadFromLocalStorageSM, saveBank, loadBank, makeBankClickHandler, saveTopLevelSliderBank as saveTopLevelSliderBankSM, loadTopLevelSliderBank as loadTopLevelSliderBankSM, saveFxSliderBank as saveFxSliderBankSM, loadFxSliderBank as loadFxSliderBankSM, saveTopLevelToggleBank as saveTopLevelToggleBankSM, loadTopLevelToggleBank as loadTopLevelToggleBankSM, saveTopLevelOneShotBank as saveTopLevelOneShotBankSM, loadTopLevelOneShotBank as loadTopLevelOneShotBankSM, saveJsCodeBank as saveJsCodeBankSM, loadJsCodeBank as loadJsCodeBankSM } from './utils/snapshotManager'
 
 // Monaco environment setup
 self.MonacoEnvironment = {
@@ -80,6 +80,39 @@ const handleFxBankClick = (voiceIndex: number, bankIndex: number, event: MouseEv
     (idx) => loadFxSliderBank(voiceIndex, idx),
     (idx) => appState.voices[voiceIndex].currentFxBank = idx,
   )(bankIndex, event)
+}
+
+// JS Code bank management wrappers
+const saveJsCodeBank = (voiceIdx: number, bankIdx: number) => saveJsCodeBankSM(appState, voiceIdx, bankIdx)
+const loadJsCodeBank = (voiceIdx: number, bankIdx: number) => loadJsCodeBankSM(appState, voiceIdx, bankIdx)
+
+const handleJsBankClick = (voiceIndex: number, bankIndex: number, event: MouseEvent) => {
+  if (event.shiftKey) {
+    // Save current code to bank
+    saveJsCodeBank(voiceIndex, bankIndex)
+    appState.voices[voiceIndex].currentJsBank = bankIndex
+  } else {
+    // Load code from bank
+    const v = appState.voices[voiceIndex]
+    const newCode = loadJsCodeBank(voiceIndex, bankIndex)
+    if (newCode === undefined) return
+    
+    // Set Monaco content (automatically updates saveable.jsCode via binding)
+    const monacoEditor = monacoEditors[voiceIndex]
+    if (monacoEditor) {
+      monacoEditor.setValue(newCode)
+    }
+    
+    if (v.isPlaying) {
+      // Hot-swap path: flag for next loop (jsCode already updated by Monaco)
+      v.hotSwapCued = true
+    } else {
+      // Immediate path: analyze if in visualize mode
+      if (!showInputEditor.value[voiceIndex]) {
+        switchToVisualizeMode(voiceIndex)
+      }
+    }
+  }
 }
 
 const handleTopLevelBankClick = makeBankClickHandler(
@@ -154,11 +187,8 @@ const switchToInputMode = (voiceIndex: number) => {
 
 const switchToVisualizeMode = (voiceIndex: number) => {
   showInputEditor.value[voiceIndex] = false
-  // Copy content from Monaco to CodeMirror
-  const monacoEditor = monacoEditors[voiceIndex]
-  const codeMirrorEditor = codeMirrorEditors[voiceIndex]
   
-  if (monacoEditor && codeMirrorEditor && !appState.voices[voiceIndex].isPlaying) {
+  if ( !appState.voices[voiceIndex].isPlaying) {
     const content = appState.voices[voiceIndex].saveable.jsCode
 
     //transform source to reflect slider values
@@ -335,6 +365,7 @@ const startVoice = (voiceIdx: number) => {
 const stopVoice = (voiceIdx: number) => {
   const v = appState.voices[voiceIdx]
   v.isPlaying = false
+  v.hotSwapCued = false // Clear hot-swap flag
   v.loopHandle?.cancel()//todo - check if this is needed - do note play functions end their notes properly?
   v.loopHandle = null
 
@@ -858,6 +889,20 @@ appState.voices.forEach((_, idx) => updateFxParams(idx))
           <div :id="`codeMirrorEditorContainer-${idx}`" class="codemirror-editor"></div>
         </div>
       </details>
+
+      <details open class="js-code-banks">
+        <summary>JS Code Banks (Click: Load, Shift+Click: Save)</summary>
+        <div class="js-bank-buttons">
+          <button 
+            v-for="bankIdx in 8" 
+            :key="bankIdx"
+            :class="{ 'active': voice.currentJsBank === bankIdx - 1 }"
+            @click="handleJsBankClick(idx, bankIdx - 1, $event)"
+          >
+            {{ bankIdx }}
+          </button>
+        </div>
+      </details>
       
       <details open class="fx-controls">
         <summary>FX Controls</summary>
@@ -1305,14 +1350,14 @@ button:hover {
   color: #f0f0f0;
 }
 
-.fx-bank-buttons {
+.fx-bank-buttons, .js-bank-buttons {
   display: flex;
   gap: 0.25rem;
   margin-top: 0.25rem;
   flex-wrap: wrap;
 }
 
-.fx-bank-buttons button {
+.fx-bank-buttons button, .js-bank-buttons button {
   width: 2rem;
   height: 2rem;
   padding: 0;
@@ -1329,18 +1374,18 @@ button:hover {
   justify-content: center;
 }
 
-.fx-bank-buttons button:hover {
+.fx-bank-buttons button:hover, .js-bank-buttons button:hover {
   background: #444;
   border-color: #666;
 }
 
-.fx-bank-buttons button.active {
+.fx-bank-buttons button.active, .js-bank-buttons button.active {
   background: #6a9bd1;
   border-color: #4a7ba7;
   color: #fff;
 }
 
-.fx-bank-buttons button.active:hover {
+.fx-bank-buttons button.active:hover, .js-bank-buttons button.active:hover {
   background: #7ba9d9;
 }
 
