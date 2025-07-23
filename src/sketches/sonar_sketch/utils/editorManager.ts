@@ -570,8 +570,7 @@ export function initializeMonacoEditorComplete(
   containerId: string,
   voiceIndex: number,
   getInitialCode: () => string,
-  onContentChange: (code: string, voiceIndex: number) => void,
-  syncToCodeMirror: (voiceIndex: number, content: string) => void
+  onContentChange: (code: string, voiceIndex: number) => void
 ) {
   const container = document.getElementById(containerId)
   if (!container) return
@@ -633,7 +632,6 @@ line(\`debug1 : seg 1 : s_tr 3 : str 1 : q 1\`)
   editor.onDidChangeModelContent(() => {
     const newContent = editor.getValue()
     onContentChange(newContent, voiceIndex)
-    syncToCodeMirror(voiceIndex, newContent)
   })
   
   monacoEditors[voiceIndex] = editor

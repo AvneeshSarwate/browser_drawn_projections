@@ -20,6 +20,7 @@ export type VoiceState = {
   isPlaying: boolean;
   isLooping: boolean;
   isCued: boolean;
+  playingLockedSourceText: string;
   loopHandle: LoopHandle | null;
   queue: Array<(ctx: TimeContext) => Promise<void>>;
   playingText: string;
@@ -95,6 +96,7 @@ export const appState: SonarAppState = {
     isPlaying: false,
     isLooping: false,
     isCued: false,
+    playingLockedSourceText: '',
     loopHandle: null,
     queue: [],
     /** copy of the slice text with resolved slider values */

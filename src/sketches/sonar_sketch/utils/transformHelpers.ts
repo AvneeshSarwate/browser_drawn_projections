@@ -356,7 +356,8 @@ export const resolveSliderExpressionsInJavaScript = (jsCode: string, sliders: nu
 
 // Produce the fully-resolved slice text (slider expressions evaluated)
 export const computeDisplayTextForVoice = (voice: VoiceState, appState: SonarAppState): string => {
-  const groups = splitTextToGroups(voice.saveable.sliceText)
+  const sourceText = voice.isPlaying ? voice.playingLockedSourceText : voice.saveable.sliceText
+  const groups = splitTextToGroups(sourceText)
   const lines: string[] = []
 
   groups.forEach(group => {

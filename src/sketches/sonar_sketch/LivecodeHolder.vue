@@ -209,8 +209,7 @@ const initializeMonacoEditor = (containerId: string, voiceIndex: number) => {
     containerId,
     voiceIndex,
     () => appState.voices[voiceIndex].saveable.jsCode,
-    (code, vIdx) => { appState.voices[vIdx].saveable.jsCode = code },
-    setCodeMirrorContent
+    (code, vIdx) => { appState.voices[vIdx].saveable.jsCode = code }
   )
 }
 
@@ -239,7 +238,7 @@ const switchToVisualizeMode = (voiceIndex: number) => {
   const monacoEditor = monacoEditors[voiceIndex]
   const codeMirrorEditor = codeMirrorEditors[voiceIndex]
   
-  if (monacoEditor && codeMirrorEditor) {
+  if (monacoEditor && codeMirrorEditor && !appState.voices[voiceIndex].isPlaying) {
     const content = monacoEditor.getValue()
 
     //transform source to reflect slider values
@@ -327,26 +326,22 @@ const runLine = async (lineText: string, ctx: TimeContext, uuid: string, voiceIn
 const startVoice = (voiceIdx: number) => {
   const v = appState.voices[voiceIdx]
 
+  v.playingLockedSourceText = appState.voices[voiceIdx].saveable.jsCode
+
   const playOnce = async (ctx: TimeContext, firstLoop: boolean) => {
     if (isJavascriptMode.value) {
-      // JavaScript mode execution
-      const monacoEditor = monacoEditors[voiceIdx]
-      if (!monacoEditor) return
-      
-      const jsCode = monacoEditor.getValue()
-      if (!jsCode.trim()) return
       
       // Switch to visualize mode when starting playback
       if (firstLoop) {
         switchToVisualizeMode(voiceIdx)
         
         
-        const { sliderResolvedCode } = resolveSliderExpressionsInJavaScript(jsCode, appState.sliders)
+        const { sliderResolvedCode } = resolveSliderExpressionsInJavaScript(v.playingLockedSourceText, appState.sliders)
         setCodeMirrorContent(voiceIdx, sliderResolvedCode)
 
         // Analyze and highlight scheduled lines (returns UUIDs)
         //todo - using a seeded random number generator here would make this work properly with "randomness"
-        const { executedUUIDs, mappings, visualizeCode } = analyzeExecutableLines(jsCode, voiceIdx, appState, uuidMappings)
+        const { executedUUIDs, mappings, visualizeCode } = analyzeExecutableLines(v.playingLockedSourceText, voiceIdx, appState, uuidMappings)
         applyScheduledHighlightByUUID(voiceIdx, Array.from(executedUUIDs), voiceScheduledUUIDs, getMappingsForVoice)
         // Create executable function
         const { executableFunc } = createExecutableFunction(visualizeCode, mappings, voiceIdx)
@@ -726,65 +721,61 @@ const updateVoiceOnSliderChange = (voiceIndex: number) => {
   // Update CodeMirror editor if in JavaScript mode and it exists
   const codeMirrorEditor = codeMirrorEditors[voiceIndex]
   if (codeMirrorEditor && isJavascriptMode.value) {
-    // Get the original Monaco content (with raw slider expressions)
-    const monacoEditor = monacoEditors[voiceIndex]
-    if (monacoEditor) {
-      const originalJsCode = monacoEditor.getValue()
+    const jsSourceText = voice.isPlaying ? voice.playingLockedSourceText : appState.voices[voiceIndex].saveable.jsCode;
+    
+    // Resolve slider expressions in the JavaScript code
+    const { sliderResolvedCode } = resolveSliderExpressionsInJavaScript(jsSourceText, appState.sliders)
+    
+    // Check if content has actually changed to avoid unnecessary updates
+    const currentContent = codeMirrorEditor.state.doc.toString()
+    if (currentContent !== sliderResolvedCode) {
+
       
-      // Resolve slider expressions in the JavaScript code
-      const { sliderResolvedCode } = resolveSliderExpressionsInJavaScript(originalJsCode, appState.sliders)
-      
-      // Check if content has actually changed to avoid unnecessary updates
-      const currentContent = codeMirrorEditor.state.doc.toString()
-      if (currentContent !== sliderResolvedCode) {
+      setCodeMirrorContent(voiceIndex, sliderResolvedCode)
 
-        
-        setCodeMirrorContent(voiceIndex, sliderResolvedCode)
-
-        // Re-apply scheduled line decorations if they were active
-        const scheduledUUIDs = voiceScheduledUUIDs.get(voiceIndex.toString())
-        if (scheduledUUIDs && scheduledUUIDs.length > 0) {
-          applyScheduledHighlightByUUID(voiceIndex, scheduledUUIDs, voiceScheduledUUIDs, getMappingsForVoice)
-        }
-
-        // Re-apply current line decorations if they were active
-        const activeUUID = voiceActiveUUIDs.get(voiceIndex.toString())
-        if (activeUUID) {
-          highlightCurrentLineByUUID(voiceIndex, activeUUID, voiceActiveUUIDs, getMappingsForVoice)
-        }
+      // Re-apply scheduled line decorations if they were active
+      const scheduledUUIDs = voiceScheduledUUIDs.get(voiceIndex.toString())
+      if (scheduledUUIDs && scheduledUUIDs.length > 0) {
+        applyScheduledHighlightByUUID(voiceIndex, scheduledUUIDs, voiceScheduledUUIDs, getMappingsForVoice)
       }
+
+      // Re-apply current line decorations if they were active
+      const activeUUID = voiceActiveUUIDs.get(voiceIndex.toString())
+      if (activeUUID) {
+        highlightCurrentLineByUUID(voiceIndex, activeUUID, voiceActiveUUIDs, getMappingsForVoice)
+      }
+    }
+    
+    // Re-render piano roll if there's an active DSL selection
+    const clickedRange = clickedDslRanges.get(voiceIndex.toString())
+    const originalDsl = clickedDslOriginalText.get(voiceIndex.toString())
+    if (clickedRange && originalDsl && !showInputEditor.value[voiceIndex]) {
+      // Re-render the piano roll with the stored original DSL text
+      setPianoRollFromDslLine(originalDsl, voiceIndex, appState, debugPianoRolls)
       
-      // Re-render piano roll if there's an active DSL selection
-      const clickedRange = clickedDslRanges.get(voiceIndex.toString())
-      const originalDsl = clickedDslOriginalText.get(voiceIndex.toString())
-      if (clickedRange && originalDsl && !showInputEditor.value[voiceIndex]) {
-        // Re-render the piano roll with the stored original DSL text
-        setPianoRollFromDslLine(originalDsl, voiceIndex, appState, debugPianoRolls)
+      // Re-highlight the clicked range with updated resolved text
+      // The range might have changed due to slider value changes
+      const segmentCount = clickedDslSegmentCounts.get(voiceIndex.toString())
+      if (segmentCount && typeof segmentCount === 'number') {
+        // Find the new range for the partial DSL in the updated text
+        const doc = codeMirrorEditor.state.doc
+        const clickedLine = doc.lineAt(clickedRange.from)
+        const lineContent = clickedLine.text
+        const dslExtract = extractDslFromLine(lineContent)
         
-        // Re-highlight the clicked range with updated resolved text
-        // The range might have changed due to slider value changes
-        const segmentCount = clickedDslSegmentCounts.get(voiceIndex.toString())
-        if (segmentCount && typeof segmentCount === 'number') {
-          // Find the new range for the partial DSL in the updated text
-          const doc = codeMirrorEditor.state.doc
-          const clickedLine = doc.lineAt(clickedRange.from)
-          const lineContent = clickedLine.text
-          const dslExtract = extractDslFromLine(lineContent)
+        if (dslExtract.isDsl && dslExtract.dslText && dslExtract.prefixLength !== undefined) {
+          // Get the partial based on segment count
+          const parts = dslExtract.dslText.split(/\s*:\s*/)
+          const partialParts = parts.slice(0, segmentCount)
+          const partialDsl = partialParts.join(' : ')
           
-          if (dslExtract.isDsl && dslExtract.dslText && dslExtract.prefixLength !== undefined) {
-            // Get the partial based on segment count
-            const parts = dslExtract.dslText.split(/\s*:\s*/)
-            const partialParts = parts.slice(0, segmentCount)
-            const partialDsl = partialParts.join(' : ')
-            
-            const from = clickedLine.from + dslExtract.prefixLength
-            const to = from + partialDsl.length
-            const newRange = { from, to }
-            
-            // Update the clicked range
-            clickedDslRanges.set(voiceIndex.toString(), newRange)
-            highlightClickedDsl(voiceIndex, newRange)
-          }
+          const from = clickedLine.from + dslExtract.prefixLength
+          const to = from + partialDsl.length
+          const newRange = { from, to }
+          
+          // Update the clicked range
+          clickedDslRanges.set(voiceIndex.toString(), newRange)
+          highlightClickedDsl(voiceIndex, newRange)
         }
       }
     }
@@ -792,8 +783,9 @@ const updateVoiceOnSliderChange = (voiceIndex: number) => {
 }
 
 const updateVoiceOnToggleChange = (voiceIndex: number) => {
-  const jsCode = monacoEditors[voiceIndex].getValue()
-  const { executedUUIDs } = analyzeExecutableLines(jsCode, voiceIndex, appState, uuidMappings)
+  const voice = appState.voices[voiceIndex]
+  const jsSourceText = voice.isPlaying ? voice.playingLockedSourceText : voice.saveable.jsCode
+  const { executedUUIDs } = analyzeExecutableLines(jsSourceText, voiceIndex, appState, uuidMappings)
   applyScheduledHighlightByUUID(voiceIndex, Array.from(executedUUIDs), voiceScheduledUUIDs, getMappingsForVoice)
 }
 
