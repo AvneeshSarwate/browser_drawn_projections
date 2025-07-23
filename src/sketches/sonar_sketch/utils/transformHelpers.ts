@@ -286,9 +286,15 @@ export const transformToRuntime = (visualizeCode: string, voiceIndex: number): s
   
   runtimeCode = runtimeCode.replace(
     lineCallRegex,
-    `await runLine($1, ctx, "$2", ${voiceIndex})`
+    `hotswapCued = await runLine($1, ctx, "$2", ${voiceIndex})
+     if(hotswapCued) return true
+    `
   )
-  
+  runtimeCode = `
+  let hotswapCued = false
+  ${runtimeCode}
+  `
+  console.log("runtimeCode", runtimeCode)
   return runtimeCode
 }
 

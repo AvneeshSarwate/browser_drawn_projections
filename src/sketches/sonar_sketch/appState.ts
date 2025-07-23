@@ -7,8 +7,6 @@ import type { TimeContext } from '@/channels/channels'
 import type { LoopHandle } from '@/channels/base_time_context'
 
 export type SaveableProperties = {
-  sliceText: string;
-  startPhraseIdx: number;
   fxParams: Record<string, number>;
   fxBanks: Record<string, number>[]; // 8 banks of FX parameters for this voice
   /** JavaScript livecoding source for this voice (Monaco input editor) */
@@ -20,6 +18,7 @@ export type VoiceState = {
   isPlaying: boolean;
   isLooping: boolean;
   isCued: boolean;
+  hotSwapCued: boolean;
   playingLockedSourceText: string;
   loopHandle: LoopHandle | null;
   queue: Array<(ctx: TimeContext) => Promise<void>>;
@@ -84,8 +83,6 @@ export const appState: SonarAppState = {
   drawing: false,
   voices: Array.from({ length: 4 }, (): VoiceState => ({
     saveable: {
-      sliceText: '',
-      startPhraseIdx: 0,
       fxParams: {},
       fxBanks: Array.from({ length: 8 }, () => ({} as Record<string, number>)),
       jsCode: ''
@@ -94,6 +91,7 @@ export const appState: SonarAppState = {
     isPlaying: false,
     isLooping: false,
     isCued: false,
+    hotSwapCued: false,
     playingLockedSourceText: '',
     loopHandle: null,
     queue: [],

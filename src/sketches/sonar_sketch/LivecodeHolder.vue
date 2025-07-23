@@ -159,7 +159,7 @@ const switchToVisualizeMode = (voiceIndex: number) => {
   const codeMirrorEditor = codeMirrorEditors[voiceIndex]
   
   if (monacoEditor && codeMirrorEditor && !appState.voices[voiceIndex].isPlaying) {
-    const content = monacoEditor.getValue()
+    const content = appState.voices[voiceIndex].saveable.jsCode
 
     //transform source to reflect slider values
     const { sliderResolvedCode } = resolveSliderExpressionsInJavaScript(content, appState.sliders)
@@ -193,6 +193,8 @@ const getMappingsForVoice = (voiceIndex: number): UUIDMapping[] => {
 const runLine = async (lineText: string, ctx: TimeContext, uuid: string, voiceIndex: number) => {
   // Highlight the current line being executed using UUID
   highlightCurrentLineByUUID(voiceIndex, uuid, voiceActiveUUIDs, getMappingsForVoice)
+  // Check if voice is still playing
+  const voice = appState.voices[voiceIndex]
   
   try {
     // Parse the line using existing parsing logic
@@ -217,8 +219,6 @@ const runLine = async (lineText: string, ctx: TimeContext, uuid: string, voiceIn
     for (const nextNote of notes) {
       await ctx.wait(nextNote.preDelta)
       
-      // Check if voice is still playing
-      const voice = appState.voices[voiceIndex]
       if (!voice.isPlaying) {
         ramps.forEach(r => r.cancel())
         break
@@ -241,45 +241,69 @@ const runLine = async (lineText: string, ctx: TimeContext, uuid: string, voiceIn
     // Clear current line highlighting after execution
     highlightCurrentLineByUUID(voiceIndex, null, voiceActiveUUIDs, getMappingsForVoice)
   }
+
+  return voice.hotSwapCued
 }
+
+const oneShot = (idx: number) => oneshotCall(idx, appState.oneShots)
+
+const initializeNewLoopWithNewSourceCode = (voiceIdx: number) => {
+  const v = appState.voices[voiceIdx]
+  v.playingLockedSourceText = appState.voices[voiceIdx].saveable.jsCode
+  
+  switchToVisualizeMode(voiceIdx)
+      
+  const { sliderResolvedCode } = resolveSliderExpressionsInJavaScript(v.playingLockedSourceText, appState.sliders)
+  setCodeMirrorContent(voiceIdx, sliderResolvedCode)
+
+  // Analyze and highlight scheduled lines (returns UUIDs)
+  //todo - using a seeded random number generator here would make this work properly with "randomness"
+  const { executedUUIDs, mappings, visualizeCode } = analyzeExecutableLines(v.playingLockedSourceText, voiceIdx, appState, uuidMappings)
+  applyScheduledHighlightByUUID(voiceIdx, Array.from(executedUUIDs), voiceScheduledUUIDs, getMappingsForVoice)
+  // Create executable function
+  const { executableFunc } = createExecutableFunction(visualizeCode, mappings, voiceIdx)
+  if (!executableFunc) {
+    console.error('Failed to create executable function for voice', voiceIdx)
+    return
+  }
+  voiceExecutableFuncs.set(voiceIdx.toString(), executableFunc)
+
+}
+
+
+/**
+ * 
+ * general pattern for looping code:
+ * - at the first cycle of the loop, input code gets parsed to runtime mode
+ * - DSL lines are live-compiled once it is their time to be run
+ * - runtime code references toggles and one-shots, their values are read live
+ * 
+ * for hotswapping
+ * - DSL lines (i.e runLine function) return whether a hotswap of new input code is cued up 
+ * - for each line/runLine call, an "if(hotSwapCued) return" line is added for early return
+ * - hotswap return value propogates up from runLine to playOnce to loop
+ * - if the hotswap is cued, the loop is restarted with the new input code
+ *   and no manual "loop management" is needed (e.g, canceling the loop handle and cueing new one)
+ */
 
 const startVoice = (voiceIdx: number) => {
   const v = appState.voices[voiceIdx]
 
-  v.playingLockedSourceText = appState.voices[voiceIdx].saveable.jsCode
-
   const playOnce = async (ctx: TimeContext, firstLoop: boolean) => {
     // Switch to visualize mode when starting playback
     if (firstLoop) {
-      switchToVisualizeMode(voiceIdx)
-      
-      
-      const { sliderResolvedCode } = resolveSliderExpressionsInJavaScript(v.playingLockedSourceText, appState.sliders)
-      setCodeMirrorContent(voiceIdx, sliderResolvedCode)
-
-      // Analyze and highlight scheduled lines (returns UUIDs)
-      //todo - using a seeded random number generator here would make this work properly with "randomness"
-      const { executedUUIDs, mappings, visualizeCode } = analyzeExecutableLines(v.playingLockedSourceText, voiceIdx, appState, uuidMappings)
-      applyScheduledHighlightByUUID(voiceIdx, Array.from(executedUUIDs), voiceScheduledUUIDs, getMappingsForVoice)
-      // Create executable function
-      const { executableFunc } = createExecutableFunction(visualizeCode, mappings, voiceIdx)
-      if (!executableFunc) {
-        console.error('Failed to create executable function for voice', voiceIdx)
-        return
-      }
-      voiceExecutableFuncs.set(voiceIdx.toString(), executableFunc)
+      initializeNewLoopWithNewSourceCode(voiceIdx)
     }
     
-    
-    
+    let hotSwapCued = false
     try {
       // Execute the JavaScript code with proper context
-      const oneShot = (idx: number) => oneshotCall(idx, appState.oneShots)
-      await voiceExecutableFuncs.get(voiceIdx.toString())(ctx, runLine, appState.toggles, oneShot) 
+      hotSwapCued = await voiceExecutableFuncs.get(voiceIdx.toString())(ctx, runLine, appState.toggles, oneShot) 
     } catch (error) {
       console.error('Error executing JavaScript code:', error)
     }
-      
+
+    return hotSwapCued
   }
 
   if (v.isLooping) {
@@ -288,8 +312,12 @@ const startVoice = (voiceIdx: number) => {
       v.loopHandle = ctx.branch(async (ctx) => {
         let firstLoop = true
         while (v.isLooping && v.isPlaying) {
-          await playOnce(ctx, firstLoop)
+          const hotSwapCued = await playOnce(ctx, firstLoop)
           firstLoop = false
+          if (hotSwapCued) {
+            v.hotSwapCued = false
+            firstLoop = true
+          }
         }
         v.isPlaying = false
         switchToInputMode(voiceIdx)
@@ -350,10 +378,6 @@ const stopAll = () => {
 const launchQueue: Array<(ctx: TimeContext) => Promise<void>> = []
 
 const instrumentChains = [getDriftChain(1), getDriftChain(2), getDriftChain(3), getDriftChain(4)]
-
-// Piano roll test section state
-const testTransformInput = ref('clip1 : arp up s1*0.5+0.1 s2^2 0 1')
-let testPianoRoll: PianoRoll<{}> | undefined = undefined
 
 // Debug piano rolls - one per voice
 const debugPianoRolls: (PianoRoll<{}> | undefined)[] = []
@@ -433,9 +457,6 @@ onMounted(async() => {
     loadFromLocalStorage()
     // Refresh editors to show restored JavaScript code
     refreshEditorsFromState()
-    
-    // Initialize test piano roll
-    testPianoRoll = new PianoRoll<{}>('testPianoRollHolder', () => {}, () => {}, true)
     
     // Initialize debug piano rolls for each voice
     for (let i = 0; i < appState.voices.length; i++) {
@@ -703,12 +724,6 @@ appState.voices.forEach((voice, vIdx) => {
   // Initial computation
   debouncedUpdate() //todo is this needed?
 
-  // React to changes in the slice text of THIS voice …
-  watch(
-    () => voice.saveable.sliceText,
-    () => debouncedUpdate()
-  )
-
   // …and to any change in the global slider array
   watch(
     () => appState.sliders,
@@ -816,8 +831,8 @@ appState.voices.forEach((_, idx) => updateFxParams(idx))
           Cue
         </label>
         <label>
-          <input type="number" class="start-phrase-idx-input" v-model.number="voice.saveable.startPhraseIdx"/>
-          Start Phrase Index
+          <input type="checkbox" v-model="voice.hotSwapCued"/>
+          Hot Swap Cued
         </label>
       </div>
       <details open class="text-display">
