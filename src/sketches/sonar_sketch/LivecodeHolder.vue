@@ -549,6 +549,31 @@ onMounted(async() => {
       })
     }
 
+    const FBV3 = midiInputs.get("FBV 3")
+    if (FBV3) {
+      FBV3.onControlChange(2, (msg) => {
+        if (msg.data2 > 64) {
+          //swap to previous code bank for voice 0
+          const newBankIdx = mod2(appState.voices[0].currentJsBank - 1, 8)
+          const me = new MouseEvent('click', {shiftKey: false})
+          handleJsBankClick(0, newBankIdx, me)
+        }
+      })
+      FBV3.onControlChange(3, (msg) => {
+        if (msg.data2 > 64) {
+          //swap to next code bank for voice 0
+          const newBankIdx = mod2(appState.voices[0].currentJsBank + 1, 8)
+          const me = new MouseEvent('click', {shiftKey: false})
+          handleJsBankClick(0, newBankIdx, me)
+        }
+      })
+      FBV3.onControlChange(4, (msg) => {
+        if(msg.data2 > 64) {
+          togglePlay(0)
+        }
+      })
+    }
+
     const playNoteMidi = (pitch: number, velocity: number, ctx: TimeContext, noteDur: number, voiceIdx: number) => {
       const inst = midiOuts[voiceIdx]
       inst.sendNoteOn(pitch, velocity)
@@ -903,6 +928,13 @@ appState.voices.forEach((_, idx) => updateFxParams(idx))
           </button>
         </div>
       </details>
+
+      <details open class="debug-piano-roll">
+        <summary>Debug Piano Roll (Click DSL lines in editor to visualize)</summary>
+        <div class="debug-piano-roll-container">
+          <div :id="`dslPianoRoll-${idx}`" class="debug-piano-roll-viewer"></div>
+        </div>
+      </details>
       
       <details open class="fx-controls">
         <summary>FX Controls</summary>
@@ -936,13 +968,6 @@ appState.voices.forEach((_, idx) => updateFxParams(idx))
           >
             {{ bankIdx }}
           </button>
-        </div>
-      </details>
-      
-      <details open class="debug-piano-roll">
-        <summary>Debug Piano Roll (Click DSL lines in editor to visualize)</summary>
-        <div class="debug-piano-roll-container">
-          <div :id="`dslPianoRoll-${idx}`" class="debug-piano-roll-viewer"></div>
         </div>
       </details>
     </div>
