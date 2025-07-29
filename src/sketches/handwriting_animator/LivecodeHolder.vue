@@ -1,6 +1,6 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
-import { type TemplateAppState, appStateName, resolution, type FreehandRenderData, type FlattenedStroke, type FlattenedStrokeGroup, type PolygonRenderData, type FlattenedPolygon, drawFlattenedStrokeGroup } from './appState';
+import { type TemplateAppState, appStateName, resolution, type FreehandRenderData, type FlattenedStroke, type FlattenedStrokeGroup, type PolygonRenderData, type FlattenedPolygon, drawFlattenedStrokeGroup, stage, setStage, activeNode, metadataText, showMetadataEditor, getActiveSingleNode, selectedPolygons, selected } from './appState';
 import { inject, onMounted, onUnmounted, ref, watch, computed, shallowReactive, type ShallowReactive, shallowRef } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
@@ -16,7 +16,16 @@ const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
 let timeLoops: CancelablePromisePoxy<any>[] = []
 
-let stage: Konva.Stage | undefined = undefined
+  const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromisePoxy<any> => {
+  const loop = launch(block)
+  timeLoops.push(loop)
+  return loop
+}
+
+const clearDrawFuncs = () => {
+  appState.drawFunctions = []
+  appState.drawFuncMap = new Map()
+}
 
 // Tool switching
 const activeTool = ref<'freehand' | 'polygon'>('freehand')
@@ -111,23 +120,6 @@ watch(activeTool, (newTool) => {
 })
 
 
-// Metadata editing state
-const activeNode = shallowRef<Konva.Node | null>(null)
-const metadataText = ref('')
-const showMetadataEditor = ref(false)
-
-// Helper function to get the currently active single node for metadata editing
-const getActiveSingleNode = (): Konva.Node | null => {
-  // freehand Path (single selection only)
-  if (selected.length === 1 && selected[0] instanceof Konva.Path) {
-    return selected[0]
-  }
-  // polygon Line (already single selection)
-  if (selectedPolygons.length === 1) {
-    return selectedPolygons[0]
-  }
-  return null
-}
 
 // Function to apply metadata changes
 const applyMetadata = () => {
@@ -372,7 +364,6 @@ interface FreehandStrokeGroup {
 const freehandStrokes = new Map<string, FreehandStroke>()
 const freehandStrokeGroups = new Map<string, FreehandStrokeGroup>()
 // Selection state - plain array like working example (no ref to avoid proxy issues)
-const selected: ShallowReactive<Konva.Node[]> = shallowReactive([])
 
 // Separate refs for UI state for freehand
 const freehandSelectedCount = ref(0)
@@ -1165,89 +1156,6 @@ const handleTimeUpdate = (time: number) => {
   freehandShapeLayer?.batchDraw()
 }
 
-// Watch for draw mode changes - simplified based on working example
-watch(freehandDrawMode, () => {
-  updateCursor?.()
-  
-  // Update draggable states when mode changes
-  updateFreehandDraggableStates()
-  
-  // Clear selection when switching to draw mode
-  if (freehandDrawMode.value) {
-    clearFreehandSelection()
-  }
-})
-
-// ================  polygon stuff ====================
-let polygonShapesLayer: Konva.Layer | undefined = undefined
-let polygonPreviewLayer: Konva.Layer | undefined = undefined
-let polygonControlsLayer: Konva.Layer | undefined = undefined
-let polygonSelectionLayer: Konva.Layer | undefined = undefined
-
-// Polygon data structures
-interface PolygonShape {
-  id: string
-  points: number[] // [x1, y1, x2, y2, ...]
-  closed: boolean
-  konvaShape?: Konva.Line
-  controlPoints?: Konva.Circle[]
-  creationTime: number
-}
-
-interface PolygonGroup {
-  id: string
-  polygonIds: string[]
-  group?: Konva.Group
-}
-
-
-// Polygon tool state
-const polygonShapes = new Map<string, PolygonShape>()
-const polygonGroups = new Map<string, PolygonGroup>()
-const selectedPolygons: ShallowReactive<Konva.Node[]> = shallowReactive([])
-
-// Selection state tracking for visual feedback
-const polygonOriginalStyles = new Map<string, { stroke: string, strokeWidth: number }>()
-
-// Function to toggle polygon selection
-const togglePolygonSelection = (polygonId: string) => {
-  const polygon = stage?.findOne(`#${polygonId}`) as Konva.Line
-  if (!polygon) return
-
-  // Clear previous selection
-  clearPolygonSelection()
-
-  // Select the clicked polygon
-  selectedPolygons.push(polygon)
-  
-  // Store original styling
-  polygonOriginalStyles.set(polygonId, {
-    stroke: polygon.stroke() as string,
-    strokeWidth: polygon.strokeWidth()
-  })
-  
-  // Apply highlight styling
-  polygon.stroke('#ff6b35') // Orange highlight
-  polygon.strokeWidth(4)
-  
-  polygonShapesLayer?.batchDraw()
-}
-
-// Function to clear polygon selection
-const clearPolygonSelection = () => {
-  selectedPolygons.forEach(node => {
-    const polygon = node as Konva.Line
-    const originalStyle = polygonOriginalStyles.get(polygon.id())
-    if (originalStyle) {
-      polygon.stroke(originalStyle.stroke)
-      polygon.strokeWidth(originalStyle.strokeWidth)
-    }
-  })
-  
-  selectedPolygons.length = 0
-  polygonOriginalStyles.clear()
-  polygonShapesLayer?.batchDraw()
-}
 
 // Function to generate baked stroke data for external rendering (p5, three.js, etc.)
 const generateBakedStrokeData = (): FreehandRenderData => {
@@ -1348,6 +1256,89 @@ const generateBakedStrokeData = (): FreehandRenderData => {
 // Function to update baked data in app state
 const updateBakedStrokeData = () => {
   appState.freehandRenderData = generateBakedStrokeData()
+}
+
+// Watch for draw mode changes - simplified based on working example
+watch(freehandDrawMode, () => {
+  updateCursor?.()
+  
+  // Update draggable states when mode changes
+  updateFreehandDraggableStates()
+  
+  // Clear selection when switching to draw mode
+  if (freehandDrawMode.value) {
+    clearFreehandSelection()
+  }
+})
+
+// ================  polygon stuff ====================
+let polygonShapesLayer: Konva.Layer | undefined = undefined
+let polygonPreviewLayer: Konva.Layer | undefined = undefined
+let polygonControlsLayer: Konva.Layer | undefined = undefined
+let polygonSelectionLayer: Konva.Layer | undefined = undefined
+
+// Polygon data structures
+interface PolygonShape {
+  id: string
+  points: number[] // [x1, y1, x2, y2, ...]
+  closed: boolean
+  konvaShape?: Konva.Line
+  controlPoints?: Konva.Circle[]
+  creationTime: number
+}
+
+interface PolygonGroup {
+  id: string
+  polygonIds: string[]
+  group?: Konva.Group
+}
+
+
+// Polygon tool state
+const polygonShapes = new Map<string, PolygonShape>()
+const polygonGroups = new Map<string, PolygonGroup>()
+
+// Selection state tracking for visual feedback
+const polygonOriginalStyles = new Map<string, { stroke: string, strokeWidth: number }>()
+
+// Function to toggle polygon selection
+const togglePolygonSelection = (polygonId: string) => {
+  const polygon = stage?.findOne(`#${polygonId}`) as Konva.Line
+  if (!polygon) return
+
+  // Clear previous selection
+  clearPolygonSelection()
+
+  // Select the clicked polygon
+  selectedPolygons.push(polygon)
+  
+  // Store original styling
+  polygonOriginalStyles.set(polygonId, {
+    stroke: polygon.stroke() as string,
+    strokeWidth: polygon.strokeWidth()
+  })
+  
+  // Apply highlight styling
+  polygon.stroke('#ff6b35') // Orange highlight
+  polygon.strokeWidth(4)
+  
+  polygonShapesLayer?.batchDraw()
+}
+
+// Function to clear polygon selection
+const clearPolygonSelection = () => {
+  selectedPolygons.forEach(node => {
+    const polygon = node as Konva.Line
+    const originalStyle = polygonOriginalStyles.get(polygon.id())
+    if (originalStyle) {
+      polygon.stroke(originalStyle.stroke)
+      polygon.strokeWidth(originalStyle.strokeWidth)
+    }
+  })
+  
+  selectedPolygons.length = 0
+  polygonOriginalStyles.clear()
+  polygonShapesLayer?.batchDraw()
 }
 
 // Function to generate baked polygon data for external rendering (p5, three.js, etc.)
@@ -1683,17 +1674,6 @@ const deserializePolygonState = () => {
 
 // Cursor update function (will be defined in onMounted)
 let updateCursor: (() => void) | undefined
-
-const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromisePoxy<any> => {
-  const loop = launch(block)
-  timeLoops.push(loop)
-  return loop
-}
-
-const clearDrawFuncs = () => {
-  appState.drawFunctions = []
-  appState.drawFuncMap = new Map()
-}
 
 // Polygon tool functions
 const handlePolygonClick = (pos: { x: number, y: number }) => {
@@ -2111,11 +2091,11 @@ onMounted(() => {
     }
 
     // Initialize Konva using the ref
-    stage = new Konva.Stage({
+    setStage(new Konva.Stage({
       container: konvaContainer.value,
       width: resolution.width,
       height: resolution.height,
-    })
+    }))
     
     // Update cursor based on mode
     updateCursor = () => {

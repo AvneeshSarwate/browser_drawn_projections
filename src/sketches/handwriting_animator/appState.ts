@@ -5,7 +5,8 @@ import { Entity, EntityList } from '@/stores/undoCommands'
 
 import { Ramp } from '@/channels/channels'
 import { defineStore, acceptHMRUpdate } from 'pinia'
-import { ref } from 'vue'
+import { ref, shallowReactive, shallowRef, type ShallowReactive } from 'vue'
+import Konva from 'konva'
 
 
 export type FlattenedStroke = {
@@ -112,4 +113,32 @@ export const recursiveDrawStrokeGroups = (p: p5, item: FlattenedStrokeGroup | Fl
       recursiveDrawStrokeGroups(p, child)
     })
   }
+}
+
+// eslint-disable-next-line prefer-const
+export let stage: Konva.Stage | undefined = undefined
+export const setStage = (s: Konva.Stage) => {
+  stage = s
+}
+
+
+// Metadata editing state
+export const activeNode = shallowRef<Konva.Node | null>(null)
+export const metadataText = ref('')
+export const showMetadataEditor = ref(false)
+
+export const selected: ShallowReactive<Konva.Node[]> = shallowReactive([]) //strokes
+export const selectedPolygons: ShallowReactive<Konva.Node[]> = shallowReactive([])
+
+// Helper function to get the currently active single node for metadata editing
+export const getActiveSingleNode = (): Konva.Node | null => {
+  // freehand Path (single selection only)
+  if (selected.length === 1 && selected[0] instanceof Konva.Path) {
+    return selected[0]
+  }
+  // polygon Line (already single selection)
+  if (selectedPolygons.length === 1) {
+    return selectedPolygons[0]
+  }
+  return null
 }
