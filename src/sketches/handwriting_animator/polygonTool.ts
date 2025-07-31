@@ -8,16 +8,16 @@ import type { PolygonRenderData, FlattenedPolygon, TemplateAppState } from "./ap
 import { globalStore, stage, activeNode, metadataText, showMetadataEditor, getActiveSingleNode, selected } from "./appState"
 
 const store = globalStore()
-const appState = store.appStateRef
+export const appState = store.appStateRef
 
-let polygonShapesLayer: Konva.Layer | undefined = undefined
-const setPolygonShapesLayer = (ls: Konva.Layer) => polygonShapesLayer = ls
-let polygonPreviewLayer: Konva.Layer | undefined = undefined
-const setPolygonPreviewLayer = (pl: Konva.Layer) => polygonPreviewLayer = pl
-let polygonControlsLayer: Konva.Layer | undefined = undefined
-const setPolygonControlsLayer = (cl: Konva.Layer) => polygonControlsLayer = cl
-let polygonSelectionLayer: Konva.Layer | undefined = undefined
-const setPolygonSelectionLayer = (sl: Konva.Layer) => polygonSelectionLayer = sl
+export let polygonShapesLayer: Konva.Layer | undefined = undefined
+export const setPolygonShapesLayer = (ls: Konva.Layer) => polygonShapesLayer = ls
+export let polygonPreviewLayer: Konva.Layer | undefined = undefined
+export const setPolygonPreviewLayer = (pl: Konva.Layer) => polygonPreviewLayer = pl
+export let polygonControlsLayer: Konva.Layer | undefined = undefined
+export const setPolygonControlsLayer = (cl: Konva.Layer) => polygonControlsLayer = cl
+export let polygonSelectionLayer: Konva.Layer | undefined = undefined
+export const setPolygonSelectionLayer = (sl: Konva.Layer) => polygonSelectionLayer = sl
 
 // Polygon data structures
 interface PolygonShape {
@@ -37,15 +37,15 @@ interface PolygonGroup {
 
 
 // Polygon tool state
-const polygonShapes = new Map<string, PolygonShape>()
-const polygonGroups = new Map<string, PolygonGroup>()
-const selectedPolygons: ShallowReactive<Konva.Node[]> = shallowReactive([])
+export const polygonShapes = new Map<string, PolygonShape>()
+export const polygonGroups = new Map<string, PolygonGroup>()
+export const selectedPolygons: ShallowReactive<Konva.Node[]> = shallowReactive([])
 
 // Selection state tracking for visual feedback
-const polygonOriginalStyles = new Map<string, { stroke: string, strokeWidth: number }>()
+export const polygonOriginalStyles = new Map<string, { stroke: string, strokeWidth: number }>()
 
 // Function to toggle polygon selection
-const togglePolygonSelection = (polygonId: string) => {
+export const togglePolygonSelection = (polygonId: string) => {
   const polygon = stage?.findOne(`#${polygonId}`) as Konva.Line
   if (!polygon) return
 
@@ -69,7 +69,7 @@ const togglePolygonSelection = (polygonId: string) => {
 }
 
 // Function to clear polygon selection
-const clearPolygonSelection = () => {
+export const clearPolygonSelection = () => {
   selectedPolygons.forEach(node => {
     const polygon = node as Konva.Line
     const originalStyle = polygonOriginalStyles.get(polygon.id())
@@ -85,7 +85,7 @@ const clearPolygonSelection = () => {
 }
 
 // Function to generate baked polygon data for external rendering (p5, three.js, etc.)
-const generateBakedPolygonData = (): PolygonRenderData => {
+export const generateBakedPolygonData = (): PolygonRenderData => {
   if (!polygonShapesLayer) return []
 
   const bakedPolygons: FlattenedPolygon[] = []
@@ -126,15 +126,15 @@ const generateBakedPolygonData = (): PolygonRenderData => {
 }
 
 // Function to update baked polygon data in app state
-const updateBakedPolygonData = () => {
+export const updateBakedPolygonData = () => {
   appState.polygonRenderData = generateBakedPolygonData()
 }
 
 // Polygon drawing state
-const isDrawingPolygon = ref(false)
-const currentPolygonPoints = ref<number[]>([])
-const polygonMode = ref<'draw' | 'edit'>('draw')
-const polygonProximityThreshold = 10 // pixels
+export const isDrawingPolygon = ref(false)
+export const currentPolygonPoints = ref<number[]>([])
+export const polygonMode = ref<'draw' | 'edit'>('draw')
+export const polygonProximityThreshold = 10 // pixels
 
 // Separate Polygon Undo/Redo system
 interface PolygonCommand {
@@ -143,17 +143,17 @@ interface PolygonCommand {
   afterState: string
 }
 
-const polygonCommandHistory = ref<PolygonCommand[]>([])
-const polygonHistoryIndex = ref(-1)
-const maxPolygonHistorySize = 50
+export const polygonCommandHistory = ref<PolygonCommand[]>([])
+export const polygonHistoryIndex = ref(-1)
+export const maxPolygonHistorySize = 50
 
 // Track if we're currently in a polygon undo/redo operation
-let isPolygonUndoRedoOperation = false
-const setIsPolygonUndoRedoOperation = (isUndoRedo: boolean) => isPolygonUndoRedoOperation = isUndoRedo
+export let isPolygonUndoRedoOperation = false
+export const setIsPolygonUndoRedoOperation = (isUndoRedo: boolean) => isPolygonUndoRedoOperation = isUndoRedo
 
 // Polygon Undo/Redo Functions
 // Get current polygon state for undo/redo
-const getCurrentPolygonState = () => {
+export const getCurrentPolygonState = () => {
   if (!stage || !polygonShapesLayer) return null
   
   try {
@@ -174,13 +174,13 @@ const getCurrentPolygonState = () => {
   }
 }
 
-const getCurrentPolygonStateString = (): string => {
+export const getCurrentPolygonStateString = (): string => {
   const state = getCurrentPolygonState()
   return JSON.stringify(state)
 }
 
 // Execute a polygon command with undo/redo support
-const executePolygonCommand = (commandName: string, action: () => void) => {
+export const executePolygonCommand = (commandName: string, action: () => void) => {
   if (isPolygonUndoRedoOperation) {
     // If we're in a polygon undo/redo, just execute the action without tracking
     action()
@@ -220,7 +220,7 @@ const executePolygonCommand = (commandName: string, action: () => void) => {
 }
 
 // Restore polygon state from string
-const restorePolygonState = (stateString: string) => {
+export const restorePolygonState = (stateString: string) => {
   if (!stateString) return
   
   isPolygonUndoRedoOperation = true
@@ -242,10 +242,10 @@ const restorePolygonState = (stateString: string) => {
 }
 
 // Polygon Undo/Redo functions
-const canPolygonUndo = computed(() => polygonHistoryIndex.value >= 0)
-const canPolygonRedo = computed(() => polygonHistoryIndex.value < polygonCommandHistory.value.length - 1)
+export const canPolygonUndo = computed(() => polygonHistoryIndex.value >= 0)
+export const canPolygonRedo = computed(() => polygonHistoryIndex.value < polygonCommandHistory.value.length - 1)
 
-const polygonUndo = () => {
+export const polygonUndo = () => {
   if (!canPolygonUndo.value) return
   
   const command = polygonCommandHistory.value[polygonHistoryIndex.value]
@@ -255,7 +255,7 @@ const polygonUndo = () => {
   polygonHistoryIndex.value--
 }
 
-const polygonRedo = () => {
+export const polygonRedo = () => {
   if (!canPolygonRedo.value) return
   
   polygonHistoryIndex.value++
@@ -266,14 +266,14 @@ const polygonRedo = () => {
 }
 
 // Polygon drag tracking for drag operations
-let polygonDragStartState: string | null = null
-const setPolygonDragStartState = (state: string | null) => polygonDragStartState = state
+export let polygonDragStartState: string | null = null
+export const setPolygonDragStartState = (state: string | null) => polygonDragStartState = state
 
-const startPolygonDragTracking = () => {
+export const startPolygonDragTracking = () => {
   polygonDragStartState = getCurrentPolygonStateString()
 }
 
-const finishPolygonDragTracking = (nodeName: string) => {
+export const finishPolygonDragTracking = (nodeName: string) => {
   if (!polygonDragStartState) return
   
   const endState = getCurrentPolygonStateString()
@@ -302,7 +302,7 @@ const finishPolygonDragTracking = (nodeName: string) => {
 }
 
 // Polygon state serialization functions
-const serializePolygonState = () => {
+export const serializePolygonState = () => {
   if (!stage || !polygonShapesLayer) return
   
   try {
@@ -322,7 +322,7 @@ const serializePolygonState = () => {
 }
 
 // Function to attach handlers to polygon nodes
-const attachPolygonHandlers = (node: Konva.Line) => {
+export const attachPolygonHandlers = (node: Konva.Line) => {
   console.log('Attaching polygon handlers to:', node.id())
   
   node.draggable(false) // Polygons are not draggable, controlled by control points
@@ -338,7 +338,7 @@ const attachPolygonHandlers = (node: Konva.Line) => {
   })
 }
 
-const deserializePolygonState = () => {
+export const deserializePolygonState = () => {
   if (!appState.polygonStateString || !stage || !polygonShapesLayer) return
   
   try {
@@ -418,7 +418,7 @@ const deserializePolygonState = () => {
 }
 
 // Polygon tool functions
-const handlePolygonClick = (pos: { x: number, y: number }) => {
+export const handlePolygonClick = (pos: { x: number, y: number }) => {
   if (!polygonShapesLayer) return
   
   if (polygonMode.value === 'draw') {
@@ -487,12 +487,12 @@ const handlePolygonClick = (pos: { x: number, y: number }) => {
   }
 }
 
-const handlePolygonMouseMove = () => {
+export const handlePolygonMouseMove = () => {
   if (!isDrawingPolygon.value || polygonMode.value !== 'draw') return
   updatePolygonPreview()
 }
 
-const handlePolygonEditMouseMove = () => {
+export const handlePolygonEditMouseMove = () => {
   if (!polygonPreviewLayer || !stage || polygonShapes.size === 0) return
   
   const mousePos = stage.getPointerPosition()
@@ -558,7 +558,7 @@ const handlePolygonEditMouseMove = () => {
   }
 }
 
-const updatePolygonPreview = () => {
+export const updatePolygonPreview = () => {
   if (!polygonPreviewLayer || !stage) return
   
   polygonPreviewLayer.destroyChildren()
@@ -635,7 +635,7 @@ const updatePolygonPreview = () => {
   polygonPreviewLayer.batchDraw()
 }
 
-const finishPolygon = () => {
+export const finishPolygon = () => {
   if (currentPolygonPoints.value.length < 6) return // Need at least 3 points
   
   executePolygonCommand('Create Polygon', () => {
@@ -682,7 +682,7 @@ const finishPolygon = () => {
 }
 
 // Clear current polygon being drawn
-const clearCurrentPolygon = () => {
+export const clearCurrentPolygon = () => {
   isDrawingPolygon.value = false
   currentPolygonPoints.value = []
   polygonPreviewLayer?.destroyChildren()
@@ -690,7 +690,7 @@ const clearCurrentPolygon = () => {
 }
 
 // Delete selected polygon
-const deleteSelectedPolygon = () => {
+export const deleteSelectedPolygon = () => {
   if (selectedPolygons.length === 0) return
   
   executePolygonCommand('Delete Selected Polygon', () => {
@@ -707,7 +707,7 @@ const deleteSelectedPolygon = () => {
 }
 
 // Show/hide control points for polygon editing
-const updatePolygonControlPoints = () => {
+export const updatePolygonControlPoints = () => {
   if (!polygonControlsLayer) return
   
   // Clear existing control points
@@ -799,19 +799,4 @@ watch(polygonMode, (newMode) => {
   }
   updatePolygonControlPoints()
   clearPolygonSelection()
-})
-
-// Watch for selection changes to update metadata editor
-watch([() => selected.length, () => selectedPolygons.length, activeNode], () => {
-  const newActiveNode = getActiveSingleNode()
-  activeNode.value = newActiveNode
-  
-  if (newActiveNode) {
-    const metadata = newActiveNode.getAttr('metadata') ?? {}
-    metadataText.value = JSON.stringify(metadata, null, 2)
-    showMetadataEditor.value = true
-  } else {
-    metadataText.value = ''
-    showMetadataEditor.value = false
-  }
 })
