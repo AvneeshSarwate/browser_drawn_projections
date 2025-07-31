@@ -4,7 +4,7 @@ import Konva from "konva"
 import getStroke from "perfect-freehand"
 import { type ShallowReactive, shallowReactive, ref, computed, watch } from "vue"
 import type { FreehandRenderData, FlattenedStroke, FlattenedStrokeGroup, TemplateAppState } from "./appState"
-import { globalStore, stage } from "./appState"
+import { globalStore, stage, selected } from "./appState"
 
 const store = globalStore()
 const appState = store.appStateRef
@@ -236,8 +236,6 @@ export interface FreehandStrokeGroup {
 
 export const freehandStrokes = new Map<string, FreehandStroke>()
 export const freehandStrokeGroups = new Map<string, FreehandStrokeGroup>()
-// Selection state - plain array like working example (no ref to avoid proxy issues)
-export const selected: ShallowReactive<Konva.Node[]> = shallowReactive([])
 
 // Separate refs for UI state for freehand
 export const freehandSelectedCount = ref(0)

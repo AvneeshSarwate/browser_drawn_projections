@@ -5,7 +5,7 @@ import { findClosestPolygonLineAtPoint } from "@/creativeAlgs/shapeHelpers"
 import Konva from "konva"
 import { type ShallowReactive, shallowReactive, ref, computed, watch } from "vue"
 import type { PolygonRenderData, FlattenedPolygon, TemplateAppState } from "./appState"
-import { globalStore, stage, activeNode, metadataText, showMetadataEditor, getActiveSingleNode, selected } from "./appState"
+import { globalStore, stage, activeNode, metadataText, showMetadataEditor, getActiveSingleNode, selectedPolygons } from "./appState"
 
 const store = globalStore()
 export const appState = store.appStateRef
@@ -39,7 +39,6 @@ interface PolygonGroup {
 // Polygon tool state
 export const polygonShapes = new Map<string, PolygonShape>()
 export const polygonGroups = new Map<string, PolygonGroup>()
-export const selectedPolygons: ShallowReactive<Konva.Node[]> = shallowReactive([])
 
 // Selection state tracking for visual feedback
 export const polygonOriginalStyles = new Map<string, { stroke: string, strokeWidth: number }>()
