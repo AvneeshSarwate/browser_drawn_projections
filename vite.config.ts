@@ -6,6 +6,7 @@ import vue from '@vitejs/plugin-vue'
 // import react from '@vitejs/plugin-react';
 import ts from 'typescript';
 import { vitePluginTypescriptTransform } from 'vite-plugin-typescript-transform';
+import vueDevTools from 'vite-plugin-vue-devtools'
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -26,7 +27,8 @@ export default defineConfig({
           target: ts.ScriptTarget.ES2021,
         },
       },
-    })
+    }),
+    vueDevTools()
   ],
   // build: {
   //   sourcemap: true,
