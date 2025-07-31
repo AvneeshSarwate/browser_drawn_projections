@@ -310,9 +310,17 @@ export class DrawingScene {
       duration?: number;
       scale?: number;
       position?: 'start' | 'center' | 'end';
+      loop?: boolean;
     }
   ): string | undefined {
     return this.lifecycleManager?.launchFromMouseClick(x, y, strokeA, strokeB, options);
+  }
+  
+  /**
+   * Clear all looped animations
+   */
+  clearLoopedAnimations(): void {
+    this.lifecycleManager?.clearLoopedAnimations();
   }
   
   /**

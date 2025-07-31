@@ -63,7 +63,8 @@ const animationParams = ref({
   interpolationT: 0.0,
   duration: 2.0,
   scale: 1.0,
-  position: 'center' as 'start' | 'center' | 'end'
+  position: 'center' as 'start' | 'center' | 'end',
+  loop: false
 })
 const gpuStrokesReady = ref(false)
 const webGPUSupported = computed(() => typeof navigator !== 'undefined' && !!navigator.gpu)
@@ -318,13 +319,24 @@ const handleBabylonCanvasClick = (event: MouseEvent) => {
         interpolationT: animationParams.value.interpolationT,
         duration: animationParams.value.duration,
         scale: animationParams.value.scale,
-        position: animationParams.value.position
+        position: animationParams.value.position,
+        loop: animationParams.value.loop
       }
     )
     
-    console.log(`Launched animation ${animationId} at (${x.toFixed(1)}, ${y.toFixed(1)})`)
+    console.log(`Launched animation ${animationId} at (${x.toFixed(1)}, ${y.toFixed(1)}) ${animationParams.value.loop ? '[LOOPING]' : ''}`)
   } catch (error) {
     console.warn('Failed to launch animation:', error)
+  }
+}
+
+const clearLoopedAnimations = () => {
+  if (!drawingScene || !gpuStrokesReady.value) return
+  
+  try {
+    drawingScene.clearLoopedAnimations()
+  } catch (error) {
+    console.warn('Failed to clear looped animations:', error)
   }
 }
 
@@ -848,6 +860,22 @@ onUnmounted(() => {
             </div>
           </div>
           
+          <div class="control-row">
+            <label>Loop:</label>
+            <input type="checkbox" v-model="animationParams.loop" />
+            <span class="loop-hint">{{ animationParams.loop ? 'Animations will loop continuously' : 'Single-shot animations' }}</span>
+          </div>
+          
+          <div class="control-row">
+            <button 
+              @click="clearLoopedAnimations" 
+              :disabled="!gpuStrokesReady"
+              class="clear-button"
+            >
+              🗑️ Clear All Looped Animations
+            </button>
+          </div>
+          
           <div class="info-row">
             <p v-if="availableStrokes.length < 2" class="warning">
               ⚠️ Draw at least 2 strokes to enable GPU animations
@@ -1149,5 +1177,33 @@ onUnmounted(() => {
   text-align: center;
   padding: 40px 20px;
   color: #666;
+}
+
+.loop-hint {
+  font-size: 12px;
+  color: #666;
+  font-style: italic;
+  margin-left: 10px;
+}
+
+.clear-button {
+  background: #dc3545;
+  color: white;
+  border: 1px solid #dc3545;
+  border-radius: 4px;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.clear-button:hover:not(:disabled) {
+  background: #c82333;
+  border-color: #c82333;
+}
+
+.clear-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 </style>

@@ -29,12 +29,13 @@ export type LaunchConfig = {
   startTime: number;        // When animation started
   
   // Spatial transform
-  startPoint: { x: number; y: number };  // Canvas coordinates (0-1280, 0-720)
+  startPoint: { x: number; y: number };  // Canvas coordinates
   scale: number;            // Size multiplier
   
   // Animation state
   active: boolean;
   phase: number;           // Current animation phase [0,1]
+  loop: boolean;           // Whether animation should loop continuously
 }
 
 // GPU-compatible layout (aligned to 16-byte boundaries)

@@ -96,10 +96,10 @@ export class DrawLifecycleManager {
       }
     }
     
-    // Remove completed animations
+    // Remove completed animations (but not looping ones)
     const completedIds: string[] = [];
     for (const [id, config] of this.activeConfigs) {
-      if (config.phase >= 1.0 || !config.active) {
+      if ((config.phase >= 1.0 || !config.active) && !config.loop) {
         completedIds.push(id);
       }
     }
@@ -113,11 +113,20 @@ export class DrawLifecycleManager {
     for (const config of this.activeConfigs.values()) {
       // Update elapsed time and phase
       config.elapsedTime = currentTime - config.startTime;
-      config.phase = Math.min(config.elapsedTime / config.totalDuration, 1.0);
       
-      // Mark as inactive if completed
-      if (config.phase >= 1.0) {
-        config.active = false;
+      if (config.loop) {
+        // For looping animations, cycle the phase between 0 and 1
+        config.phase = (config.elapsedTime / config.totalDuration) % 1.0;
+        // Keep animation active for looping
+        config.active = true;
+      } else {
+        // For non-looping animations, clamp phase to [0,1]
+        config.phase = Math.min(config.elapsedTime / config.totalDuration, 1.0);
+        
+        // Mark as inactive if completed
+        if (config.phase >= 1.0) {
+          config.active = false;
+        }
       }
     }
   }
@@ -191,6 +200,24 @@ export class DrawLifecycleManager {
   }
   
   /**
+   * Clear all looped animations
+   */
+  clearLoopedAnimations(): void {
+    const loopedIds: string[] = [];
+    for (const [id, config] of this.activeConfigs) {
+      if (config.loop) {
+        loopedIds.push(id);
+      }
+    }
+    
+    for (const id of loopedIds) {
+      this.activeConfigs.delete(id);
+    }
+    
+    console.log(`Cleared ${loopedIds.length} looped animations`);
+  }
+  
+  /**
    * Interactive launch from mouse click
    */
   launchFromMouseClick(
@@ -203,6 +230,7 @@ export class DrawLifecycleManager {
       duration?: number;
       scale?: number;
       position?: 'start' | 'center' | 'end';
+      loop?: boolean;
     } = {}
   ): string {
     // Calculate position offset based on stroke bounds and position setting
@@ -264,7 +292,8 @@ export class DrawLifecycleManager {
       interpolationT: options.interpolationT ?? 0.0,
       totalDuration: options.duration ?? 2.0,
       startPoint: { x: x + offsetX, y: y + offsetY },
-      scale
+      scale,
+      loop: options.loop ?? false
     };
     
     return this.addAnimation(config);
