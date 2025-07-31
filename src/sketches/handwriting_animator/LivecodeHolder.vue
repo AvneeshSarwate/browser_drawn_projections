@@ -76,10 +76,12 @@ const webGPUSupported = computed(() => typeof navigator !== 'undefined' && !!nav
 // Script editor state
 const scriptEditorRef = ref<HTMLDivElement>()
 let scriptEditor: EditorView | undefined = undefined
-const scriptCode = ref(`// Launch multiple strokes in patterns
+const SCRIPT_STORAGE_KEY = 'handwriting-animator-script'
+const defaultScript = `// Launch multiple strokes in patterns
 launchStroke(100, 100, 0, 1)
 launchStroke(200, 200, 0, 1, { duration: 3.0, loop: true })
-launchStroke(300, 300, 1, 0, { startPhase: 0.5 })`)
+launchStroke(300, 300, 1, 0, { startPhase: 0.5 })`
+const scriptCode = ref(localStorage.getItem(SCRIPT_STORAGE_KEY) || defaultScript)
 const scriptExecuting = ref(false)
 
 let gridLayer: Konva.Layer | undefined = undefined
@@ -377,7 +379,9 @@ const initializeScriptEditor = () => {
     }),
     EditorView.updateListener.of(update => {
       if (update.docChanged) {
-        scriptCode.value = update.state.doc.toString()
+        const newCode = update.state.doc.toString()
+        scriptCode.value = newCode
+        localStorage.setItem(SCRIPT_STORAGE_KEY, newCode)
       }
     })
   ]
