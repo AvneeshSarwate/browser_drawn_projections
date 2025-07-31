@@ -5,6 +5,7 @@
 ## bugs and cleanup 
 - clearing looped animations takes more than 1 click sometimes
 - transforms for shapes don't get reflected in looped animations as expected
+- click launch after launching a script doesn't work
 
 
 
