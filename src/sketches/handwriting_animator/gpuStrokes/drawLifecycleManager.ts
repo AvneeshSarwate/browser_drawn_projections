@@ -50,7 +50,7 @@ export class DrawLifecycleManager {
       id,
       startTime: currentTime,
       elapsedTime: 0,
-      phase: 0,
+      phase: config.startPhase, // Initialize phase with startPhase offset
       active: true
     };
     
@@ -111,19 +111,20 @@ export class DrawLifecycleManager {
   
   private updateActiveAnimations(currentTime: number): void {
     for (const config of this.activeConfigs.values()) {
-      // Update elapsed time and phase
+      // Update elapsed time and calculate base phase
       config.elapsedTime = currentTime - config.startTime;
+      const basePhase = config.elapsedTime / config.totalDuration;
       
       if (config.loop) {
-        // For looping animations, cycle the phase between 0 and 1
-        config.phase = (config.elapsedTime / config.totalDuration) % 1.0;
+        // For looping animations, cycle the phase between 0 and 1, offset by startPhase
+        config.phase = (basePhase + config.startPhase) % 1.0;
         // Keep animation active for looping
         config.active = true;
       } else {
-        // For non-looping animations, clamp phase to [0,1]
-        config.phase = Math.min(config.elapsedTime / config.totalDuration, 1.0);
+        // For non-looping animations, add startPhase offset and clamp to [0,1]
+        config.phase = Math.min(basePhase + config.startPhase, 1.0);
         
-        // Mark as inactive if completed
+        // Mark as inactive if completed (phase >= 1.0)
         if (config.phase >= 1.0) {
           config.active = false;
         }
@@ -231,6 +232,7 @@ export class DrawLifecycleManager {
       scale?: number;
       position?: 'start' | 'center' | 'end';
       loop?: boolean;
+      startPhase?: number;
     } = {}
   ): string {
     // Calculate position offset based on stroke bounds and position setting
@@ -293,7 +295,8 @@ export class DrawLifecycleManager {
       totalDuration: options.duration ?? 2.0,
       startPoint: { x: x + offsetX, y: y + offsetY },
       scale,
-      loop: options.loop ?? false
+      loop: options.loop ?? false,
+      startPhase: options.startPhase ?? 0.0
     };
     
     return this.addAnimation(config);

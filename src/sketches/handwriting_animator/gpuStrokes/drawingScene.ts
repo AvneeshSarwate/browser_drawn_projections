@@ -311,6 +311,7 @@ export class DrawingScene {
       scale?: number;
       position?: 'start' | 'center' | 'end';
       loop?: boolean;
+      startPhase?: number;
     }
   ): string | undefined {
     return this.lifecycleManager?.launchFromMouseClick(x, y, strokeA, strokeB, options);

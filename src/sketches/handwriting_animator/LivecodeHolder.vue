@@ -64,7 +64,8 @@ const animationParams = ref({
   duration: 2.0,
   scale: 1.0,
   position: 'center' as 'start' | 'center' | 'end',
-  loop: false
+  loop: false,
+  startPhase: 0.0
 })
 const gpuStrokesReady = ref(false)
 const webGPUSupported = computed(() => typeof navigator !== 'undefined' && !!navigator.gpu)
@@ -320,7 +321,8 @@ const handleBabylonCanvasClick = (event: MouseEvent) => {
         duration: animationParams.value.duration,
         scale: animationParams.value.scale,
         position: animationParams.value.position,
-        loop: animationParams.value.loop
+        loop: animationParams.value.loop,
+        startPhase: animationParams.value.startPhase
       }
     )
     
@@ -867,6 +869,18 @@ onUnmounted(() => {
           </div>
           
           <div class="control-row">
+            <label>Start Phase ({{ animationParams.startPhase.toFixed(2) }}):</label>
+            <input 
+              type="range" 
+              v-model.number="animationParams.startPhase" 
+              min="0" 
+              max="1" 
+              step="0.01"
+            />
+            <span class="phase-hint">{{ (animationParams.startPhase * 100).toFixed(0) }}% through animation</span>
+          </div>
+          
+          <div class="control-row">
             <button 
               @click="clearLoopedAnimations" 
               :disabled="!gpuStrokesReady"
@@ -1179,7 +1193,8 @@ onUnmounted(() => {
   color: #666;
 }
 
-.loop-hint {
+.loop-hint,
+.phase-hint {
   font-size: 12px;
   color: #666;
   font-style: italic;

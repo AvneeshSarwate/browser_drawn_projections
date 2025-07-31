@@ -27,6 +27,7 @@ export type LaunchConfig = {
   totalDuration: number;    // Total animation duration in seconds
   elapsedTime: number;      // Current elapsed time
   startTime: number;        // When animation started
+  startPhase: number;       // Initial phase offset [0,1]
   
   // Spatial transform
   startPoint: { x: number; y: number };  // Canvas coordinates
