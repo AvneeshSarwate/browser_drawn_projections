@@ -9,29 +9,29 @@ import { globalStore, stage } from "./appState"
 const store = globalStore()
 const appState = store.appStateRef
 
-let freehandShapeLayer: Konva.Layer | undefined = undefined
-const setFreehandShapeLayer = (ls: Konva.Layer) => freehandShapeLayer = ls
-let freehandDrawingLayer: Konva.Layer | undefined = undefined
-const setFreehandDrawingLayer = (dl: Konva.Layer) => freehandDrawingLayer = dl
-let freehandSelectionLayer: Konva.Layer | undefined = undefined
-const setFreehandSelectionLayer = (sl: Konva.Layer) => freehandSelectionLayer = sl
+export let freehandShapeLayer: Konva.Layer | undefined = undefined
+export const setFreehandShapeLayer = (ls: Konva.Layer) => freehandShapeLayer = ls
+export let freehandDrawingLayer: Konva.Layer | undefined = undefined
+export const setFreehandDrawingLayer = (dl: Konva.Layer) => freehandDrawingLayer = dl
+export let freehandSelectionLayer: Konva.Layer | undefined = undefined
+export const setFreehandSelectionLayer = (sl: Konva.Layer) => freehandSelectionLayer = sl
 
 // Drawing state
-let isDrawing = false
-const setIsDrawing = (id: boolean) => isDrawing = id
-let currentPoints: number[] = []
-const setCurrentPoints = (pts: number[]) => currentPoints = pts
-let currentTimestamps: number[] = []
-const setCurrentTimestamps = (ts: number[]) => currentTimestamps = ts
-let drawingStartTime = 0
-const setDrawingStartTime = (ts: number) => drawingStartTime = ts
+export let isDrawing = false
+export const setIsDrawing = (id: boolean) => isDrawing = id
+export let currentPoints: number[] = []
+export const setCurrentPoints = (pts: number[]) => currentPoints = pts
+export let currentTimestamps: number[] = []
+export const setCurrentTimestamps = (ts: number[]) => currentTimestamps = ts
+export let drawingStartTime = 0
+export const setDrawingStartTime = (ts: number) => drawingStartTime = ts
 
 
 // Transform controls - for freehand
-let selTr: Konva.Transformer | undefined = undefined
-const setSelTr = (tr: Konva.Transformer) => selTr = tr
-let grpTr: Konva.Transformer | undefined = undefined
-const setGrpTr = (tr: Konva.Transformer) => grpTr = tr
+export let selTr: Konva.Transformer | undefined = undefined
+export const setSelTr = (tr: Konva.Transformer) => selTr = tr
+export let grpTr: Konva.Transformer | undefined = undefined
+export const setGrpTr = (tr: Konva.Transformer) => grpTr = tr
 
 // Helper functions from working example
 const freehandLockPivot = (node: Konva.Group | Konva.Node) => {
@@ -116,13 +116,13 @@ const freehandToggleSelection = (node: Konva.Node) => {
   freehandRefreshUI() 
 }
 
-const clearFreehandSelection = () => { 
+export const clearFreehandSelection = () => { 
   selected.length = 0 
   freehandRefreshUI() 
 }
 
 // Update timeline state based on current selection
-const updateTimelineState = () => {
+export const updateTimelineState = () => {
   const oldDuration = timelineDuration.value
   let newDuration = 0
   
@@ -217,7 +217,7 @@ const freehandRefreshUI = () => {
 }
 
 // Stroke data structure
-interface FreehandStroke {
+export interface FreehandStroke {
   id: string
   points: number[]
   timestamps: number[]
@@ -228,29 +228,29 @@ interface FreehandStroke {
   isFreehand: boolean // Track if this is a freehand stroke with timing info
 }
 
-interface FreehandStrokeGroup {
+export interface FreehandStrokeGroup {
   id: string
   strokeIds: string[]
   group?: Konva.Group
 }
 
-const freehandStrokes = new Map<string, FreehandStroke>()
-const freehandStrokeGroups = new Map<string, FreehandStrokeGroup>()
+export const freehandStrokes = new Map<string, FreehandStroke>()
+export const freehandStrokeGroups = new Map<string, FreehandStrokeGroup>()
 // Selection state - plain array like working example (no ref to avoid proxy issues)
-const selected: ShallowReactive<Konva.Node[]> = shallowReactive([])
+export const selected: ShallowReactive<Konva.Node[]> = shallowReactive([])
 
 // Separate refs for UI state for freehand
-const freehandSelectedCount = ref(0)
-const isFreehandGroupSelected = ref(false)
-const freehandCanGroupRef = ref(false)
-const selectedStrokesForTimeline = ref(new Set<string>())
-const timelineDuration = ref(0)
-const showGrid = ref(false)
-const gridSize = 20
-const currentPlaybackTime = ref(0)
-const freehandDrawMode = ref(true) // true = draw mode, false = select mode
-const useRealTiming = ref(false) // false = use max threshold, true = use actual timing
-const maxInterStrokeDelay = 300 // 0.3 seconds max gap between strokes
+export const freehandSelectedCount = ref(0)
+export const isFreehandGroupSelected = ref(false)
+export const freehandCanGroupRef = ref(false)
+export const selectedStrokesForTimeline = ref(new Set<string>())
+export const timelineDuration = ref(0)
+export const showGrid = ref(false)
+export const gridSize = 20
+export const currentPlaybackTime = ref(0)
+export const freehandDrawMode = ref(true) // true = draw mode, false = select mode
+export const useRealTiming = ref(false) // false = use max threshold, true = use actual timing
+export const maxInterStrokeDelay = 300 // 0.3 seconds max gap between strokes
 
 // Undo/Redo system for freehand
 interface FreehandCommand {
@@ -268,7 +268,7 @@ let isUndoRedoOperation = false
 const setIsUndoRedoOperation = (isUndoRedo: boolean) => isUndoRedoOperation = isUndoRedo
 
 // Track if animation is currently playing for UI locking
-const isAnimating = ref(false)
+export const isAnimating = ref(false)
 
 
 
@@ -300,7 +300,7 @@ const getCurrentFreehandStateString = (): string => {
 }
 
 // Execute a command with undo/redo support
-const executeFreehandCommand = (commandName: string, action: () => void) => {
+export const executeFreehandCommand = (commandName: string, action: () => void) => {
   if (isUndoRedoOperation) {
     // If we're in an undo/redo, just execute the action without tracking
     action()
@@ -372,10 +372,10 @@ const restoreFreehandState = (stateString: string) => {
 }
 
 // Undo/Redo functions
-const canUndoFreehand = computed(() => freehandHistoryIndex.value >= 0)
-const canRedoFreehand = computed(() => freehandHistoryIndex.value < freehandCommandHistory.value.length - 1)
+export const canUndoFreehand = computed(() => freehandHistoryIndex.value >= 0)
+export const canRedoFreehand = computed(() => freehandHistoryIndex.value < freehandCommandHistory.value.length - 1)
 
-const undoFreehand = () => {
+export const undoFreehand = () => {
   if (!canUndoFreehand.value) return
   
   const command = freehandCommandHistory.value[freehandHistoryIndex.value]
@@ -385,7 +385,7 @@ const undoFreehand = () => {
   freehandHistoryIndex.value--
 }
 
-const redoFreehand = () => {
+export const redoFreehand = () => {
   if (!canRedoFreehand.value) return
   
   freehandHistoryIndex.value++
@@ -399,11 +399,11 @@ const redoFreehand = () => {
 let freehandDragStartState: string | null = null
 const setFreehandDragStartState = (state: string | null) => freehandDragStartState = state
 
-const startFreehandDragTracking = () => {
+export const startFreehandDragTracking = () => {
   freehandDragStartState = getCurrentFreehandStateString()
 }
 
-const finishFreehandDragTracking = (nodeName: string) => {
+export const finishFreehandDragTracking = (nodeName: string) => {
   if (!freehandDragStartState) return
   
   const endState = getCurrentFreehandStateString()
@@ -443,7 +443,7 @@ const refreshStrokeConnections = () => {
 }
 
 // Serialization functions for hotreloading
-const serializeFreehandState = () => {
+export const serializeFreehandState = () => {
   if (!stage || !freehandShapeLayer) return
   
   try {
@@ -460,7 +460,7 @@ const serializeFreehandState = () => {
   }
 }
 
-const deserializeFreehandState = () => {
+export const deserializeFreehandState = () => {
   if (!appState.freehandStateString || !stage || !freehandShapeLayer) return
   
   try {
@@ -584,7 +584,7 @@ const deserializeFreehandState = () => {
 }
 
 // Function to update draggable state based on mode and group membership
-const updateFreehandDraggableStates = () => {
+export const updateFreehandDraggableStates = () => {
   console.log('updateDraggableStates called, drawMode:', freehandDrawMode.value, 'strokes count:', freehandStrokes.size)
   
   // Update all shapes
@@ -615,7 +615,7 @@ const updateFreehandDraggableStates = () => {
 }
 
 // Helper function to convert points to perfect-freehand stroke
-const getStrokePath = (points: number[], normalize: boolean = false): string => {
+export const getStrokePath = (points: number[], normalize: boolean = false): string => {
   if (points.length < 4) return ''
   
   // Convert flat array to point pairs
@@ -659,7 +659,7 @@ const getStrokePath = (points: number[], normalize: boolean = false): string => 
   return `${d} Z`
 }
 
-const getPointsBounds = (points: number[]): { minX: number, minY: number, maxX: number, maxY: number } => {
+export const getPointsBounds = (points: number[]): { minX: number, minY: number, maxX: number, maxY: number } => {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
   for (let i = 0; i < points.length; i += 2) {
     minX = Math.min(minX, points[i])
@@ -671,7 +671,7 @@ const getPointsBounds = (points: number[]): { minX: number, minY: number, maxX: 
 }
 
 // Helper function to create a new stroke shape
-const createStrokeShape = (points: number[], id: string): Konva.Path => {
+export const createStrokeShape = (points: number[], id: string): Konva.Path => {
   // Get bounds to position the shape
   const bounds = getPointsBounds(points)
   
@@ -712,7 +712,7 @@ const createStrokeShape = (points: number[], id: string): Konva.Path => {
 }
 
 // Handle click following working example pattern
-const handleClick = (target: Konva.Node, shiftKey: boolean) => {
+export const handleClick = (target: Konva.Node, shiftKey: boolean) => {
   // Only allow selection in select mode  
   if (freehandDrawMode.value) return
   
@@ -728,7 +728,7 @@ const handleClick = (target: Konva.Node, shiftKey: boolean) => {
 }
 
 // Group selected strokes - simplified from working example  
-const groupSelectedStrokes = () => {
+export const groupSelectedStrokes = () => {
   if (selected.length < 2) return
 
   executeFreehandCommand('Group Strokes', () => {
@@ -774,7 +774,7 @@ const groupSelectedStrokes = () => {
 }
 
 // Ungroup selected groups - simplified from working example
-const ungroupSelectedStrokes = () => {
+export const ungroupSelectedStrokes = () => {
   if (!(selected.length === 1 && selected[0] instanceof Konva.Group)) return
   
   executeFreehandCommand('Ungroup Strokes', () => {
@@ -808,7 +808,7 @@ const ungroupSelectedStrokes = () => {
 }
 
 // Delete selected freehand strokes/groups
-const deleteFreehandSelected = () => {
+export const deleteFreehandSelected = () => {
   if (selected.length === 0) return
   
   executeFreehandCommand('Delete Selected', () => {
@@ -829,7 +829,7 @@ const deleteFreehandSelected = () => {
 }
 
 // Handle timeline updates and stroke animation - restored full logic
-const handleTimeUpdate = (time: number) => {
+export const handleTimeUpdate = (time: number) => {
   currentPlaybackTime.value = time
   
   // Get strokes to animate and sort them
@@ -1130,7 +1130,7 @@ const generateBakedStrokeData = (): FreehandRenderData => {
 }
 
 // Function to update baked data in app state
-const updateBakedStrokeData = () => {
+export const updateBakedStrokeData = () => {
   appState.freehandRenderData = generateBakedStrokeData()
 }
 
