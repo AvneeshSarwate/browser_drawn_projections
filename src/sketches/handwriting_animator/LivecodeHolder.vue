@@ -305,6 +305,7 @@ const handleBabylonCanvasClick = (event: MouseEvent) => {
   const rect = babylonContainer.value?.getBoundingClientRect()
   if (!rect) return
   
+  // Get click position relative to canvas
   const x = event.clientX - rect.left
   const y = event.clientY - rect.top
   
@@ -321,7 +322,7 @@ const handleBabylonCanvasClick = (event: MouseEvent) => {
       }
     )
     
-    console.log(`Launched animation ${animationId} at (${x}, ${y})`)
+    console.log(`Launched animation ${animationId} at (${x.toFixed(1)}, ${y.toFixed(1)})`)
   } catch (error) {
     console.warn('Failed to launch animation:', error)
   }
@@ -733,7 +734,6 @@ onUnmounted(() => {
           height: resolution.height + 'px',
         }"
       ></div>
-    </div>
     
     <!-- Metadata Editor -->
     <div v-if="showMetadataEditor" class="metadata-panel">
@@ -769,12 +769,15 @@ onUnmounted(() => {
     <div v-if="isAnimating" class="animation-lock-warning">
       ⚠️ Timeline has modified elements - press Stop to unlock
     </div>
+
     <!-- GPU Strokes Canvas -->
       <div class="gpu-strokes-section">
         <h3>GPU Strokes Animation</h3>
         <canvas 
           ref="babylonContainer"
           class="babylon-canvas"
+          :width="resolution.width"
+          :height="resolution.height"
           :style="{
             width: resolution.width + 'px',
             height: resolution.height + 'px',
@@ -860,6 +863,7 @@ onUnmounted(() => {
           <p v-else>🔄 Initializing GPU Strokes...</p>
         </div>
       </div>
+    </div>
   </div>
 </template>
 
@@ -885,7 +889,9 @@ onUnmounted(() => {
 
 .canvas-wrapper {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
 }
 
 .control-panel button {
@@ -1057,8 +1063,8 @@ onUnmounted(() => {
   border: 1px solid #ccc;
   border-radius: 8px;
   padding: 20px;
-  margin-top: 20px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  width: 100%;
   max-width: 800px;
 }
 

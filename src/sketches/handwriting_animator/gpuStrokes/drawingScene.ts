@@ -19,8 +19,14 @@ export class DrawingScene {
   private maxAnimations: number = DRAWING_CONSTANTS.MAX_ANIMATIONS;
   private pointsPerStroke: number = DRAWING_CONSTANTS.POINTS_PER_STROKE;
   private maxInstances: number = this.maxAnimations * this.pointsPerStroke;
+  private canvasWidth!: number;
+  private canvasHeight!: number;
   
   async createScene(canvas: HTMLCanvasElement, stats: Stats): Promise<void> {
+    // Store canvas dimensions for use throughout the system
+    this.canvasWidth = canvas.width;
+    this.canvasHeight = canvas.height;
+    
     await this.initializeEngine(canvas);
     this.setupCamera();
     // await this.setupStrokeData(); // only for test data
@@ -52,7 +58,7 @@ export class DrawingScene {
     const camera = new BABYLON.FreeCamera("camera", new BABYLON.Vector3(0, 0, -1), this.scene);
     
     // Set up orthographic projection to match canvas coordinates
-    const aspectRatio = DRAWING_CONSTANTS.CANVAS_WIDTH / DRAWING_CONSTANTS.CANVAS_HEIGHT;
+    const aspectRatio = this.canvasWidth / this.canvasHeight;
     
     camera.mode = BABYLON.Camera.ORTHOGRAPHIC_CAMERA;
     camera.orthoLeft = -aspectRatio;
@@ -98,10 +104,10 @@ export class DrawingScene {
   
   private setupMaterials(): void {
     // Create base mesh for instancing (2D circle)
-    const aspectRatio = DRAWING_CONSTANTS.CANVAS_WIDTH / DRAWING_CONSTANTS.CANVAS_HEIGHT;
+    const aspectRatio = this.canvasWidth / this.canvasHeight;
     const targetPixelSize = 50; // Larger base size for visibility
     const orthoWidth = 2 * aspectRatio;
-    const circleRadius = (targetPixelSize / DRAWING_CONSTANTS.CANVAS_WIDTH) * orthoWidth * 0.5;
+    const circleRadius = (targetPixelSize / this.canvasWidth) * orthoWidth * 0.5;
     
     this.instancedMesh = BABYLON.MeshBuilder.CreateDisc(
       "strokePoint",
@@ -189,8 +195,8 @@ export class DrawingScene {
     this.globalParamsBuffer.addUniform("padding3", 1);
     
     // Set initial values
-    this.globalParamsBuffer.updateFloat("canvasWidth", DRAWING_CONSTANTS.CANVAS_WIDTH);
-    this.globalParamsBuffer.updateFloat("canvasHeight", DRAWING_CONSTANTS.CANVAS_HEIGHT);
+    this.globalParamsBuffer.updateFloat("canvasWidth", this.canvasWidth);
+    this.globalParamsBuffer.updateFloat("canvasHeight", this.canvasHeight);
     this.globalParamsBuffer.updateFloat("maxAnimations", this.maxAnimations);
     this.globalParamsBuffer.update();
     
