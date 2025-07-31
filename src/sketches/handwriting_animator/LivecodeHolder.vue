@@ -312,7 +312,7 @@ const handleBabylonCanvasClick = (event: MouseEvent) => {
   const y = event.clientY - rect.top
   
   try {
-    const animationId = drawingScene.launchFromMouseClick(
+    const animationId = drawingScene.launchStroke(
       x, y,
       animationParams.value.strokeA,
       animationParams.value.strokeB,

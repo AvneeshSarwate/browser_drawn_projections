@@ -300,7 +300,7 @@ export class DrawingScene {
   /**
    * Launch animation from mouse click
    */
-  launchFromMouseClick(
+  launchStroke(
     x: number, 
     y: number, 
     strokeA: number, 
@@ -314,7 +314,7 @@ export class DrawingScene {
       startPhase?: number;
     }
   ): string | undefined {
-    return this.lifecycleManager?.launchFromMouseClick(x, y, strokeA, strokeB, options);
+    return this.lifecycleManager?.launchStroke(x, y, strokeA, strokeB, options);
   }
   
   /**

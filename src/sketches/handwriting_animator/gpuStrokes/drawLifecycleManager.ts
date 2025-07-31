@@ -221,7 +221,7 @@ export class DrawLifecycleManager {
   /**
    * Interactive launch from mouse click
    */
-  launchFromMouseClick(
+  launchStroke(
     x: number, 
     y: number, 
     strokeA: number, 
