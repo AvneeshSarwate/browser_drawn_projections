@@ -1,7 +1,7 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
 import { type TemplateAppState, appStateName, resolution, type FreehandRenderData, type FlattenedStroke, type FlattenedStrokeGroup, type PolygonRenderData, type FlattenedPolygon, drawFlattenedStrokeGroup, stage, setStage, activeNode, metadataText, showMetadataEditor, getActiveSingleNode, selectedPolygons, selected } from './appState';
-import { inject, onMounted, onUnmounted, ref, watch, computed, shallowReactive, type ShallowReactive, shallowRef } from 'vue';
+import { inject, onMounted, onUnmounted, ref, watch, computed, shallowReactive, type ShallowReactive, shallowRef, nextTick } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
@@ -12,6 +12,9 @@ import { clearFreehandSelection, createStrokeShape, currentPoints, currentTimest
 import { DrawingScene } from './gpuStrokes/drawingScene';
 import { StrokeInterpolator } from './gpuStrokes/strokeInterpolator';
 import Stats from '@/rendering/stats';
+import { EditorView, basicSetup } from 'codemirror';
+import { javascript } from '@codemirror/lang-javascript';
+import { oneDark } from '@codemirror/theme-one-dark';
 import { polygonShapesLayer, polygonPreviewLayer, polygonControlsLayer, polygonSelectionLayer, clearPolygonSelection, updatePolygonControlPoints, deserializePolygonState, polygonMode, handlePolygonClick, isDrawingPolygon, handlePolygonMouseMove, handlePolygonEditMouseMove, currentPolygonPoints, finishPolygon, clearCurrentPolygon, serializePolygonState, setPolygonControlsLayer, setPolygonPreviewLayer, setPolygonSelectionLayer, setPolygonShapesLayer, polygonUndo, polygonRedo, canPolygonUndo, canPolygonRedo, deleteSelectedPolygon } from './polygonTool';
 
 // ==================== common stuff ====================
@@ -69,6 +72,15 @@ const animationParams = ref({
 })
 const gpuStrokesReady = ref(false)
 const webGPUSupported = computed(() => typeof navigator !== 'undefined' && !!navigator.gpu)
+
+// Script editor state
+const scriptEditorRef = ref<HTMLDivElement>()
+let scriptEditor: EditorView | undefined = undefined
+const scriptCode = ref(`// Launch multiple strokes in patterns
+launchStroke(100, 100, 0, 1)
+launchStroke(200, 200, 0, 1, { duration: 3.0, loop: true })
+launchStroke(300, 300, 1, 0, { startPhase: 0.5 })`)
+const scriptExecuting = ref(false)
 
 let gridLayer: Konva.Layer | undefined = undefined
 
@@ -342,6 +354,84 @@ const clearLoopedAnimations = () => {
   }
 }
 
+// Script editor functions
+const initializeScriptEditor = () => {
+  if (!scriptEditorRef.value) return
+  
+  const extensions = [
+    basicSetup,
+    javascript(),
+    oneDark,
+    EditorView.theme({
+      '&': { 
+        maxHeight: '300px',
+        width: '100%'
+      },
+      '.cm-scroller': { 
+        overflow: 'auto',
+        maxHeight: '300px'
+      },
+      '.cm-editor': {
+        fontSize: '14px'
+      }
+    }),
+    EditorView.updateListener.of(update => {
+      if (update.docChanged) {
+        scriptCode.value = update.state.doc.toString()
+      }
+    })
+  ]
+
+  scriptEditor = new EditorView({
+    doc: scriptCode.value,
+    extensions,
+    parent: scriptEditorRef.value
+  })
+}
+
+const executeScript = () => {
+  if (!drawingScene || !gpuStrokesReady.value || scriptExecuting.value) return
+  
+  scriptExecuting.value = true
+  
+  try {
+    // Create launchStroke function that wraps drawingScene.launchStroke
+    const launchStroke = (x: number, y: number, strokeA: number, strokeB: number, options?: any) => {
+      if (!drawingScene || availableStrokes.value.length < 2) {
+        console.warn('Insufficient strokes available for launching')
+        return
+      }
+      
+      // Validate stroke indices
+      if (strokeA < 0 || strokeA >= availableStrokes.value.length || 
+          strokeB < 0 || strokeB >= availableStrokes.value.length) {
+        console.warn(`Invalid stroke indices: strokeA=${strokeA}, strokeB=${strokeB}. Available: 0-${availableStrokes.value.length - 1}`)
+        return
+      }
+      
+      try {
+        return drawingScene.launchStroke(x, y, strokeA, strokeB, options)
+      } catch (error) {
+        console.error('Error launching stroke:', error)
+      }
+    }
+    
+    // Get current script code
+    const code = scriptEditor?.state.doc.toString() || scriptCode.value
+    
+    // Create execution context and run script
+    const scriptFunction = new Function('launchStroke', code)
+    scriptFunction(launchStroke)
+    
+    console.log('Script executed successfully')
+  } catch (error) {
+    console.error('Script execution error:', error)
+    alert(`Script Error: ${error.message}`)
+  } finally {
+    scriptExecuting.value = false
+  }
+}
+
 
 // ================  freehand stuff ====================
 
@@ -449,6 +539,10 @@ onMounted(async () => {
     
     // Set up the freehand data update callback
     appState.freehandDataUpdateCallback = updateGPUStrokes
+    
+    // Initialize script editor
+    await nextTick() // Ensure DOM elements are ready
+    initializeScriptEditor()
 
     // Mouse/touch event handlers
     stage.on('mousedown touchstart', (e) => {
@@ -888,6 +982,13 @@ onUnmounted(() => {
             >
               🗑️ Clear All Looped Animations
             </button>
+            <button 
+            @click="executeScript" 
+            :disabled="!gpuStrokesReady || scriptExecuting || availableStrokes.length < 2"
+            class="launch-button"
+          >
+            {{ scriptExecuting ? 'Executing...' : 'Launch Script' }}
+          </button>
           </div>
           
           <div class="info-row">
@@ -903,6 +1004,22 @@ onUnmounted(() => {
         <div v-else class="gpu-loading">
           <p v-if="!webGPUSupported">❌ WebGPU not supported in this browser</p>
           <p v-else>🔄 Initializing GPU Strokes...</p>
+        </div>
+      </div>
+      
+      <!-- JavaScript Script Editor -->
+      <div class="script-editor-section">
+        <h3>JavaScript Scripts</h3>
+        <div 
+          ref="scriptEditorRef"
+          class="script-editor"
+        ></div>
+        <div class="script-controls">
+          <span class="script-info">
+            {{ availableStrokes.length < 2 ? 
+                'Need at least 2 strokes to run scripts' : 
+                `Ready to execute (${availableStrokes.length} strokes available)` }}
+          </span>
         </div>
       </div>
     </div>
@@ -1220,5 +1337,64 @@ onUnmounted(() => {
 .clear-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Script Editor Styles */
+.script-editor-section {
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  padding: 20px;
+  margin-top: 20px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  max-width: 800px;
+}
+
+.script-editor-section h3 {
+  margin: 0 0 15px 0;
+  color: #333;
+  text-align: center;
+}
+
+.script-editor {
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  margin-bottom: 15px;
+}
+
+.script-controls {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.launch-button {
+  background: #28a745;
+  color: white;
+  border: 1px solid #28a745;
+  border-radius: 4px;
+  padding: 10px 20px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.launch-button:hover:not(:disabled) {
+  background: #218838;
+  border-color: #218838;
+}
+
+.launch-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: #6c757d;
+  border-color: #6c757d;
+}
+
+.script-info {
+  color: #666;
+  font-size: 14px;
 }
 </style>
