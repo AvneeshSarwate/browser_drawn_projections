@@ -7,8 +7,8 @@ export const DRAWING_CONSTANTS = {
   POINTS_PER_STROKE: 1024,
   
   // System limits
-  MAX_STROKES: 64,
-  MAX_ANIMATIONS: 64,
+  MAX_STROKES: 1024,
+  MAX_ANIMATIONS: 1024,
   
   // GPU optimization
   WORKGROUP_SIZE: 64,
@@ -22,7 +22,7 @@ export const DRAWING_CONSTANTS = {
   STROKE_TEXTURE_HEIGHT: MAX_STROKES,  // Number of strokes
   
   // Memory calculations
-  STROKE_TEXTURE_BYTES: 1024 * 64 * 2 * 2, // width × height × 2 channels × 2 bytes per half-float = 262KB
+  STROKE_TEXTURE_BYTES: 1024 * 1024 * 2 * 2, // width × height × 2 channels × 2 bytes per half-float = 4MB
 } as const;
 
 // Type-safe access to constants

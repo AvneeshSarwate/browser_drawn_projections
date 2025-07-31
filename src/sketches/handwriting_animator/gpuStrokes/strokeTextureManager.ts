@@ -26,7 +26,7 @@ export class StrokeTextureManager {
   }
   
   private createStrokeTexture(): void {
-    // Create RG32Float texture: 1024 width (points) x 64 height (strokes)
+    // Create RG32Float texture: 1024 width (points) x 1024 height (strokes)
     // Each texel stores (x,y) coordinates as RG channels
     const texWidth = this.pointsPerStroke;
     const texHeight = this.maxStrokes;

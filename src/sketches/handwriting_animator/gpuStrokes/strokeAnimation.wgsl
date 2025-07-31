@@ -21,9 +21,9 @@ struct GlobalParams {
     canvasHeight: f32,
     maxAnimations: f32,
     deltaTime: f32,
+    textureHeight: f32,
     padding1: f32,
     padding2: f32,
-    padding3: f32,
 };
 
 // Bindings
@@ -97,9 +97,8 @@ fn phaser(pct: f32, phase: f32, e: f32) -> f32 {
 fn sampleStroke(strokeIndex: u32, phase: f32) -> vec2<f32> {
     // Add half-texel offset for proper center sampling on both axes
     let texWidth = f32(POINTS_PER_STROKE);
-    let texHeight = 64.0; // Should match STROKE_TEXTURE_HEIGHT from constants
     let u = clamp(phase, 0.0, 1.0);
-    let v = (f32(strokeIndex) + 0.5) / texHeight;
+    let v = (f32(strokeIndex) + 0.5) / globalParams.textureHeight;
     let textureCoord = vec2<f32>(u, v);
     return textureSampleLevel(strokeTexture, strokeSampler, textureCoord, 0.0).rg;
 }

@@ -11,6 +11,7 @@ import Timeline from './Timeline.vue';
 import { clearFreehandSelection, createStrokeShape, currentPoints, currentTimestamps, deserializeFreehandState, drawingStartTime, executeFreehandCommand, finishFreehandDragTracking, freehandDrawingLayer, freehandDrawMode, freehandSelectionLayer, freehandShapeLayer, freehandStrokes, getPointsBounds, getStrokePath, gridSize, isAnimating, isDrawing, selTr, serializeFreehandState, setCurrentPoints, setCurrentTimestamps, setDrawingStartTime, setFreehandDrawingLayer, setFreehandSelectionLayer, setFreehandShapeLayer, setIsDrawing, setSelTr, showGrid, startFreehandDragTracking, updateBakedStrokeData, updateFreehandDraggableStates, updateTimelineState, type FreehandStroke, groupSelectedStrokes, ungroupSelectedStrokes, freehandCanGroupRef, isFreehandGroupSelected, freehandSelectedCount, undoFreehand, canUndoFreehand, canRedoFreehand, redoFreehand, useRealTiming, deleteFreehandSelected, selectedStrokesForTimeline, timelineDuration, handleTimeUpdate, maxInterStrokeDelay, setUpdateCursor, updateCursor } from './freehandTool';
 import { DrawingScene } from './gpuStrokes/drawingScene';
 import { StrokeInterpolator } from './gpuStrokes/strokeInterpolator';
+import { DRAWING_CONSTANTS } from './gpuStrokes/constants';
 import Stats from '@/rendering/stats';
 import { EditorView, basicSetup } from 'codemirror';
 import { javascript } from '@codemirror/lang-javascript';
@@ -201,7 +202,7 @@ const convertFreehandStrokesToGPUFormat = () => {
   
   const gpuStrokes = []
   
-  for (let i = 0; i < Math.min(freehandStrokeArray.length, 64); i++) {
+  for (let i = 0; i < Math.min(freehandStrokeArray.length, DRAWING_CONSTANTS.MAX_STROKES); i++) {
     const stroke = freehandStrokeArray[i]
     try {
       // Convert flat array to point objects with timestamps

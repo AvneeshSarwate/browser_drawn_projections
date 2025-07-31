@@ -190,14 +190,15 @@ export class DrawingScene {
     this.globalParamsBuffer.addUniform("canvasHeight", 1);
     this.globalParamsBuffer.addUniform("maxAnimations", 1);
     this.globalParamsBuffer.addUniform("deltaTime", 1);
+    this.globalParamsBuffer.addUniform("textureHeight", 1);
     this.globalParamsBuffer.addUniform("padding1", 1);
     this.globalParamsBuffer.addUniform("padding2", 1);
-    this.globalParamsBuffer.addUniform("padding3", 1);
     
     // Set initial values
     this.globalParamsBuffer.updateFloat("canvasWidth", this.canvasWidth);
     this.globalParamsBuffer.updateFloat("canvasHeight", this.canvasHeight);
     this.globalParamsBuffer.updateFloat("maxAnimations", this.maxAnimations);
+    this.globalParamsBuffer.updateFloat("textureHeight", DRAWING_CONSTANTS.MAX_STROKES);
     this.globalParamsBuffer.update();
     
     // Store shader in ShaderStore
