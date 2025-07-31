@@ -1130,11 +1130,12 @@ const generateBakedStrokeData = (): FreehandRenderData => {
 // Function to update baked data in app state
 export const updateBakedStrokeData = () => {
   appState.freehandRenderData = generateBakedStrokeData()
+  appState.freehandDataUpdateCallback?.()
 }
 
 // Cursor update function (will be defined in onMounted)
-let updateCursor: (() => void) | undefined
-const setUpdateCursor = (uc: (() => void)) => updateCursor = uc
+export let updateCursor: (() => void) | undefined
+export const setUpdateCursor = (uc: (() => void)) => updateCursor = uc
 
 // Watch for draw mode changes - simplified based on working example
 watch(freehandDrawMode, () => {

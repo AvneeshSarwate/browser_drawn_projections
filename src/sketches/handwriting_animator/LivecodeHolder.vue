@@ -8,7 +8,10 @@ import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
 import Konva from 'konva';
 import Timeline from './Timeline.vue';
-import { clearFreehandSelection, createStrokeShape, currentPoints, currentTimestamps, deserializeFreehandState, drawingStartTime, executeFreehandCommand, finishFreehandDragTracking, freehandDrawingLayer, freehandDrawMode, freehandSelectionLayer, freehandShapeLayer, freehandStrokes, getPointsBounds, getStrokePath, gridSize, isAnimating, isDrawing, selTr, serializeFreehandState, setCurrentPoints, setCurrentTimestamps, setDrawingStartTime, setFreehandDrawingLayer, setFreehandSelectionLayer, setFreehandShapeLayer, setIsDrawing, setSelTr, showGrid, startFreehandDragTracking, updateBakedStrokeData, updateFreehandDraggableStates, updateTimelineState, type FreehandStroke, groupSelectedStrokes, ungroupSelectedStrokes, freehandCanGroupRef, isFreehandGroupSelected, freehandSelectedCount, undoFreehand, canUndoFreehand, canRedoFreehand, redoFreehand, useRealTiming, deleteFreehandSelected, selectedStrokesForTimeline, timelineDuration, handleTimeUpdate, maxInterStrokeDelay } from './freehandTool';
+import { clearFreehandSelection, createStrokeShape, currentPoints, currentTimestamps, deserializeFreehandState, drawingStartTime, executeFreehandCommand, finishFreehandDragTracking, freehandDrawingLayer, freehandDrawMode, freehandSelectionLayer, freehandShapeLayer, freehandStrokes, getPointsBounds, getStrokePath, gridSize, isAnimating, isDrawing, selTr, serializeFreehandState, setCurrentPoints, setCurrentTimestamps, setDrawingStartTime, setFreehandDrawingLayer, setFreehandSelectionLayer, setFreehandShapeLayer, setIsDrawing, setSelTr, showGrid, startFreehandDragTracking, updateBakedStrokeData, updateFreehandDraggableStates, updateTimelineState, type FreehandStroke, groupSelectedStrokes, ungroupSelectedStrokes, freehandCanGroupRef, isFreehandGroupSelected, freehandSelectedCount, undoFreehand, canUndoFreehand, canRedoFreehand, redoFreehand, useRealTiming, deleteFreehandSelected, selectedStrokesForTimeline, timelineDuration, handleTimeUpdate, maxInterStrokeDelay, setUpdateCursor, updateCursor } from './freehandTool';
+import { DrawingScene } from './gpuStrokes/drawingScene';
+import { StrokeInterpolator } from './gpuStrokes/strokeInterpolator';
+import Stats from '@/rendering/stats';
 import { polygonShapesLayer, polygonPreviewLayer, polygonControlsLayer, polygonSelectionLayer, clearPolygonSelection, updatePolygonControlPoints, deserializePolygonState, polygonMode, handlePolygonClick, isDrawingPolygon, handlePolygonMouseMove, handlePolygonEditMouseMove, currentPolygonPoints, finishPolygon, clearCurrentPolygon, serializePolygonState, setPolygonControlsLayer, setPolygonPreviewLayer, setPolygonSelectionLayer, setPolygonShapesLayer, polygonUndo, polygonRedo, canPolygonUndo, canPolygonRedo, deleteSelectedPolygon } from './polygonTool';
 
 // ==================== common stuff ====================
@@ -48,6 +51,22 @@ const setAnimatingState = (animating: boolean) => {
 
 // Add this ref near the other refs
 const konvaContainer = ref<HTMLDivElement>()
+const babylonContainer = ref<HTMLCanvasElement>()
+
+// GPU Strokes state
+let drawingScene: DrawingScene | undefined = undefined
+let strokeInterpolator: StrokeInterpolator | undefined = undefined
+const availableStrokes = ref<Array<{index: number, name: string}>>([])
+const animationParams = ref({
+  strokeA: 0,
+  strokeB: 0,
+  interpolationT: 0.0,
+  duration: 2.0,
+  scale: 1.0,
+  position: 'center' as 'start' | 'center' | 'end'
+})
+const gpuStrokesReady = ref(false)
+const webGPUSupported = computed(() => typeof navigator !== 'undefined' && !!navigator.gpu)
 
 let gridLayer: Konva.Layer | undefined = undefined
 
@@ -157,17 +176,165 @@ const applyMetadata = () => {
   }
 }
 
+// GPU Strokes functions
+const convertFreehandStrokesToGPUFormat = () => {
+  if (!strokeInterpolator) return []
+  
+  const freehandStrokeArray = Array.from(freehandStrokes.values())
+    .filter(stroke => stroke.isFreehand && stroke.points.length >= 4)
+  
+  const gpuStrokes = []
+  
+  for (let i = 0; i < Math.min(freehandStrokeArray.length, 64); i++) {
+    const stroke = freehandStrokeArray[i]
+    try {
+      // Convert flat array to point objects with timestamps
+      const points = []
+      for (let j = 0; j < stroke.points.length; j += 2) {
+        if (j + 1 < stroke.points.length) {
+          points.push({
+            x: stroke.points[j],
+            y: stroke.points[j + 1],
+            timestamp: stroke.timestamps[j / 2] || 0
+          })
+        }
+      }
+      
+      // Calculate bounding box
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
+      points.forEach(p => {
+        minX = Math.min(minX, p.x)
+        maxX = Math.max(maxX, p.x)
+        minY = Math.min(minY, p.y)
+        maxY = Math.max(maxY, p.y)
+      })
+      
+      // Create stroke object in expected format
+      const strokeData = {
+        id: stroke.id,
+        points: points,
+        boundingBox: { minX, maxX, minY, maxY }
+      }
+      
+      // Normalize the stroke using the interpolator
+      const normalizedPoints = strokeInterpolator.normalizeStroke(strokeData)
+      
+      if (strokeInterpolator.validateNormalizedStroke(normalizedPoints)) {
+        gpuStrokes.push({
+          index: i,
+          stroke: {
+            ...strokeData,
+            points: normalizedPoints
+          }
+        })
+      }
+    } catch (error) {
+      console.warn(`Failed to convert stroke ${stroke.id}:`, error)
+    }
+  }
+  
+  return gpuStrokes
+}
+
+const updateGPUStrokes = () => {
+  if (!drawingScene || !gpuStrokesReady.value) return
+  
+  try {
+    const gpuStrokes = convertFreehandStrokesToGPUFormat()
+    
+    // Upload to GPU
+    drawingScene.uploadStrokes(gpuStrokes)
+    
+    // Update available strokes list for UI
+    availableStrokes.value = gpuStrokes.map((stroke, idx) => ({
+      index: idx,
+      name: `Stroke ${idx + 1}`
+    }))
+    
+    // Reset animation params if they're out of bounds
+    if (animationParams.value.strokeA >= gpuStrokes.length) {
+      animationParams.value.strokeA = 0
+    }
+    if (animationParams.value.strokeB >= gpuStrokes.length) {
+      animationParams.value.strokeB = 0
+    }
+    
+    console.log(`Updated GPU with ${gpuStrokes.length} strokes`)
+  } catch (error) {
+    console.warn('Failed to update GPU strokes:', error)
+  }
+}
+
+const initializeGPUStrokes = async () => {
+  if (!babylonContainer.value) return
+  
+  try {
+    // Check WebGPU support
+    if (!navigator.gpu) {
+      console.warn('WebGPU not supported - GPU strokes disabled')
+      return
+    }
+    
+    // Initialize components
+    drawingScene = new DrawingScene()
+    strokeInterpolator = new StrokeInterpolator()
+    
+    // Create stats for the GPU scene
+    const stats = new Stats()
+    stats.showPanel(0) // FPS
+    babylonContainer.value.parentElement?.appendChild(stats.dom)
+    
+    // Initialize the scene
+    await drawingScene.createScene(babylonContainer.value, stats)
+    
+    gpuStrokesReady.value = true
+    
+    // Initial stroke upload
+    updateGPUStrokes()
+    
+    console.log('GPU Strokes initialized successfully')
+  } catch (error) {
+    console.error('Failed to initialize GPU Strokes:', error)
+    gpuStrokesReady.value = false
+  }
+}
+
+const handleBabylonCanvasClick = (event: MouseEvent) => {
+  if (!drawingScene || !gpuStrokesReady.value || availableStrokes.value.length < 2) return
+  
+  const rect = babylonContainer.value?.getBoundingClientRect()
+  if (!rect) return
+  
+  const x = event.clientX - rect.left
+  const y = event.clientY - rect.top
+  
+  try {
+    const animationId = drawingScene.launchFromMouseClick(
+      x, y,
+      animationParams.value.strokeA,
+      animationParams.value.strokeB,
+      {
+        interpolationT: animationParams.value.interpolationT,
+        duration: animationParams.value.duration,
+        scale: animationParams.value.scale,
+        position: animationParams.value.position
+      }
+    )
+    
+    console.log(`Launched animation ${animationId} at (${x}, ${y})`)
+  } catch (error) {
+    console.warn('Failed to launch animation:', error)
+  }
+}
+
 
 // ================  freehand stuff ====================
-
-// Cursor update function (will be defined in onMounted)
-let updateCursor: (() => void) | undefined
 
 // ================  polygon stuff ====================
 
 // ====================  main ====================
 
-onMounted(() => {
+onMounted(async () => {
   try {
     const p5i = appState.p5Instance!!
     const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
@@ -187,11 +354,11 @@ onMounted(() => {
     }))
     
     // Update cursor based on mode
-    updateCursor = () => {
+    setUpdateCursor(() => {
       if (stage && konvaContainer.value) {
         konvaContainer.value.style.cursor = freehandDrawMode.value ? 'crosshair' : 'default'
       }
-    }
+    })
     updateCursor()
 
     // Create layers
@@ -261,6 +428,12 @@ onMounted(() => {
     // Try to restore canvas state from hotreload (after all setup is complete)
     deserializeFreehandState()
     deserializePolygonState()
+    
+    // Initialize GPU Strokes
+    await initializeGPUStrokes()
+    
+    // Set up the freehand data update callback
+    appState.freehandDataUpdateCallback = updateGPUStrokes
 
     // Mouse/touch event handlers
     stage.on('mousedown touchstart', (e) => {
@@ -449,6 +622,9 @@ onUnmounted(() => {
   serializeFreehandState()
   serializePolygonState()
   
+  // Clean up GPU resources
+  drawingScene?.dispose()
+  
   shaderGraphEndNode?.disposeAll()
   clearListeners()
   clearDrawFuncs()
@@ -593,6 +769,97 @@ onUnmounted(() => {
     <div v-if="isAnimating" class="animation-lock-warning">
       ⚠️ Timeline has modified elements - press Stop to unlock
     </div>
+    <!-- GPU Strokes Canvas -->
+      <div class="gpu-strokes-section">
+        <h3>GPU Strokes Animation</h3>
+        <canvas 
+          ref="babylonContainer"
+          class="babylon-canvas"
+          :style="{
+            width: resolution.width + 'px',
+            height: resolution.height + 'px',
+          }"
+          @click="handleBabylonCanvasClick"
+        ></canvas>
+        
+        <!-- Animation Parameters -->
+        <div v-if="gpuStrokesReady" class="animation-controls">
+          <div class="control-row">
+            <label>Stroke A:</label>
+            <select v-model="animationParams.strokeA" :disabled="availableStrokes.length < 2">
+              <option v-for="stroke in availableStrokes" :key="stroke.index" :value="stroke.index">
+                {{ stroke.name }}
+              </option>
+            </select>
+          </div>
+          
+          <div class="control-row">
+            <label>Stroke B:</label>
+            <select v-model="animationParams.strokeB" :disabled="availableStrokes.length < 2">
+              <option v-for="stroke in availableStrokes" :key="stroke.index" :value="stroke.index">
+                {{ stroke.name }}
+              </option>
+            </select>
+          </div>
+          
+          <div class="control-row">
+            <label>Interpolation ({{ animationParams.interpolationT.toFixed(2) }}):</label>
+            <input 
+              type="range" 
+              v-model.number="animationParams.interpolationT" 
+              min="0" 
+              max="1" 
+              step="0.01"
+            />
+          </div>
+          
+          <div class="control-row">
+            <label>Duration:</label>
+            <input 
+              type="number" 
+              v-model.number="animationParams.duration" 
+              min="0.1" 
+              max="10" 
+              step="0.1"
+            />
+            <span>seconds</span>
+          </div>
+          
+          <div class="control-row">
+            <label>Scale ({{ animationParams.scale.toFixed(2) }}):</label>
+            <input 
+              type="range" 
+              v-model.number="animationParams.scale" 
+              min="0.1" 
+              max="3" 
+              step="0.1"
+            />
+          </div>
+          
+          <div class="control-row">
+            <label>Position:</label>
+            <div class="radio-group">
+              <label><input type="radio" v-model="animationParams.position" value="start" /> Start</label>
+              <label><input type="radio" v-model="animationParams.position" value="center" /> Center</label>
+              <label><input type="radio" v-model="animationParams.position" value="end" /> End</label>
+            </div>
+          </div>
+          
+          <div class="info-row">
+            <p v-if="availableStrokes.length < 2" class="warning">
+              ⚠️ Draw at least 2 strokes to enable GPU animations
+            </p>
+            <p v-else class="info">
+              ✓ Click on canvas above to launch animations with current settings
+            </p>
+          </div>
+        </div>
+        
+        <div v-else class="gpu-loading">
+          <p v-if="!webGPUSupported">❌ WebGPU not supported in this browser</p>
+          <p v-else>🔄 Initializing GPU Strokes...</p>
+        </div>
+      </div>
   </div>
 </template>
 
@@ -782,5 +1049,100 @@ onUnmounted(() => {
 
 .multi-select-warning p {
   margin: 5px 0;
+}
+
+/* GPU Strokes Styles */
+.gpu-strokes-section {
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  padding: 20px;
+  margin-top: 20px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  max-width: 800px;
+}
+
+.gpu-strokes-section h3 {
+  margin: 0 0 15px 0;
+  color: #333;
+  text-align: center;
+}
+
+.babylon-canvas {
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: crosshair;
+  display: block;
+  margin: 0 auto 20px auto;
+}
+
+.babylon-canvas:hover {
+  border-color: #0066ff;
+}
+
+.animation-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.control-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.control-row label {
+  min-width: 120px;
+  font-weight: 500;
+  color: #333;
+}
+
+.control-row select,
+.control-row input[type="number"] {
+  padding: 5px 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.control-row input[type="range"] {
+  flex: 1;
+  min-width: 100px;
+}
+
+.radio-group {
+  display: flex;
+  gap: 15px;
+}
+
+.radio-group label {
+  min-width: auto;
+  font-weight: normal;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.info-row {
+  text-align: center;
+  margin-top: 10px;
+}
+
+.info-row .warning {
+  color: #e67e22;
+  font-weight: 500;
+}
+
+.info-row .info {
+  color: #27ae60;
+  font-weight: 500;
+}
+
+.gpu-loading {
+  text-align: center;
+  padding: 40px 20px;
+  color: #666;
 }
 </style>
