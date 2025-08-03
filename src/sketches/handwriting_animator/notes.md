@@ -1,15 +1,17 @@
 
 
 
-
-## bugs and cleanup 
-- clearing looped animations takes more than 1 click sometimes
-- transforms for shapes don't get reflected in looped animations as expected
-- click launch after launching a script doesn't work
+## more stuff to manage groups of strokes and launch groups with script
+convertFreehandStrokesToGPUFormat
+generateBakedStrokeData
 
 
-
-
+- for metadata editor, if selected is a group, show heirarcical list of children metadata editors 
+- for metadata being edited for a child, find some way to highlight the child 
+	- maybe just draw rect around bounding box of child? looks diff from normal selection transform
+- metadata needs to include an "order" field and a "name" field 
+	- order for what order it is sequentially in a group, name for convenience for mapping 
+- when flattening, keep a map between group-id => ordered-list-child-indicies (indices are texture array indices)  
 
 
 

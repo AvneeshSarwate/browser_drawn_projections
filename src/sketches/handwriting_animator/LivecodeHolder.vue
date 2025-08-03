@@ -8,6 +8,7 @@ import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
 import Konva from 'konva';
 import Timeline from './Timeline.vue';
+import MetadataEditor from './MetadataEditor.vue';
 import { clearFreehandSelection, createStrokeShape, currentPoints, currentTimestamps, deserializeFreehandState, drawingStartTime, executeFreehandCommand, finishFreehandDragTracking, freehandDrawingLayer, freehandDrawMode, freehandSelectionLayer, freehandShapeLayer, freehandStrokes, getPointsBounds, getStrokePath, gridSize, isAnimating, isDrawing, selTr, serializeFreehandState, setCurrentPoints, setCurrentTimestamps, setDrawingStartTime, setFreehandDrawingLayer, setFreehandSelectionLayer, setFreehandShapeLayer, setIsDrawing, setSelTr, showGrid, startFreehandDragTracking, updateBakedStrokeData, updateFreehandDraggableStates, updateTimelineState, type FreehandStroke, groupSelectedStrokes, ungroupSelectedStrokes, freehandCanGroupRef, isFreehandGroupSelected, freehandSelectedCount, undoFreehand, canUndoFreehand, canRedoFreehand, redoFreehand, useRealTiming, deleteFreehandSelected, selectedStrokesForTimeline, timelineDuration, handleTimeUpdate, maxInterStrokeDelay, setUpdateCursor, updateCursor } from './freehandTool';
 import { DrawingScene } from './gpuStrokes/drawingScene';
 import { StrokeInterpolator } from './gpuStrokes/strokeInterpolator';
@@ -17,6 +18,7 @@ import { EditorView, basicSetup } from 'codemirror';
 import { javascript } from '@codemirror/lang-javascript';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { polygonShapesLayer, polygonPreviewLayer, polygonControlsLayer, polygonSelectionLayer, clearPolygonSelection, updatePolygonControlPoints, deserializePolygonState, polygonMode, handlePolygonClick, isDrawingPolygon, handlePolygonMouseMove, handlePolygonEditMouseMove, currentPolygonPoints, finishPolygon, clearCurrentPolygon, serializePolygonState, setPolygonControlsLayer, setPolygonPreviewLayer, setPolygonSelectionLayer, setPolygonShapesLayer, polygonUndo, polygonRedo, canPolygonUndo, canPolygonRedo, deleteSelectedPolygon } from './polygonTool';
+import type { StrokePoint } from './gpuStrokes/strokeTypes';
 
 // ==================== common stuff ====================
 const appState = inject<TemplateAppState>(appStateName)!!
@@ -172,35 +174,39 @@ watch([() => selected.length, () => selectedPolygons.length, activeNode], () => 
 })
 
 // Function to apply metadata changes
-const applyMetadata = () => {
+const applyMetadata = (metadata: any) => {
   if (!activeNode.value) return
-  try {
-    const obj = JSON.parse(metadataText.value || '{}')
-    activeNode.value.setAttr('metadata', obj)
-    
-    // Add to undo history
-    if (selectedPolygons.some(node => node.id() === activeNode.value?.id())) {
-      // For polygons - need to implement polygon command history if not exists
-      console.log('Polygon metadata updated')
-    } else {
-      // For freehand shapes
-      executeFreehandCommand('Edit Metadata', () => {
-        // The actual change has already been applied above
-      })
-    }
-  } catch (e) {
-    alert('Invalid JSON format')
+  
+  activeNode.value.setAttr('metadata', metadata)
+  
+  // Add to undo history
+  if (selectedPolygons.some(node => node.id() === activeNode.value?.id())) {
+    // For polygons - need to implement polygon command history if not exists
+    console.log('Polygon metadata updated')
+  } else {
+    // For freehand shapes
+    executeFreehandCommand('Edit Metadata', () => {
+      // The actual change has already been applied above
+    })
   }
 }
 
 // GPU Strokes functions
+type GPUStroke = {
+  index: number
+  stroke: {
+    id: string
+    points: StrokePoint[]
+    boundingBox: { minX: number, maxX: number, minY: number, maxY: number }
+  }
+}
 const convertFreehandStrokesToGPUFormat = () => {
   if (!strokeInterpolator) return []
   
   const freehandStrokeArray = Array.from(freehandStrokes.values())
     .filter(stroke => stroke.isFreehand && stroke.points.length >= 4)
   
-  const gpuStrokes = []
+  const gpuStrokes: GPUStroke[] = []
   
   for (let i = 0; i < Math.min(freehandStrokeArray.length, DRAWING_CONSTANTS.MAX_STROKES); i++) {
     const stroke = freehandStrokeArray[i]
@@ -848,27 +854,13 @@ onUnmounted(() => {
         }"
       ></div>
     
-    <!-- Metadata Editor -->
-    <div v-if="showMetadataEditor" class="metadata-panel">
-      <div v-if="activeNode" class="metadata-editor">
-        <h3>Shape Metadata</h3>
-        <p class="metadata-help">Edit JSON metadata for the selected shape:</p>
-        <textarea 
-          v-model="metadataText" 
-          class="metadata-textarea"
-          rows="8" 
-          placeholder="Enter JSON metadata..."
-        ></textarea>
-        <div class="metadata-buttons">
-          <button @click="applyMetadata" class="save-button">Save Metadata</button>
-          <button @click="showMetadataEditor = false" class="cancel-button">Close</button>
-        </div>
-      </div>
-      <div v-else-if="selected.length > 1 || selectedPolygons.length > 1" class="multi-select-warning">
-        <p>⚠️ Can only edit metadata for one shape at a time</p>
-        <p>Please select a single shape to edit its metadata.</p>
-      </div>
-    </div>
+    <!-- Metadata Editor Component -->
+    <MetadataEditor 
+      :active-node="activeNode"
+      :visible="showMetadataEditor"
+      @apply="applyMetadata"
+      @cancel="showMetadataEditor = false"
+    />
     
     <Timeline 
       :strokes="freehandStrokes"
@@ -1133,93 +1125,7 @@ onUnmounted(() => {
   border: 1px solid black;
 }
 
-.metadata-panel {
-  background: white;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  padding: 20px;
-  margin-top: 20px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  max-width: 600px;
-  width: 100%;
-}
 
-.metadata-editor h3 {
-  margin: 0 0 10px 0;
-  color: #333;
-}
-
-.metadata-help {
-  margin: 0 0 15px 0;
-  color: #666;
-  font-size: 14px;
-}
-
-.metadata-textarea {
-  width: 100%;
-  min-height: 200px;
-  padding: 12px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  font-family: 'Monaco', 'Consolas', monospace;
-  font-size: 13px;
-  line-height: 1.4;
-  resize: vertical;
-  margin-bottom: 15px;
-}
-
-.metadata-textarea:focus {
-  outline: none;
-  border-color: #0066ff;
-  box-shadow: 0 0 0 2px rgba(0, 102, 255, 0.2);
-}
-
-.metadata-buttons {
-  display: flex;
-  gap: 10px;
-}
-
-.save-button {
-  background: #28a745;
-  color: white;
-  border: 1px solid #28a745;
-  border-radius: 4px;
-  padding: 8px 16px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: all 0.2s;
-}
-
-.save-button:hover {
-  background: #218838;
-  border-color: #218838;
-}
-
-.cancel-button {
-  background: #6c757d;
-  color: white;
-  border: 1px solid #6c757d;
-  border-radius: 4px;
-  padding: 8px 16px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: all 0.2s;
-}
-
-.cancel-button:hover {
-  background: #5a6268;
-  border-color: #5a6268;
-}
-
-.multi-select-warning {
-  text-align: center;
-  color: #e67e22;
-  padding: 20px;
-}
-
-.multi-select-warning p {
-  margin: 5px 0;
-}
 
 /* GPU Strokes Styles */
 .gpu-strokes-section {
