@@ -166,11 +166,20 @@ watch([() => selected.length, () => selectedPolygons.length, activeNode], () => 
   const newActiveNode = getActiveSingleNode()
   activeNode.value = newActiveNode
   
+  // Show metadata editor if there's any selection (single nodes, groups, or multiple items)
+  const hasAnySelection = selected.length > 0 || selectedPolygons.length > 0
+  
   if (newActiveNode) {
+    // Single node selected - populate the old metadata text for compatibility
     const metadata = newActiveNode.getAttr('metadata') ?? {}
     metadataText.value = JSON.stringify(metadata, null, 2)
     showMetadataEditor.value = true
+  } else if (hasAnySelection) {
+    // Group or multiple selection - show editor but clear old metadata text
+    metadataText.value = ''
+    showMetadataEditor.value = true
   } else {
+    // No selection - hide editor
     metadataText.value = ''
     showMetadataEditor.value = false
   }
