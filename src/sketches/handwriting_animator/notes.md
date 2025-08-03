@@ -12,6 +12,7 @@ generateBakedStrokeData
 - metadata needs to include an "order" field and a "name" field 
 	- order for what order it is sequentially in a group, name for convenience for mapping 
 - when flattening, keep a map between group-id => ordered-list-child-indicies (indices are texture array indices)  
+- need to store relative position metadata for children in a group for launched playback
 
 
 

@@ -10,7 +10,7 @@ import Konva from 'konva';
 import Timeline from './Timeline.vue';
 import MetadataEditor from './MetadataEditor.vue';
 import HierarchicalMetadataEditor from './HierarchicalMetadataEditor.vue';
-import { clearFreehandSelection, createStrokeShape, currentPoints, currentTimestamps, deserializeFreehandState, drawingStartTime, executeFreehandCommand, finishFreehandDragTracking, freehandDrawingLayer, freehandDrawMode, freehandSelectionLayer, freehandShapeLayer, freehandStrokes, getPointsBounds, getStrokePath, gridSize, isAnimating, isDrawing, selTr, serializeFreehandState, setCurrentPoints, setCurrentTimestamps, setDrawingStartTime, setFreehandDrawingLayer, setFreehandSelectionLayer, setFreehandShapeLayer, setIsDrawing, setSelTr, showGrid, startFreehandDragTracking, updateBakedStrokeData, updateFreehandDraggableStates, updateTimelineState, type FreehandStroke, groupSelectedStrokes, ungroupSelectedStrokes, freehandCanGroupRef, isFreehandGroupSelected, freehandSelectedCount, undoFreehand, canUndoFreehand, canRedoFreehand, redoFreehand, useRealTiming, deleteFreehandSelected, selectedStrokesForTimeline, timelineDuration, handleTimeUpdate, maxInterStrokeDelay, setUpdateCursor, updateCursor, createMetadataHighlight } from './freehandTool';
+import { clearFreehandSelection, createStrokeShape, currentPoints, currentTimestamps, deserializeFreehandState, drawingStartTime, executeFreehandCommand, finishFreehandDragTracking, freehandDrawingLayer, freehandDrawMode, freehandSelectionLayer, freehandShapeLayer, freehandStrokes, getPointsBounds, getStrokePath, gridSize, isAnimating, isDrawing, selTr, serializeFreehandState, setCurrentPoints, setCurrentTimestamps, setDrawingStartTime, setFreehandDrawingLayer, setFreehandSelectionLayer, setFreehandShapeLayer, setIsDrawing, setSelTr, showGrid, startFreehandDragTracking, updateBakedStrokeData, updateFreehandDraggableStates, updateTimelineState, type FreehandStroke, groupSelectedStrokes, ungroupSelectedStrokes, freehandCanGroupRef, isFreehandGroupSelected, freehandSelectedCount, undoFreehand, canUndoFreehand, canRedoFreehand, redoFreehand, useRealTiming, deleteFreehandSelected, selectedStrokesForTimeline, timelineDuration, handleTimeUpdate, maxInterStrokeDelay, setUpdateCursor, updateCursor, createMetadataHighlight, getGroupStrokeIndices } from './freehandTool';
 import { DrawingScene } from './gpuStrokes/drawingScene';
 import { StrokeInterpolator } from './gpuStrokes/strokeInterpolator';
 import { DRAWING_CONSTANTS } from './gpuStrokes/constants';
@@ -78,6 +78,11 @@ const animationParams = ref({
 })
 const gpuStrokesReady = ref(false)
 const webGPUSupported = computed(() => typeof navigator !== 'undefined' && !!navigator.gpu)
+
+// Group launch state
+const launchByName = ref(false)
+const groupName = ref('')
+const availableGroups = computed(() => Object.keys(appState.freehandGroupMap))
 
 // Script editor state
 const scriptEditorRef = ref<HTMLDivElement>()
@@ -335,7 +340,7 @@ const initializeGPUStrokes = async () => {
 }
 
 const handleBabylonCanvasClick = (event: MouseEvent) => {
-  if (!drawingScene || !gpuStrokesReady.value || availableStrokes.value.length < 2) return
+  if (!drawingScene || !gpuStrokesReady.value) return
   
   const rect = babylonContainer.value?.getBoundingClientRect()
   if (!rect) return
@@ -345,21 +350,58 @@ const handleBabylonCanvasClick = (event: MouseEvent) => {
   const y = event.clientY - rect.top
   
   try {
-    const animationId = drawingScene.launchStroke(
-      x, y,
-      animationParams.value.strokeA,
-      animationParams.value.strokeB,
-      {
-        interpolationT: animationParams.value.interpolationT,
-        duration: animationParams.value.duration,
-        scale: animationParams.value.scale,
-        position: animationParams.value.position,
-        loop: animationParams.value.loop,
-        startPhase: animationParams.value.startPhase
+    if (launchByName.value && groupName.value) {
+      // Launch by group name
+      const strokeIndices = getGroupStrokeIndices(groupName.value)
+      if (strokeIndices.length === 0) {
+        console.warn(`No strokes found for group: ${groupName.value}`)
+        return
       }
-    )
-    
-    console.log(`Launched animation ${animationId} at (${x.toFixed(1)}, ${y.toFixed(1)}) ${animationParams.value.loop ? '[LOOPING]' : ''}`)
+      
+      // Launch each stroke in the group with a small offset
+      strokeIndices.forEach((strokeIndex, i) => {
+        setTimeout(() => {
+          const animationId = drawingScene!.launchStroke(
+            x + (i * 10), y + (i * 10), // Small offset for each stroke
+            strokeIndex,
+            strokeIndex,
+            {
+              interpolationT: 0.0, // No interpolation for group launch
+              duration: animationParams.value.duration,
+              scale: animationParams.value.scale,
+              position: animationParams.value.position,
+              loop: animationParams.value.loop,
+              startPhase: animationParams.value.startPhase
+            }
+          )
+          console.log(`Launched group stroke ${strokeIndex} (animation ${animationId})`)
+        }, i * 50) // 50ms delay between strokes
+      })
+      
+      console.log(`Launched group "${groupName.value}" with ${strokeIndices.length} strokes at (${x.toFixed(1)}, ${y.toFixed(1)})`)
+    } else {
+      // Standard interpolated launch
+      if (availableStrokes.value.length < 2) {
+        console.warn('Need at least 2 strokes for interpolated launch')
+        return
+      }
+      
+      const animationId = drawingScene.launchStroke(
+        x, y,
+        animationParams.value.strokeA,
+        animationParams.value.strokeB,
+        {
+          interpolationT: animationParams.value.interpolationT,
+          duration: animationParams.value.duration,
+          scale: animationParams.value.scale,
+          position: animationParams.value.position,
+          loop: animationParams.value.loop,
+          startPhase: animationParams.value.startPhase
+        }
+      )
+      
+      console.log(`Launched interpolated animation ${animationId} at (${x.toFixed(1)}, ${y.toFixed(1)}) ${animationParams.value.loop ? '[LOOPING]' : ''}`)
+    }
   } catch (error) {
     console.warn('Failed to launch animation:', error)
   }
@@ -907,7 +949,7 @@ onUnmounted(() => {
         <div v-if="gpuStrokesReady" class="animation-controls">
           <div class="control-row">
             <label>Stroke A:</label>
-            <select v-model="animationParams.strokeA" :disabled="availableStrokes.length < 2">
+            <select v-model="animationParams.strokeA" :disabled="availableStrokes.length < 2 || launchByName">
               <option v-for="stroke in availableStrokes" :key="stroke.index" :value="stroke.index">
                 {{ stroke.name }}
               </option>
@@ -916,7 +958,7 @@ onUnmounted(() => {
           
           <div class="control-row">
             <label>Stroke B:</label>
-            <select v-model="animationParams.strokeB" :disabled="availableStrokes.length < 2">
+            <select v-model="animationParams.strokeB" :disabled="availableStrokes.length < 2 || launchByName">
               <option v-for="stroke in availableStrokes" :key="stroke.index" :value="stroke.index">
                 {{ stroke.name }}
               </option>
@@ -931,7 +973,26 @@ onUnmounted(() => {
               min="0" 
               max="1" 
               step="0.01"
+              :disabled="launchByName"
             />
+          </div>
+          
+          <!-- Launch by Name Controls -->
+          <div class="control-row">
+            <label>Launch by Group Name:</label>
+            <input type="checkbox" v-model="launchByName" />
+            <span class="launch-mode-hint">{{ launchByName ? 'Group launch mode' : 'Interpolation mode' }}</span>
+          </div>
+          
+          <div v-if="launchByName" class="control-row">
+            <label>Group Name:</label>
+            <select v-model="groupName" :disabled="availableGroups.length === 0">
+              <option value="">Select a group...</option>
+              <option v-for="name in availableGroups" :key="name" :value="name">
+                {{ name }}
+              </option>
+            </select>
+            <span class="group-hint">{{ availableGroups.length }} groups available</span>
           </div>
           
           <div class="control-row">
@@ -1002,11 +1063,17 @@ onUnmounted(() => {
           </div>
           
           <div class="info-row">
-            <p v-if="availableStrokes.length < 2" class="warning">
-              ⚠️ Draw at least 2 strokes to enable GPU animations
+            <p v-if="launchByName && !groupName" class="warning">
+              ⚠️ Select a group name to launch group animations
+            </p>
+            <p v-else-if="launchByName && groupName" class="info">
+              ✓ Click canvas to launch group "{{ groupName }}" ({{ getGroupStrokeIndices(groupName).length }} strokes)
+            </p>
+            <p v-else-if="availableStrokes.length < 2" class="warning">
+              ⚠️ Draw at least 2 strokes to enable interpolated animations
             </p>
             <p v-else class="info">
-              ✓ Click on canvas above to launch animations with current settings
+              ✓ Click canvas to launch interpolated animations with current settings
             </p>
           </div>
         </div>
@@ -1236,11 +1303,22 @@ onUnmounted(() => {
 }
 
 .loop-hint,
-.phase-hint {
+.phase-hint,
+.launch-mode-hint,
+.group-hint {
   font-size: 12px;
   color: #666;
   font-style: italic;
   margin-left: 10px;
+}
+
+.launch-mode-hint {
+  font-weight: 500;
+  color: #0066ff;
+}
+
+.group-hint {
+  color: #28a745;
 }
 
 .clear-button {
