@@ -1212,6 +1212,23 @@ export const collectHierarchy = (): HierarchyEntry[] => {
   return out
 }
 
+export const collectHierarchyFromRoot = (rootNode: Konva.Node): HierarchyEntry[] => {
+  const out: HierarchyEntry[] = []
+  
+  const walk = (node: Konva.Node, depth = 0, path = '') => {
+    out.push({ node, depth, indexPath: path })
+    
+    if (node instanceof Konva.Group) {
+      node.getChildren().forEach((child, i) =>
+        walk(child, depth + 1, path ? `${path}/${i}` : `${i}`)
+      )
+    }
+  }
+  
+  walk(rootNode, 0, '0')
+  return out
+}
+
 // Cursor update function (will be defined in onMounted)
 export let updateCursor: (() => void) | undefined
 export const setUpdateCursor = (uc: (() => void)) => updateCursor = uc

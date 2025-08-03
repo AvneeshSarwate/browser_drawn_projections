@@ -2,28 +2,57 @@
 import { ref, watch, computed, shallowRef, onUnmounted } from 'vue'
 import Konva from 'konva'
 import MetadataEditor from './MetadataEditor.vue'
-import { setNodeMetadata, collectHierarchy, type HierarchyEntry, updateMetadataHighlight } from './freehandTool'
+import { setNodeMetadata, collectHierarchy, collectHierarchyFromRoot, type HierarchyEntry, updateMetadataHighlight } from './freehandTool'
 import { appState, selected, getActiveSingleNode } from './appState'
 import { isFreehandGroupSelected } from './freehandTool'
 
-// No props needed - we auto-detect mode
-const entries = ref<HierarchyEntry[]>(collectHierarchy())
-const activeNode = shallowRef<Konva.Node | null>(null)
-
-// Auto-detect which mode to use
+// Auto-detect which mode to use and get root selection
 const singleNode = computed(() => getActiveSingleNode())
 const multiSelected = computed(() => selected.length > 1 || isFreehandGroupSelected.value)
 const mode = computed(() => 
   multiSelected.value ? 'hierarchical' : (singleNode.value ? 'simple' : 'none')
 )
 
-// Whenever baked data updates – rebuild the hierarchy list
-watch(
-  () => appState.freehandRenderData,    // changed by updateBakedStrokeData
-  () => { 
-    entries.value = collectHierarchy() 
+// Get the root node for hierarchy display
+const hierarchyRoot = computed(() => {
+  if (mode.value === 'hierarchical' && selected.length === 1) {
+    // If single group selected, use it as root
+    return selected[0] instanceof Konva.Group ? selected[0] : null
   }
-)
+  return null
+})
+
+// Collect hierarchy based on current selection
+const entries = computed(() => {
+  const root = hierarchyRoot.value
+  if (root) {
+    // Show hierarchy rooted at selected group
+    return collectHierarchyFromRoot(root)
+  } else if (mode.value === 'hierarchical') {
+    // Show full canvas hierarchy for multi-selection
+    return collectHierarchy()
+  }
+  return []
+})
+
+const activeNode = shallowRef<Konva.Node | null>(null)
+
+// Initialize activeNode based on current selection when component mounts or mode changes
+watch([mode, hierarchyRoot], ([newMode, newRoot]) => {
+  if (newMode === 'hierarchical' && newRoot) {
+    // If hierarchical mode with a group selected, set it as active
+    activeNode.value = newRoot
+    updateMetadataHighlight(newRoot as Konva.Node)
+  } else if (newMode === 'simple' && singleNode.value) {
+    // If simple mode, set the single node as active
+    activeNode.value = singleNode.value
+    updateMetadataHighlight(singleNode.value as Konva.Node)
+  } else if (newMode === 'none') {
+    // Clear active node when nothing selected
+    activeNode.value = null
+    updateMetadataHighlight(undefined)
+  }
+}, { immediate: true })
 
 // Watch for single node selection changes
 watch(singleNode, (node) => {
@@ -103,7 +132,7 @@ const hasMetadata = (node: any) => {
     <template v-else-if="mode === 'hierarchical'">
       <div class="hierarchical-editor">
         <div class="header">
-          <h3>Hierarchical Metadata Editor</h3>
+          <h3>{{ hierarchyRoot ? `Group: ${nodeLabel(hierarchyRoot as any)}` : 'Hierarchical Metadata Editor' }}</h3>
           <p class="help">Select a node to edit its metadata:</p>
         </div>
         
