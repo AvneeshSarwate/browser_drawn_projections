@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, computed, shallowRef } from 'vue'
+import { ref, watch, computed, shallowRef, onUnmounted } from 'vue'
 import Konva from 'konva'
 import MetadataEditor from './MetadataEditor.vue'
 import { setNodeMetadata, collectHierarchy, type HierarchyEntry, updateMetadataHighlight } from './freehandTool'
@@ -36,6 +36,19 @@ watch(singleNode, (node) => {
 // Watch for activeNode changes to update highlight
 watch(activeNode, (node) => {
   updateMetadataHighlight(node as Konva.Node | undefined)
+})
+
+// Watch for mode changes to clear highlight when editor is not active
+watch(mode, (newMode) => {
+  if (newMode === 'none') {
+    activeNode.value = null
+    updateMetadataHighlight(undefined)
+  }
+})
+
+// Clear highlight when component is unmounted
+onUnmounted(() => {
+  updateMetadataHighlight(undefined)
 })
 
 const selectNode = (node: any) => {
