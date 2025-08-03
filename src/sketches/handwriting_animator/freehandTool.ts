@@ -16,6 +16,43 @@ export const setFreehandDrawingLayer = (dl: Konva.Layer) => freehandDrawingLayer
 export let freehandSelectionLayer: Konva.Layer | undefined = undefined
 export const setFreehandSelectionLayer = (sl: Konva.Layer) => freehandSelectionLayer = sl
 
+// Highlight layer for metadata editing
+export let metadataHighlightLayer: Konva.Layer | undefined = undefined
+export let metadataHighlightRect: Konva.Rect | undefined = undefined
+
+export const createMetadataHighlight = () => {
+  metadataHighlightLayer = new Konva.Layer({ listening: false })
+  metadataHighlightRect = new Konva.Rect({
+    stroke: 'red',
+    strokeWidth: 2,
+    dash: [4, 4],
+    listening: false,
+    visible: false
+  })
+  metadataHighlightLayer.add(metadataHighlightRect)
+  return metadataHighlightLayer
+}
+
+export const updateMetadataHighlight = (node?: Konva.Node) => {
+  if (!metadataHighlightRect || !metadataHighlightLayer) return
+  
+  if (!node) {
+    metadataHighlightRect.visible(false)
+    metadataHighlightLayer.batchDraw()
+    return
+  }
+  
+  const bbox = node.getClientRect({ relativeTo: node.getStage() })
+  metadataHighlightRect.setAttrs({
+    x: bbox.x,
+    y: bbox.y,
+    width: bbox.width,
+    height: bbox.height,
+    visible: true
+  })
+  metadataHighlightLayer.batchDraw()
+}
+
 // Drawing state
 export let isDrawing = false
 export const setIsDrawing = (id: boolean) => isDrawing = id
@@ -103,7 +140,7 @@ const getSelectedStrokes = (): FreehandStroke[] => {
 }
 
 // Selection functions from working example
-const freehandAddSelection = (node: Konva.Node) => { 
+export const freehandAddSelection = (node: Konva.Node) => { 
   console.log('Adding to selection:', node.id(), node.constructor.name)
   if (!selected.includes(node)) selected.push(node) 
   console.log('Selected array now has:', selected.length, 'items')
@@ -1131,6 +1168,48 @@ const generateBakedStrokeData = (): FreehandRenderData => {
 export const updateBakedStrokeData = () => {
   appState.freehandRenderData = generateBakedStrokeData()
   appState.freehandDataUpdateCallback?.()
+}
+
+// Undoable metadata mutator for nodes
+export const setNodeMetadata = (
+  node: Konva.Node,
+  meta: Record<string, any> | undefined
+) => {
+  executeFreehandCommand('Edit Metadata', () => {
+    if (meta === undefined || Object.keys(meta).length === 0) {
+      node.setAttr('metadata', undefined)   // keep export slim
+    } else {
+      node.setAttr('metadata', meta)
+    }
+    updateBakedStrokeData()                 // keep render-data in sync
+  })
+}
+
+// Hierarchy utility for metadata editing
+export interface HierarchyEntry {
+  node: Konva.Node        // actual Konva node
+  depth: number           // depth == indent level (50px each)
+  indexPath: string       // e.g. "0/3/1" – handy for v-key
+}
+
+export const collectHierarchy = (): HierarchyEntry[] => {
+  const out: HierarchyEntry[] = []
+  
+  const walk = (node: Konva.Node, depth = 0, path = '') => {
+    out.push({ node, depth, indexPath: path })
+    
+    if (node instanceof Konva.Group) {
+      node.getChildren().forEach((child, i) =>
+        walk(child, depth + 1, path ? `${path}/${i}` : `${i}`)
+      )
+    }
+  }
+  
+  if (freehandShapeLayer) {
+    freehandShapeLayer.getChildren().forEach((child, i) => walk(child, 0, `${i}`))
+  }
+  
+  return out
 }
 
 // Cursor update function (will be defined in onMounted)

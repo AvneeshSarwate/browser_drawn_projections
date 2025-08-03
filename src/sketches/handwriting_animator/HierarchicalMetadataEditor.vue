@@ -1,0 +1,216 @@
+<script setup lang="ts">
+import { ref, watch, computed, shallowRef } from 'vue'
+import Konva from 'konva'
+import MetadataEditor from './MetadataEditor.vue'
+import { setNodeMetadata, collectHierarchy, type HierarchyEntry, updateMetadataHighlight } from './freehandTool'
+import { appState, selected, getActiveSingleNode } from './appState'
+import { isFreehandGroupSelected } from './freehandTool'
+
+// No props needed - we auto-detect mode
+const entries = ref<HierarchyEntry[]>(collectHierarchy())
+const activeNode = shallowRef<Konva.Node | null>(null)
+
+// Auto-detect which mode to use
+const singleNode = computed(() => getActiveSingleNode())
+const multiSelected = computed(() => selected.length > 1 || isFreehandGroupSelected.value)
+const mode = computed(() => 
+  multiSelected.value ? 'hierarchical' : (singleNode.value ? 'simple' : 'none')
+)
+
+// Whenever baked data updates – rebuild the hierarchy list
+watch(
+  () => appState.freehandRenderData,    // changed by updateBakedStrokeData
+  () => { 
+    entries.value = collectHierarchy() 
+  }
+)
+
+// Watch for single node selection changes
+watch(singleNode, (node) => {
+  if (mode.value === 'simple') {
+    activeNode.value = node
+    updateMetadataHighlight(node as Konva.Node | undefined)
+  }
+})
+
+// Watch for activeNode changes to update highlight
+watch(activeNode, (node) => {
+  updateMetadataHighlight(node as Konva.Node | undefined)
+})
+
+const selectNode = (node: any) => {
+  activeNode.value = node as Konva.Node
+  // No longer sync with canvas selection - just update highlight
+}
+
+const applyMetadataSingle = (meta: any) => {
+  if (singleNode.value) {
+    setNodeMetadata(singleNode.value as Konva.Node, meta)
+  }
+}
+
+const applyMetadata = (meta: any) => {
+  if (activeNode.value) {
+    setNodeMetadata(activeNode.value as Konva.Node, meta)
+  }
+}
+
+const nodeLabel = (node: any) => {
+  const konvaNode = node as Konva.Node
+  const id = konvaNode.id() || `#${(konvaNode as any)._id}`
+  if (konvaNode instanceof Konva.Group) {
+    const childCount = konvaNode.getChildren().length
+    return `Group ${id} (${childCount} ${childCount === 1 ? 'child' : 'children'})`
+  } else if (konvaNode instanceof Konva.Path) {
+    return `Stroke ${id}`
+  } else {
+    return `${konvaNode.constructor.name} ${id}`
+  }
+}
+
+const hasMetadata = (node: any) => {
+  const konvaNode = node as Konva.Node
+  const metadata = konvaNode.getAttr('metadata')
+  return metadata && Object.keys(metadata).length > 0
+}
+</script>
+
+<template>
+  <div class="smart-metadata-editor">
+    <!-- Simple mode for single selections -->
+    <template v-if="mode === 'simple'">
+      <MetadataEditor
+        :active-node="singleNode!"
+        :visible="true"
+        @apply="applyMetadataSingle"
+      />
+    </template>
+
+    <!-- Hierarchical mode for groups/multi-selections -->
+    <template v-else-if="mode === 'hierarchical'">
+      <div class="hierarchical-editor">
+        <div class="header">
+          <h3>Hierarchical Metadata Editor</h3>
+          <p class="help">Select a node to edit its metadata:</p>
+        </div>
+        
+        <div class="tree-view" v-if="entries.length > 0">
+          <div
+            v-for="entry in entries"
+            :key="entry.indexPath"
+            :class="['tree-row', { active: entry.node === activeNode }]"
+            :style="{ paddingLeft: entry.depth * 50 + 'px' }"
+            @click="selectNode(entry.node)"
+          >
+            <span class="label">{{ nodeLabel(entry.node as any) }}</span>
+            <span class="metadata-indicator" v-if="hasMetadata(entry.node as any)">●</span>
+          </div>
+        </div>
+        
+        <div v-else class="empty-state">
+          <p>No shapes or groups available</p>
+        </div>
+
+        <!-- JSON editor for selected tree node -->
+        <MetadataEditor
+          v-if="activeNode"
+          :active-node="activeNode"
+          :visible="true"
+          @apply="applyMetadata"
+        />
+      </div>
+    </template>
+
+    <!-- No selection state -->
+    <div v-else class="empty-state">
+      <p>Select something to edit its metadata</p>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.smart-metadata-editor {
+  margin-top: 8px;
+}
+
+.hierarchical-editor {
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 8px 16px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+  max-width: 700px;
+  font-size: 15px;
+}
+
+.header {
+  margin-bottom: 8px;
+}
+
+.header h3 {
+  margin: 0 0 4px 0;
+  font-size: 17px;
+  color: #333;
+}
+
+.help {
+  margin: 0;
+  color: #666;
+  font-size: 14px;
+}
+
+.tree-view {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid #eee;
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+
+.tree-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+  cursor: pointer;
+  user-select: none;
+  border-bottom: 1px solid #f5f5f5;
+  transition: background-color 0.15s;
+}
+
+.tree-row:last-child {
+  border-bottom: none;
+}
+
+.tree-row:hover {
+  background-color: #f8f9fa;
+}
+
+.tree-row.active {
+  background-color: #fff2f2;
+  border-left: 3px solid #dc3545;
+}
+
+.label {
+  font-family: 'Monaco', 'Consolas', monospace;
+  font-size: 13px;
+  color: #333;
+}
+
+.metadata-indicator {
+  color: #28a745;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.empty-state {
+  text-align: center;
+  color: #666;
+  padding: 20px;
+  font-style: italic;
+}
+
+.empty-state p {
+  margin: 0;
+}
+</style>
