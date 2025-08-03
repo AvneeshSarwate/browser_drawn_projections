@@ -27,7 +27,7 @@ const entries = computed(() => {
   const root = hierarchyRoot.value
   if (root) {
     // Show hierarchy rooted at selected group
-    return collectHierarchyFromRoot(root)
+    return collectHierarchyFromRoot([root])
   } else if (mode.value === 'hierarchical') {
     // Show full canvas hierarchy for multi-selection
     return collectHierarchy()

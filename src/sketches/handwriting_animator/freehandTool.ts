@@ -1192,7 +1192,7 @@ export interface HierarchyEntry {
   indexPath: string       // e.g. "0/3/1" – handy for v-key
 }
 
-export const collectHierarchy = (): HierarchyEntry[] => {
+export const collectHierarchyFromRoot = (rootNodes: Konva.Node[]): HierarchyEntry[] => {
   const out: HierarchyEntry[] = []
   
   const walk = (node: Konva.Node, depth = 0, path = '') => {
@@ -1205,28 +1205,13 @@ export const collectHierarchy = (): HierarchyEntry[] => {
     }
   }
   
-  if (freehandShapeLayer) {
-    freehandShapeLayer.getChildren().forEach((child, i) => walk(child, 0, `${i}`))
-  }
-  
+  rootNodes.forEach((node, i) => walk(node, 0, `${i}`))
   return out
 }
 
-export const collectHierarchyFromRoot = (rootNode: Konva.Node): HierarchyEntry[] => {
-  const out: HierarchyEntry[] = []
-  
-  const walk = (node: Konva.Node, depth = 0, path = '') => {
-    out.push({ node, depth, indexPath: path })
-    
-    if (node instanceof Konva.Group) {
-      node.getChildren().forEach((child, i) =>
-        walk(child, depth + 1, path ? `${path}/${i}` : `${i}`)
-      )
-    }
-  }
-  
-  walk(rootNode, 0, '0')
-  return out
+export const collectHierarchy = (): HierarchyEntry[] => {
+  if (!freehandShapeLayer) return []
+  return collectHierarchyFromRoot(freehandShapeLayer.getChildren())
 }
 
 // Cursor update function (will be defined in onMounted)
