@@ -324,6 +324,13 @@ export class DrawingScene {
   clearLoopedAnimations(): void {
     this.lifecycleManager?.clearLoopedAnimations();
   }
+
+  /**
+   * Get stroke bounding box for relative positioning
+   */
+  getStrokeBounds(strokeIndex: number): { minX: number; maxX: number; minY: number; maxY: number } | null {
+    return this.strokeTextureManager?.getStrokeBounds(strokeIndex) || null;
+  }
   
   /**
    * Dispose of all resources

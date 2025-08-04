@@ -358,13 +358,35 @@ const handleBabylonCanvasClick = (event: MouseEvent) => {
         return
       }
       
-      // Launch each stroke in the group with a small offset
-      strokeIndices.forEach((strokeIndex, i) => {
+      // Get bounding boxes for all strokes to calculate relative positions
+      const strokeBounds = strokeIndices.map(index => ({
+        index,
+        bounds: drawingScene!.getStrokeBounds(index)
+      })).filter(item => item.bounds !== null)
+      
+      if (strokeBounds.length === 0) {
+        console.warn(`No valid stroke bounds found for group: ${groupName.value}`)
+        return
+      }
+      
+      // Use the first stroke as the reference position
+      const firstStrokeBounds = strokeBounds[0].bounds!
+      const referenceX = firstStrokeBounds.minX
+      const referenceY = firstStrokeBounds.minY
+      
+      // Launch each stroke with relative positioning preserved
+      strokeBounds.forEach((strokeInfo, i) => {
+        const { index, bounds } = strokeInfo
+        
+        // Calculate offset from the reference stroke
+        const deltaX = bounds!.minX - referenceX
+        const deltaY = bounds!.minY - referenceY
+        
         setTimeout(() => {
           const animationId = drawingScene!.launchStroke(
-            x + (i * 10), y + (i * 10), // Small offset for each stroke
-            strokeIndex,
-            strokeIndex,
+            x + deltaX, y + deltaY, // Position with relative offset
+            index,
+            index,
             {
               interpolationT: 0.0, // No interpolation for group launch
               duration: animationParams.value.duration,
@@ -374,11 +396,11 @@ const handleBabylonCanvasClick = (event: MouseEvent) => {
               startPhase: animationParams.value.startPhase
             }
           )
-          console.log(`Launched group stroke ${strokeIndex} (animation ${animationId})`)
+          console.log(`Launched group stroke ${index} (animation ${animationId}) at offset (${deltaX.toFixed(1)}, ${deltaY.toFixed(1)})`)
         }, i * 50) // 50ms delay between strokes
       })
       
-      console.log(`Launched group "${groupName.value}" with ${strokeIndices.length} strokes at (${x.toFixed(1)}, ${y.toFixed(1)})`)
+      console.log(`Launched group "${groupName.value}" with ${strokeBounds.length} strokes at (${x.toFixed(1)}, ${y.toFixed(1)}) with relative positioning`)
     } else {
       // Standard interpolated launch
       if (availableStrokes.value.length < 2) {
