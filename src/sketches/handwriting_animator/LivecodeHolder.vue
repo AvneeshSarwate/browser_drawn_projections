@@ -644,7 +644,7 @@ onMounted(async () => {
         // Freehand tool logic
         if (freehandDrawMode.value) {
           // Drawing mode
-          if (e.target !== stage) return
+          // if (e.target !== stage) return
           
           setIsDrawing(true)
           setCurrentPoints([pos.x, pos.y])
