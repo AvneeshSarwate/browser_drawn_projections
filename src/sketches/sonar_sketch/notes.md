@@ -1,6 +1,12 @@
 # notes
 
 
+## randomness + analysis ideas
+- use a seedable random number generator, have diff instances per voice, and cache the seed/state at the start of each function call
+- if all random calls are made with rng, then you can run the function twice, once sync w/o playback to analyze, and once to actually play, with same results
+- this gives you the primitives for adding "lookahead time sync" interactions between voices
+
+
 ## design assumptions to remember
 - first line of DSL is the clip line
 - transforming text never changes its line structure
