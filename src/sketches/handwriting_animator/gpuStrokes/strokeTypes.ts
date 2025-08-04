@@ -17,6 +17,8 @@ export type Stroke = {
   };
 }
 
+export type AnimationControlMode = 'manual' | 'auto';
+
 export type LaunchConfig = {
   id: string;
   strokeAIndex: number;     // Index into stroke texture (0-63)
@@ -28,6 +30,7 @@ export type LaunchConfig = {
   elapsedTime: number;      // Current elapsed time
   startTime: number;        // When animation started
   startPhase: number;       // Initial phase offset [0,1]
+  controlMode: AnimationControlMode;      // Whether to control time manually
   
   // Spatial transform
   startPoint: { x: number; y: number };  // Canvas coordinates

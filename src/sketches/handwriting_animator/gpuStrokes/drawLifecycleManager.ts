@@ -1,6 +1,6 @@
 import * as BABYLON from 'babylonjs';
 import { PriorityQueue } from './priorityQueue';
-import type { LaunchConfig, GPULaunchConfig } from './strokeTypes';
+import type { LaunchConfig, GPULaunchConfig, AnimationControlMode } from './strokeTypes';
 import { DRAWING_CONSTANTS } from './constants';
 import type { StrokeTextureManager } from './strokeTextureManager';
 
@@ -37,11 +37,23 @@ export class DrawLifecycleManager {
     // Initialize with inactive configs
     this.clearGPUBuffer();
   }
-  
+
+  updateAnimation(id: string, updates: Partial<LaunchConfig>): boolean {
+    const config = this.activeConfigs.get(id);
+    if (!config) {
+      console.warn(`Animation with ID ${id} not found`);
+      return false;
+    }
+
+    // Update the config with the new values
+    Object.assign(config, updates);
+    return true;
+  }
+
   /**
    * Add new animation to queue
    */
-  addAnimation(config: Omit<LaunchConfig, 'id' | 'startTime' | 'elapsedTime' | 'phase' | 'active'>): string {
+  addAnimation(config: Omit<LaunchConfig, 'id' | 'startTime' | 'elapsedTime' | 'phase'>): string {
     const id = `anim_${this.nextId++}`;
     const currentTime = performance.now() * 0.001; // Convert to seconds
     
@@ -51,7 +63,7 @@ export class DrawLifecycleManager {
       startTime: currentTime,
       elapsedTime: 0,
       phase: config.startPhase, // Initialize phase with startPhase offset
-      active: true
+      active: config.active
     };
     
     // Validate config
@@ -60,9 +72,15 @@ export class DrawLifecycleManager {
       throw new Error(`Invalid animation config: ${validation.errors.join(', ')}`);
     }
     
-    const deadline = currentTime + config.totalDuration;
-    this.priorityQueue.add(id, deadline, fullConfig);
-    
+    if (fullConfig.controlMode === 'manual') {
+      // For manual control, we don't add to the queue, just set active
+      this.activeConfigs.set(id, fullConfig);
+    } else {
+      // For auto control, add to the priority queue
+      const deadline = currentTime + config.totalDuration;
+      this.priorityQueue.add(id, deadline, fullConfig);
+    }
+
     return id;
   }
   
@@ -74,7 +92,7 @@ export class DrawLifecycleManager {
     this.processQueue(currentTime);
     
     // Update active animations
-    this.updateActiveAnimations(currentTime);
+    this.updateActiveNonManualAnimations(currentTime);
     
     // Upload to GPU
     this.uploadToGPU();
@@ -99,7 +117,7 @@ export class DrawLifecycleManager {
     // Remove completed animations (but not looping ones)
     const completedIds: string[] = [];
     for (const [id, config] of this.activeConfigs) {
-      if ((config.phase >= 1.0 || !config.active) && !config.loop) {
+      if ((config.phase >= 1.0 || !config.active) && !config.loop && config.controlMode !== 'manual') {
         completedIds.push(id);
       }
     }
@@ -109,8 +127,10 @@ export class DrawLifecycleManager {
     }
   }
   
-  private updateActiveAnimations(currentTime: number): void {
+  private updateActiveNonManualAnimations(currentTime: number): void {
     for (const config of this.activeConfigs.values()) {
+      if (config.controlMode === 'manual') continue;
+
       // Update elapsed time and calculate base phase
       config.elapsedTime = currentTime - config.startTime;
       const basePhase = config.elapsedTime / config.totalDuration;
@@ -233,6 +253,8 @@ export class DrawLifecycleManager {
       position?: 'start' | 'center' | 'end';
       loop?: boolean;
       startPhase?: number;
+      controlMode?: AnimationControlMode;
+      active?: boolean;
     } = {}
   ): string {
     // Calculate position offset based on stroke bounds and position setting
@@ -296,7 +318,9 @@ export class DrawLifecycleManager {
       startPoint: { x: x + offsetX, y: y + offsetY },
       scale,
       loop: options.loop ?? false,
-      startPhase: options.startPhase ?? 0.0
+      startPhase: options.startPhase ?? 0.0,
+      controlMode: options.controlMode ?? 'auto',
+      active: options.active ?? true
     };
     
     return this.addAnimation(config);

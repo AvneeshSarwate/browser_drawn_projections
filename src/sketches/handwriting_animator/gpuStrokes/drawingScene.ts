@@ -6,6 +6,7 @@ import { DrawLifecycleManager } from './drawLifecycleManager';
 import { DRAWING_CONSTANTS } from './constants';
 import strokeAnimationWGSL from './strokeAnimation.wgsl?raw';
 import Stats from '@/rendering/stats';
+import type { LaunchConfig } from './strokeTypes';
 
 export class DrawingScene {
   private engine!: BABYLON.WebGPUEngine;
@@ -313,11 +314,27 @@ export class DrawingScene {
       position?: 'start' | 'center' | 'end';
       loop?: boolean;
       startPhase?: number;
+      active?: boolean;
+      controlMode?: 'manual' | 'auto';
     }
   ): string | undefined {
     return this.lifecycleManager?.launchStroke(x, y, strokeA, strokeB, options);
   }
-  
+
+  /**
+   * Update existing animation
+   */
+  updateStroke(id: string, updates: Partial<LaunchConfig>): boolean {
+    return this.lifecycleManager?.updateAnimation(id, updates);
+  }
+
+  /**
+   * Cancel an active stroke animation
+   */
+  cancelStroke(id: string): boolean {
+    return this.lifecycleManager?.cancelAnimation(id);
+  }
+
   /**
    * Clear all looped animations
    */

@@ -2,19 +2,11 @@
 
 
 ## more stuff to manage groups of strokes and launch groups with script
-convertFreehandStrokesToGPUFormat
-generateBakedStrokeData
 
-
-- for metadata editor, if selected is a group, show heirarcical list of children metadata editors 
-- for metadata being edited for a child, find some way to highlight the child 
-	- maybe just draw rect around bounding box of child? looks diff from normal selection transform
-- metadata needs to include an "order" field and a "name" field 
-	- order for what order it is sequentially in a group, name for convenience for mapping 
-- when flattening, keep a map between group-id => ordered-list-child-indicies (indices are texture array indices)  
-- need to store relative position metadata for children in a group for launched playback
-
-
+- bounding-box adjustment for groups only works with pointer-start relative launch
+- need to fix edge conditions for phase/active
+- need to figure out proper math for draw-all => collapse-all logic
+- need to test with nested groups
 
 
 

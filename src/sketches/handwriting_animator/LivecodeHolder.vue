@@ -339,6 +339,14 @@ const initializeGPUStrokes = async () => {
   }
 }
 
+// fn phaser(pct: f32, phase: f32, e: f32) -> f32 {
+//     return clamp((phase - 1.0 + pct * (1.0 + e)) / e, 0.0, 1.0);
+// }
+
+const phaser = (pct: number, phase: number, e: number): number => {
+  return Math.max(0, Math.min(1, (phase - 1 + pct * (1 + e)) / e))
+}
+
 const handleBabylonCanvasClick = (event: MouseEvent) => {
   if (!drawingScene || !gpuStrokesReady.value) return
   
@@ -373,6 +381,8 @@ const handleBabylonCanvasClick = (event: MouseEvent) => {
       const firstStrokeBounds = strokeBounds[0].bounds!
       const referenceX = firstStrokeBounds.minX
       const referenceY = firstStrokeBounds.minY
+
+      const launchedAnimationIds: string[] = []
       
       // Launch each stroke with relative positioning preserved
       strokeBounds.forEach((strokeInfo, i) => {
@@ -382,22 +392,46 @@ const handleBabylonCanvasClick = (event: MouseEvent) => {
         const deltaX = bounds!.minX - referenceX
         const deltaY = bounds!.minY - referenceY
         
-        setTimeout(() => {
-          const animationId = drawingScene!.launchStroke(
-            x + deltaX, y + deltaY, // Position with relative offset
-            index,
-            index,
-            {
-              interpolationT: 0.0, // No interpolation for group launch
-              duration: animationParams.value.duration,
-              scale: animationParams.value.scale,
-              position: animationParams.value.position,
-              loop: animationParams.value.loop,
-              startPhase: animationParams.value.startPhase
-            }
-          )
-          console.log(`Launched group stroke ${index} (animation ${animationId}) at offset (${deltaX.toFixed(1)}, ${deltaY.toFixed(1)})`)
-        }, i * 50) // 50ms delay between strokes
+        const animationId = drawingScene!.launchStroke(
+          x + deltaX, y + deltaY, // Position with relative offset
+          index,
+          index,
+          {
+            interpolationT: 0.0, // No interpolation for group launch
+            duration: animationParams.value.duration,
+            scale: animationParams.value.scale,
+            position: animationParams.value.position,
+            loop: animationParams.value.loop,
+            startPhase: animationParams.value.startPhase,
+            controlMode: 'manual' // Use manual control mode for group strokes
+          }
+        )
+        console.log(`Launched group stroke ${index} (animation ${animationId}) at offset (${deltaX.toFixed(1)}, ${deltaY.toFixed(1)})`)
+        launchedAnimationIds.push(animationId)
+      })
+
+      //call launchLoop() to manage animation progress
+      launchLoop(async (ctx) => {
+        const singleDur = animationParams.value.duration
+        const totalDur = animationParams.value.duration * launchedAnimationIds.length
+        const numStrokes = launchedAnimationIds.length
+        const startTime = ctx.progTime
+        let elapsedTime = 0
+        while (elapsedTime < totalDur) {
+          const currentlyDrawingProg = elapsedTime % singleDur
+          const currentlyDrawingInd = Math.floor(elapsedTime/singleDur);
+          const currentlyDrawingPhase = currentlyDrawingProg / singleDur; 
+
+          const activeId = launchedAnimationIds[currentlyDrawingInd];
+
+          drawingScene!.updateStroke(activeId, { phase: currentlyDrawingPhase });
+
+          elapsedTime = ctx.progTime - startTime
+          await ctx.waitSec(0.016)
+        }
+        launchedAnimationIds.forEach(animId => {
+          drawingScene!.cancelStroke(animId)
+        })
       })
       
       console.log(`Launched group "${groupName.value}" with ${strokeBounds.length} strokes at (${x.toFixed(1)}, ${y.toFixed(1)}) with relative positioning`)
