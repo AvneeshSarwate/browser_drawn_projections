@@ -201,25 +201,39 @@ type GPUStroke = {
 const convertFreehandStrokesToGPUFormat = () => {
   if (!strokeInterpolator) return []
   
-  const freehandStrokeArray = Array.from(freehandStrokes.values())
-    .filter(stroke => stroke.isFreehand && stroke.points.length >= 4)
+  // Use transformed data from appState.freehandRenderData instead of raw stroke data
+  const flattenedStrokes: FlattenedStroke[] = []
+  
+  // Helper function to recursively extract all FlattenedStroke objects
+  const extractStrokes = (strokeGroups: FlattenedStrokeGroup[]) => {
+    strokeGroups.forEach(group => {
+      group.children.forEach(child => {
+        if ('points' in child) {
+          // It's a FlattenedStroke
+          flattenedStrokes.push(child)
+        } else {
+          // It's a FlattenedStrokeGroup, recurse
+          extractStrokes([child])
+        }
+      })
+    })
+  }
+  
+  extractStrokes(appState.freehandRenderData)
   
   const gpuStrokes: GPUStroke[] = []
   
-  for (let i = 0; i < Math.min(freehandStrokeArray.length, DRAWING_CONSTANTS.MAX_STROKES); i++) {
-    const stroke = freehandStrokeArray[i]
+  for (let i = 0; i < Math.min(flattenedStrokes.length, DRAWING_CONSTANTS.MAX_STROKES); i++) {
+    const flattenedStroke = flattenedStrokes[i]
     try {
-      // Convert flat array to point objects with timestamps
-      const points = []
-      for (let j = 0; j < stroke.points.length; j += 2) {
-        if (j + 1 < stroke.points.length) {
-          points.push({
-            x: stroke.points[j],
-            y: stroke.points[j + 1],
-            timestamp: stroke.timestamps[j / 2] || 0
-          })
-        }
-      }
+      // Points are already in the correct format with x, y, ts from the transformed data
+      const points = flattenedStroke.points.map(p => ({
+        x: p.x,
+        y: p.y,
+        t: p.ts
+      }))
+      
+      if (points.length < 2) continue // Skip invalid strokes
       
       // Calculate bounding box
       let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
@@ -232,7 +246,7 @@ const convertFreehandStrokesToGPUFormat = () => {
       
       // Create stroke object in expected format
       const strokeData = {
-        id: stroke.id,
+        id: `gpu_stroke_${i}`, // Generate ID since we don't have access to original stroke ID
         points: points,
         boundingBox: { minX, maxX, minY, maxY }
       }
@@ -250,7 +264,7 @@ const convertFreehandStrokesToGPUFormat = () => {
         })
       }
     } catch (error) {
-      console.warn(`Failed to convert stroke ${stroke.id}:`, error)
+      console.warn(`Failed to convert stroke ${i}:`, error)
     }
   }
   
