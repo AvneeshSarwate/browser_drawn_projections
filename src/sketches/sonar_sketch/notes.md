@@ -1,5 +1,8 @@
 # notes
 
+## bugs
+- fix oneShot 
+
 
 ## randomness + analysis ideas
 - use a seedable random number generator, have diff instances per voice, and cache the seed/state at the start of each function call

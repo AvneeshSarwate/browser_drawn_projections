@@ -66,8 +66,8 @@ fn main(@builtin(global_invocation_id) globalId: vec3<u32>) {
     
     let phaseVal = clamp(phaser(config.phase, pointProgress, 1.0), 0.0, 0.9999);
     
-    // If this point hasn't been "revealed" yet, hide it
-    if (phaseVal <= 0.001) {
+    // If this point hasn't been "revealed" yet, or if animation is complete, skip it
+    if (phaseVal <= 0.001 || phaseVal >= 0.999) {
         setInactiveInstance(globalIndex);
         return;
     }

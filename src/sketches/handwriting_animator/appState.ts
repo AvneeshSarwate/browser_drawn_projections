@@ -77,6 +77,32 @@ export const resolution = {
 
 //todo api - add caching/rehydrating of appState from local storage
 
+// UI refs that should persist across hot reloads
+export const activeTool = ref<'freehand' | 'polygon'>('freehand')
+export const availableStrokes = ref<Array<{index: number, name: string}>>([])
+export const animationParams = ref({
+  strokeA: 0,
+  strokeB: 0,
+  interpolationT: 0.0,
+  duration: 2.0,
+  scale: 1.0,
+  position: 'center' as 'start' | 'center' | 'end',
+  loop: false,
+  startPhase: 0.0
+})
+export const gpuStrokesReady = ref(false)
+export const launchByName = ref(false)
+export const groupName = ref('')
+
+// Script editor state
+export const SCRIPT_STORAGE_KEY = 'handwriting-animator-script'
+const defaultScript = `// Launch multiple strokes in patterns
+launchStroke(100, 100, 0, 1)
+launchStroke(200, 200, 0, 1, { duration: 3.0, loop: true })
+launchStroke(300, 300, 1, 0, { startPhase: 0.5 })`
+export const scriptCode = ref(localStorage.getItem(SCRIPT_STORAGE_KEY) || defaultScript)
+export const scriptExecuting = ref(false)
+
 export const globalStore = defineStore(appStateName, () => {
   const appStateRef = ref(appState)
 

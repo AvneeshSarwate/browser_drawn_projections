@@ -1,7 +1,7 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
-import { type TemplateAppState, appStateName, resolution, type FreehandRenderData, type FlattenedStroke, type FlattenedStrokeGroup, type PolygonRenderData, type FlattenedPolygon, drawFlattenedStrokeGroup, stage, setStage, activeNode, metadataText, showMetadataEditor, getActiveSingleNode, selectedPolygons, selected } from './appState';
-import { inject, onMounted, onUnmounted, ref, watch, computed, shallowReactive, type ShallowReactive, shallowRef, nextTick } from 'vue';
+import { type TemplateAppState, appStateName, resolution, type FreehandRenderData, type FlattenedStroke, type FlattenedStrokeGroup, type PolygonRenderData, type FlattenedPolygon, drawFlattenedStrokeGroup, stage, setStage, activeNode, metadataText, showMetadataEditor, getActiveSingleNode, selectedPolygons, selected, activeTool, availableStrokes, animationParams, gpuStrokesReady, launchByName, groupName, scriptCode, scriptExecuting, SCRIPT_STORAGE_KEY } from './appState';
+import { inject, onMounted, onUnmounted, ref, watch, computed, shallowReactive, type ShallowReactive, shallowRef, nextTick, h } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
@@ -37,8 +37,7 @@ const clearDrawFuncs = () => {
   appState.drawFuncMap = new Map()
 }
 
-// Tool switching
-const activeTool = ref<'freehand' | 'polygon'>('freehand')
+// Tool switching - now imported from appState
 
 // Callback for Timeline to set animation state  
 const setAnimatingState = (animating: boolean) => {
@@ -65,35 +64,17 @@ const babylonContainer = ref<HTMLCanvasElement>()
 // GPU Strokes state
 let drawingScene: DrawingScene | undefined = undefined
 let strokeInterpolator: StrokeInterpolator | undefined = undefined
-const availableStrokes = ref<Array<{index: number, name: string}>>([])
-const animationParams = ref({
-  strokeA: 0,
-  strokeB: 0,
-  interpolationT: 0.0,
-  duration: 2.0,
-  scale: 1.0,
-  position: 'center' as 'start' | 'center' | 'end',
-  loop: false,
-  startPhase: 0.0
-})
-const gpuStrokesReady = ref(false)
+// availableStrokes, animationParams, gpuStrokesReady now imported from appState
 const webGPUSupported = computed(() => typeof navigator !== 'undefined' && !!navigator.gpu)
 
 // Group launch state
-const launchByName = ref(false)
-const groupName = ref('')
+// launchByName, groupName now imported from appState
 const availableGroups = computed(() => Object.keys(appState.freehandGroupMap))
 
 // Script editor state
 const scriptEditorRef = ref<HTMLDivElement>()
 let scriptEditor: EditorView | undefined = undefined
-const SCRIPT_STORAGE_KEY = 'handwriting-animator-script'
-const defaultScript = `// Launch multiple strokes in patterns
-launchStroke(100, 100, 0, 1)
-launchStroke(200, 200, 0, 1, { duration: 3.0, loop: true })
-launchStroke(300, 300, 1, 0, { startPhase: 0.5 })`
-const scriptCode = ref(localStorage.getItem(SCRIPT_STORAGE_KEY) || defaultScript)
-const scriptExecuting = ref(false)
+// scriptCode, scriptExecuting now imported from appState
 
 let gridLayer: Konva.Layer | undefined = undefined
 
@@ -412,9 +393,13 @@ const handleBabylonCanvasClick = (event: MouseEvent) => {
 
       //call launchLoop() to manage animation progress
       launchLoop(async (ctx) => {
+        const hangTimeFrac = 0.3 //amount of time to hang with whole group written out
+
         const singleDur = animationParams.value.duration
         const totalDur = animationParams.value.duration * launchedAnimationIds.length
-        const numStrokes = launchedAnimationIds.length
+        const hangTimeDur = totalDur * hangTimeFrac
+        const phaseInDur = (totalDur-hangTimeDur) / 2
+        const piecewisPhaseInDur = phaseInDur / launchedAnimationIds.length
         const startTime = ctx.progTime
         let elapsedTime = 0
         while (elapsedTime < totalDur) {
@@ -427,6 +412,25 @@ const handleBabylonCanvasClick = (event: MouseEvent) => {
           drawingScene!.updateStroke(activeId, { phase: currentlyDrawingPhase });
 
           elapsedTime = ctx.progTime - startTime
+
+
+          launchedAnimationIds.forEach((animId, ind) => {
+            if (elapsedTime < phaseInDur) {
+            
+              const phaseInTime = (elapsedTime - ind * piecewisPhaseInDur) / piecewisPhaseInDur;
+              const clampedPhase = Math.min(1, Math.max(0, phaseInTime)) * 0.5;
+              drawingScene!.updateStroke(animId, { phase: clampedPhase });
+            } else {
+              const outElapsedTime = elapsedTime - (phaseInDur+hangTimeDur);
+              const phaseOutTime = (outElapsedTime - ind * piecewisPhaseInDur) / piecewisPhaseInDur;
+              const clampedPhase = Math.min(1, Math.max(0, phaseOutTime))*0.5 + 0.5;
+              drawingScene!.updateStroke(animId, { phase: clampedPhase });
+              // if( clampedPhase >= 1.0 && !animationParams.value.loop) {
+              //   drawingScene!.cancelStroke(animId);
+              // }
+            }
+          })
+
           await ctx.waitSec(0.016)
         }
         launchedAnimationIds.forEach(animId => {
@@ -1080,6 +1084,7 @@ onUnmounted(() => {
               <label><input type="radio" v-model="animationParams.position" value="start" /> Start</label>
               <label><input type="radio" v-model="animationParams.position" value="center" /> Center</label>
               <label><input type="radio" v-model="animationParams.position" value="end" /> End</label>
+              <label><input type="radio" v-model="animationParams.position" value="top-left" /> Top Left</label>
             </div>
           </div>
           
