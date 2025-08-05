@@ -239,7 +239,42 @@ export class DrawLifecycleManager {
   }
   
   /**
-   * Interactive launch from mouse click
+   * Launch stroke with raw coordinates (no anchor calculation)
+   * This is the low-level method that doesn't perform any offset calculations
+   */
+  launchRaw(
+    startPoint: { x: number; y: number },
+    strokeA: number, 
+    strokeB: number,
+    options: {
+      interpolationT?: number;
+      duration?: number;
+      scale?: number;
+      loop?: boolean;
+      startPhase?: number;
+      controlMode?: AnimationControlMode;
+      active?: boolean;
+    } = {}
+  ): string {
+    const config = {
+      strokeAIndex: strokeA,
+      strokeBIndex: strokeB,
+      interpolationT: options.interpolationT ?? 0.0,
+      totalDuration: options.duration ?? 2.0,
+      startPoint,
+      scale: options.scale ?? 1.0,
+      loop: options.loop ?? false,
+      startPhase: options.startPhase ?? 0.0,
+      controlMode: options.controlMode ?? 'auto',
+      active: options.active ?? true
+    };
+    
+    return this.addAnimation(config);
+  }
+
+  /**
+   * Interactive launch from mouse click (legacy method - use DrawingScene.launchStrokeWithAnchor instead)
+   * @deprecated Use DrawingScene.launchStrokeWithAnchor for new code
    */
   launchStroke(
     x: number, 
@@ -310,20 +345,8 @@ export class DrawLifecycleManager {
       }
     }
 
-    const config = {
-      strokeAIndex: strokeA,
-      strokeBIndex: strokeB,
-      interpolationT: options.interpolationT ?? 0.0,
-      totalDuration: options.duration ?? 2.0,
-      startPoint: { x: x + offsetX, y: y + offsetY },
-      scale,
-      loop: options.loop ?? false,
-      startPhase: options.startPhase ?? 0.0,
-      controlMode: options.controlMode ?? 'auto',
-      active: options.active ?? true
-    };
-    
-    return this.addAnimation(config);
+    const startPoint = { x: x + offsetX, y: y + offsetY };
+    return this.launchRaw(startPoint, strokeA, strokeB, options);
   }
   
   /**

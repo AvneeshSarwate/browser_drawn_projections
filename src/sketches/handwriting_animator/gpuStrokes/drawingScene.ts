@@ -7,6 +7,7 @@ import { DRAWING_CONSTANTS } from './constants';
 import strokeAnimationWGSL from './strokeAnimation.wgsl?raw';
 import Stats from '@/rendering/stats';
 import type { LaunchConfig } from './strokeTypes';
+import { getStrokeAnchor, getGroupAnchor, type AnchorKind } from './coordinateUtils';
 
 export class DrawingScene {
   private engine!: BABYLON.WebGPUEngine;
@@ -300,7 +301,8 @@ export class DrawingScene {
   }
   
   /**
-   * Launch animation from mouse click
+   * Launch animation from mouse click (legacy method - use launchStrokeWithAnchor instead)
+   * @deprecated Use launchStrokeWithAnchor for new code
    */
   launchStroke(
     x: number, 
@@ -319,6 +321,120 @@ export class DrawingScene {
     }
   ): string | undefined {
     return this.lifecycleManager?.launchStroke(x, y, strokeA, strokeB, options);
+  }
+
+  /**
+   * Launch stroke with proper anchor handling
+   */
+  launchStrokeWithAnchor(
+    clickX: number,
+    clickY: number,
+    strokeA: number,
+    strokeB: number,
+    options: {
+      anchor?: AnchorKind;
+      interpolationT?: number;
+      duration?: number;
+      scale?: number;
+      loop?: boolean;
+      startPhase?: number;
+      active?: boolean;
+      controlMode?: 'manual' | 'auto';
+    } = {}
+  ): string | undefined {
+    if (!this.strokeTextureManager || !this.lifecycleManager) {
+      console.warn('DrawingScene not properly initialized');
+      return undefined;
+    }
+
+    const anchor = getStrokeAnchor(
+      this.strokeTextureManager,
+      strokeA,
+      strokeB,
+      options.interpolationT ?? 0.0,
+      options.anchor ?? 'center'
+    );
+
+    const scale = options.scale ?? 1.0;
+    const startPoint = {
+      x: clickX - anchor.x * scale,
+      y: clickY - anchor.y * scale
+    };
+
+    return this.lifecycleManager.launchRaw(startPoint, strokeA, strokeB, options);
+  }
+
+  /**
+   * Launch group of strokes with unified anchor handling
+   */
+  launchGroup(
+    clickX: number,
+    clickY: number,
+    strokeIndices: number[],
+    options: {
+      anchor?: AnchorKind;
+      duration?: number;
+      scale?: number;
+      loop?: boolean;
+      startPhase?: number;
+      active?: boolean;
+      controlMode?: 'manual' | 'auto';
+    } = {}
+  ): string[] {
+    if (!this.strokeTextureManager || !this.lifecycleManager) {
+      console.warn('DrawingScene not properly initialized');
+      return [];
+    }
+
+    if (strokeIndices.length === 0) {
+      console.warn('No strokes provided for group launch');
+      return [];
+    }
+
+    // Calculate group-level anchor
+    const groupAnchor = getGroupAnchor(
+      this.strokeTextureManager,
+      strokeIndices,
+      options.anchor ?? 'center'
+    );
+
+    const scale = options.scale ?? 1.0;
+    
+    // Calculate one shared translation for the whole group
+    // The GPU will add scale * strokePoint to this base, so the group anchor will land at clickX, clickY
+    const baseStartPoint = {
+      x: clickX - groupAnchor.x * scale,
+      y: clickY - groupAnchor.y * scale
+    };
+
+    const launchedIds: string[] = [];
+
+    // Launch each stroke with the same base translation
+    // The relative positioning between strokes is handled automatically by the GPU
+    // since each stroke has different normalized coordinates
+    for (const strokeIndex of strokeIndices) {
+      const animationId = this.lifecycleManager.launchRaw(
+        baseStartPoint,
+        strokeIndex,
+        strokeIndex,
+        {
+          interpolationT: 0.0, // No interpolation for group strokes
+          duration: options.duration,
+          scale,
+          loop: options.loop,
+          startPhase: options.startPhase,
+          active: options.active,
+          controlMode: options.controlMode ?? 'manual' // Default to manual for groups
+        }
+      );
+
+      if (animationId) {
+        launchedIds.push(animationId);
+      }
+    }
+
+    console.log(`Launched group with ${launchedIds.length} strokes at (${clickX.toFixed(1)}, ${clickY.toFixed(1)}) using ${options.anchor ?? 'center'} anchor`);
+    return launchedIds;
   }
 
   /**

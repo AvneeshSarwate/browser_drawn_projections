@@ -354,56 +354,30 @@ const handleBabylonCanvasClick = (event: MouseEvent) => {
   
   try {
     if (launchByName.value && groupName.value) {
-      // Launch by group name
+      // Launch by group name using new unified API
       const strokeIndices = getGroupStrokeIndices(groupName.value)
       if (strokeIndices.length === 0) {
         console.warn(`No strokes found for group: ${groupName.value}`)
         return
       }
-      
-      // Get bounding boxes for all strokes to calculate relative positions
-      const strokeBounds = strokeIndices.map(index => ({
-        index,
-        bounds: drawingScene!.getStrokeBounds(index)
-      })).filter(item => item.bounds !== null)
-      
-      if (strokeBounds.length === 0) {
-        console.warn(`No valid stroke bounds found for group: ${groupName.value}`)
+
+      const launchedAnimationIds = drawingScene.launchGroup(
+        x, y,
+        strokeIndices,
+        {
+          anchor: animationParams.value.position as any, // Convert 'start'|'center'|'end' to AnchorKind
+          duration: animationParams.value.duration,
+          scale: animationParams.value.scale,
+          loop: animationParams.value.loop,
+          startPhase: animationParams.value.startPhase,
+          controlMode: 'manual' // Use manual control mode for group strokes
+        }
+      )
+
+      if (launchedAnimationIds.length === 0) {
+        console.warn(`Failed to launch any strokes for group: ${groupName.value}`)
         return
       }
-      
-      // Use the first stroke as the reference position
-      const firstStrokeBounds = strokeBounds[0].bounds!
-      const referenceX = firstStrokeBounds.minX
-      const referenceY = firstStrokeBounds.minY
-
-      const launchedAnimationIds: string[] = []
-      
-      // Launch each stroke with relative positioning preserved
-      strokeBounds.forEach((strokeInfo, i) => {
-        const { index, bounds } = strokeInfo
-        
-        // Calculate offset from the reference stroke
-        const deltaX = bounds!.minX - referenceX
-        const deltaY = bounds!.minY - referenceY
-        
-        const animationId = drawingScene!.launchStroke(
-          x + deltaX, y + deltaY, // Position with relative offset
-          index,
-          index,
-          {
-            interpolationT: 0.0, // No interpolation for group launch
-            duration: animationParams.value.duration,
-            scale: animationParams.value.scale,
-            position: animationParams.value.position,
-            loop: animationParams.value.loop,
-            startPhase: animationParams.value.startPhase,
-            controlMode: 'manual' // Use manual control mode for group strokes
-          }
-        )
-        console.log(`Launched group stroke ${index} (animation ${animationId}) at offset (${deltaX.toFixed(1)}, ${deltaY.toFixed(1)})`)
-        launchedAnimationIds.push(animationId)
-      })
 
       //call launchLoop() to manage animation progress
       launchLoop(async (ctx) => {
@@ -452,23 +426,23 @@ const handleBabylonCanvasClick = (event: MouseEvent) => {
         })
       })
       
-      console.log(`Launched group "${groupName.value}" with ${strokeBounds.length} strokes at (${x.toFixed(1)}, ${y.toFixed(1)}) with relative positioning`)
+      console.log(`Launched group "${groupName.value}" with ${launchedAnimationIds.length} strokes at (${x.toFixed(1)}, ${y.toFixed(1)}) using ${animationParams.value.position} anchor`)
     } else {
-      // Standard interpolated launch
+      // Standard interpolated launch using new API
       if (availableStrokes.value.length < 2) {
         console.warn('Need at least 2 strokes for interpolated launch')
         return
       }
       
-      const animationId = drawingScene.launchStroke(
+      const animationId = drawingScene.launchStrokeWithAnchor(
         x, y,
         animationParams.value.strokeA,
         animationParams.value.strokeB,
         {
+          anchor: animationParams.value.position as any, // Convert 'start'|'center'|'end' to AnchorKind
           interpolationT: animationParams.value.interpolationT,
           duration: animationParams.value.duration,
           scale: animationParams.value.scale,
-          position: animationParams.value.position,
           loop: animationParams.value.loop,
           startPhase: animationParams.value.startPhase
         }
