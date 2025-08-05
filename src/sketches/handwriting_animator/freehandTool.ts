@@ -9,6 +9,163 @@ import { globalStore, stage, selected } from "./appState"
 const store = globalStore()
 const appState = store.appStateRef
 
+// Utility functions for duplication
+const uid = (prefix = 'id_') => `${prefix}${crypto.randomUUID()}`
+
+// Konva clone behavior confirmed: recursively clones children but keeps same IDs
+
+// Extracted handler attachment logic for reuse in duplication
+export const attachHandlersRecursively = (node: Konva.Node) => {
+  // Shared setup for both Path and Group nodes
+  if (node instanceof Konva.Path || node instanceof Konva.Group) {
+    const nodeType = node instanceof Konva.Path ? 'path' : 'group'
+
+    node.draggable(true)
+
+    // Remove any existing handlers to avoid duplicates
+    node.off('click.freehand')
+    node.off('dragstart.freehand')
+    node.off('dragend.freehand')
+
+    node.on('click.freehand', (e) => {
+      e.cancelBubble = true
+      handleClick(node, e.evt.shiftKey)
+    })
+
+    node.on('dragstart.freehand', () => {
+      startFreehandDragTracking()
+    })
+
+    node.on('dragend.freehand', () => {
+      finishFreehandDragTracking(node.constructor.name)
+      freehandShapeLayer?.batchDraw()
+    })
+
+    // Group-specific logic: recursively attach handlers to all children
+    if (node instanceof Konva.Group) {
+      node.getChildren().forEach(child => {
+        attachHandlersRecursively(child)
+      })
+    }
+  }
+}
+
+// Simplified deep clone - Konva clones children automatically!
+const deepCloneWithNewIds = (
+  origNode: Konva.Node,
+  offsetX: number = 0,
+  offsetY: number = 0
+): Konva.Node => {
+
+  // Konva's clone automatically handles children recursively
+  const clone = origNode.clone({
+    x: origNode.x() + offsetX,
+    y: origNode.y() + offsetY
+  })
+
+  // Recursively update IDs for the entire tree
+  const updateIdsRecursively = (node: Konva.Node, originalNode: Konva.Node) => {
+    // Generate new unique ID
+    const newId = uid()
+    node.id(newId)
+
+    // Update data structures
+    if (node instanceof Konva.Path) {
+      const originalStroke = Array.from(freehandStrokes.values())
+        .find(s => s.shape === originalNode)
+
+      if (originalStroke) {
+        const newStroke: FreehandStroke = {
+          ...originalStroke,
+          id: newId,
+          shape: node
+        }
+        freehandStrokes.set(newId, newStroke)
+        console.log('Created stroke data for cloned Path:', newId)
+      }
+    } else if (node instanceof Konva.Group) {
+      // Update children first, then create group data
+      const originalGroup = originalNode as Konva.Group
+      const clonedGroup = node as Konva.Group
+
+      clonedGroup.getChildren().forEach((child, index) => {
+        const originalChild = originalGroup.getChildren()[index]
+        updateIdsRecursively(child, originalChild)
+      })
+
+      // Create group data structure
+      const strokeIds = clonedGroup.find('Path').map(p => p.id())
+      if (strokeIds.length > 0) {
+        freehandStrokeGroups.set(newId, {
+          id: newId,
+          strokeIds,
+          group: clonedGroup
+        })
+        console.log('Created group data for cloned Group:', newId, 'with strokes:', strokeIds)
+      }
+    }
+  }
+
+  // Update IDs and data structures for the entire cloned tree
+  updateIdsRecursively(clone, origNode)
+
+  // Attach event handlers to all nodes in the cloned tree
+  attachHandlersRecursively(clone)
+
+  console.log('Successfully cloned', origNode.className, 'with new ID:', clone.id())
+
+  return clone
+}
+
+// Main duplicate function
+export const duplicateFreehandSelected = () => {
+  if (selected.length === 0) {
+    console.log('No items selected for duplication')
+    return
+  }
+
+  console.log('Duplicating', selected.length, 'selected items')
+
+  executeFreehandCommand('Duplicate', () => {
+    // Filter to top-level nodes only (avoid ancestor/descendant conflicts)
+    const topLevelNodes = selected.filter(node => {
+      return !selected.some(other => other !== node && other.isAncestorOf(node))
+    })
+
+    console.log('Top-level nodes to duplicate:', topLevelNodes.length)
+
+    const duplicatedNodes: Konva.Node[] = []
+
+    // Clone each top-level node with 50px offset
+    topLevelNodes.forEach((node, index) => {
+      console.log(`Duplicating node ${index + 1}:`, node.id(), node.className)
+      const duplicate = deepCloneWithNewIds(node, 50, 50)
+
+      // Add to the same parent as original
+      const parent = node.getParent()
+      if (parent) {
+        parent.add(duplicate)
+        console.log('Added duplicate to parent:', parent.className)
+      }
+
+      duplicatedNodes.push(duplicate)
+    })
+
+    console.log('Created', duplicatedNodes.length, 'duplicates')
+
+    // Update selection to newly created duplicates
+    clearFreehandSelection()
+    duplicatedNodes.forEach(node => freehandAddSelection(node))
+
+    // Update UI and data structures
+    updateFreehandDraggableStates()
+    updateBakedStrokeData()
+    freehandShapeLayer?.batchDraw()
+
+    console.log('Duplication complete')
+  })
+}
+
 export let freehandShapeLayer: Konva.Layer | undefined = undefined
 export const setFreehandShapeLayer = (ls: Konva.Layer) => freehandShapeLayer = ls
 export let freehandDrawingLayer: Konva.Layer | undefined = undefined
@@ -512,37 +669,7 @@ export const deserializeFreehandState = () => {
     freehandStrokeGroups.clear()
     selected.length = 0
 
-    // Function to recursively attach handlers to all nodes
-    const attachHandlersRecursively = (node: Konva.Node) => {
-      // Shared setup for both Path and Group nodes
-      if (node instanceof Konva.Path || node instanceof Konva.Group) {
-        const nodeType = node instanceof Konva.Path ? 'path' : 'group'
-        console.log(`Attaching handlers to ${nodeType}:`, node.id())
-
-        node.draggable(true)
-
-        node.on('click', (e) => {
-          e.cancelBubble = true
-          handleClick(node, e.evt.shiftKey)
-        })
-
-        node.on('dragstart', () => {
-          startFreehandDragTracking()
-        })
-
-        node.on('dragend', () => {
-          finishFreehandDragTracking(node.constructor.name)
-          freehandShapeLayer?.batchDraw()
-        })
-
-        // Group-specific logic: recursively attach handlers to all children
-        if (node instanceof Konva.Group) {
-          node.getChildren().forEach(child => {
-            attachHandlersRecursively(child)
-          })
-        }
-      }
-    }
+    // Use the extracted handler attachment logic
 
     // Restore layer content using Konva.Node.create
     const layerData = canvasState.layer
