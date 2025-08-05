@@ -86,7 +86,7 @@ export const animationParams = ref({
   interpolationT: 0.0,
   duration: 2.0,
   scale: 1.0,
-  position: 'center' as 'start' | 'center' | 'end',
+  position: 'center' as 'start' | 'center' | 'end' | 'bbox-center' | 'bbox-tl' | 'bbox-tr' | 'bbox-bl' | 'bbox-br',
   loop: false,
   startPhase: 0.0
 })

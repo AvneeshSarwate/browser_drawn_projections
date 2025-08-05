@@ -20,13 +20,14 @@ import { javascript } from '@codemirror/lang-javascript';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { polygonShapesLayer, polygonPreviewLayer, polygonControlsLayer, polygonSelectionLayer, clearPolygonSelection, updatePolygonControlPoints, deserializePolygonState, polygonMode, handlePolygonClick, isDrawingPolygon, handlePolygonMouseMove, handlePolygonEditMouseMove, currentPolygonPoints, finishPolygon, clearCurrentPolygon, serializePolygonState, setPolygonControlsLayer, setPolygonPreviewLayer, setPolygonSelectionLayer, setPolygonShapesLayer, polygonUndo, polygonRedo, canPolygonUndo, canPolygonRedo, deleteSelectedPolygon } from './polygonTool';
 import type { StrokePoint } from './gpuStrokes/strokeTypes';
+import type { AnchorKind } from './gpuStrokes/coordinateUtils';
 
 // ==================== common stuff ====================
 const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
 let timeLoops: CancelablePromisePoxy<any>[] = []
 
-  const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromisePoxy<any> => {
+const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromisePoxy<any> => {
   const loop = launch(block)
   timeLoops.push(loop)
   return loop
@@ -42,7 +43,7 @@ const clearDrawFuncs = () => {
 // Callback for Timeline to set animation state  
 const setAnimatingState = (animating: boolean) => {
   isAnimating.value = animating
-  
+
   // Block/unblock all stage interactions when animation state changes
   if (stage) {
     if (animating) {
@@ -81,17 +82,17 @@ let gridLayer: Konva.Layer | undefined = undefined
 // Draw grid
 const drawGrid = () => {
   if (!gridLayer || !stage) return
-  
+
   gridLayer.destroyChildren()
-  
+
   if (!showGrid.value) {
     gridLayer.batchDraw()
     return
   }
-  
+
   const width = stage.width()
   const height = stage.height()
-  
+
   // Vertical lines
   for (let x = 0; x <= width; x += gridSize) {
     gridLayer.add(new Konva.Line({
@@ -100,7 +101,7 @@ const drawGrid = () => {
       strokeWidth: 1,
     }))
   }
-  
+
   // Horizontal lines
   for (let y = 0; y <= height; y += gridSize) {
     gridLayer.add(new Konva.Line({
@@ -110,7 +111,7 @@ const drawGrid = () => {
     }))
   }
 
-  
+
   gridLayer.batchDraw()
 }
 
@@ -121,7 +122,7 @@ watch(activeTool, (newTool) => {
     freehandShapeLayer?.listening(true)
     freehandDrawingLayer?.listening(true)
     freehandSelectionLayer?.listening(true)
-    
+
     polygonShapesLayer?.listening(false)
     polygonPreviewLayer?.listening(false)
     polygonControlsLayer?.listening(false)
@@ -131,17 +132,17 @@ watch(activeTool, (newTool) => {
     freehandShapeLayer?.listening(false)
     freehandDrawingLayer?.listening(false)
     freehandSelectionLayer?.listening(false)
-    
+
     polygonShapesLayer?.listening(true)
     polygonPreviewLayer?.listening(true)
     polygonControlsLayer?.listening(true)
     polygonSelectionLayer?.listening(true)
   }
-  
+
   // Clear selections when switching tools
   clearFreehandSelection()
   clearPolygonSelection()
-  
+
   // Redraw stage
   stage?.batchDraw()
 })
@@ -151,10 +152,10 @@ watch(activeTool, (newTool) => {
 watch([() => selected.length, () => selectedPolygons.length, activeNode], () => {
   const newActiveNode = getActiveSingleNode()
   activeNode.value = newActiveNode
-  
+
   // Show metadata editor if there's any selection (single nodes, groups, or multiple items)
   const hasAnySelection = selected.length > 0 || selectedPolygons.length > 0
-  
+
   if (newActiveNode) {
     // Single node selected - populate the old metadata text for compatibility
     const metadata = newActiveNode.getAttr('metadata') ?? {}
@@ -174,9 +175,9 @@ watch([() => selected.length, () => selectedPolygons.length, activeNode], () => 
 // Function to apply metadata changes
 const applyMetadata = (metadata: any) => {
   if (!activeNode.value) return
-  
+
   activeNode.value.setAttr('metadata', metadata)
-  
+
   // Add to undo history
   if (selectedPolygons.some(node => node.id() === activeNode.value?.id())) {
     // For polygons - need to implement polygon command history if not exists
@@ -200,10 +201,10 @@ type GPUStroke = {
 }
 const convertFreehandStrokesToGPUFormat = () => {
   if (!strokeInterpolator) return []
-  
+
   // Use transformed data from appState.freehandRenderData instead of raw stroke data
   const flattenedStrokes: FlattenedStroke[] = []
-  
+
   // Helper function to recursively extract all FlattenedStroke objects
   const extractStrokes = (strokeGroups: FlattenedStrokeGroup[]) => {
     strokeGroups.forEach(group => {
@@ -218,11 +219,11 @@ const convertFreehandStrokesToGPUFormat = () => {
       })
     })
   }
-  
+
   extractStrokes(appState.freehandRenderData)
-  
+
   const gpuStrokes: GPUStroke[] = []
-  
+
   for (let i = 0; i < Math.min(flattenedStrokes.length, DRAWING_CONSTANTS.MAX_STROKES); i++) {
     const flattenedStroke = flattenedStrokes[i]
     try {
@@ -232,9 +233,9 @@ const convertFreehandStrokesToGPUFormat = () => {
         y: p.y,
         t: p.ts
       }))
-      
+
       if (points.length < 2) continue // Skip invalid strokes
-      
+
       // Calculate bounding box
       let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
       points.forEach(p => {
@@ -243,17 +244,17 @@ const convertFreehandStrokesToGPUFormat = () => {
         minY = Math.min(minY, p.y)
         maxY = Math.max(maxY, p.y)
       })
-      
+
       // Create stroke object in expected format
       const strokeData = {
         id: `gpu_stroke_${i}`, // Generate ID since we don't have access to original stroke ID
         points: points,
         boundingBox: { minX, maxX, minY, maxY }
       }
-      
+
       // Normalize the stroke using the interpolator
       const normalizedPoints = strokeInterpolator.normalizeStroke(strokeData)
-      
+
       if (strokeInterpolator.validateNormalizedStroke(normalizedPoints)) {
         gpuStrokes.push({
           index: i,
@@ -267,25 +268,25 @@ const convertFreehandStrokesToGPUFormat = () => {
       console.warn(`Failed to convert stroke ${i}:`, error)
     }
   }
-  
+
   return gpuStrokes
 }
 
 const updateGPUStrokes = () => {
   if (!drawingScene || !gpuStrokesReady.value) return
-  
+
   try {
     const gpuStrokes = convertFreehandStrokesToGPUFormat()
-    
+
     // Upload to GPU
     drawingScene.uploadStrokes(gpuStrokes)
-    
+
     // Update available strokes list for UI
     availableStrokes.value = gpuStrokes.map((stroke, idx) => ({
       index: idx,
       name: `Stroke ${idx + 1}`
     }))
-    
+
     // Reset animation params if they're out of bounds
     if (animationParams.value.strokeA >= gpuStrokes.length) {
       animationParams.value.strokeA = 0
@@ -293,7 +294,7 @@ const updateGPUStrokes = () => {
     if (animationParams.value.strokeB >= gpuStrokes.length) {
       animationParams.value.strokeB = 0
     }
-    
+
     console.log(`Updated GPU with ${gpuStrokes.length} strokes`)
   } catch (error) {
     console.warn('Failed to update GPU strokes:', error)
@@ -302,31 +303,31 @@ const updateGPUStrokes = () => {
 
 const initializeGPUStrokes = async () => {
   if (!babylonContainer.value) return
-  
+
   try {
     // Check WebGPU support
     if (!navigator.gpu) {
       console.warn('WebGPU not supported - GPU strokes disabled')
       return
     }
-    
+
     // Initialize components
     drawingScene = new DrawingScene()
     strokeInterpolator = new StrokeInterpolator()
-    
+
     // Create stats for the GPU scene
     const stats = new Stats()
     stats.showPanel(0) // FPS
     babylonContainer.value.parentElement?.appendChild(stats.dom)
-    
+
     // Initialize the scene
     await drawingScene.createScene(babylonContainer.value, stats)
-    
+
     gpuStrokesReady.value = true
-    
+
     // Initial stroke upload
     updateGPUStrokes()
-    
+
     console.log('GPU Strokes initialized successfully')
   } catch (error) {
     console.error('Failed to initialize GPU Strokes:', error)
@@ -344,14 +345,14 @@ const phaser = (pct: number, phase: number, e: number): number => {
 
 const handleBabylonCanvasClick = (event: MouseEvent) => {
   if (!drawingScene || !gpuStrokesReady.value) return
-  
+
   const rect = babylonContainer.value?.getBoundingClientRect()
   if (!rect) return
-  
+
   // Get click position relative to canvas
   const x = event.clientX - rect.left
   const y = event.clientY - rect.top
-  
+
   try {
     if (launchByName.value && groupName.value) {
       // Launch by group name using new unified API
@@ -365,7 +366,7 @@ const handleBabylonCanvasClick = (event: MouseEvent) => {
         x, y,
         strokeIndices,
         {
-          anchor: animationParams.value.position as any, // Convert 'start'|'center'|'end' to AnchorKind
+          anchor: animationParams.value.position as AnchorKind,
           duration: animationParams.value.duration,
           scale: animationParams.value.scale,
           loop: animationParams.value.loop,
@@ -386,14 +387,14 @@ const handleBabylonCanvasClick = (event: MouseEvent) => {
         const singleDur = animationParams.value.duration
         const totalDur = animationParams.value.duration * launchedAnimationIds.length
         const hangTimeDur = totalDur * hangTimeFrac
-        const phaseInDur = (totalDur-hangTimeDur) / 2
+        const phaseInDur = (totalDur - hangTimeDur) / 2
         const piecewisPhaseInDur = phaseInDur / launchedAnimationIds.length
         const startTime = ctx.progTime
         let elapsedTime = 0
         while (elapsedTime < totalDur) {
           const currentlyDrawingProg = elapsedTime % singleDur
-          const currentlyDrawingInd = Math.floor(elapsedTime/singleDur);
-          const currentlyDrawingPhase = currentlyDrawingProg / singleDur; 
+          const currentlyDrawingInd = Math.floor(elapsedTime / singleDur);
+          const currentlyDrawingPhase = currentlyDrawingProg / singleDur;
 
           const activeId = launchedAnimationIds[currentlyDrawingInd];
 
@@ -404,14 +405,14 @@ const handleBabylonCanvasClick = (event: MouseEvent) => {
 
           launchedAnimationIds.forEach((animId, ind) => {
             if (elapsedTime < phaseInDur) {
-            
+
               const phaseInTime = (elapsedTime - ind * piecewisPhaseInDur) / piecewisPhaseInDur;
               const clampedPhase = Math.min(1, Math.max(0, phaseInTime)) * 0.5;
               drawingScene!.updateStroke(animId, { phase: clampedPhase });
             } else {
-              const outElapsedTime = elapsedTime - (phaseInDur+hangTimeDur);
+              const outElapsedTime = elapsedTime - (phaseInDur + hangTimeDur);
               const phaseOutTime = (outElapsedTime - ind * piecewisPhaseInDur) / piecewisPhaseInDur;
-              const clampedPhase = Math.min(1, Math.max(0, phaseOutTime))*0.5 + 0.5;
+              const clampedPhase = Math.min(1, Math.max(0, phaseOutTime)) * 0.5 + 0.5;
               drawingScene!.updateStroke(animId, { phase: clampedPhase });
               // if( clampedPhase >= 1.0 && !animationParams.value.loop) {
               //   drawingScene!.cancelStroke(animId);
@@ -425,7 +426,7 @@ const handleBabylonCanvasClick = (event: MouseEvent) => {
           drawingScene!.cancelStroke(animId)
         })
       })
-      
+
       console.log(`Launched group "${groupName.value}" with ${launchedAnimationIds.length} strokes at (${x.toFixed(1)}, ${y.toFixed(1)}) using ${animationParams.value.position} anchor`)
     } else {
       // Standard interpolated launch using new API
@@ -433,13 +434,13 @@ const handleBabylonCanvasClick = (event: MouseEvent) => {
         console.warn('Need at least 2 strokes for interpolated launch')
         return
       }
-      
+
       const animationId = drawingScene.launchStrokeWithAnchor(
         x, y,
         animationParams.value.strokeA,
         animationParams.value.strokeB,
         {
-          anchor: animationParams.value.position as any, // Convert 'start'|'center'|'end' to AnchorKind
+          anchor: animationParams.value.position as AnchorKind,
           interpolationT: animationParams.value.interpolationT,
           duration: animationParams.value.duration,
           scale: animationParams.value.scale,
@@ -447,7 +448,7 @@ const handleBabylonCanvasClick = (event: MouseEvent) => {
           startPhase: animationParams.value.startPhase
         }
       )
-      
+
       console.log(`Launched interpolated animation ${animationId} at (${x.toFixed(1)}, ${y.toFixed(1)}) ${animationParams.value.loop ? '[LOOPING]' : ''}`)
     }
   } catch (error) {
@@ -457,7 +458,7 @@ const handleBabylonCanvasClick = (event: MouseEvent) => {
 
 const clearLoopedAnimations = () => {
   if (!drawingScene || !gpuStrokesReady.value) return
-  
+
   try {
     drawingScene.clearLoopedAnimations()
   } catch (error) {
@@ -468,17 +469,17 @@ const clearLoopedAnimations = () => {
 // Script editor functions
 const initializeScriptEditor = () => {
   if (!scriptEditorRef.value) return
-  
+
   const extensions = [
     basicSetup,
     javascript(),
     oneDark,
     EditorView.theme({
-      '&': { 
+      '&': {
         maxHeight: '300px',
         width: '100%'
       },
-      '.cm-scroller': { 
+      '.cm-scroller': {
         overflow: 'auto',
         maxHeight: '300px'
       },
@@ -504,9 +505,9 @@ const initializeScriptEditor = () => {
 
 const executeScript = () => {
   if (!drawingScene || !gpuStrokesReady.value || scriptExecuting.value) return
-  
+
   scriptExecuting.value = true
-  
+
   try {
     // Create launchStroke function that wraps drawingScene.launchStroke
     const launchStroke = (x: number, y: number, strokeA: number, strokeB: number, options?: any) => {
@@ -514,28 +515,28 @@ const executeScript = () => {
         console.warn('Insufficient strokes available for launching')
         return
       }
-      
+
       // Validate stroke indices
-      if (strokeA < 0 || strokeA >= availableStrokes.value.length || 
-          strokeB < 0 || strokeB >= availableStrokes.value.length) {
+      if (strokeA < 0 || strokeA >= availableStrokes.value.length ||
+        strokeB < 0 || strokeB >= availableStrokes.value.length) {
         console.warn(`Invalid stroke indices: strokeA=${strokeA}, strokeB=${strokeB}. Available: 0-${availableStrokes.value.length - 1}`)
         return
       }
-      
+
       try {
         return drawingScene.launchStroke(x, y, strokeA, strokeB, options)
       } catch (error) {
         console.error('Error launching stroke:', error)
       }
     }
-    
+
     // Get current script code
     const code = scriptEditor?.state.doc.toString() || scriptCode.value
-    
+
     // Create execution context and run script
     const scriptFunction = new Function('launchStroke', code)
     scriptFunction(launchStroke)
-    
+
     console.log('Script executed successfully')
   } catch (error) {
     console.error('Script execution error:', error)
@@ -570,7 +571,7 @@ onMounted(async () => {
       width: resolution.width,
       height: resolution.height,
     }))
-    
+
     // Update cursor based on mode
     setUpdateCursor(() => {
       if (stage && konvaContainer.value) {
@@ -585,13 +586,13 @@ onMounted(async () => {
     setFreehandShapeLayer(new Konva.Layer())
     setFreehandDrawingLayer(new Konva.Layer())
     setFreehandSelectionLayer(new Konva.Layer())
-    
+
     // Create polygon layers
     setPolygonShapesLayer(new Konva.Layer())
     setPolygonPreviewLayer(new Konva.Layer())
     setPolygonControlsLayer(new Konva.Layer())
     setPolygonSelectionLayer(new Konva.Layer())
-    
+
     stage.add(gridLayer)
     stage.add(freehandShapeLayer)
     stage.add(freehandDrawingLayer)
@@ -600,11 +601,11 @@ onMounted(async () => {
     stage.add(polygonPreviewLayer)
     stage.add(polygonControlsLayer)
     stage.add(polygonSelectionLayer)
-    
+
     // Add metadata highlight layer on top
     const metadataHighlightLayer = createMetadataHighlight()
     stage.add(metadataHighlightLayer)
-    
+
     // Set initial listening states based on active tool
     if (activeTool.value === 'freehand') {
       polygonShapesLayer.listening(false)
@@ -618,45 +619,45 @@ onMounted(async () => {
     }
 
     // Create transformers like working example
-    setSelTr(new Konva.Transformer({ 
-      rotateEnabled: true, 
-      keepRatio: true, 
+    setSelTr(new Konva.Transformer({
+      rotateEnabled: true,
+      keepRatio: true,
       padding: 6,
       rotationSnaps: [0, 45, 90, 135, 180, 225, 270, 315],
       rotationSnapTolerance: 5,
     }))
-    
+
     // Add transform tracking to main transformer
     selTr.on('transformstart', () => {
       startFreehandDragTracking()
     })
-    
+
     selTr.on('transformend', () => {
       finishFreehandDragTracking('Transform Selection')
     })
-    
+
     freehandSelectionLayer.add(selTr)
 
     // Initial grid draw
     drawGrid()
-    
+
     // Initialize polygon control points if needed  
     updatePolygonControlPoints()
-    
+
     // Start in select mode for testing
     freehandDrawMode.value = false
     updateCursor()
-    
+
     // Try to restore canvas state from hotreload (after all setup is complete)
     deserializeFreehandState()
     deserializePolygonState()
-    
+
     // Initialize GPU Strokes
     await initializeGPUStrokes()
-    
+
     // Set up the freehand data update callback
     appState.freehandDataUpdateCallback = updateGPUStrokes
-    
+
     // Initialize script editor
     await nextTick() // Ensure DOM elements are ready
     initializeScriptEditor()
@@ -665,18 +666,18 @@ onMounted(async () => {
     stage.on('mousedown touchstart', (e) => {
       const pos = stage.getPointerPosition()
       if (!pos) return
-      
+
       if (activeTool.value === 'freehand') {
         // Freehand tool logic
         if (freehandDrawMode.value) {
           // Drawing mode
           // if (e.target !== stage) return
-          
+
           setIsDrawing(true)
           setCurrentPoints([pos.x, pos.y])
           setDrawingStartTime(performance.now())
           setCurrentTimestamps([0])
-          
+
           // Clear selection when starting to draw
           clearFreehandSelection()
         } else {
@@ -700,10 +701,10 @@ onMounted(async () => {
       if (activeTool.value === 'freehand' && isDrawing) {
         const pos = stage.getPointerPosition()
         if (!pos) return
-        
+
         currentPoints.push(pos.x, pos.y)
         currentTimestamps.push(performance.now() - drawingStartTime)
-        
+
         // Update preview
         freehandDrawingLayer?.destroyChildren()
         const previewPath = new Konva.Path({
@@ -726,47 +727,47 @@ onMounted(async () => {
       if (activeTool.value === 'freehand' && isDrawing) {
         setIsDrawing(false)
         freehandDrawingLayer?.destroyChildren()
-        
+
         if (currentPoints.length > 2) {
-        executeFreehandCommand('Draw Stroke', () => {
-          // Create new stroke
-          const creationTime = Date.now()
-          const strokeId = `stroke-${creationTime}`
-          
-          // Get bounds for normalization
-          const bounds = getPointsBounds(currentPoints)
-          
-          // Create normalized points
-          const normalizedPoints: number[] = []
-          for (let i = 0; i < currentPoints.length; i += 2) {
-            normalizedPoints.push(currentPoints[i] - bounds.minX)
-            normalizedPoints.push(currentPoints[i + 1] - bounds.minY)
-          }
-          
-          const originalPath = getStrokePath(normalizedPoints)
-          const stroke: FreehandStroke = {
-            id: strokeId,
-            points: currentPoints,
-            timestamps: currentTimestamps,
-            originalPath: originalPath,
-            creationTime: creationTime,
-            isFreehand: true, // This is a freehand stroke with timing info
-          }
-          
-          // Create shape
-          const shape = createStrokeShape(currentPoints, strokeId)
-          stroke.shape = shape
-          
-          // Add to data structures
-          freehandStrokes.set(strokeId, stroke)
-          freehandShapeLayer?.add(shape)
-          updateFreehandDraggableStates() // Update draggable state for new stroke
-          updateTimelineState() // Update timeline state when new stroke is added
-          freehandShapeLayer?.batchDraw()
-          updateBakedStrokeData() // Update baked data after new stroke
-        })
+          executeFreehandCommand('Draw Stroke', () => {
+            // Create new stroke
+            const creationTime = Date.now()
+            const strokeId = `stroke-${creationTime}`
+
+            // Get bounds for normalization
+            const bounds = getPointsBounds(currentPoints)
+
+            // Create normalized points
+            const normalizedPoints: number[] = []
+            for (let i = 0; i < currentPoints.length; i += 2) {
+              normalizedPoints.push(currentPoints[i] - bounds.minX)
+              normalizedPoints.push(currentPoints[i + 1] - bounds.minY)
+            }
+
+            const originalPath = getStrokePath(normalizedPoints)
+            const stroke: FreehandStroke = {
+              id: strokeId,
+              points: currentPoints,
+              timestamps: currentTimestamps,
+              originalPath: originalPath,
+              creationTime: creationTime,
+              isFreehand: true, // This is a freehand stroke with timing info
+            }
+
+            // Create shape
+            const shape = createStrokeShape(currentPoints, strokeId)
+            stroke.shape = shape
+
+            // Add to data structures
+            freehandStrokes.set(strokeId, stroke)
+            freehandShapeLayer?.add(shape)
+            updateFreehandDraggableStates() // Update draggable state for new stroke
+            updateTimelineState() // Update timeline state when new stroke is added
+            freehandShapeLayer?.batchDraw()
+            updateBakedStrokeData() // Update baked data after new stroke
+          })
         }
-        
+
         setCurrentPoints([])
         setCurrentTimestamps([])
       }
@@ -778,7 +779,7 @@ onMounted(async () => {
       p5Mouse = targetToP5Coords(ev, p5i, threeCanvas)
     }, threeCanvas)
 
-    const rand = (n: number) => sinN(n*123.23)
+    const rand = (n: number) => sinN(n * 123.23)
 
     const randColor = (seed: number) => {
       return {
@@ -807,7 +808,7 @@ onMounted(async () => {
         p.pop()
       }
 
-      if(appState.freehandRenderData.length > 0) {
+      if (appState.freehandRenderData.length > 0) {
         drawFlattenedStrokeGroup(p, appState.freehandRenderData)
       }
     })
@@ -817,9 +818,9 @@ onMounted(async () => {
 
     shaderGraphEndNode = canvasPaint
     appState.shaderDrawFunc = () => shaderGraphEndNode!!.renderAll(appState.threeRenderer!!)
-    
+
     singleKeydownEvent('p', (ev) => { appState.paused = !appState.paused })
-    
+
     // Escape key handling for polygon tool
     singleKeydownEvent('Escape', (ev) => {
       if (activeTool.value === 'polygon' && isDrawingPolygon.value) {
@@ -843,19 +844,19 @@ onMounted(async () => {
 
 onUnmounted(() => {
   console.log("disposing livecoded resources")
-  
+
   // Save state before unmounting (for hot reload)
   serializeFreehandState()
   serializePolygonState()
-  
+
   // Clean up GPU resources
   drawingScene?.dispose()
-  
+
   shaderGraphEndNode?.disposeAll()
   clearListeners()
   clearDrawFuncs()
   timeLoops.forEach(tl => tl.cancel())
-  
+
   // Clean up Konva
   stage?.destroy()
 })
@@ -871,10 +872,11 @@ onUnmounted(() => {
         <option value="polygon">⬟ Polygon</option>
       </select>
       <span class="separator">|</span>
-      
+
       <!-- Freehand Tool Toolbar -->
       <template v-if="activeTool === 'freehand'">
-        <button @click="freehandDrawMode = !freehandDrawMode" :class="{ active: freehandDrawMode }" :disabled="isAnimating">
+        <button @click="freehandDrawMode = !freehandDrawMode" :class="{ active: freehandDrawMode }"
+          :disabled="isAnimating">
           {{ freehandDrawMode ? '✏️ Draw' : '👆 Select' }}
         </button>
         <button @click="showGrid = !showGrid" :class="{ active: showGrid }" :disabled="isAnimating">
@@ -903,15 +905,12 @@ onUnmounted(() => {
           {{ useRealTiming ? '⏱️ Real Time' : '⏱️ Max 0.3s' }}
         </button>
         <span class="separator">|</span>
-        <button 
-          @click="showMetadataEditor = !showMetadataEditor" 
-          :class="{ active: showMetadataEditor }"
-          :disabled="isAnimating"
-        >
+        <button @click="showMetadataEditor = !showMetadataEditor" :class="{ active: showMetadataEditor }"
+          :disabled="isAnimating">
           📝 Metadata
         </button>
       </template>
-      
+
       <!-- Polygon Tool Toolbar -->
       <template v-if="activeTool === 'polygon'">
         <button @click="polygonMode = 'draw'" :class="{ active: polygonMode === 'draw' }" :disabled="isAnimating">
@@ -938,11 +937,8 @@ onUnmounted(() => {
           🗑️ Delete
         </button>
         <span class="separator">|</span>
-        <button 
-          @click="showMetadataEditor = !showMetadataEditor" 
-          :class="{ active: showMetadataEditor }"
-          :disabled="isAnimating"
-        >
+        <button @click="showMetadataEditor = !showMetadataEditor" :class="{ active: showMetadataEditor }"
+          :disabled="isAnimating">
           📝 Metadata
         </button>
         <span v-if="isDrawingPolygon" class="info">Drawing: {{ currentPolygonPoints.length / 2 }} points</span>
@@ -951,48 +947,31 @@ onUnmounted(() => {
       <span class="info">{{ freehandSelectedCount }} selected</span>
     </div>
     <div class="canvas-wrapper">
-      <div 
-        ref="konvaContainer"
-        class="konva-container"
-        :style="{
-          width: resolution.width + 'px',
-          height: resolution.height + 'px',
-        }"
-      ></div>
-    
-    <!-- Smart Metadata Editor -->
-    <HierarchicalMetadataEditor 
-      v-if="showMetadataEditor"
-    />
-    
-    <Timeline 
-      :strokes="freehandStrokes"
-      :selectedStrokes="selectedStrokesForTimeline"
-      :useRealTiming="useRealTiming"
-      :maxInterStrokeDelay="maxInterStrokeDelay"
-      :overrideDuration="timelineDuration > 0 ? timelineDuration : undefined"
-      :lockWhileAnimating="setAnimatingState"
-      @timeUpdate="handleTimeUpdate"
-    />
-    <div v-if="isAnimating" class="animation-lock-warning">
-      ⚠️ Timeline has modified elements - press Stop to unlock
-    </div>
+      <div ref="konvaContainer" class="konva-container" :style="{
+        width: resolution.width + 'px',
+        height: resolution.height + 'px',
+      }"></div>
 
-    <!-- GPU Strokes Canvas -->
+      <!-- Smart Metadata Editor -->
+      <HierarchicalMetadataEditor v-if="showMetadataEditor" />
+
+      <Timeline :strokes="freehandStrokes" :selectedStrokes="selectedStrokesForTimeline" :useRealTiming="useRealTiming"
+        :maxInterStrokeDelay="maxInterStrokeDelay"
+        :overrideDuration="timelineDuration > 0 ? timelineDuration : undefined" :lockWhileAnimating="setAnimatingState"
+        @timeUpdate="handleTimeUpdate" />
+      <div v-if="isAnimating" class="animation-lock-warning">
+        ⚠️ Timeline has modified elements - press Stop to unlock
+      </div>
+
+      <!-- GPU Strokes Canvas -->
       <div class="gpu-strokes-section">
         <h3>GPU Strokes Animation</h3>
-        <canvas 
-          ref="babylonContainer"
-          class="babylon-canvas"
-          :width="resolution.width"
-          :height="resolution.height"
+        <canvas ref="babylonContainer" class="babylon-canvas" :width="resolution.width" :height="resolution.height"
           :style="{
             width: resolution.width + 'px',
             height: resolution.height + 'px',
-          }"
-          @click="handleBabylonCanvasClick"
-        ></canvas>
-        
+          }" @click="handleBabylonCanvasClick"></canvas>
+
         <!-- Animation Parameters -->
         <div v-if="gpuStrokesReady" class="animation-controls">
           <div class="control-row">
@@ -1003,7 +982,7 @@ onUnmounted(() => {
               </option>
             </select>
           </div>
-          
+
           <div class="control-row">
             <label>Stroke B:</label>
             <select v-model="animationParams.strokeB" :disabled="availableStrokes.length < 2 || launchByName">
@@ -1012,26 +991,20 @@ onUnmounted(() => {
               </option>
             </select>
           </div>
-          
+
           <div class="control-row">
             <label>Interpolation ({{ animationParams.interpolationT.toFixed(2) }}):</label>
-            <input 
-              type="range" 
-              v-model.number="animationParams.interpolationT" 
-              min="0" 
-              max="1" 
-              step="0.01"
-              :disabled="launchByName"
-            />
+            <input type="range" v-model.number="animationParams.interpolationT" min="0" max="1" step="0.01"
+              :disabled="launchByName" />
           </div>
-          
+
           <!-- Launch by Name Controls -->
           <div class="control-row">
             <label>Launch by Group Name:</label>
             <input type="checkbox" v-model="launchByName" />
             <span class="launch-mode-hint">{{ launchByName ? 'Group launch mode' : 'Interpolation mode' }}</span>
           </div>
-          
+
           <div v-if="launchByName" class="control-row">
             <label>Group Name:</label>
             <select v-model="groupName" :disabled="availableGroups.length === 0">
@@ -1042,75 +1015,60 @@ onUnmounted(() => {
             </select>
             <span class="group-hint">{{ availableGroups.length }} groups available</span>
           </div>
-          
+
           <div class="control-row">
             <label>Duration:</label>
-            <input 
-              type="number" 
-              v-model.number="animationParams.duration" 
-              min="0.1" 
-              max="10" 
-              step="0.1"
-            />
+            <input type="number" v-model.number="animationParams.duration" min="0.1" max="10" step="0.1" />
             <span>seconds</span>
           </div>
-          
+
           <div class="control-row">
             <label>Scale ({{ animationParams.scale.toFixed(2) }}):</label>
-            <input 
-              type="range" 
-              v-model.number="animationParams.scale" 
-              min="0.1" 
-              max="3" 
-              step="0.1"
-            />
+            <input type="range" v-model.number="animationParams.scale" min="0.1" max="3" step="0.1" />
           </div>
-          
+
           <div class="control-row">
-            <label>Position:</label>
+            <label>Anchor Position:</label>
             <div class="radio-group">
-              <label><input type="radio" v-model="animationParams.position" value="start" /> Start</label>
-              <label><input type="radio" v-model="animationParams.position" value="center" /> Center</label>
-              <label><input type="radio" v-model="animationParams.position" value="end" /> End</label>
-              <label><input type="radio" v-model="animationParams.position" value="top-left" /> Top Left</label>
+              <div class="anchor-section">
+                <div class="anchor-category">Stroke Points:</div>
+                <label><input type="radio" v-model="animationParams.position" value="start" /> Start Point</label>
+                <label><input type="radio" v-model="animationParams.position" value="center" /> Center</label>
+                <label><input type="radio" v-model="animationParams.position" value="end" /> End Point</label>
+              </div>
+              <div class="anchor-section">
+                <div class="anchor-category">Bounding Box:</div>
+                <label><input type="radio" v-model="animationParams.position" value="bbox-center" /> BBox Center</label>
+                <label><input type="radio" v-model="animationParams.position" value="bbox-tl" /> Top Left</label>
+                <label><input type="radio" v-model="animationParams.position" value="bbox-tr" /> Top Right</label>
+                <label><input type="radio" v-model="animationParams.position" value="bbox-bl" /> Bottom Left</label>
+                <label><input type="radio" v-model="animationParams.position" value="bbox-br" /> Bottom Right</label>
+              </div>
             </div>
           </div>
-          
+
           <div class="control-row">
             <label>Loop:</label>
             <input type="checkbox" v-model="animationParams.loop" />
-            <span class="loop-hint">{{ animationParams.loop ? 'Animations will loop continuously' : 'Single-shot animations' }}</span>
+            <span class="loop-hint">{{ animationParams.loop ? 'Animations will loop continuously' : 'Single-shot animations'}}</span>
           </div>
-          
+
           <div class="control-row">
             <label>Start Phase ({{ animationParams.startPhase.toFixed(2) }}):</label>
-            <input 
-              type="range" 
-              v-model.number="animationParams.startPhase" 
-              min="0" 
-              max="1" 
-              step="0.01"
-            />
+            <input type="range" v-model.number="animationParams.startPhase" min="0" max="1" step="0.01" />
             <span class="phase-hint">{{ (animationParams.startPhase * 100).toFixed(0) }}% through animation</span>
           </div>
-          
+
           <div class="control-row">
-            <button 
-              @click="clearLoopedAnimations" 
-              :disabled="!gpuStrokesReady"
-              class="clear-button"
-            >
+            <button @click="clearLoopedAnimations" :disabled="!gpuStrokesReady" class="clear-button">
               🗑️ Clear All Looped Animations
             </button>
-            <button 
-            @click="executeScript" 
-            :disabled="!gpuStrokesReady || scriptExecuting || availableStrokes.length < 2"
-            class="launch-button"
-          >
-            {{ scriptExecuting ? 'Executing...' : 'Launch Script' }}
-          </button>
+            <button @click="executeScript"
+              :disabled="!gpuStrokesReady || scriptExecuting || availableStrokes.length < 2" class="launch-button">
+              {{ scriptExecuting ? 'Executing...' : 'Launch Script' }}
+            </button>
           </div>
-          
+
           <div class="info-row">
             <p v-if="launchByName && !groupName" class="warning">
               ⚠️ Select a group name to launch group animations
@@ -1126,26 +1084,21 @@ onUnmounted(() => {
             </p>
           </div>
         </div>
-        
+
         <div v-else class="gpu-loading">
           <p v-if="!webGPUSupported">❌ WebGPU not supported in this browser</p>
           <p v-else>🔄 Initializing GPU Strokes...</p>
         </div>
       </div>
-      
+
       <!-- JavaScript Script Editor -->
       <div class="script-editor-section">
         <h3>JavaScript Scripts</h3>
-        <div 
-          ref="scriptEditorRef"
-          class="script-editor"
-        ></div>
+        <div ref="scriptEditorRef" class="script-editor"></div>
         <div class="script-controls">
           <span class="script-info">
-            {{ availableStrokes.length < 2 ? 
-                'Need at least 2 strokes to run scripts' : 
-                `Ready to execute (${availableStrokes.length} strokes available)` }}
-          </span>
+            {{ availableStrokes.length < 2 ? 'Need at least 2 strokes to run scripts' : `Ready to execute
+              (${availableStrokes.length} strokes available)` }} </span>
         </div>
       </div>
     </div>
@@ -1245,8 +1198,15 @@ onUnmounted(() => {
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.6;
+  }
 }
 
 .konva-container {
@@ -1320,6 +1280,7 @@ onUnmounted(() => {
 .radio-group {
   display: flex;
   gap: 15px;
+  flex-wrap: wrap;
 }
 
 .radio-group label {
@@ -1328,6 +1289,27 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 5px;
+}
+
+.anchor-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  /* background: #34495e; */
+  border-radius: 6px;
+  min-width: 150px;
+}
+
+.anchor-category {
+  font-weight: bold;
+  font-size: 12px;
+  color: #bdc3c7;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid #4a5568;
+  padding-bottom: 4px;
 }
 
 .info-row {
