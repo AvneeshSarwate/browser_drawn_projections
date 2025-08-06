@@ -1295,6 +1295,14 @@ const generateBakedStrokeData = (): { data: FreehandRenderData, groupMap: Record
       // Extract metadata from the Konva node
       const metadata = node.getAttr('metadata')
 
+      // If stroke metadata has a "name", add it to the group map as a group with 1 stroke
+      if (metadata && metadata.name && typeof metadata.name === 'string') {
+        if (!groupMap[metadata.name]) {
+          groupMap[metadata.name] = []
+        }
+        groupMap[metadata.name].push(strokeIndex)
+      }
+
       // Increment stroke index for this concrete stroke
       const currentStrokeIndex = strokeIndex++
 
@@ -1327,6 +1335,11 @@ const generateBakedStrokeData = (): { data: FreehandRenderData, groupMap: Record
         for (let i = groupStartIndex; i < strokeIndex; i++) {
           groupStrokeIndices.push(i)
         }
+
+        //sort groupStrokeIndices according to the "order" metadata on the children strokes (filling missing orders with Infinity)
+        // const childOrders = children.map(child => child.metadata?.order ?? Infinity)
+
+
         groupMap[metadata.name] = groupStrokeIndices
       }
 
