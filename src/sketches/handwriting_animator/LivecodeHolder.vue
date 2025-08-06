@@ -10,7 +10,8 @@ import Konva from 'konva';
 import Timeline from './Timeline.vue';
 import MetadataEditor from './MetadataEditor.vue';
 import HierarchicalMetadataEditor from './HierarchicalMetadataEditor.vue';
-import { clearFreehandSelection, createStrokeShape, currentPoints, currentTimestamps, deserializeFreehandState, drawingStartTime, executeFreehandCommand, finishFreehandDragTracking, freehandDrawingLayer, freehandDrawMode, freehandSelectionLayer, freehandShapeLayer, freehandStrokes, getPointsBounds, getStrokePath, gridSize, isAnimating, isDrawing, selTr, serializeFreehandState, setCurrentPoints, setCurrentTimestamps, setDrawingStartTime, setFreehandDrawingLayer, setFreehandSelectionLayer, setFreehandShapeLayer, setIsDrawing, setSelTr, showGrid, startFreehandDragTracking, updateBakedStrokeData, updateFreehandDraggableStates, updateTimelineState, type FreehandStroke, groupSelectedStrokes, ungroupSelectedStrokes, freehandCanGroupRef, isFreehandGroupSelected, freehandSelectedCount, undoFreehand, canUndoFreehand, canRedoFreehand, redoFreehand, useRealTiming, deleteFreehandSelected, selectedStrokesForTimeline, timelineDuration, handleTimeUpdate, maxInterStrokeDelay, setUpdateCursor, updateCursor, createMetadataHighlight, getGroupStrokeIndices, duplicateFreehandSelected, downloadFreehandDrawing, uploadFreehandDrawing, dragSelectionState, createSelectionRect, updateSelectionRect, completeSelectionRect, resetSelectionRect } from './freehandTool';
+import VisualizationToggles from './VisualizationToggles.vue';
+import { clearFreehandSelection, createStrokeShape, currentPoints, currentTimestamps, deserializeFreehandState, drawingStartTime, executeFreehandCommand, finishFreehandDragTracking, freehandDrawingLayer, freehandDrawMode, freehandSelectionLayer, freehandShapeLayer, freehandStrokes, getPointsBounds, getStrokePath, gridSize, isAnimating, isDrawing, selTr, serializeFreehandState, setCurrentPoints, setCurrentTimestamps, setDrawingStartTime, setFreehandDrawingLayer, setFreehandSelectionLayer, setFreehandShapeLayer, setIsDrawing, setSelTr, showGrid, startFreehandDragTracking, updateBakedStrokeData, updateFreehandDraggableStates, updateTimelineState, type FreehandStroke, groupSelectedStrokes, ungroupSelectedStrokes, freehandCanGroupRef, isFreehandGroupSelected, freehandSelectedCount, undoFreehand, canUndoFreehand, canRedoFreehand, redoFreehand, useRealTiming, deleteFreehandSelected, selectedStrokesForTimeline, timelineDuration, handleTimeUpdate, maxInterStrokeDelay, setUpdateCursor, updateCursor, createMetadataHighlight, getGroupStrokeIndices, duplicateFreehandSelected, downloadFreehandDrawing, uploadFreehandDrawing, dragSelectionState, createSelectionRect, updateSelectionRect, completeSelectionRect, resetSelectionRect, setRefreshAVs } from './freehandTool';
 import { DrawingScene } from './gpuStrokes/drawingScene';
 import { StrokeInterpolator } from './gpuStrokes/strokeInterpolator';
 import { DRAWING_CONSTANTS } from './gpuStrokes/constants';
@@ -19,6 +20,7 @@ import { EditorView, basicSetup } from 'codemirror';
 import { javascript } from '@codemirror/lang-javascript';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { polygonShapesLayer, polygonPreviewLayer, polygonControlsLayer, polygonSelectionLayer, clearPolygonSelection, updatePolygonControlPoints, deserializePolygonState, polygonMode, handlePolygonClick, isDrawingPolygon, handlePolygonMouseMove, handlePolygonEditMouseMove, currentPolygonPoints, finishPolygon, clearCurrentPolygon, serializePolygonState, setPolygonControlsLayer, setPolygonPreviewLayer, setPolygonSelectionLayer, setPolygonShapesLayer, polygonUndo, polygonRedo, canPolygonUndo, canPolygonRedo, deleteSelectedPolygon } from './polygonTool';
+import { initAVLayer, refreshAVs } from './ancillaryVisualizations';
 import type { StrokePoint } from './gpuStrokes/strokeTypes';
 import type { AnchorKind } from './gpuStrokes/coordinateUtils';
 
@@ -606,6 +608,10 @@ onMounted(async () => {
     const metadataHighlightLayer = createMetadataHighlight()
     stage.add(metadataHighlightLayer)
     
+    // Initialize ancillary visualizations layer
+    initAVLayer()
+    setRefreshAVs(refreshAVs)
+    
     // Create selection rectangle for drag selection
     createSelectionRect()
 
@@ -995,7 +1001,10 @@ onUnmounted(() => {
       }"></div>
 
       <!-- Smart Metadata Editor -->
-      <HierarchicalMetadataEditor v-if="showMetadataEditor" />
+      <div class="metadata-suite" v-if="showMetadataEditor">
+        <VisualizationToggles />
+        <HierarchicalMetadataEditor />
+      </div>
 
       <Timeline :strokes="freehandStrokes" :selectedStrokes="selectedStrokesForTimeline" :useRealTiming="useRealTiming"
         :maxInterStrokeDelay="maxInterStrokeDelay"
@@ -1484,5 +1493,12 @@ onUnmounted(() => {
 .script-info {
   color: #666;
   font-size: 14px;
+}
+
+.metadata-suite {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 600px;
 }
 </style>

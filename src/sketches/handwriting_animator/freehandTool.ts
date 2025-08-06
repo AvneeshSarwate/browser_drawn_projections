@@ -6,6 +6,9 @@ import { type ShallowReactive, shallowReactive, ref, computed, watch } from "vue
 import type { FreehandRenderData, FlattenedStroke, FlattenedStrokeGroup, TemplateAppState } from "./appState"
 import { globalStore, stage, selected } from "./appState"
 
+// Import AV refresh function - we'll import lazily to avoid circular deps
+let refreshAVs: (() => void) | undefined
+
 const store = globalStore()
 const appState = store.appStateRef
 
@@ -40,6 +43,9 @@ export const attachHandlersRecursively = (node: Konva.Node) => {
       finishFreehandDragTracking(node.constructor.name)
       freehandShapeLayer?.batchDraw()
     })
+
+    // AV refresh events are now handled globally by stage listeners
+    // (these individual listeners are no longer needed)
 
     // Group-specific logic: recursively attach handlers to all children
     if (node instanceof Konva.Group) {
@@ -1071,6 +1077,7 @@ export const deleteFreehandSelected = () => {
     updateTimelineState() // Update timeline state after deletion
     freehandShapeLayer?.batchDraw()
     updateBakedStrokeData() // Update baked data after deletion
+    refreshAVs?.() // Clean up any orphaned ancillary visualizations
   })
 }
 
@@ -1432,6 +1439,7 @@ export const setNodeMetadata = (
       node.setAttr('metadata', meta)
     }
     updateBakedStrokeData()                 // keep render-data in sync
+    refreshAVs?.()                          // refresh ancillary visualizations
   })
 }
 
@@ -1551,3 +1559,8 @@ watch(freehandDrawMode, () => {
     clearFreehandSelection()
   }
 })
+
+// Function to set the AV refresh callback (called from LivecodeHolder)
+export const setRefreshAVs = (fn: () => void) => {
+  refreshAVs = fn
+}
