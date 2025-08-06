@@ -1,36 +1,26 @@
 <script setup lang="ts">
-import { ref, watch, computed, shallowRef, onUnmounted } from 'vue'
+import { watch, computed, shallowRef, onUnmounted } from 'vue'
 import Konva from 'konva'
 import MetadataEditor from './MetadataEditor.vue'
-import { setNodeMetadata, collectHierarchy, collectHierarchyFromRoot, type HierarchyEntry, updateMetadataHighlight } from './freehandTool'
-import { appState, selected, getActiveSingleNode } from './appState'
-import { isFreehandGroupSelected } from './freehandTool'
+import { setNodeMetadata, collectHierarchyFromRoot, updateMetadataHighlight } from './freehandTool'
+import { selected, getActiveSingleNode } from './appState'
 
 // Auto-detect which mode to use and get root selection
 const singleNode = computed(() => getActiveSingleNode())
-const multiSelected = computed(() => selected.length > 1 || isFreehandGroupSelected.value)
+const multiSelected = computed(() => selected.length > 1)
+const groupSelected = computed(() => selected.length === 1 && selected[0] instanceof Konva.Group)
 const mode = computed(() => 
-  multiSelected.value ? 'hierarchical' : (singleNode.value ? 'simple' : 'none')
+  multiSelected.value || groupSelected.value ? 'hierarchical' : (singleNode.value ? 'simple' : 'none')
 )
 
-// Get the root node for hierarchy display
-const hierarchyRoot = computed(() => {
-  if (mode.value === 'hierarchical' && selected.length === 1) {
-    // If single group selected, use it as root
-    return selected[0] instanceof Konva.Group ? selected[0] : null
-  }
-  return null
-})
-
-// Collect hierarchy based on current selection
+// Collect hierarchy based on current selection - only show selected nodes
 const entries = computed(() => {
-  const root = hierarchyRoot.value
-  if (root) {
+  if (multiSelected.value) {
+    // Show only the selected nodes for multi-selection
+    return collectHierarchyFromRoot(selected as Konva.Node[])
+  } else if (groupSelected.value) {
     // Show hierarchy rooted at selected group
-    return collectHierarchyFromRoot([root])
-  } else if (mode.value === 'hierarchical') {
-    // Show full canvas hierarchy for multi-selection
-    return collectHierarchy()
+    return collectHierarchyFromRoot([selected[0]])
   }
   return []
 })
@@ -38,15 +28,19 @@ const entries = computed(() => {
 const activeNode = shallowRef<Konva.Node | null>(null)
 
 // Initialize activeNode based on current selection when component mounts or mode changes
-watch([mode, hierarchyRoot], ([newMode, newRoot]) => {
-  if (newMode === 'hierarchical' && newRoot) {
-    // If hierarchical mode with a group selected, set it as active
-    activeNode.value = newRoot
-    updateMetadataHighlight(newRoot as Konva.Node)
+watch([mode, groupSelected], ([newMode, isGroupSelected]) => {
+  if (newMode === 'hierarchical' && isGroupSelected) {
+    // If hierarchical mode with a single group selected, set it as active
+    activeNode.value = selected[0]
+    updateMetadataHighlight(selected[0] as Konva.Node)
   } else if (newMode === 'simple' && singleNode.value) {
     // If simple mode, set the single node as active
     activeNode.value = singleNode.value
     updateMetadataHighlight(singleNode.value as Konva.Node)
+  } else if (newMode === 'hierarchical' && multiSelected.value) {
+    // Multi-selection: don't auto-select any node, force user to pick
+    activeNode.value = null
+    updateMetadataHighlight(undefined)
   } else if (newMode === 'none') {
     // Clear active node when nothing selected
     activeNode.value = null
@@ -132,8 +126,11 @@ const hasMetadata = (node: any) => {
     <template v-else-if="mode === 'hierarchical'">
       <div class="hierarchical-editor">
         <div class="header">
-          <h3>{{ hierarchyRoot ? `Group: ${nodeLabel(hierarchyRoot as any)}` : 'Hierarchical Metadata Editor' }}</h3>
-          <p class="help">Select a node to edit its metadata:</p>
+          <h3 v-if="groupSelected">Group: {{ nodeLabel(selected[0] as any) }}</h3>
+          <h3 v-else-if="multiSelected" class="multi-selection-header">
+            {{ selected.length }} items selected – single-item editing only
+          </h3>
+          <p class="help">{{ multiSelected ? 'Pick one below to edit its metadata:' : 'Select a node to edit its metadata:' }}</p>
         </div>
         
         <div class="tree-view" v-if="entries.length > 0">
@@ -160,6 +157,11 @@ const hasMetadata = (node: any) => {
           :visible="true"
           @apply="applyMetadata"
         />
+        
+        <!-- Hint when no node is selected in multi-selection mode -->
+        <div v-else-if="multiSelected" class="selection-hint">
+          <p>← Click a row above to edit its metadata</p>
+        </div>
       </div>
     </template>
 
@@ -193,6 +195,11 @@ const hasMetadata = (node: any) => {
   margin: 0 0 4px 0;
   font-size: 17px;
   color: #333;
+}
+
+.multi-selection-header {
+  color: #e67e22 !important;
+  font-weight: bold;
 }
 
 .help {
@@ -253,6 +260,20 @@ const hasMetadata = (node: any) => {
 }
 
 .empty-state p {
+  margin: 0;
+}
+
+.selection-hint {
+  text-align: center;
+  color: #666;
+  padding: 15px;
+  font-style: italic;
+  border: 2px dashed #ddd;
+  border-radius: 6px;
+  margin-top: 10px;
+}
+
+.selection-hint p {
   margin: 0;
 }
 </style>
