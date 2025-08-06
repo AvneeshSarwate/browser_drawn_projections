@@ -652,6 +652,55 @@ export const serializeFreehandState = () => {
   }
 }
 
+// Download/Upload functionality
+export const downloadFreehandDrawing = () => {
+  const stateString = getCurrentFreehandStateString()
+  if (!stateString) {
+    console.warn('No drawing data to download')
+    return
+  }
+
+  const blob = new Blob([stateString], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `freehand_drawing_${new Date().toISOString().slice(0, 16).replace(/:/g, '-')}.json`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+export const uploadFreehandDrawing = () => {
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = '.json'
+  input.onchange = (event) => {
+    const file = (event.target as HTMLInputElement).files?.[0]
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      try {
+        const content = e.target?.result as string
+        // Validate it's valid JSON
+        JSON.parse(content)
+        
+        // Set the state string and deserialize
+        appState.freehandStateString = content
+        deserializeFreehandState()
+        
+        console.log('Successfully loaded drawing from file:', file.name)
+      } catch (error) {
+        console.error('Failed to parse uploaded file:', error)
+        alert('Invalid JSON file. Please upload a valid freehand drawing file.')
+      }
+    }
+    reader.readAsText(file)
+  }
+  input.click()
+}
+
 export const deserializeFreehandState = () => {
   if (!appState.freehandStateString || !stage || !freehandShapeLayer) return
 

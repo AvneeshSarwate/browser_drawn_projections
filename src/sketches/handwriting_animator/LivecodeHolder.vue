@@ -10,7 +10,7 @@ import Konva from 'konva';
 import Timeline from './Timeline.vue';
 import MetadataEditor from './MetadataEditor.vue';
 import HierarchicalMetadataEditor from './HierarchicalMetadataEditor.vue';
-import { clearFreehandSelection, createStrokeShape, currentPoints, currentTimestamps, deserializeFreehandState, drawingStartTime, executeFreehandCommand, finishFreehandDragTracking, freehandDrawingLayer, freehandDrawMode, freehandSelectionLayer, freehandShapeLayer, freehandStrokes, getPointsBounds, getStrokePath, gridSize, isAnimating, isDrawing, selTr, serializeFreehandState, setCurrentPoints, setCurrentTimestamps, setDrawingStartTime, setFreehandDrawingLayer, setFreehandSelectionLayer, setFreehandShapeLayer, setIsDrawing, setSelTr, showGrid, startFreehandDragTracking, updateBakedStrokeData, updateFreehandDraggableStates, updateTimelineState, type FreehandStroke, groupSelectedStrokes, ungroupSelectedStrokes, freehandCanGroupRef, isFreehandGroupSelected, freehandSelectedCount, undoFreehand, canUndoFreehand, canRedoFreehand, redoFreehand, useRealTiming, deleteFreehandSelected, selectedStrokesForTimeline, timelineDuration, handleTimeUpdate, maxInterStrokeDelay, setUpdateCursor, updateCursor, createMetadataHighlight, getGroupStrokeIndices, duplicateFreehandSelected } from './freehandTool';
+import { clearFreehandSelection, createStrokeShape, currentPoints, currentTimestamps, deserializeFreehandState, drawingStartTime, executeFreehandCommand, finishFreehandDragTracking, freehandDrawingLayer, freehandDrawMode, freehandSelectionLayer, freehandShapeLayer, freehandStrokes, getPointsBounds, getStrokePath, gridSize, isAnimating, isDrawing, selTr, serializeFreehandState, setCurrentPoints, setCurrentTimestamps, setDrawingStartTime, setFreehandDrawingLayer, setFreehandSelectionLayer, setFreehandShapeLayer, setIsDrawing, setSelTr, showGrid, startFreehandDragTracking, updateBakedStrokeData, updateFreehandDraggableStates, updateTimelineState, type FreehandStroke, groupSelectedStrokes, ungroupSelectedStrokes, freehandCanGroupRef, isFreehandGroupSelected, freehandSelectedCount, undoFreehand, canUndoFreehand, canRedoFreehand, redoFreehand, useRealTiming, deleteFreehandSelected, selectedStrokesForTimeline, timelineDuration, handleTimeUpdate, maxInterStrokeDelay, setUpdateCursor, updateCursor, createMetadataHighlight, getGroupStrokeIndices, duplicateFreehandSelected, downloadFreehandDrawing, uploadFreehandDrawing } from './freehandTool';
 import { DrawingScene } from './gpuStrokes/drawingScene';
 import { StrokeInterpolator } from './gpuStrokes/strokeInterpolator';
 import { DRAWING_CONSTANTS } from './gpuStrokes/constants';
@@ -915,10 +915,19 @@ onUnmounted(() => {
         </button>
         <span class="separator">|</span>
         <button @click="showMetadataEditor = !showMetadataEditor" :class="{ active: showMetadataEditor }"
-          :disabled="isAnimating">
-          📝 Metadata
+        :disabled="isAnimating">
+        📝 Metadata
         </button>
-      </template>
+          <span class="separator">|</span>
+         <div class="button-group vertical">
+           <button @click="downloadFreehandDrawing" :disabled="isAnimating">
+             💾 Download
+           </button>
+           <button @click="uploadFreehandDrawing" :disabled="isAnimating">
+             📁 Upload
+           </button>
+         </div>
+       </template>
 
       <!-- Polygon Tool Toolbar -->
       <template v-if="activeTool === 'polygon'">
