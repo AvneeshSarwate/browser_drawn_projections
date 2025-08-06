@@ -10,7 +10,7 @@ import Konva from 'konva';
 import Timeline from './Timeline.vue';
 import MetadataEditor from './MetadataEditor.vue';
 import HierarchicalMetadataEditor from './HierarchicalMetadataEditor.vue';
-import { clearFreehandSelection, createStrokeShape, currentPoints, currentTimestamps, deserializeFreehandState, drawingStartTime, executeFreehandCommand, finishFreehandDragTracking, freehandDrawingLayer, freehandDrawMode, freehandSelectionLayer, freehandShapeLayer, freehandStrokes, getPointsBounds, getStrokePath, gridSize, isAnimating, isDrawing, selTr, serializeFreehandState, setCurrentPoints, setCurrentTimestamps, setDrawingStartTime, setFreehandDrawingLayer, setFreehandSelectionLayer, setFreehandShapeLayer, setIsDrawing, setSelTr, showGrid, startFreehandDragTracking, updateBakedStrokeData, updateFreehandDraggableStates, updateTimelineState, type FreehandStroke, groupSelectedStrokes, ungroupSelectedStrokes, freehandCanGroupRef, isFreehandGroupSelected, freehandSelectedCount, undoFreehand, canUndoFreehand, canRedoFreehand, redoFreehand, useRealTiming, deleteFreehandSelected, selectedStrokesForTimeline, timelineDuration, handleTimeUpdate, maxInterStrokeDelay, setUpdateCursor, updateCursor, createMetadataHighlight, getGroupStrokeIndices, duplicateFreehandSelected, downloadFreehandDrawing, uploadFreehandDrawing } from './freehandTool';
+import { clearFreehandSelection, createStrokeShape, currentPoints, currentTimestamps, deserializeFreehandState, drawingStartTime, executeFreehandCommand, finishFreehandDragTracking, freehandDrawingLayer, freehandDrawMode, freehandSelectionLayer, freehandShapeLayer, freehandStrokes, getPointsBounds, getStrokePath, gridSize, isAnimating, isDrawing, selTr, serializeFreehandState, setCurrentPoints, setCurrentTimestamps, setDrawingStartTime, setFreehandDrawingLayer, setFreehandSelectionLayer, setFreehandShapeLayer, setIsDrawing, setSelTr, showGrid, startFreehandDragTracking, updateBakedStrokeData, updateFreehandDraggableStates, updateTimelineState, type FreehandStroke, groupSelectedStrokes, ungroupSelectedStrokes, freehandCanGroupRef, isFreehandGroupSelected, freehandSelectedCount, undoFreehand, canUndoFreehand, canRedoFreehand, redoFreehand, useRealTiming, deleteFreehandSelected, selectedStrokesForTimeline, timelineDuration, handleTimeUpdate, maxInterStrokeDelay, setUpdateCursor, updateCursor, createMetadataHighlight, getGroupStrokeIndices, duplicateFreehandSelected, downloadFreehandDrawing, uploadFreehandDrawing, dragSelectionState, createSelectionRect, updateSelectionRect, completeSelectionRect, resetSelectionRect } from './freehandTool';
 import { DrawingScene } from './gpuStrokes/drawingScene';
 import { StrokeInterpolator } from './gpuStrokes/strokeInterpolator';
 import { DRAWING_CONSTANTS } from './gpuStrokes/constants';
@@ -605,6 +605,9 @@ onMounted(async () => {
     // Add metadata highlight layer on top
     const metadataHighlightLayer = createMetadataHighlight()
     stage.add(metadataHighlightLayer)
+    
+    // Create selection rectangle for drag selection
+    createSelectionRect()
 
     // Set initial listening states based on active tool
     if (activeTool.value === 'freehand') {
@@ -683,8 +686,16 @@ onMounted(async () => {
         } else {
           // Selection mode
           if (e.target === stage) {
-            // Clicked on empty space - clear selection
-            clearFreehandSelection()
+            // Prepare for potential drag selection, but don't clear selection yet
+            dragSelectionState.value = {
+              isSelecting: true,
+              startPos: { x: pos.x, y: pos.y },
+              currentPos: { x: pos.x, y: pos.y },
+              isShiftHeld: e.evt.shiftKey
+            }
+            
+            // Reset selection rectangle to prevent stale data from affecting drag detection
+            resetSelectionRect(pos.x, pos.y)
           }
         }
       } else if (activeTool.value === 'polygon') {
@@ -714,6 +725,13 @@ onMounted(async () => {
         })
         freehandDrawingLayer?.add(previewPath)
         freehandDrawingLayer?.batchDraw()
+      } else if (activeTool.value === 'freehand' && !freehandDrawMode.value && dragSelectionState.value.isSelecting) {
+        // Drag selection in progress
+        const pos = stage.getPointerPosition()
+        if (!pos) return
+        
+        dragSelectionState.value.currentPos = { x: pos.x, y: pos.y }
+        updateSelectionRect()
       } else if (activeTool.value === 'polygon') {
         if (polygonMode.value === 'draw' && isDrawingPolygon.value) {
           handlePolygonMouseMove()
@@ -770,6 +788,10 @@ onMounted(async () => {
 
         setCurrentPoints([])
         setCurrentTimestamps([])
+      } else if (activeTool.value === 'freehand' && !freehandDrawMode.value && dragSelectionState.value.isSelecting) {
+        // Complete drag selection
+        completeSelectionRect(dragSelectionState.value.isShiftHeld)
+        dragSelectionState.value.isSelecting = false
       }
     })
 
