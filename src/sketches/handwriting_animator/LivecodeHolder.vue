@@ -883,26 +883,32 @@ onUnmounted(() => {
           {{ showGrid ? '⊞ Grid On' : '⊡ Grid Off' }}
         </button>
         <span class="separator">|</span>
+        <div class="button-group vertical">
         <button @click="groupSelectedStrokes" :disabled="!freehandCanGroupRef || isAnimating">
-          Group
-        </button>
+            Group
+          </button>
         <button @click="ungroupSelectedStrokes" :disabled="!isFreehandGroupSelected || isAnimating">
-          Ungroup
-        </button>
+            Ungroup
+           </button>
+         </div>
         <span class="separator">|</span>
+        <div class="button-group vertical">
         <button @click="duplicateFreehandSelected" :disabled="freehandSelectedCount === 0 || isAnimating">
-          📄 Duplicate
+        📄 Duplicate
         </button>
         <button @click="deleteFreehandSelected" :disabled="freehandSelectedCount === 0 || isAnimating">
-          🗑️ Delete
+        🗑️ Delete
         </button>
+        </div>
         <span class="separator">|</span>
+        <div class="button-group vertical">
         <button @click="undoFreehand" :disabled="!canUndoFreehand || isAnimating" title="Undo (Ctrl/Cmd+Z)">
-          ↶ Undo
+        ↶ Undo
         </button>
         <button @click="redoFreehand" :disabled="!canRedoFreehand || isAnimating" title="Redo (Ctrl/Cmd+Shift+Z)">
-          ↷ Redo
+        ↷ Redo
         </button>
+        </div>
         <span class="separator">|</span>
         <button @click="useRealTiming = !useRealTiming" :class="{ active: useRealTiming }">
           {{ useRealTiming ? '⏱️ Real Time' : '⏱️ Max 0.3s' }}
@@ -926,18 +932,20 @@ onUnmounted(() => {
           {{ showGrid ? '⊞ Grid On' : '⊡ Grid Off' }}
         </button>
         <span class="separator">|</span>
+        <div class="button-group vertical">
         <button @click="polygonUndo" :disabled="!canPolygonUndo || isAnimating" title="Undo (Ctrl/Cmd+Z)">
-          ↶ Undo
+        ↶ Undo
         </button>
         <button @click="polygonRedo" :disabled="!canPolygonRedo || isAnimating" title="Redo (Ctrl/Cmd+Shift+Z)">
-          ↷ Redo
+        ↷ Redo
         </button>
+        </div>
         <span class="separator">|</span>
         <button @click="clearCurrentPolygon" :disabled="!isDrawingPolygon || isAnimating">
-          🗑️ Cancel Shape
+        🗑️ Cancel Shape
         </button>
         <button @click="deleteSelectedPolygon" :disabled="selectedPolygons.length === 0 || isAnimating">
-          🗑️ Delete
+        🗑️ Delete
         </button>
         <span class="separator">|</span>
         <button @click="showMetadataEditor = !showMetadataEditor" :class="{ active: showMetadataEditor }"
@@ -1158,6 +1166,18 @@ onUnmounted(() => {
 .control-panel button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.button-group.vertical {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.button-group.vertical button {
+  margin: 0;
+  padding: 3px 10px;
+  font-size: 12px;
 }
 
 .tool-dropdown {
