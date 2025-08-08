@@ -1,11 +1,13 @@
 
 
+## basic plan of dynamic page layout 
+- get an alphabet annotated with top/bottom lines 
+- write script that takes ascii and generates the launch-start and scale for each character (using top/bottom line alignment)
+- write a launcher that does a basic write-out/collapse launch with the above layout info
+- figure out a mouse-over - rewrite system for per-charater re-animation
+
 
 ## more stuff to manage groups of strokes and launch groups with script
-
-- bounding-box adjustment for groups only works with pointer-start relative launch
-- need to fix edge conditions for phase/active
-- need to figure out proper math for draw-all => collapse-all logic
 - need to test with nested groups
 
 
