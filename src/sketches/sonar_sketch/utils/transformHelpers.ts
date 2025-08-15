@@ -96,7 +96,6 @@ export function buildClipFromLine(
   return { clip: curClip, updatedClipLine: updatedTokens.join(' : ') }
 }
 
-//todo - splitTextToGroups is kind of redudant with findLineCallMatches this only works for raw DSL, not javascriot?
 /** Split multiline slice text into groups of main line + optional ramp lines */
 export const splitTextToGroups = (text: string): { clipLine: string; rampLines: string[] }[] => {
   const allLines = text.split('\n').map((l) => l.trim()).filter(Boolean)
@@ -157,7 +156,8 @@ export const findLineCallMatches = (jsCode: string): {
   templateEnd: number, 
   templateStartLine: number,
   content: string,
-  lines: { content: string, startIndex: number, endIndex: number }[]
+  lines: { content: string, startIndex: number, endIndex: number }[],
+  groups: { clipLine: string; rampLines: string[] }[]
 }[] => {
   const matches: { 
     start: number, 
@@ -166,7 +166,8 @@ export const findLineCallMatches = (jsCode: string): {
     templateEnd: number, 
     templateStartLine: number,
     content: string,
-    lines: { content: string, startIndex: number, endIndex: number }[]
+    lines: { content: string, startIndex: number, endIndex: number }[],
+    groups: { clipLine: string; rampLines: string[] }[]
   }[] = []
   let searchIndex = 0
   
@@ -212,7 +213,29 @@ export const findLineCallMatches = (jsCode: string): {
       currentIndex += lineContent.length + (index < contentLines.length - 1 ? 1 : 0)
     })
     
-    matches.push({ start, end, templateStart, templateEnd, templateStartLine, content, lines })
+    // Parse content into groups (like splitTextToGroups)
+    const allLines = content.split('\n').map((l) => l.trim()).filter(Boolean)
+    const groups: { clipLine: string; rampLines: string[] }[] = []
+    let currentClipLine = ''
+    let currentRampLines: string[] = []
+
+    for (const line of allLines) {
+      if (line.startsWith('=> ')) {
+        currentRampLines.push(line)
+      } else {
+        if (currentClipLine) {
+          groups.push({ clipLine: currentClipLine, rampLines: [...currentRampLines] })
+        }
+        currentClipLine = line
+        currentRampLines = []
+      }
+    }
+
+    if (currentClipLine) {
+      groups.push({ clipLine: currentClipLine, rampLines: [...currentRampLines] })
+    }
+    
+    matches.push({ start, end, templateStart, templateEnd, templateStartLine, content, lines, groups })
     searchIndex = end
   }
   
@@ -307,8 +330,9 @@ export const createExecutableFunction = (visualizeCode: string, mappings: UUIDMa
   try {
     const runtimeCode = transformToRuntime(visualizeCode, voiceIndex)
     
+    //todo barrier - add barrier arguments
     // Create async function with proper context  
-    const executableFunc = new Function('ctx', 'runLine', 'flags', 'oneShot', `
+    const executableFunc = new Function('ctx', 'runLine', 'flags', 'oneShot', 'startBarrier', 'resolveBarrier', 'awaitBarrier',  `
       async function execute() {
         ${runtimeCode}
       }
@@ -367,9 +391,18 @@ export const parseRampLine = (rampLine: string) => {
   return { paramName, startVal, endVal }
 }
 
+type AnalyzeExecutableLinesResult = {
+  executedUUIDs: Set<string>
+  mappings: UUIDMapping[]
+  visualizeCode: string
+  uuidEndTimes: {uuid: string, endTime: number}[]
+}
+
 // Function to analyze JavaScript code by executing visualize-time version and tracking line() calls
-export const analyzeExecutableLines = (jsCode: string, voiceIndex: number, appState: SonarAppState, uuidMappings: Map<string, UUIDMapping[]>): { executedUUIDs: Set<string>, mappings: UUIDMapping[], visualizeCode: string } => {
+export const analyzeExecutableLines = (jsCode: string, voiceIndex: number, appState: SonarAppState, uuidMappings: Map<string, UUIDMapping[]>): AnalyzeExecutableLinesResult  => {
   const executedUUIDs: Set<string> = new Set()
+  const uuidEndTimes: {uuid: string, endTime: number}[] = []
+
   
   try {
     // Get the visualize-time code with UUIDs
@@ -378,24 +411,33 @@ export const analyzeExecutableLines = (jsCode: string, voiceIndex: number, appSt
     // Store mappings for this voice
     uuidMappings.set(voiceIndex.toString(), mappings)
     
+    let trackingTime = 0
+
     // Create line function that tracks which UUIDs are called (analysis mode)
     const line = (text: string, uuid: string) => {
       executedUUIDs.add(uuid)
+      const mainClipLine = text.split('\n')[0].trim()
+      const clip = buildClipFromLine(mainClipLine, appState.sliders).clip
+      trackingTime += clip.duration
+      uuidEndTimes.push({ uuid, endTime: trackingTime })
       // No execution - just tracking
     }
+
+    const db = () => { } //dummy barrier
     
+    //todo barrier - add dummy barrier arguments
     // Create and execute the visualize-time function
-    const visualizeFunc = new Function('line', 'flags', 'oneShot', visualizeCode)
+    const visualizeFunc = new Function('line', 'flags', 'oneShot', 'startBarrier', 'resolveBarrier', 'awaitBarrier', visualizeCode)
     
     // Execute with the line function to see which UUIDs would be called
     const oneshotValsSnapshot = appState.oneShots.map(o => o ? true : false)
     const oneShot = (idx: number) => oneshotCall(idx, oneshotValsSnapshot)
-    visualizeFunc(line, appState.toggles, oneShot)
+    visualizeFunc(line, appState.toggles, oneShot, db, db, db)
     console.log("executedUUIDs", voiceIndex, executedUUIDs)
-    return { executedUUIDs, mappings, visualizeCode } // Return UUIDs of lines that will execute
+    return { executedUUIDs, mappings, visualizeCode, uuidEndTimes } // Return UUIDs of lines that will execute
     
   } catch (error) {
     console.error('Error analyzing executable lines:', error)
-    return { executedUUIDs: new Set(), mappings: [], visualizeCode: '' }
+    return { executedUUIDs: new Set(), mappings: [], visualizeCode: '', uuidEndTimes: []}
   }
 }

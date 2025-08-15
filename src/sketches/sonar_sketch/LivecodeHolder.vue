@@ -1,7 +1,7 @@
 <!-- eslint-disable no-debugger -->
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
-import { type SonarAppState, appStateName, type VoiceState, globalStore, type SaveableProperties, oneshotCall } from './appState';
+import { type SonarAppState, appStateName, type VoiceState, globalStore, type SaveableProperties, oneshotCall, startBarrier, resolveBarrier, awaitBarrier } from './appState';
 import { inject, onMounted, onUnmounted, reactive, ref, computed, watch, nextTick } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
@@ -328,7 +328,9 @@ const startVoice = (voiceIdx: number) => {
     let hotSwapCued = false
     try {
       // Execute the JavaScript code with proper context
-      hotSwapCued = await voiceExecutableFuncs.get(voiceIdx.toString())(ctx, runLine, appState.toggles, oneShot) 
+      const execFunc = voiceExecutableFuncs.get(voiceIdx.toString())
+      //todo barrier - add barrier arguments
+      hotSwapCued = await execFunc(ctx, runLine, appState.toggles, oneShot, startBarrier, resolveBarrier, awaitBarrier) 
     } catch (error) {
       console.error('Error executing JavaScript code:', error)
     }
@@ -497,7 +499,7 @@ onMounted(async() => {
     
     await MIDI_READY
     console.log('midi ready')
-    await INITIALIZE_ABLETON_CLIPS('src/sketches/sonar_sketch/piano_melodies Project/piano_melodies_mapped.als', staticClipData, false)
+    await INITIALIZE_ABLETON_CLIPS('src/sketches/sonar_sketch/piano_melodies Project/freeze_loop_setup_sonar.als', staticClipData, false)
     console.log('clips ready')
     await TONE_AUDIO_START
     console.log('tone ready')

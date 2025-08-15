@@ -131,6 +131,48 @@ export const resolution = {
   height: 500
 }
 
+
+/**
+ * todo barrier - the current implementation will break the timing engine. 
+ * To fix this, when the barrier is resolved, we need to broadcast the 
+ * current time to all of the channels that are waiting on the barrier.
+ * they then adopt the broadcasted time as their current time.
+ * This might require a refactor of the core time context logic to work. 
+ * Additionally, will need to do another scripting-api/engine-api split. 
+ * the in-browser api will just be barrierFunc("name") but the engine
+ * function call will need to be barrierFunc("name", ctx) so that
+ * the appropriate time context info can be used
+ */
+
+export const promiseBarrierMap = new Map<string, { promise: Promise<void>, resolve: () => void, time: number }>()
+
+export const startBarrier = (key: string) => {
+  const newPromise = new Promise<void>((resolve, reject) => {
+    promiseBarrierMap.set(key, { promise: newPromise, resolve, time: -1 })
+  })
+}
+
+export const resolveBarrier = (key: string, ctx: TimeContext) => {
+  const barrier = promiseBarrierMap.get(key)
+  if (!barrier) {
+    console.warn(`No barrier found for key: ${key}`)
+    return
+  }
+  barrier.time = ctx.mostRecentDescendentBeats
+  barrier.resolve()
+  promiseBarrierMap.delete(key)
+}
+
+export const awaitBarrier = async (key: string, ctx: TimeContext) => {
+  const barrier = promiseBarrierMap.get(key)
+  if (!barrier) {
+    console.warn(`No barrier found for key: ${key}`)
+    return Promise.resolve()
+  }
+  await barrier.promise
+  barrier.time = ctx.mostRecentDescendentTime
+}
+
 //todo api - add caching/rehydrating of appState from local storage
 
 export const globalStore = defineStore(appStateName, () => {
