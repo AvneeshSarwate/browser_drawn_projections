@@ -172,9 +172,10 @@ export function findLineCallMatches(jsCode: string): LineCallMatch[] {
 /**
  * Transform visualize code to runtime code using AST parsing
  * Takes visualizeCode (output of transformLineCalls) and a voiceIndex,
- * and rewrites every `line(template, "uuid")` call into:
- *   hotswapCued = await runLine(template, ctx, "uuid", voiceIndex)
- *   if(hotswapCued) return true
+ * and rewrites:
+ * - line(template, "uuid") -> hotswapCued = await runLine(template, ctx, "uuid", voiceIndex); if(hotswapCued) return true
+ * - resolveBarrier(string) -> resolveBarrier(string, ctx)  
+ * - awaitBarrier(string) -> awaitBarrier(string, ctx)
  */
 export function transformToRuntime(visualizeCode: string, voiceIndex: number): string {
   const ast = acorn.parse(visualizeCode, {
@@ -185,26 +186,53 @@ export function transformToRuntime(visualizeCode: string, voiceIndex: number): s
 
   const patches: Patch[] = []
 
-  // Transform line() calls to runLine() calls with hotswap logic
+  // Transform function calls
   walk.simple(ast, {
     CallExpression(node) {
-      if (node.callee?.type !== 'Identifier' || node.callee.name !== 'line') return
+      if (node.callee?.type !== 'Identifier') return
+      const functionName = node.callee.name
       const args = node.arguments || []
-      if (args.length < 2) return // expect template + uuid from transformLineCalls
 
-      const arg0 = args[0]
-      const arg1 = args[1]
-      const isTemplate = arg0.type === 'TemplateLiteral'
-      const isStringLit = arg0.type === 'Literal' && typeof arg0.value === 'string'
-      if (!isTemplate && !isStringLit) return
-      if (isTemplate && arg0.expressions && arg0.expressions.length > 0) return
+      // Transform line() calls to runLine() calls with hotswap logic
+      if (functionName === 'line') {
+        if (args.length < 2) return // expect template + uuid from transformLineCalls
 
-      const arg0Text = visualizeCode.slice(arg0.start, arg0.end)
-      const arg1Text = visualizeCode.slice(arg1.start, arg1.end)
+        const arg0 = args[0]
+        const arg1 = args[1]
+        const isTemplate = arg0.type === 'TemplateLiteral'
+        const isStringLit = arg0.type === 'Literal' && typeof arg0.value === 'string'
+        if (!isTemplate && !isStringLit) return
+        if (isTemplate && arg0.expressions && arg0.expressions.length > 0) return
 
-      const replacement = `hotswapCued = await runLine(${arg0Text}, ctx, ${arg1Text}, ${voiceIndex})
+        const arg0Text = visualizeCode.slice(arg0.start, arg0.end)
+        const arg1Text = visualizeCode.slice(arg1.start, arg1.end)
+
+        const replacement = `hotswapCued = await runLine(${arg0Text}, ctx, ${arg1Text}, ${voiceIndex})
      if(hotswapCued) return true`
-      patches.push({ start: node.start, end: node.end, text: replacement })
+        patches.push({ start: node.start, end: node.end, text: replacement })
+      }
+      
+      // Transform resolveBarrier(string) -> resolveBarrier(string, ctx)
+      else if (functionName === 'resolveBarrier') {
+        if (args.length !== 1) return // expect exactly one string argument
+        
+        const arg0 = args[0]
+        const arg0Text = visualizeCode.slice(arg0.start, arg0.end)
+        
+        const replacement = `resolveBarrier(${arg0Text}, ctx)`
+        patches.push({ start: node.start, end: node.end, text: replacement })
+      }
+      
+      // Transform awaitBarrier(string) -> awaitBarrier(string, ctx)
+      else if (functionName === 'awaitBarrier') {
+        if (args.length !== 1) return // expect exactly one string argument
+        
+        const arg0 = args[0]
+        const arg0Text = visualizeCode.slice(arg0.start, arg0.end)
+        
+        const replacement = `awaitBarrier(${arg0Text}, ctx)`
+        patches.push({ start: node.start, end: node.end, text: replacement })
+      }
     },
   })
 

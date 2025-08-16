@@ -133,7 +133,8 @@ export const resolution = {
 
 
 /**
- * todo barrier - the current implementation will break the timing engine. 
+ * todo barrier - a naoive implementation with only promises and no
+ * modication of context time will break the timing engine. 
  * To fix this, when the barrier is resolved, we need to broadcast the 
  * current time to all of the channels that are waiting on the barrier.
  * they then adopt the broadcasted time as their current time.
@@ -158,7 +159,7 @@ export const resolveBarrier = (key: string, ctx: TimeContext) => {
     console.warn(`No barrier found for key: ${key}`)
     return
   }
-  barrier.time = ctx.mostRecentDescendentBeats
+  barrier.time = ctx.time
   barrier.resolve()
   promiseBarrierMap.delete(key)
 }
@@ -170,7 +171,7 @@ export const awaitBarrier = async (key: string, ctx: TimeContext) => {
     return Promise.resolve()
   }
   await barrier.promise
-  barrier.time = ctx.mostRecentDescendentTime
+  ctx.time = barrier.time
 }
 
 //todo api - add caching/rehydrating of appState from local storage
