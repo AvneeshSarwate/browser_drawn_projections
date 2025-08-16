@@ -1,5 +1,45 @@
 # notes
 
+Replace regex parsing with Acorn AST
+
+## BACKGROUND CONTEXT
+
+this application allows the user to write javascript in the browser in codemirror to sequene music. however, the javascript that the user writes is not the javascript that gets executed. The user javascript is parsed and transformed into multiple different runtime forms that help analyze what is to be played and then actually play the music.
+
+look at the functions preprocessJavaScript, analyzeExecutableLines, and transformToRuntime in sonar_sketch/utils/transformHelpers.ts - they parse and transform the javascript using regex and string replacement. 
+
+the function calls to be tranformed look like 
+
+line(`debug1 : seg 1 : s_tr 4 : str 1 : q 1`)
+to 
+await runLine(`debug1 : seg 1 : s_tr 4 : str 1 : q 1`, ctx, "17fab54d-d8cc-45b0-b5f9-fa6771cf095f", 0)
+
+or
+
+line(`debug1 : seg 1 : s_tr 1 : str s1 : q 1
+       => param1 0.5 0.8`) 
+to
+await runLine(`debug1 : seg 1 : s_tr 1 : str s1 : q 1
+       => param1 0.5 0.8`, ctx, "17fab54d-d8cc-45b0-b5f9-fa6771cf095f", 0)
+
+or
+
+line(`debug1 : seg 1 : s_tr 2 : str 1 : q 1
+     => param1 0.5 0.8
+     => param3 0.6 0.7`)
+to
+await runLine(`debug1 : seg 1 : s_tr 2 : str 1 : q 1
+     => param1 0.5 0.8
+     => param3 0.6 0.7`, ctx, "17fab54d-d8cc-45b0-b5f9-fa6771cf095f", 0)
+
+in sonar_sketch/LivecodeHolder.vue, look at voiceExecutableFuncs to see how the runtime functions are used. 
+
+## The Task
+
+I want to replace the regex and substring based string replacement with acorn js to do more robust parsing and replacement of javascript code.
+
+acorn.js is already installed, search for documentation on how to use it and execute this task
+
 ## bugs
 - fix oneShot 
 
