@@ -3,7 +3,11 @@
 import { AbletonClip, clipMap } from '@/io/abletonClips'
 import { TRANSFORM_REGISTRY } from '../clipTransforms'
 import { evaluate } from '../sliderExprParser'
-import { oneshotCall, type SonarAppState, type VoiceState } from '../appState'
+import { oneshotCall, type SonarAppState } from '../appState'
+import {
+  findLineCallMatches as findLineCallMatchesAST,
+  transformToRuntime as transformToRuntimeAST,
+} from './acornHelpers'
 
 /** Split a full transform chain line into the source clip name and an array of command strings */
 export const splitTransformChainToCommandStrings = (line: string) => {
@@ -140,107 +144,16 @@ export const generateUUID = (): string => {
 }
 
 /** Find all line() calls in JavaScript code and return match information
- * 
- * examples:
- * line(`debug1 : seg 1 : s_tr 3 : str 1 : q 1`)
- * 
- * line(`debug1 : seg 1 : s_tr 2 : str 1 : q 1
-     => param1 0.5 0.8
-     => param3 0.6 0.7`)
- * 
- */
-export const findLineCallMatches = (jsCode: string): { 
-  start: number, 
-  end: number, 
-  templateStart: number, 
-  templateEnd: number, 
-  templateStartLine: number,
-  content: string,
-  lines: { content: string, startIndex: number, endIndex: number }[],
-  groups: { clipLine: string; rampLines: string[] }[]
-}[] => {
-  const matches: { 
-    start: number, 
-    end: number, 
-    templateStart: number, 
-    templateEnd: number, 
-    templateStartLine: number,
-    content: string,
-    lines: { content: string, startIndex: number, endIndex: number }[],
-    groups: { clipLine: string; rampLines: string[] }[]
-  }[] = []
-  let searchIndex = 0
-  
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
-    const start = jsCode.indexOf('line(`', searchIndex)
-    if (start === -1) break
-    
-    // Find the matching `)` - look for backtick followed by closing paren
-    const backtickEnd = jsCode.indexOf('`)', start + 6)
-    if (backtickEnd === -1) {
-      searchIndex = start + 6
-      continue
-    }
-    
-    const end = backtickEnd + 2 // Include the `)
-    const templateStart = jsCode.indexOf('`', start)
-    const templateEnd = backtickEnd
-    const content = jsCode.substring(templateStart + 1, templateEnd)
-    
-    // Calculate the line number where the line() call starts
-    const beforeCallText = jsCode.substring(0, start)
-    const templateStartLine = (beforeCallText.match(/\n/g) || []).length
-    
-    // Parse individual lines within the template literal
-    const lines: { content: string, startIndex: number, endIndex: number }[] = []
-    const contentLines = content.split('\n')
-    let currentIndex = 0
-    
-    contentLines.forEach((lineContent, index) => {
-      const trimmedContent = lineContent.trim()
-      if (trimmedContent) { // Skip empty lines
-        const lineStartIndex = templateStart + 1 + currentIndex
-        const lineEndIndex = lineStartIndex + lineContent.length
-        
-        lines.push({
-          content: trimmedContent,
-          startIndex: lineStartIndex,
-          endIndex: lineEndIndex
-        })
-      }
-      // +1 for the newline character (except for the last line)
-      currentIndex += lineContent.length + (index < contentLines.length - 1 ? 1 : 0)
-    })
-    
-    // Parse content into groups (like splitTextToGroups)
-    const allLines = content.split('\n').map((l) => l.trim()).filter(Boolean)
-    const groups: { clipLine: string; rampLines: string[] }[] = []
-    let currentClipLine = ''
-    let currentRampLines: string[] = []
-
-    for (const line of allLines) {
-      if (line.startsWith('=> ')) {
-        currentRampLines.push(line)
-      } else {
-        if (currentClipLine) {
-          groups.push({ clipLine: currentClipLine, rampLines: [...currentRampLines] })
-        }
-        currentClipLine = line
-        currentRampLines = []
-      }
-    }
-
-    if (currentClipLine) {
-      groups.push({ clipLine: currentClipLine, rampLines: [...currentRampLines] })
-    }
-    
-    matches.push({ start, end, templateStart, templateEnd, templateStartLine, content, lines, groups })
-    searchIndex = end
-  }
-  
-  return matches
-}
+* 
+* examples:
+* line(`debug1 : seg 1 : s_tr 3 : str 1 : q 1`)
+* 
+* line(`debug1 : seg 1 : s_tr 2 : str 1 : q 1
+=> param1 0.5 0.8
+=> param3 0.6 0.7`)
+* 
+*/
+export const findLineCallMatches = findLineCallMatchesAST
 
 const uuidCache = new Map<string, { visualizeCode: string, inputCode: string, mappings: UUIDMapping[] }>()
 const makeCacheKey = (jsCode: string, voiceIndex: number) => `voice: ${voiceIndex} ${jsCode}`
@@ -302,23 +215,25 @@ export const preprocessJavaScript = (inputCode: string, voiceIndex: number): { v
 
 /** Step 2: Runtime transformer - converts line() calls to runLine() calls */
 export const transformToRuntime = (visualizeCode: string, voiceIndex: number): string => {
-  let runtimeCode = visualizeCode
+  // First transform line() calls to have the correct signature: line(template, ctx, uuid, voiceIndex)
+  const transformedCode = transformToRuntimeAST(visualizeCode, voiceIndex)
   
-  // Find and replace line() calls that may span multiple lines
-  const lineCallRegex = /line\s*\(\s*(`(?:[^`\\]|\\.)*`)\s*,\s*"([^"]+)"\s*\)/gs
+  // Then replace line() calls with runLine() calls and add hotswap logic
+  const lineCallRegex = /line\s*\(\s*([^,]+),\s*ctx,\s*([^,]+),\s*(\d+)\s*\)/gs
   
-  runtimeCode = runtimeCode.replace(
+  const runtimeCode = transformedCode.replace(
     lineCallRegex,
-    `hotswapCued = await runLine($1, ctx, "$2", ${voiceIndex})
+    `hotswapCued = await runLine($1, ctx, $2, $3)
      if(hotswapCued) return true
     `
   )
-  runtimeCode = `
+  
+  const wrappedCode = `
   let hotswapCued = false
   ${runtimeCode}
   `
-  console.log("runtimeCode", runtimeCode)
-  return runtimeCode
+  console.log("runtimeCode", wrappedCode)
+  return wrappedCode
 }
 
 /** Step 3: Create executable function from JavaScript code */

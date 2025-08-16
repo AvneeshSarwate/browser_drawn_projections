@@ -8,11 +8,11 @@ this application allows the user to write javascript in the browser in codemirro
 
 look at the functions preprocessJavaScript, analyzeExecutableLines, and transformToRuntime in sonar_sketch/utils/transformHelpers.ts - they parse and transform the javascript using regex and string replacement. 
 
-the function calls to be tranformed look like 
+here are hexamples of the transformations that are done:
 
 line(`debug1 : seg 1 : s_tr 4 : str 1 : q 1`)
 to 
-await runLine(`debug1 : seg 1 : s_tr 4 : str 1 : q 1`, ctx, "17fab54d-d8cc-45b0-b5f9-fa6771cf095f", 0)
+await runLine(`debug1 : seg 1 : s_tr 4 : str 1 : q 1`, "17fab54d-d8cc-45b0-b5f9-fa6771cf095f")
 
 or
 
@@ -20,7 +20,7 @@ line(`debug1 : seg 1 : s_tr 1 : str s1 : q 1
        => param1 0.5 0.8`) 
 to
 await runLine(`debug1 : seg 1 : s_tr 1 : str s1 : q 1
-       => param1 0.5 0.8`, ctx, "17fab54d-d8cc-45b0-b5f9-fa6771cf095f", 0)
+       => param1 0.5 0.8`, "17fab54d-d8cc-45b0-b5f9-fa6771cf095f")
 
 or
 
@@ -30,7 +30,7 @@ line(`debug1 : seg 1 : s_tr 2 : str 1 : q 1
 to
 await runLine(`debug1 : seg 1 : s_tr 2 : str 1 : q 1
      => param1 0.5 0.8
-     => param3 0.6 0.7`, ctx, "17fab54d-d8cc-45b0-b5f9-fa6771cf095f", 0)
+     => param3 0.6 0.7`, "17fab54d-d8cc-45b0-b5f9-fa6771cf095f")
 
 in sonar_sketch/LivecodeHolder.vue, look at voiceExecutableFuncs to see how the runtime functions are used. 
 
