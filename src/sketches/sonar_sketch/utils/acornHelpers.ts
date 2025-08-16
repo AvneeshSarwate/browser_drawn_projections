@@ -173,7 +173,8 @@ export function findLineCallMatches(jsCode: string): LineCallMatch[] {
  * Transform visualize code to runtime code using AST parsing
  * Takes visualizeCode (output of transformLineCalls) and a voiceIndex,
  * and rewrites every `line(template, "uuid")` call into:
- *   line(template, ctx, "uuid", voiceIndex)
+ *   hotswapCued = await runLine(template, ctx, "uuid", voiceIndex)
+ *   if(hotswapCued) return true
  */
 export function transformToRuntime(visualizeCode: string, voiceIndex: number): string {
   const ast = acorn.parse(visualizeCode, {
@@ -184,7 +185,7 @@ export function transformToRuntime(visualizeCode: string, voiceIndex: number): s
 
   const patches: Patch[] = []
 
-  // Preserve structure; only change arguments of line() calls
+  // Transform line() calls to runLine() calls with hotswap logic
   walk.simple(ast, {
     CallExpression(node) {
       if (node.callee?.type !== 'Identifier' || node.callee.name !== 'line') return
@@ -201,7 +202,8 @@ export function transformToRuntime(visualizeCode: string, voiceIndex: number): s
       const arg0Text = visualizeCode.slice(arg0.start, arg0.end)
       const arg1Text = visualizeCode.slice(arg1.start, arg1.end)
 
-      const replacement = `line(${arg0Text}, ctx, ${arg1Text}, ${voiceIndex})`
+      const replacement = `hotswapCued = await runLine(${arg0Text}, ctx, ${arg1Text}, ${voiceIndex})
+     if(hotswapCued) return true`
       patches.push({ start: node.start, end: node.end, text: replacement })
     },
   })

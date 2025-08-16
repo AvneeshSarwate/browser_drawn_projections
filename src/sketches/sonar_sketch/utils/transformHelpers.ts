@@ -215,19 +215,10 @@ export const preprocessJavaScript = (inputCode: string, voiceIndex: number): { v
 
 /** Step 2: Runtime transformer - converts line() calls to runLine() calls */
 export const transformToRuntime = (visualizeCode: string, voiceIndex: number): string => {
-  // First transform line() calls to have the correct signature: line(template, ctx, uuid, voiceIndex)
-  const transformedCode = transformToRuntimeAST(visualizeCode, voiceIndex)
+  // Transform line() calls to runLine() calls with hotswap logic using AST
+  const runtimeCode = transformToRuntimeAST(visualizeCode, voiceIndex)
   
-  // Then replace line() calls with runLine() calls and add hotswap logic
-  const lineCallRegex = /line\s*\(\s*([^,]+),\s*ctx,\s*([^,]+),\s*(\d+)\s*\)/gs
-  
-  const runtimeCode = transformedCode.replace(
-    lineCallRegex,
-    `hotswapCued = await runLine($1, ctx, $2, $3)
-     if(hotswapCued) return true
-    `
-  )
-  
+  // Wrap with hotswapCued declaration
   const wrappedCode = `
   let hotswapCued = false
   ${runtimeCode}
