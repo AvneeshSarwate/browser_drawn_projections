@@ -148,9 +148,11 @@ export const resolution = {
 export const promiseBarrierMap = new Map<string, { promise: Promise<void>, resolve: () => void, time: number }>()
 
 export const startBarrier = (key: string) => {
+  let res: () => void = null
   const newPromise = new Promise<void>((resolve, reject) => {
-    promiseBarrierMap.set(key, { promise: newPromise, resolve, time: -1 })
+    res = resolve
   })
+  promiseBarrierMap.set(key, { promise: newPromise, resolve: res, time: -1 })
 }
 
 export const resolveBarrier = (key: string, ctx: TimeContext) => {

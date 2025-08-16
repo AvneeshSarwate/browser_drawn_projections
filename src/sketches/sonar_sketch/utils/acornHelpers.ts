@@ -230,7 +230,7 @@ export function transformToRuntime(visualizeCode: string, voiceIndex: number): s
         const arg0 = args[0]
         const arg0Text = visualizeCode.slice(arg0.start, arg0.end)
         
-        const replacement = `awaitBarrier(${arg0Text}, ctx)`
+        const replacement = `await awaitBarrier(${arg0Text}, ctx)`
         patches.push({ start: node.start, end: node.end, text: replacement })
       }
     },

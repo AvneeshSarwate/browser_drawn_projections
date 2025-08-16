@@ -301,13 +301,11 @@ type AnalyzeExecutableLinesResult = {
   executedUUIDs: Set<string>
   mappings: UUIDMapping[]
   visualizeCode: string
-  uuidEndTimes: {uuid: string, endTime: number}[]
 }
 
 // Function to analyze JavaScript code by executing visualize-time version and tracking line() calls
 export const analyzeExecutableLines = (jsCode: string, voiceIndex: number, appState: SonarAppState, uuidMappings: Map<string, UUIDMapping[]>): AnalyzeExecutableLinesResult  => {
   const executedUUIDs: Set<string> = new Set()
-  const uuidEndTimes: {uuid: string, endTime: number}[] = []
 
   
   try {
@@ -317,16 +315,10 @@ export const analyzeExecutableLines = (jsCode: string, voiceIndex: number, appSt
     // Store mappings for this voice
     uuidMappings.set(voiceIndex.toString(), mappings)
     
-    let trackingTime = 0
 
     // Create line function that tracks which UUIDs are called (analysis mode)
     const line = (text: string, uuid: string) => {
       executedUUIDs.add(uuid)
-      const mainClipLine = text.split('\n')[0].trim()
-      const clip = buildClipFromLine(mainClipLine, appState.sliders).clip
-      trackingTime += clip.duration
-      uuidEndTimes.push({ uuid, endTime: trackingTime })
-      // No execution - just tracking
     }
 
     const db = () => { } //dummy barrier
@@ -340,10 +332,10 @@ export const analyzeExecutableLines = (jsCode: string, voiceIndex: number, appSt
     const oneShot = (idx: number) => oneshotCall(idx, oneshotValsSnapshot)
     visualizeFunc(line, appState.toggles, oneShot, db, db, db)
     console.log("executedUUIDs", voiceIndex, executedUUIDs)
-    return { executedUUIDs, mappings, visualizeCode, uuidEndTimes } // Return UUIDs of lines that will execute
+    return { executedUUIDs, mappings, visualizeCode } // Return UUIDs of lines that will execute
     
   } catch (error) {
     console.error('Error analyzing executable lines:', error)
-    return { executedUUIDs: new Set(), mappings: [], visualizeCode: '', uuidEndTimes: []}
+    return { executedUUIDs: new Set(), mappings: [], visualizeCode: ''}
   }
 }
