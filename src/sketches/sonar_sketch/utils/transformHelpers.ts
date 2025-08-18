@@ -340,7 +340,8 @@ export const analyzeExecutableLines = (jsCode: string, voiceIndex: number, appSt
     
     //todo barrier - add dummy barrier arguments
     // Create and execute the visualize-time function
-    const visualizeFunc = new Function('line', 'flags', 'oneShot', 'startBarrier', 'resolveBarrier', 'awaitBarrier', visualizeCode)
+    const visualizeFunc = new Function('line', 'flags', 'oneShot', 'startBarrier', 'resolveBarrier', 'awaitBarrier', 'ctx', visualizeCode)
+    //ctx added to help with debugging at runtime for timing things
     
     // Execute with the line function to see which UUIDs would be called
     const oneshotValsSnapshot = appState.oneShots.map(o => o ? true : false)

@@ -3,7 +3,7 @@
 ## bugs
 - race-conditions on barriers when looping and in sync
   - need to make it so that 
-    1. if you await a barrier whose start time is the same as the current time, you automatically release
+    1. (FIXED) if you await a barrier whose start time is the same as the current time, you automatically release
       - this is blocked by logical time not being identical across branched loops with the same wait sequences
     2. if you resolve a barrier after a barrier has been waited at the same time, you can go back an release that barrier 
       - need to save references to all await instaces and their wait start time

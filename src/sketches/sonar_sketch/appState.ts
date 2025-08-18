@@ -173,9 +173,7 @@ export const awaitBarrier = async (key: string, ctx: TimeContext) => {
     return Promise.resolve()
   }
 
-  console.log(`ctxTime ${ctx.time} barrierStart ${barrier.startTime}`)
-  const timeDiffAbs = Math.abs(ctx.time - barrier.startTime)
-  if (timeDiffAbs < 0.01) return
+  if (ctx.time - barrier.startTime) return
     
   await barrier.promise
   ctx.time = barrier.resolveTime

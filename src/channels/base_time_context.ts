@@ -223,7 +223,7 @@ export abstract class TimeContext {
    */
   public branch<T>(block: (ctx: TimeContext) => Promise<T>, debugName: string = ""): LoopHandle {
     //todo bug - instead of now(), should use this.rootContext!.mostRecentDescendentTime?
-    const promise = createAndLaunchContext(block, now(), Object.getPrototypeOf(this).constructor, false, this, debugName)
+    const promise = createAndLaunchContext(block, this.rootContext!.mostRecentDescendentTime, Object.getPrototypeOf(this).constructor, false, this, debugName)
     //todo api - this allows you to manage a branch without accidentally awaiting on it in a way that
     //would screw up parent context time. but in general, awaiting on anything other than
     //ctx.wait[Time] or ctx.branchWait will screw up contextTime <=> wallClock time relationship.
