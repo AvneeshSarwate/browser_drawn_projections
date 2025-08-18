@@ -145,14 +145,14 @@ export const resolution = {
  * the appropriate time context info can be used
  */
 
-export const promiseBarrierMap = new Map<string, { promise: Promise<void>, resolve: () => void, time: number }>()
+export const promiseBarrierMap = new Map<string, { promise: Promise<void>, resolve: () => void, resolveTime: number, startTime: number }>()
 
-export const startBarrier = (key: string) => {
+export const startBarrier = (key: string, ctx: TimeContext) => {
   let res: () => void = null
   const newPromise = new Promise<void>((resolve, reject) => {
     res = resolve
   })
-  promiseBarrierMap.set(key, { promise: newPromise, resolve: res, time: -1 })
+  promiseBarrierMap.set(key, { promise: newPromise, resolve: res, resolveTime: -1, startTime: ctx.time })
 }
 
 export const resolveBarrier = (key: string, ctx: TimeContext) => {
@@ -161,7 +161,7 @@ export const resolveBarrier = (key: string, ctx: TimeContext) => {
     console.warn(`No barrier found for key: ${key}`)
     return
   }
-  barrier.time = ctx.time
+  barrier.resolveTime = ctx.time
   barrier.resolve()
   promiseBarrierMap.delete(key)
 }
@@ -172,8 +172,13 @@ export const awaitBarrier = async (key: string, ctx: TimeContext) => {
     console.warn(`No barrier found for key: ${key}`)
     return Promise.resolve()
   }
+
+  console.log(`ctxTime ${ctx.time} barrierStart ${barrier.startTime}`)
+  const timeDiffAbs = Math.abs(ctx.time - barrier.startTime)
+  if (timeDiffAbs < 0.01) return
+    
   await barrier.promise
-  ctx.time = barrier.time
+  ctx.time = barrier.resolveTime
 }
 
 //todo api - add caching/rehydrating of appState from local storage

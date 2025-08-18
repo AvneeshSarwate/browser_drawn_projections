@@ -212,6 +212,17 @@ export function transformToRuntime(visualizeCode: string, voiceIndex: number): s
         patches.push({ start: node.start, end: node.end, text: replacement })
       }
       
+      // Transform startBarrier(string) -> startBarrier(string, ctx)
+      else if (functionName === 'startBarrier') {
+        if (args.length !== 1) return // expect exactly one string argument
+        
+        const arg0 = args[0]
+        const arg0Text = visualizeCode.slice(arg0.start, arg0.end)
+        
+        const replacement = `startBarrier(${arg0Text}, ctx)`
+        patches.push({ start: node.start, end: node.end, text: replacement })
+      }
+
       // Transform resolveBarrier(string) -> resolveBarrier(string, ctx)
       else if (functionName === 'resolveBarrier') {
         if (args.length !== 1) return // expect exactly one string argument
