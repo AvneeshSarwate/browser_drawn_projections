@@ -1,58 +1,45 @@
 # notes
 
-Replace regex parsing with Acorn AST
 
-## BACKGROUND CONTEXT
 
-this application allows the user to write javascript in the browser in codemirror to sequene music. however, the javascript that the user writes is not the javascript that gets executed. The user javascript is parsed and transformed into multiple different runtime forms that help analyze what is to be played and then actually play the music.
-
-look at the functions preprocessJavaScript, analyzeExecutableLines, and transformToRuntime in sonar_sketch/utils/transformHelpers.ts - they parse and transform the javascript using regex and string replacement. 
-
-here are hexamples of the transformations that are done:
-
-line(`debug1 : seg 1 : s_tr 4 : str 1 : q 1`)
-to 
-await runLine(`debug1 : seg 1 : s_tr 4 : str 1 : q 1`, "17fab54d-d8cc-45b0-b5f9-fa6771cf095f")
-
-or
-
-line(`debug1 : seg 1 : s_tr 1 : str s1 : q 1
-       => param1 0.5 0.8`) 
-to
-await runLine(`debug1 : seg 1 : s_tr 1 : str s1 : q 1
-       => param1 0.5 0.8`, "17fab54d-d8cc-45b0-b5f9-fa6771cf095f")
-
-or
-
-line(`debug1 : seg 1 : s_tr 2 : str 1 : q 1
-     => param1 0.5 0.8
-     => param3 0.6 0.7`)
-to
-await runLine(`debug1 : seg 1 : s_tr 2 : str 1 : q 1
-     => param1 0.5 0.8
-     => param3 0.6 0.7`, "17fab54d-d8cc-45b0-b5f9-fa6771cf095f")
-
-in sonar_sketch/LivecodeHolder.vue, look at voiceExecutableFuncs to see how the runtime functions are used. 
-
-## The Task
-
-I want to replace the regex and substring based string replacement with acorn js to do more robust parsing and replacement of javascript code.
-
-acorn.js is already installed, search for documentation on how to use it and execute this task
-
-## bugs
-- fix oneShot 
+## quick API reference for livecoding
+- call funcs like 
+  ```javascript
+  line(`debug1 : seg 1 : s_tr 2 : str s1 : q s2+s3, somefunc stringArg
+      => param1 0.5 0.8
+      => param3 0.6 0.7`)
+  //s1, s2, s3, sliders, slidders can be used as expressions
+  ```
+- access global vars like 
+  ```javascript
+  flags[0]
+  oneShot(0)
+  ```
+- time synchronization barriers like 
+  ```javascript 
+  startBarrier('name')
+  resolveBarrier('name')
+  awaitBarrier('name')
+  ```
+- in globals livecode section, set vars like 
+  ```javascript
+  flags[0] = false
+  oneShots[0] = true
+  sliders[0] = 0.5
+  //remember sliders are 0-1 - no protection for accidentally setting out of range - might break based on function
+  ```
+- hotswapp cued usage - toggle it on when you're ready to hotswap and it picks up new code from the start of the function after the current line is finished playing
 
 
 ## randomness + analysis ideas
-- use a seedable random number generator, have diff instances per voice, and cache the seed/state at the start of each function call
-- if all random calls are made with rng, then you can run the function twice, once sync w/o playback to analyze, and once to actually play, with same results
-- this gives you the primitives for adding "lookahead time sync" interactions between voices
+- use a seedable random number generator, have diff instances per voice, and cache the seed/state at the start of each function call and reset between visualize/play runs
+- if all random calls are made with rng, then you can run the function twice, once w/o playback to analyze/visualize, and once to actually play, with same results
+  - you'll see visualized lines change per loop
 
 
 ## design assumptions to remember
 - first line of DSL is the clip line
-- transforming text never changes its line structure
+- transforming text for visualize mode never changes its line structure
 
 ## UI additions
 - have some form of help or autocorrect for the dsl (either in editor or just in vue component)
@@ -70,8 +57,8 @@ for(let i = 0; i < 100; i++) {
   line(`debug1 : seg 1 : s_tr s2 : str s1 : harm s3 : s_tr -2 : str 0.25`)
 }
 ```
-
 what would it take to allow while-loops to work properly but also terminate?
+- maybe use acorn to rewrite certain types of while loops to allow analysis?
 - instead of `flags[i]`, have `flags(i)` function that only returns true ~100 times
   - if nested whiles, could still lead to analysis being slow? 
   - rare to have more than 2 levels of nesting, would still be fast enough?
