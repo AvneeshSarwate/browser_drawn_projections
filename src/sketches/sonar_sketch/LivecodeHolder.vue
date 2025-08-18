@@ -17,8 +17,8 @@ import { PianoRoll, type NoteInfo } from '@/music/pianoRoll'
 import * as Tone from 'tone'
 import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
 import TsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
-import { buildClipFromLine, splitTextToGroups, generateUUID, findLineCallMatches, preprocessJavaScript, transformToRuntime, createExecutableFunction, resolveSliderExpressionsInJavaScript, type UUIDMapping, parseRampLine, analyzeExecutableLines } from './utils/transformHelpers'
-import { monacoEditors, codeMirrorEditors, setCodeMirrorContent, highlightCurrentLine, highlightScheduledLines, initializeMonacoEditorComplete, initializeCodeMirrorEditorComplete, highlightCurrentLineByUUID, applyScheduledHighlightByUUID, handleDslLineClick, setPianoRollFromDslLine, clickedDslRanges, highlightClickedDsl, updateDslOutlines, clearPianoRoll, clickedDslOriginalText, clearAllDslHighlights, extractDslFromLine, clickedDslSegmentCounts } from './utils/editorManager'
+import { buildClipFromLine, splitTextToGroups, generateUUID, findLineCallMatches, preprocessJavaScript, transformToRuntime, createExecutableFunction, resolveSliderExpressionsInJavaScript, type UUIDMapping, parseRampLine, analyzeExecutableLines, executeParamSetterString } from './utils/transformHelpers'
+import { monacoEditors, codeMirrorEditors, setCodeMirrorContent, highlightCurrentLine, highlightScheduledLines, initializeMonacoEditorComplete, initializeCodeMirrorEditorComplete, highlightCurrentLineByUUID, applyScheduledHighlightByUUID, handleDslLineClick, setPianoRollFromDslLine, clickedDslRanges, highlightClickedDsl, updateDslOutlines, clearPianoRoll, clickedDslOriginalText, clearAllDslHighlights, extractDslFromLine, clickedDslSegmentCounts, codeMirrorEditorsByName } from './utils/editorManager'
 import { saveSnapshot as saveSnapshotSM, loadSnapshotStateOnly as loadSnapshotStateOnlySM, downloadSnapshotsFile, loadSnapshotsFromFile as loadSnapshotsFromFileSM, saveToLocalStorage as saveToLocalStorageSM, loadFromLocalStorage as loadFromLocalStorageSM, saveBank, loadBank, makeBankClickHandler, saveTopLevelSliderBank as saveTopLevelSliderBankSM, loadTopLevelSliderBank as loadTopLevelSliderBankSM, saveFxSliderBank as saveFxSliderBankSM, loadFxSliderBank as loadFxSliderBankSM, saveTopLevelToggleBank as saveTopLevelToggleBankSM, loadTopLevelToggleBank as loadTopLevelToggleBankSM, saveTopLevelOneShotBank as saveTopLevelOneShotBankSM, loadTopLevelOneShotBank as loadTopLevelOneShotBankSM, saveJsCodeBank as saveJsCodeBankSM, loadJsCodeBank as loadJsCodeBankSM } from './utils/snapshotManager'
 
 // Monaco environment setup
@@ -408,6 +408,8 @@ const stopAll = () => {
   })
 }
 
+let baseTimeContextHandle: (TimeContext | null) = null 
+
 const launchQueue: Array<(ctx: TimeContext) => Promise<void>> = []
 
 const instrumentChains = [getDriftChain(1), getDriftChain(2), getDriftChain(3), getDriftChain(4)]
@@ -477,6 +479,16 @@ function refreshEditorsFromState() {
   })
 }
 
+const GLOBAL_PARAM_EDITOR_NAME = 'globalParamEditor'
+
+const runGlobalParamScript = () => {
+  const paramEditor = codeMirrorEditorsByName.get(GLOBAL_PARAM_EDITOR_NAME)
+  if (paramEditor) {
+    const paramScript = paramEditor.state.doc.toString()
+    executeParamSetterString(paramScript, baseTimeContextHandle, appState)
+  }
+}
+
 onMounted(async() => {
   try {
     // Initialize editors for all voices
@@ -485,6 +497,14 @@ onMounted(async() => {
       initializeMonacoEditor(`monacoEditorContainer-${i}`, i)
       initializeCodeMirrorEditor(`codeMirrorEditorContainer-${i}`, i)
     }
+    initializeCodeMirrorEditorComplete(
+      'globals-livecode-editor-container',
+      -1,
+      () => "//livecode global params here\n\n\n\n\n",
+      null,
+      false,
+      GLOBAL_PARAM_EDITOR_NAME
+    )
 
     // Load from localStorage first (both snapshots and current state)
     loadFromLocalStorage()
@@ -628,6 +648,7 @@ onMounted(async() => {
     launchLoop(async (ctx) => {
       ctx.bpm = 120
       console.log('launch loop')
+      baseTimeContextHandle = ctx
 
       // eslint-disable-next-line no-constant-condition
       while (true) {
@@ -851,6 +872,11 @@ appState.voices.forEach((_, idx) => updateFxParams(idx))
       <input type="checkbox" v-model="appState.oneShots[idx]" />
       <label>one-shot {{ idx + 1 }}</label>
     </div>
+  </div>
+
+  <div id="global-param-livecode">
+    <div id="globals-livecode-editor-container"></div>
+    <button @click="runGlobalParamScript">Exec param change</button>
   </div>
   
 
@@ -1240,6 +1266,10 @@ button {
 
 button:hover {
   background: #444;
+}
+
+button:active {
+  background: #4a5c2a;
 }
 
 .text-display {
@@ -1742,4 +1772,15 @@ details summary {
   height: 100%;
   min-height: 180px;
 }
+
+#global-param-livecode {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+}
+
+#globals-livecode-editor-container {
+  min-width: 500px;
+}
+
 </style>

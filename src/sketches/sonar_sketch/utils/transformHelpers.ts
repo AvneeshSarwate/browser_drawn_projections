@@ -8,6 +8,7 @@ import {
   findLineCallMatches as findLineCallMatchesAST,
   transformToRuntime as transformToRuntimeAST,
 } from './acornHelpers'
+import type { TimeContext } from '@/channels/base_time_context'
 
 /** Split a full transform chain line into the source clip name and an array of command strings */
 export const splitTransformChainToCommandStrings = (line: string) => {
@@ -225,6 +226,20 @@ export const transformToRuntime = (visualizeCode: string, voiceIndex: number): s
   `
   console.log("runtimeCode", wrappedCode)
   return wrappedCode
+}
+
+export const executeParamSetterString = (functionBody: string, baseTimeCtx: TimeContext, appState: SonarAppState) => {
+
+  const templateCode = `
+  const toggles = appState.toggles
+  const oneShots = appState.oneShots
+  const sliders = appState.sliders
+  ${functionBody}
+  `
+
+  const func = new Function('appState', 'ctx', templateCode)
+  
+  func(appState)
 }
 
 /** Step 3: Create executable function from JavaScript code */

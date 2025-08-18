@@ -18,6 +18,7 @@ import type { SonarAppState } from '../appState'
 // ---------------------------------------------------------------------------
 export const monacoEditors: (monaco.editor.IStandaloneCodeEditor | undefined)[] = []
 export const codeMirrorEditors: (EditorView | undefined)[] = []
+export const codeMirrorEditorsByName: Map<string, EditorView> = new Map()
 
 // ---------------------------------------------------------------------------
 //  Helper to check if content is a DSL line and extract the DSL text
@@ -570,7 +571,7 @@ export function initializeMonacoEditorComplete(
   containerId: string,
   voiceIndex: number,
   getInitialCode: () => string,
-  onContentChange: (code: string, voiceIndex: number) => void
+  onContentChange: (code: string, voiceIndex: number) => void,
 ) {
   const container = document.getElementById(containerId)
   if (!container) return
@@ -647,7 +648,9 @@ export function initializeCodeMirrorEditorComplete(
   containerId: string,
   voiceIndex: number,
   getInitialContent: () => string,
-  onDslLineClick?: (lineContent: string, lineNumber: number, voiceIndex: number, originalText: string) => void
+  onDslLineClick?: (lineContent: string, lineNumber: number, voiceIndex: number, originalText: string) => void,
+  isMusicCodeEditor: boolean = true,
+  editorName: string = ''
 ) {
   const container = document.getElementById(containerId)
   if (!container) return
@@ -662,7 +665,6 @@ line(\`debug3 : seg 3\`)`
     javascript(),
     oneDark,
     lineHighlightField,
-    EditorView.editable.of(false), // Read-only for visualization
     EditorView.theme({
       '&': { 
         maxHeight: EDITOR_MAX_HEIGHT,
@@ -713,24 +715,32 @@ line(\`debug3 : seg 3\`)`
     })
   ]
 
-  // Add DSL click plugin if callback provided
-  if (onDslLineClick) {
-    extensions.push(createDslClickPlugin(voiceIndex, onDslLineClick, clickedDslRanges))
+  if (isMusicCodeEditor) {
+    extensions.push(EditorView.editable.of(false)) // Read-only for visualization
+    // Add DSL click plugin if callback provided
+    if (onDslLineClick) {
+      extensions.push(createDslClickPlugin(voiceIndex, onDslLineClick, clickedDslRanges))
+    }
+    
+    // Add hover handler for DSL partial highlighting
+    extensions.push(createDslHoverPlugin(voiceIndex))
   }
-  
-  // Add hover handler for DSL partial highlighting
-  extensions.push(createDslHoverPlugin(voiceIndex))
 
   const editor = new EditorView({
     doc: initialContent,
     extensions,
     parent: container
   })
+
+  if(editorName) codeMirrorEditorsByName.set(editorName, editor)
   
-  codeMirrorEditors[voiceIndex] = editor
-  
-  // Apply initial DSL outlines
-  updateDslOutlines(voiceIndex, initialContent)
+  if (isMusicCodeEditor) {
+    codeMirrorEditors[voiceIndex] = editor
+    codeMirrorEditorsByName.set('voice-'+voiceIndex, editor)
+    
+    // Apply initial DSL outlines
+    updateDslOutlines(voiceIndex, initialContent)
+  }
 } 
 
 // Helper to identify DSL lines in content and update decorators
