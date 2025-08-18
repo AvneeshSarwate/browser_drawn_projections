@@ -344,7 +344,6 @@ const startVoice = (voiceIdx: number) => {
       v.loopHandle = ctx.branch(async (ctx) => {
         let firstLoop = true
         while (v.isLooping && v.isPlaying) {
-          console.log(`loopIteration ${voiceIdx} ${ctx.time}`)
           const hotSwapCued = await playOnce(ctx, firstLoop)
           firstLoop = false
           if (hotSwapCued) {

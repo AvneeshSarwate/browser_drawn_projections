@@ -7,6 +7,10 @@
       - this is blocked by logical time not being identical across branched loops with the same wait sequences
     2. if you resolve a barrier after a barrier has been waited at the same time, you can go back an release that barrier 
       - need to save references to all await instaces and their wait start time
+    3. need to thing of various sandwich cases betwen start/resolve/await
+      - simplest "robust" solution probably involves keeping some historical track of the times at which buffers are started/resolved, and if you await on anything in that history, you release immediately
+      - can probs just have this be a constant size N most recent for practical purposes 
+    4. note that this system will only be robust for "event level" granularity (eg ~50 ms)
 
 ## todo
 - need to have barriers properly released/cancelled when switching between presets
