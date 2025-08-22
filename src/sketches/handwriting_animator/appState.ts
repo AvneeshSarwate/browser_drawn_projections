@@ -92,7 +92,7 @@ export const animationParams = ref({
 })
 export const gpuStrokesReady = ref(false)
 export const launchByName = ref(false)
-export const groupName = ref('')
+export const selectedGroupName = ref('')
 
 // Script editor state
 export const SCRIPT_STORAGE_KEY = 'handwriting-animator-script'
@@ -145,7 +145,6 @@ export const recursiveDrawStrokeGroups = (p: p5, item: FlattenedStrokeGroup | Fl
   }
 }
 
-// eslint-disable-next-line prefer-const
 export let stage: Konva.Stage | undefined = undefined
 export const setStage = (s: Konva.Stage) => {
   stage = s

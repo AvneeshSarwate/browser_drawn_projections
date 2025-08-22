@@ -1,6 +1,6 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
-import { type TemplateAppState, appStateName, resolution, type FreehandRenderData, type FlattenedStroke, type FlattenedStrokeGroup, type PolygonRenderData, type FlattenedPolygon, drawFlattenedStrokeGroup, stage, setStage, activeNode, metadataText, showMetadataEditor, getActiveSingleNode, selectedPolygons, selected, activeTool, availableStrokes, animationParams, gpuStrokesReady, launchByName, groupName, scriptCode, scriptExecuting, SCRIPT_STORAGE_KEY } from './appState';
+import { type TemplateAppState, appStateName, resolution, type FreehandRenderData, type FlattenedStroke, type FlattenedStrokeGroup, type PolygonRenderData, type FlattenedPolygon, drawFlattenedStrokeGroup, stage, setStage, activeNode, metadataText, showMetadataEditor, getActiveSingleNode, selectedPolygons, selected, activeTool, availableStrokes, animationParams, gpuStrokesReady, launchByName, selectedGroupName, scriptCode, scriptExecuting, SCRIPT_STORAGE_KEY } from './appState';
 import { inject, onMounted, onUnmounted, ref, watch, computed, shallowReactive, type ShallowReactive, shallowRef, nextTick, h } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
@@ -11,10 +11,11 @@ import Timeline from './Timeline.vue';
 import MetadataEditor from './MetadataEditor.vue';
 import HierarchicalMetadataEditor from './HierarchicalMetadataEditor.vue';
 import VisualizationToggles from './VisualizationToggles.vue';
-import { clearFreehandSelection, createStrokeShape, currentPoints, currentTimestamps, deserializeFreehandState, drawingStartTime, executeFreehandCommand, finishFreehandDragTracking, freehandDrawingLayer, freehandDrawMode, freehandSelectionLayer, freehandShapeLayer, freehandStrokes, getPointsBounds, getStrokePath, gridSize, isAnimating, isDrawing, selTr, serializeFreehandState, setCurrentPoints, setCurrentTimestamps, setDrawingStartTime, setFreehandDrawingLayer, setFreehandSelectionLayer, setFreehandShapeLayer, setIsDrawing, setSelTr, showGrid, startFreehandDragTracking, updateBakedStrokeData, updateFreehandDraggableStates, updateTimelineState, type FreehandStroke, groupSelectedStrokes, ungroupSelectedStrokes, freehandCanGroupRef, isFreehandGroupSelected, freehandSelectedCount, undoFreehand, canUndoFreehand, canRedoFreehand, redoFreehand, useRealTiming, deleteFreehandSelected, selectedStrokesForTimeline, timelineDuration, handleTimeUpdate, maxInterStrokeDelay, setUpdateCursor, updateCursor, createMetadataHighlight, getGroupStrokeIndices, duplicateFreehandSelected, downloadFreehandDrawing, uploadFreehandDrawing, dragSelectionState, createSelectionRect, updateSelectionRect, completeSelectionRect, resetSelectionRect, setRefreshAVs } from './freehandTool';
+import { clearFreehandSelection, createStrokeShape, currentPoints, currentTimestamps, deserializeFreehandState, drawingStartTime, executeFreehandCommand, finishFreehandDragTracking, freehandDrawingLayer, freehandDrawMode, freehandSelectionLayer, freehandShapeLayer, freehandStrokes, getPointsBounds, getStrokePath, gridSize, isAnimating, isDrawing, selTr, serializeFreehandState, setCurrentPoints, setCurrentTimestamps, setDrawingStartTime, setFreehandDrawingLayer, setFreehandSelectionLayer, setFreehandShapeLayer, setIsDrawing, setSelTr, showGrid, startFreehandDragTracking, updateBakedStrokeData, updateFreehandDraggableStates, updateTimelineState, type FreehandStroke, groupSelectedStrokes, ungroupSelectedStrokes, freehandCanGroupRef, isFreehandGroupSelected, freehandSelectedCount, undoFreehand, canUndoFreehand, canRedoFreehand, redoFreehand, useRealTiming, deleteFreehandSelected, selectedStrokesForTimeline, timelineDuration, handleTimeUpdate, maxInterStrokeDelay, setUpdateCursor, updateCursor, createMetadataHighlight, getGroupStrokeIndices, duplicateFreehandSelected, downloadFreehandDrawing, uploadFreehandDrawing, dragSelectionState, createSelectionRect, updateSelectionRect, completeSelectionRect, resetSelectionRect, setRefreshAVs, type FreehandStrokeGroup } from './freehandTool';
 import { DrawingScene } from './gpuStrokes/drawingScene';
 import { StrokeInterpolator } from './gpuStrokes/strokeInterpolator';
 import { DRAWING_CONSTANTS } from './gpuStrokes/constants';
+//@ts-ignore
 import Stats from '@/rendering/stats';
 import { EditorView, basicSetup } from 'codemirror';
 import { javascript } from '@codemirror/lang-javascript';
@@ -23,6 +24,8 @@ import { polygonShapesLayer, polygonPreviewLayer, polygonControlsLayer, polygonS
 import { initAVLayer, refreshAVs } from './ancillaryVisualizations';
 import type { StrokePoint } from './gpuStrokes/strokeTypes';
 import type { AnchorKind } from './gpuStrokes/coordinateUtils';
+import type { LoopHandle } from '@/channels/base_time_context';
+import { combineBoundingBoxes } from './gpuStrokes/strokeTextureManager';
 
 // ==================== common stuff ====================
 const appState = inject<TemplateAppState>(appStateName)!!
@@ -345,6 +348,98 @@ const phaser = (pct: number, phase: number, e: number): number => {
   return Math.max(0, Math.min(1, (phase - 1 + pct * (1 + e)) / e))
 }
 
+
+
+let gridXY = { x: 16 * 5, y: 9 * 5 }
+const arrayOf = (n: number) =>  Array.from(Array(n).keys())
+const letterPhases = arrayOf(gridXY.x).map(k => {
+  return arrayOf(gridXY.y).map(i => 0)
+})
+
+const letterLoops: (LoopHandle|null)[][] = arrayOf(gridXY.x).map(k => {
+  return arrayOf(gridXY.y).map(i => null)
+})
+
+const letterAnimationGroups: string[][][] = arrayOf(gridXY.x).map(k => {
+  return arrayOf(gridXY.y).map(i => [])
+})
+
+let lastMousedGridCell = { x: -1, y: -1 }
+const mousePos2GridCell = (event: MouseEvent) => {
+  const x = event.x / resolution.width * gridXY.x
+  const y = event.y / resolution.height * gridXY.y
+  return {x, y}
+}
+const ANIMATE_TIME = 1
+const mouseAnimationMove = (event: MouseEvent) => {
+  const {x: newX, y: newY} = mousePos2GridCell(event)
+
+  const enteredNewCell = lastMousedGridCell.x != newX || lastMousedGridCell.y != newY
+  if (enteredNewCell) {
+    const cellLoop = letterLoops[newX][newY]
+    if (cellLoop) {
+      cellLoop.cancel()
+    }
+    launchLoop(async ctx => {
+      const thread = ctx.branch(async ctx => {
+        const startTime = ctx.time
+        while (ctx.time - startTime < ANIMATE_TIME) {
+          //step forward the specific stroke animation components from letterAnimationGroups[newX][newY]
+          await ctx.waitSec(0.016)
+        }
+      })
+      letterLoops[newX][newY] = thread
+    })
+  }
+
+  lastMousedGridCell = {x: newX, y: newY}
+}
+
+//call this ONE TIME during sketch set up after stroke data is loaded
+const charToStrokeMap: Map<string, FlattenedStrokeGroup> = new Map()
+const mapCharToStrokeGroup = (inputText: string) => {
+  appState.freehandRenderData.forEach(fsg => {
+    if (fsg.metadata.char && fsg.metadata.char.match(/^[a-z0-9]$/i)) {
+      charToStrokeMap.set(fsg.metadata.char, fsg)
+    }
+  })
+}
+
+//call this ONE TIME during sketch set up after mapCharToStrokeGroup is called
+const launchLetterAtCell = (xInd: number, yInd: number, letterGroupName: string) => {
+  // get initial bounding box of group
+  // - get indices for strokes in group // getGroupStrokeIndices(groupName)
+  // - get bounding boxes per index from strokeTextureManager.getStrokeBounds
+  // - composite bounding boxes
+  const strokeIndices = getGroupStrokeIndices(letterGroupName)
+  const groupBBox = drawingScene!.getGroupStrokeBounds(strokeIndices)!
+
+  //scale by x so that group matches width
+  const bboxWidth = groupBBox.maxX - groupBBox.minX
+  const bboxHeight = groupBBox.maxY - groupBBox.minY
+  const cellWidth = resolution.width / gridXY.x
+  const cellHeight = resolution.height / gridXY.y
+  const scale = cellWidth / bboxWidth
+  const baseline: number = charToStrokeMap.get(letterGroupName)?.metadata?.baseline ?? 0
+  const yShift = bboxHeight * scale * baseline
+  const launchX = cellWidth * xInd
+  const launchY = cellHeight * yInd - yShift
+
+  //shift start point down so that baseline of group hits grid bottom line (gridPt.y - bbox.height*scale * baselineFrac) 
+  const launchedAnimationIds = drawingScene!.launchGroup(launchX, launchY, strokeIndices, {
+    anchor: 'bbox-bl',
+    scale,
+    controlMode: 'manual'
+  })
+
+  letterAnimationGroups[xInd][yInd] = launchedAnimationIds
+}
+
+const handleBabylonCanvasMove = (event: MouseEvent) => {
+  //add flag to wait for necessary data being ready
+  mouseAnimationMove(event)
+}
+
 const handleBabylonCanvasClick = (event: MouseEvent) => {
   if (!drawingScene || !gpuStrokesReady.value) return
 
@@ -356,11 +451,11 @@ const handleBabylonCanvasClick = (event: MouseEvent) => {
   const y = event.clientY - rect.top
 
   try {
-    if (launchByName.value && groupName.value) {
+    if (launchByName.value && selectedGroupName.value) {
       // Launch by group name using new unified API
-      const strokeIndices = getGroupStrokeIndices(groupName.value)
+      const strokeIndices = getGroupStrokeIndices(selectedGroupName.value)
       if (strokeIndices.length === 0) {
-        console.warn(`No strokes found for group: ${groupName.value}`)
+        console.warn(`No strokes found for group: ${selectedGroupName.value}`)
         return
       }
 
@@ -378,7 +473,7 @@ const handleBabylonCanvasClick = (event: MouseEvent) => {
       )
 
       if (launchedAnimationIds.length === 0) {
-        console.warn(`Failed to launch any strokes for group: ${groupName.value}`)
+        console.warn(`Failed to launch any strokes for group: ${selectedGroupName.value}`)
         return
       }
 
@@ -429,7 +524,7 @@ const handleBabylonCanvasClick = (event: MouseEvent) => {
         })
       })
 
-      console.log(`Launched group "${groupName.value}" with ${launchedAnimationIds.length} strokes at (${x.toFixed(1)}, ${y.toFixed(1)}) using ${animationParams.value.position} anchor`)
+      console.log(`Launched group "${selectedGroupName.value}" with ${launchedAnimationIds.length} strokes at (${x.toFixed(1)}, ${y.toFixed(1)}) using ${animationParams.value.position} anchor`)
     } else {
       // Standard interpolated launch using new API
       if (availableStrokes.value.length < 2) {
@@ -542,6 +637,7 @@ const executeScript = () => {
     console.log('Script executed successfully')
   } catch (error) {
     console.error('Script execution error:', error)
+    //@ts-ignore
     alert(`Script Error: ${error.message}`)
   } finally {
     scriptExecuting.value = false
@@ -580,7 +676,7 @@ onMounted(async () => {
         konvaContainer.value.style.cursor = freehandDrawMode.value ? 'crosshair' : 'default'
       }
     })
-    updateCursor()
+    updateCursor!()
 
     // Create layers
     gridLayer = new Konva.Layer()
@@ -595,18 +691,18 @@ onMounted(async () => {
     setPolygonControlsLayer(new Konva.Layer())
     setPolygonSelectionLayer(new Konva.Layer())
 
-    stage.add(gridLayer)
-    stage.add(freehandShapeLayer)
-    stage.add(freehandDrawingLayer)
-    stage.add(freehandSelectionLayer)
-    stage.add(polygonShapesLayer)
-    stage.add(polygonPreviewLayer)
-    stage.add(polygonControlsLayer)
-    stage.add(polygonSelectionLayer)
+    stage!.add(gridLayer)
+    stage!.add(freehandShapeLayer!)
+    stage!.add(freehandDrawingLayer!)
+    stage!.add(freehandSelectionLayer!)
+    stage!.add(polygonShapesLayer!)
+    stage!.add(polygonPreviewLayer!)
+    stage!.add(polygonControlsLayer!)
+    stage!.add(polygonSelectionLayer!)
 
     // Add metadata highlight layer on top
     const metadataHighlightLayer = createMetadataHighlight()
-    stage.add(metadataHighlightLayer)
+    stage!.add(metadataHighlightLayer)
     
     // Initialize ancillary visualizations layer
     initAVLayer()
@@ -617,14 +713,14 @@ onMounted(async () => {
 
     // Set initial listening states based on active tool
     if (activeTool.value === 'freehand') {
-      polygonShapesLayer.listening(false)
-      polygonPreviewLayer.listening(false)
-      polygonControlsLayer.listening(false)
-      polygonSelectionLayer.listening(false)
+      polygonShapesLayer!.listening(false)
+      polygonPreviewLayer!.listening(false)
+      polygonControlsLayer!.listening(false)
+      polygonSelectionLayer!.listening(false)
     } else {
-      freehandShapeLayer.listening(false)
-      freehandDrawingLayer.listening(false)
-      freehandSelectionLayer.listening(false)
+      freehandShapeLayer!.listening(false)
+      freehandDrawingLayer!.listening(false)
+      freehandSelectionLayer!.listening(false)
     }
 
     // Create transformers like working example
@@ -637,15 +733,15 @@ onMounted(async () => {
     }))
 
     // Add transform tracking to main transformer
-    selTr.on('transformstart', () => {
+    selTr!.on('transformstart', () => {
       startFreehandDragTracking()
     })
 
-    selTr.on('transformend', () => {
+    selTr!.on('transformend', () => {
       finishFreehandDragTracking('Transform Selection')
     })
 
-    freehandSelectionLayer.add(selTr)
+    freehandSelectionLayer!.add(selTr!)
 
     // Initial grid draw
     drawGrid()
@@ -655,7 +751,7 @@ onMounted(async () => {
 
     // Start in select mode for testing
     freehandDrawMode.value = false
-    updateCursor()
+    updateCursor!()
 
     // Try to restore canvas state from hotreload (after all setup is complete)
     deserializeFreehandState()
@@ -672,8 +768,8 @@ onMounted(async () => {
     initializeScriptEditor()
 
     // Mouse/touch event handlers
-    stage.on('mousedown touchstart', (e) => {
-      const pos = stage.getPointerPosition()
+    stage!.on('mousedown touchstart', (e) => {
+      const pos = stage!.getPointerPosition()
       if (!pos) return
 
       if (activeTool.value === 'freehand') {
@@ -714,9 +810,9 @@ onMounted(async () => {
       }
     })
 
-    stage.on('mousemove touchmove', (e) => {
+    stage!.on('mousemove touchmove', (e) => {
       if (activeTool.value === 'freehand' && isDrawing) {
-        const pos = stage.getPointerPosition()
+        const pos = stage!.getPointerPosition()
         if (!pos) return
 
         currentPoints.push(pos.x, pos.y)
@@ -733,7 +829,7 @@ onMounted(async () => {
         freehandDrawingLayer?.batchDraw()
       } else if (activeTool.value === 'freehand' && !freehandDrawMode.value && dragSelectionState.value.isSelecting) {
         // Drag selection in progress
-        const pos = stage.getPointerPosition()
+        const pos = stage!.getPointerPosition()
         if (!pos) return
         
         dragSelectionState.value.currentPos = { x: pos.x, y: pos.y }
@@ -747,7 +843,7 @@ onMounted(async () => {
       }
     })
 
-    stage.on('mouseup touchend', () => {
+    stage!.on('mouseup touchend', () => {
       if (activeTool.value === 'freehand' && isDrawing) {
         setIsDrawing(false)
         freehandDrawingLayer?.destroyChildren()
@@ -1058,7 +1154,7 @@ onUnmounted(() => {
 
           <div v-if="launchByName" class="control-row">
             <label>Group Name:</label>
-            <select v-model="groupName" :disabled="availableGroups.length === 0">
+            <select v-model="selectedGroupName" :disabled="availableGroups.length === 0">
               <option value="">Select a group...</option>
               <option v-for="name in availableGroups" :key="name" :value="name">
                 {{ name }}
@@ -1121,11 +1217,11 @@ onUnmounted(() => {
           </div>
 
           <div class="info-row">
-            <p v-if="launchByName && !groupName" class="warning">
+            <p v-if="launchByName && !selectedGroupName" class="warning">
               ⚠️ Select a group name to launch group animations
             </p>
-            <p v-else-if="launchByName && groupName" class="info">
-              ✓ Click canvas to launch group "{{ groupName }}" ({{ getGroupStrokeIndices(groupName).length }} strokes)
+            <p v-else-if="launchByName && selectedGroupName" class="info">
+              ✓ Click canvas to launch group "{{ selectedGroupName }}" ({{ getGroupStrokeIndices(selectedGroupName).length }} strokes)
             </p>
             <p v-else-if="availableStrokes.length < 2" class="warning">
               ⚠️ Draw at least 2 strokes to enable interpolated animations

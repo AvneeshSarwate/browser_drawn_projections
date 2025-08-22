@@ -5,6 +5,7 @@ import { StrokeTextureManager } from './strokeTextureManager';
 import { DrawLifecycleManager } from './drawLifecycleManager';
 import { DRAWING_CONSTANTS } from './constants';
 import strokeAnimationWGSL from './strokeAnimation.wgsl?raw';
+//@ts-ignore
 import Stats from '@/rendering/stats';
 import type { LaunchConfig } from './strokeTypes';
 import { getStrokeAnchor, getGroupAnchor, type AnchorKind } from './coordinateUtils';
@@ -463,6 +464,10 @@ export class DrawingScene {
    */
   getStrokeBounds(strokeIndex: number): { minX: number; maxX: number; minY: number; maxY: number } | null {
     return this.strokeTextureManager?.getStrokeBounds(strokeIndex) || null;
+  }
+
+  getGroupStrokeBounds(strokeIndexes: number[]): { minX: number; maxX: number; minY: number; maxY: number } | null {
+    return this.strokeTextureManager?.getStrokeGroupBounds(strokeIndexes)
   }
   
   /**
