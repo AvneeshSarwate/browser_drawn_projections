@@ -352,9 +352,6 @@ const phaser = (pct: number, phase: number, e: number): number => {
 
 let gridXY = { x: 16 * 5, y: 9 * 5 }
 const arrayOf = (n: number) =>  Array.from(Array(n).keys())
-const letterPhases = arrayOf(gridXY.x).map(k => {
-  return arrayOf(gridXY.y).map(i => 0)
-})
 
 const letterLoops: (LoopHandle|null)[][] = arrayOf(gridXY.x).map(k => {
   return arrayOf(gridXY.y).map(i => null)
@@ -365,14 +362,24 @@ const letterAnimationGroups: string[][][] = arrayOf(gridXY.x).map(k => {
 })
 
 let lastMousedGridCell = { x: -1, y: -1 }
-const mousePos2GridCell = (event: MouseEvent) => {
+const mousePos2GridCell = (event: {x: number, y: number}) => {
   const x = event.x / resolution.width * gridXY.x
   const y = event.y / resolution.height * gridXY.y
   return {x, y}
 }
 const ANIMATE_TIME = 1
 const mouseAnimationMove = (event: MouseEvent) => {
-  const {x: newX, y: newY} = mousePos2GridCell(event)
+
+  if (!drawingScene || !gpuStrokesReady.value) return
+
+  const rect = babylonContainer.value?.getBoundingClientRect()
+  if (!rect) return
+
+  // Get mouse position relative to canvas
+  const x = event.clientX - rect.left
+  const y = event.clientY - rect.top
+
+  const {x: newX, y: newY} = mousePos2GridCell({x, y})
 
   const enteredNewCell = lastMousedGridCell.x != newX || lastMousedGridCell.y != newY
   if (enteredNewCell) {
@@ -384,7 +391,12 @@ const mouseAnimationMove = (event: MouseEvent) => {
       const thread = ctx.branch(async ctx => {
         const startTime = ctx.time
         while (ctx.time - startTime < ANIMATE_TIME) {
-          //step forward the specific stroke animation components from letterAnimationGroups[newX][newY]
+           //divide by half because phase 0.5 is full extension and 1 is collapsed to end point
+          const phase = ((ctx.time - startTime) / ANIMATE_TIME) / 2
+          letterAnimationGroups[newX][newY].forEach(id => {
+            //todo - for groups with multiple strokes this all draws at once, change to be like click behaviour below later
+            drawingScene!.updateStroke(id, {phase})
+          })
           await ctx.waitSec(0.016)
         }
       })
@@ -405,8 +417,24 @@ const mapCharToStrokeGroup = (inputText: string) => {
   })
 }
 
+const flatIdxToCellCoord = (idx: number) => {
+  return {x: idx % gridXY.x, y: Math.floor(idx / gridXY.x)}
+}
+
+const convertStringToCellIndices = (inputString: string) => {
+  const cellDef = inputString.split("").map((c, idx, arr) => {
+    //todo - this handles spaces but not newlines
+    const hasName = ["a", "b", "c", "d", "e"].includes(c) 
+    const xy = flatIdxToCellCoord(idx)
+    return {hasName, xy, name: c}
+  }).filter(def => def.hasName)
+
+  return cellDef
+}
+
 //call this ONE TIME during sketch set up after mapCharToStrokeGroup is called
 const launchLetterAtCell = (xInd: number, yInd: number, letterGroupName: string) => {
+  
   // get initial bounding box of group
   // - get indices for strokes in group // getGroupStrokeIndices(groupName)
   // - get bounding boxes per index from strokeTextureManager.getStrokeBounds
@@ -435,8 +463,35 @@ const launchLetterAtCell = (xInd: number, yInd: number, letterGroupName: string)
   letterAnimationGroups[xInd][yInd] = launchedAnimationIds
 }
 
+const launchAnimatedLetterLayoutForString = (inputStr: string) => {
+  //clear existing letters
+  const existingStrokeIds = letterAnimationGroups.flat(3)
+  existingStrokeIds.forEach(eid => {
+    drawingScene!.cancelStroke(eid)
+  })
+  const existingPlayLoops = letterLoops.flat(2)
+  existingPlayLoops.forEach(l => {
+    if(l) l.cancel()
+  })
+
+  //layout input 
+  const cellDef = convertStringToCellIndices(inputStr)
+
+  //launch animations
+  cellDef.forEach(def => {
+    const {xy: {x, y}, name} = def
+    launchLetterAtCell(x, y, name)
+  })
+}
+
+/* in onMount
+const testText = "aabababcdcde"
+mapCharToStrokeGroup(testText)
+launchAnimatedLetterLayoutForString(testText)
+*/
+
 const handleBabylonCanvasMove = (event: MouseEvent) => {
-  //add flag to wait for necessary data being ready
+  alert("babylon mouse move not implemented")
   mouseAnimationMove(event)
 }
 
@@ -1117,7 +1172,7 @@ onUnmounted(() => {
           :style="{
             width: resolution.width + 'px',
             height: resolution.height + 'px',
-          }" @click="handleBabylonCanvasClick"></canvas>
+          }" @click="handleBabylonCanvasClick" @mousemove="handleBabylonCanvasMove"></canvas>
 
         <!-- Animation Parameters -->
         <div v-if="gpuStrokesReady" class="animation-controls">

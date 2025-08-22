@@ -356,6 +356,7 @@ export class DrawLifecycleManager {
     if (this.activeConfigs.has(id)) {
       const config = this.activeConfigs.get(id)!;
       config.active = false;
+      this.activeConfigs.delete(id)
       return true;
     }
     
