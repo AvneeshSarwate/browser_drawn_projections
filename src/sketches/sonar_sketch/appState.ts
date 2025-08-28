@@ -152,6 +152,14 @@ export const startBarrier = (key: string, ctx: TimeContext) => {
   const newPromise = new Promise<void>((resolve, reject) => {
     res = resolve
   })
+  
+  //fix for missing case
+  const oldBarrier = promiseBarrierMap.get(key)
+  if (oldBarrier) {
+    oldBarrier.resolve()
+    oldBarrier.resolveTime = ctx.time
+  } 
+
   promiseBarrierMap.set(key, { promise: newPromise, resolve: res, resolveTime: -1, startTime: ctx.time })
 }
 
