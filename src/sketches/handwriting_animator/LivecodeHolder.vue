@@ -471,7 +471,7 @@ const launchAnimatedLetterLayoutForString = (inputStr: string) => {
   })
   const existingPlayLoops = letterLoops.flat(2)
   existingPlayLoops.forEach(l => {
-    if(l) l.cancel()
+    l?.cancel()
   })
 
   //layout input 

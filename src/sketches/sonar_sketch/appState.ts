@@ -173,11 +173,61 @@ export const awaitBarrier = async (key: string, ctx: TimeContext) => {
     return Promise.resolve()
   }
 
-  if (ctx.time - barrier.startTime) return
+  //if await happens at the same time as barrier start, you're already synced
+  if (ctx.time == barrier.startTime) return
     
   await barrier.promise
   ctx.time = barrier.resolveTime
 }
+
+//todo API - can move these to be instance methods for the root of the context tree?
+//these things only actually work within the same context tree
+
+
+/**
+  event orders per key - loop A is start/resolving barriers, loop B is awaiting to sync, imagine 1 beat loops
+
+  startA - t-0
+  resolA - t-1
+  awaitB - t-1
+  startA - t-1
+
+  because of unpredictability of setTimeout, events at t-1 could happen in any order wrt wall clock
+
+  All 6 possibilities:
+
+  resolA - t-1
+  awaitB - t-1
+  startA - t-1
+  - awaitB immediately releases becaues no active key and never waits on barrier 
+
+  resolA - t-1
+  startA - t-1
+  awaitB - t-1
+  - awaitB immediately releases because startTime == waitTime and never waits on barrier 
+
+  startA - t-1
+  resolA - t-1
+  awaitB - t-1
+  - awaitB immediately releases becaues no active key and never waits on barrier 
+
+  startA - t-1
+  awaitB - t-1
+  resolA - t-1
+  - awaitB immediately releases because startTime == waitTime and never waits on barrier 
+
+  awaitB - t-1
+  startA - t-1
+  resolA - t-1
+  - awaitB waits because it has captured and is waiting on barrier set at t-0, which never gets resolved when barrier map entry is overwritten with new start
+  - FIX: if "double start" (eg, key as existing unresolved barrier when start is called), release it before creating new one
+
+  awaitB - t-1
+  resolA - t-1
+  startA - t-1
+  - awaitB releases because it's barrier is resolved
+
+ */
 
 //todo api - add caching/rehydrating of appState from local storage
 
