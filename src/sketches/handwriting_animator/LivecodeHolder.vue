@@ -68,7 +68,8 @@ const babylonContainer = ref<HTMLCanvasElement>()
 
 
 // GPU Strokes state
-let drawingScene: DrawingScene | undefined = undefined
+//todo - drawing scene doesn't seem to reinitialze properly on hotreload
+let drawingScene: DrawingScene | undefined = undefined 
 let strokeInterpolator: StrokeInterpolator | undefined = undefined
 // availableStrokes, animationParams, gpuStrokesReady now imported from appState
 const webGPUSupported = computed(() => typeof navigator !== 'undefined' && !!navigator.gpu)
@@ -350,7 +351,7 @@ const phaser = (pct: number, phase: number, e: number): number => {
 
 
 
-let gridXY = { x: 16 * 5, y: 9 * 5 }
+let gridXY = { x: 16, y: 9 }
 const arrayOf = (n: number) =>  Array.from(Array(n).keys())
 
 const letterLoops: (LoopHandle|null)[][] = arrayOf(gridXY.x).map(k => {
@@ -361,14 +362,17 @@ const letterAnimationGroups: string[][][] = arrayOf(gridXY.x).map(k => {
   return arrayOf(gridXY.y).map(i => [])
 })
 
-let lastMousedGridCell = { x: -1, y: -1 }
+let lastMouseGridCell = { x: -1, y: -1 }
 const mousePos2GridCell = (event: {x: number, y: number}) => {
-  const x = event.x / resolution.width * gridXY.x
-  const y = event.y / resolution.height * gridXY.y
+  const x = Math.floor(event.x / resolution.width * gridXY.x)
+  const y = Math.floor(event.y / resolution.height * gridXY.y)
   return {x, y}
 }
 const ANIMATE_TIME = 1
+const layoutActivated = ref(false)
 const mouseAnimationMove = (event: MouseEvent) => {
+
+  if (!layoutActivated.value) return
 
   if (!drawingScene || !gpuStrokesReady.value) return
 
@@ -381,7 +385,7 @@ const mouseAnimationMove = (event: MouseEvent) => {
 
   const {x: newX, y: newY} = mousePos2GridCell({x, y})
 
-  const enteredNewCell = lastMousedGridCell.x != newX || lastMousedGridCell.y != newY
+  const enteredNewCell = lastMouseGridCell.x != newX || lastMouseGridCell.y != newY
   if (enteredNewCell) {
     const cellLoop = letterLoops[newX][newY]
     if (cellLoop) {
@@ -404,7 +408,8 @@ const mouseAnimationMove = (event: MouseEvent) => {
     })
   }
 
-  lastMousedGridCell = {x: newX, y: newY}
+  lastMouseGridCell = { x: newX, y: newY }
+  console.log('new mouse cell', lastMouseGridCell)
 }
 
 //call this ONE TIME during sketch set up after stroke data is loaded
@@ -455,7 +460,7 @@ const launchLetterAtCell = (xInd: number, yInd: number, letterGroupName: string)
 
   //shift start point down so that baseline of group hits grid bottom line (gridPt.y - bbox.height*scale * baselineFrac) 
   const launchedAnimationIds = drawingScene!.launchGroup(launchX, launchY, strokeIndices, {
-    anchor: 'bbox-bl',
+    anchor: 'bbox-tl', //todo - need to fix 
     scale,
     controlMode: 'manual'
   })
@@ -485,13 +490,18 @@ const launchAnimatedLetterLayoutForString = (inputStr: string) => {
 }
 
 /* in onMount
-const testText = "aabababcdcde"
-mapCharToStrokeGroup(testText)
-launchAnimatedLetterLayoutForString(testText)
+
 */
 
+const launchLayout = () => {
+  layoutActivated.value = true
+  const testText = "aabababcdcde"
+  mapCharToStrokeGroup(testText)
+  launchAnimatedLetterLayoutForString(testText)
+}
+
 const handleBabylonCanvasMove = (event: MouseEvent) => {
-  alert("babylon mouse move not implemented")
+  // alert("babylon mouse move not implemented")
   mouseAnimationMove(event)
 }
 
@@ -1268,6 +1278,9 @@ onUnmounted(() => {
             <button @click="executeScript"
               :disabled="!gpuStrokesReady || scriptExecuting || availableStrokes.length < 2" class="launch-button">
               {{ scriptExecuting ? 'Executing...' : 'Launch Script' }}
+            </button>
+            <button @click="launchLayout" class="launch-button">
+              {{ 'Launch Layout' }}
             </button>
           </div>
 

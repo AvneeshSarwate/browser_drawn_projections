@@ -264,7 +264,7 @@ export class DrawingScene {
       if (Math.floor(currentTime) % 3 === 0 && deltaTime < 0.1) {
         const status = this.lifecycleManager.getStatus();
         if (status.activeCount > 0) {
-          console.log(`Active animations: ${status.activeCount}, dispatching ${workgroups} workgroups (${totalThreads} threads)`);
+          // console.log(`Active animations: ${status.activeCount}, dispatching ${workgroups} workgroups (${totalThreads} threads)`);
         }
       }
     });
