@@ -306,7 +306,7 @@ export const serializePolygonState = () => {
   
   try {
     // Serialize only the essential polygon state
-    const polygonState = getCurrentPolygonState()
+    const polygonState = getCurrentPolygonState()!
     
     
     appState.polygonStateString = JSON.stringify(polygonState)
@@ -361,7 +361,7 @@ export const deserializePolygonState = () => {
       layerData.children.forEach((childData: any, index: number) => {
         console.log('Creating polygon node', index, 'of type', childData.className)
         const node = Konva.Node.create(JSON.stringify(childData)) as Konva.Line
-        polygonShapesLayer.add(node)
+        polygonShapesLayer!.add(node)
         console.log('Added polygon node to layer:', node.id(), node.isVisible())
         
         // Attach handlers to this polygon node
@@ -373,7 +373,7 @@ export const deserializePolygonState = () => {
     if (polygonState.polygons) {
       polygonState.polygons.forEach(([id, polygonData]: [string, any]) => {
         // Use stage.findOne to search for the polygon shape
-        const shape = stage.findOne(`#${id}`) as Konva.Line
+        const shape = stage!.findOne(`#${id}`) as Konva.Line
         console.log('Restoring polygon:', id, 'found shape:', !!shape)
         const polygon: PolygonShape = {
           id: polygonData.id,
@@ -393,7 +393,7 @@ export const deserializePolygonState = () => {
         const group: PolygonGroup = {
           id: groupData.id,
           polygonIds: groupData.polygonIds,
-          group: stage.findOne(`#${id}`) as Konva.Group,
+          group: stage!.findOne(`#${id}`) as Konva.Group,
         }
         polygonGroups.set(id, group)
       })
@@ -475,7 +475,7 @@ export const handlePolygonClick = (pos: { x: number, y: number }) => {
             polygon.points.splice(insertIndex, 0, midX, midY)
             
             // Update the Konva shape and control points
-            polygon.konvaShape.points(polygon.points)
+            polygon.konvaShape!.points(polygon.points)
             updatePolygonControlPoints() // Refresh control points
             serializePolygonState() // Serialize for hotreload
             polygonShapesLayer?.batchDraw()
@@ -772,7 +772,7 @@ export const updatePolygonControlPoints = () => {
         })
         
         polygon.controlPoints.push(controlPoint)
-        polygonControlsLayer.add(controlPoint)
+        polygonControlsLayer!.add(controlPoint)
       }
     })
   }

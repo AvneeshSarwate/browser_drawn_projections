@@ -215,7 +215,7 @@ export const updateMetadataHighlight = (node?: Konva.Node) => {
     return
   }
 
-  const bbox = node.getClientRect({ relativeTo: node.getStage() })
+  const bbox = node.getClientRect({ relativeTo: node.getStage()! })
   metadataHighlightRect.setAttrs({
     x: bbox.x,
     y: bbox.y,
@@ -283,7 +283,7 @@ const freehandTopGroup = (node: Konva.Node): Konva.Group | null => {
   let candidate: Konva.Group | null = null
   while (cur && cur !== freehandShapeLayer) {
     if (cur instanceof Konva.Group) candidate = cur
-    cur = cur.getParent()
+    cur = cur.getParent()!
   }
   return candidate
 }
@@ -684,9 +684,9 @@ export const serializeFreehandState = () => {
 
     appState.freehandStateString = JSON.stringify(canvasState)
     console.log('Serialized canvas state:', {
-      layerChildren: canvasState.layer?.children?.length || 0,
-      strokes: canvasState.strokes.length,
-      strokeGroups: canvasState.strokeGroups.length
+      layerChildren: canvasState!.layer?.children?.length || 0,
+      strokes: canvasState!.strokes.length,
+      strokeGroups: canvasState!.strokeGroups.length
     })
   } catch (error) {
     console.warn('Failed to serialize Konva state:', error)
@@ -768,7 +768,7 @@ export const deserializeFreehandState = () => {
       layerData.children.forEach((childData: any, index: number) => {
         console.log('Creating node', index, 'of type', childData.className)
         const node = Konva.Node.create(JSON.stringify(childData))
-        freehandShapeLayer.add(node)
+        freehandShapeLayer!.add(node)
         console.log('Added node to layer:', node.id(), node.isVisible())
 
         // Recursively attach handlers to this node and all its children
@@ -780,7 +780,7 @@ export const deserializeFreehandState = () => {
     if (canvasState.strokes) {
       canvasState.strokes.forEach(([id, strokeData]: [string, any]) => {
         // Use stage.findOne to search recursively through all groups
-        const shape = stage.findOne(`#${id}`) as Konva.Path
+        const shape = stage!.findOne(`#${id}`) as Konva.Path
         console.log('Restoring stroke:', id, 'found shape:', !!shape)
         const stroke: FreehandStroke = {
           id: strokeData.id,
@@ -801,7 +801,7 @@ export const deserializeFreehandState = () => {
         const group: FreehandStrokeGroup = {
           id: groupData.id,
           strokeIds: groupData.strokeIds,
-          group: stage.findOne(`#${id}`) as Konva.Group,
+          group: stage!.findOne(`#${id}`) as Konva.Group,
         }
         freehandStrokeGroups.set(id, group)
       })
@@ -827,7 +827,7 @@ export const deserializeFreehandState = () => {
 
     // Force a redraw to make sure everything is visible
     setTimeout(() => {
-      freehandShapeLayer.batchDraw()
+      freehandShapeLayer!.batchDraw()
       updateBakedStrokeData() // Update baked data after deserialization
     }, 30)
   } catch (error) {
@@ -986,7 +986,7 @@ export const groupSelectedStrokes = () => {
   executeFreehandCommand('Group Strokes', () => {
     // compute common parent to insert new group into (layer by default)
     let commonParent = selected[0].getParent()
-    for (const n of selected) if (n.getParent() !== commonParent) { commonParent = freehandShapeLayer; break }
+    for (const n of selected) if (n.getParent() !== commonParent) { commonParent = freehandShapeLayer!; break }
 
     const superGroup = new Konva.Group({ draggable: true })
     commonParent?.add(superGroup)
