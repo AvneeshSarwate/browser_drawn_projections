@@ -331,8 +331,8 @@ export const attachPolygonHandlers = (node: Konva.Line) => {
     if(polygonMode.value === 'draw') {
       console.log('Polygon clicked draw:', node.id())
     } else if(polygonMode.value === 'edit') {
-      console.log('Polygon clicked edit:', node.id())
-      togglePolygonSelection(node.id())
+        console.log('Polygon clicked edit:', node.id())
+        togglePolygonSelection(node.id())
     }
   })
 }

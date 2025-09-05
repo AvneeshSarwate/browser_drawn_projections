@@ -866,10 +866,10 @@ onMounted(async () => {
           }
         }
       } else if (activeTool.value === 'polygon') {
-        // Polygon tool logic - handle draw and edit modes only
-        if (e.target === stage || (polygonMode.value === 'edit' && e.target.getParent() !== polygonControlsLayer)) {
-          //todo - maybe allow clicking on polygon in draw mode?
-          // Handle clicks on canvas or polygon shapes (but not control points)
+        // Polygon tool logic - allow clicks anywhere except on control points
+        const parent = e.target.getParent?.()
+        const isControlPoint = parent === polygonControlsLayer
+        if (!isControlPoint) {
           handlePolygonClick(pos)
         }
       }
