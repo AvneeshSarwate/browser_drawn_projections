@@ -2,7 +2,7 @@
 import { watch, computed, shallowRef, onUnmounted } from 'vue'
 import Konva from 'konva'
 import MetadataEditor from './MetadataEditor.vue'
-import { setNodeMetadata, collectHierarchyFromRoot, updateMetadataHighlight } from './freehandTool'
+import { setNodeMetadata, collectHierarchyFromRoot, updateMetadataHighlight, updateHoverHighlight } from './freehandTool'
 import { selected, getActiveSingleNode } from './appState'
 
 // Auto-detect which mode to use and get root selection
@@ -72,6 +72,7 @@ watch(mode, (newMode) => {
 // Clear highlight when component is unmounted
 onUnmounted(() => {
   updateMetadataHighlight(undefined)
+  updateHoverHighlight(undefined)
 })
 
 const selectNode = (node: any) => {
@@ -109,6 +110,14 @@ const hasMetadata = (node: any) => {
   const metadata = konvaNode.getAttr('metadata')
   return metadata && Object.keys(metadata).length > 0
 }
+
+const handleMouseEnter = (node: any) => {
+  updateHoverHighlight(node as Konva.Node)
+}
+
+const handleMouseLeave = () => {
+  updateHoverHighlight(undefined)
+}
 </script>
 
 <template>
@@ -140,6 +149,8 @@ const hasMetadata = (node: any) => {
             :class="['tree-row', { active: entry.node === activeNode }]"
             :style="{ paddingLeft: entry.depth * 50 + 'px' }"
             @click="selectNode(entry.node)"
+            @mouseenter="handleMouseEnter(entry.node)"
+            @mouseleave="handleMouseLeave"
           >
             <span class="label">{{ nodeLabel(entry.node as any) }}</span>
             <span class="metadata-indicator" v-if="hasMetadata(entry.node as any)">●</span>

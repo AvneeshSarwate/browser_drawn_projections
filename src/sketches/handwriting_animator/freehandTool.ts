@@ -183,6 +183,9 @@ export const setFreehandSelectionLayer = (sl: Konva.Layer) => freehandSelectionL
 export let metadataHighlightLayer: Konva.Layer | undefined = undefined
 export let metadataHighlightRect: Konva.Rect | undefined = undefined
 
+// Hover highlight layer for metadata tree navigation
+export let hoverHighlightRect: Konva.Rect | undefined = undefined
+
 // Drag selection state and rectangle
 export const dragSelectionState = ref({
   isSelecting: false,
@@ -202,7 +205,15 @@ export const createMetadataHighlight = () => {
     listening: false,
     visible: false
   })
+  hoverHighlightRect = new Konva.Rect({
+    stroke: 'green',
+    strokeWidth: 2,
+    dash: [4, 4],
+    listening: false,
+    visible: false
+  })
   metadataHighlightLayer.add(metadataHighlightRect)
+  metadataHighlightLayer.add(hoverHighlightRect)
   return metadataHighlightLayer
 }
 
@@ -217,6 +228,26 @@ export const updateMetadataHighlight = (node?: Konva.Node) => {
 
   const bbox = node.getClientRect({ relativeTo: node.getStage()! })
   metadataHighlightRect.setAttrs({
+    x: bbox.x,
+    y: bbox.y,
+    width: bbox.width,
+    height: bbox.height,
+    visible: true
+  })
+  metadataHighlightLayer.batchDraw()
+}
+
+export const updateHoverHighlight = (node?: Konva.Node) => {
+  if (!hoverHighlightRect || !metadataHighlightLayer) return
+
+  if (!node) {
+    hoverHighlightRect.visible(false)
+    metadataHighlightLayer.batchDraw()
+    return
+  }
+
+  const bbox = node.getClientRect({ relativeTo: node.getStage()! })
+  hoverHighlightRect.setAttrs({
     x: bbox.x,
     y: bbox.y,
     width: bbox.width,
