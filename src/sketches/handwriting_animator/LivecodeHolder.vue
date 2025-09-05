@@ -11,7 +11,8 @@ import Timeline from './Timeline.vue';
 import MetadataEditor from './MetadataEditor.vue';
 import HierarchicalMetadataEditor from './HierarchicalMetadataEditor.vue';
 import VisualizationToggles from './VisualizationToggles.vue';
-import { clearFreehandSelection, createStrokeShape, currentPoints, currentTimestamps, deserializeFreehandState, drawingStartTime, executeFreehandCommand, finishFreehandDragTracking, freehandDrawingLayer, freehandDrawMode, freehandSelectionLayer, freehandShapeLayer, freehandStrokes, getPointsBounds, getStrokePath, gridSize, isAnimating, isDrawing, selTr, serializeFreehandState, setCurrentPoints, setCurrentTimestamps, setDrawingStartTime, setFreehandDrawingLayer, setFreehandSelectionLayer, setFreehandShapeLayer, setIsDrawing, setSelTr, showGrid, startFreehandDragTracking, updateBakedStrokeData, updateFreehandDraggableStates, updateTimelineState, type FreehandStroke, groupSelectedStrokes, ungroupSelectedStrokes, freehandCanGroupRef, isFreehandGroupSelected, freehandSelectedCount, undoFreehand, canUndoFreehand, canRedoFreehand, redoFreehand, useRealTiming, deleteFreehandSelected, selectedStrokesForTimeline, timelineDuration, handleTimeUpdate, maxInterStrokeDelay, setUpdateCursor, updateCursor, createMetadataHighlight, getGroupStrokeIndices, duplicateFreehandSelected, downloadFreehandDrawing, uploadFreehandDrawing, dragSelectionState, createSelectionRect, updateSelectionRect, completeSelectionRect, resetSelectionRect, setRefreshAVs, type FreehandStrokeGroup } from './freehandTool';
+import { clearFreehandSelection, createStrokeShape, currentPoints, currentTimestamps, deserializeFreehandState, drawingStartTime, executeFreehandCommand, finishFreehandDragTracking, freehandDrawingLayer, freehandDrawMode, freehandSelectionLayer, freehandShapeLayer, freehandStrokes, getPointsBounds, getStrokePath, gridSize, isAnimating, isDrawing, selTr, serializeFreehandState, setCurrentPoints, setCurrentTimestamps, setDrawingStartTime, setFreehandDrawingLayer, setFreehandSelectionLayer, setFreehandShapeLayer, setIsDrawing, setSelTr, showGrid, startFreehandDragTracking, updateBakedStrokeData, updateFreehandDraggableStates, updateTimelineState, type FreehandStroke, groupSelectedStrokes, ungroupSelectedStrokes, freehandCanGroupRef, isFreehandGroupSelected, freehandSelectedCount, undoFreehand, canUndoFreehand, canRedoFreehand, redoFreehand, useRealTiming, deleteFreehandSelected, selectedStrokesForTimeline, timelineDuration, handleTimeUpdate, maxInterStrokeDelay, setUpdateCursor, updateCursor, getGroupStrokeIndices, duplicateFreehandSelected, downloadFreehandDrawing, uploadFreehandDrawing, dragSelectionState, createSelectionRect, updateSelectionRect, completeSelectionRect, resetSelectionRect, setRefreshAVs, type FreehandStrokeGroup } from './freehandTool';
+import { ensureHighlightLayer } from '@/metadata';
 import { DrawingScene } from './gpuStrokes/drawingScene';
 import { StrokeInterpolator } from './gpuStrokes/strokeInterpolator';
 import { DRAWING_CONSTANTS } from './gpuStrokes/constants';
@@ -193,6 +194,20 @@ const applyMetadata = (metadata: any) => {
     executeFreehandCommand('Edit Metadata', () => {
       // The actual change has already been applied above
     })
+  }
+}
+
+// Callback for HierarchicalMetadataEditor to apply metadata with tool-specific command system
+const handleApplyMetadata = (node: any, metadata: any) => {
+  // For freehand tool, wrap in undoable command
+  if (activeTool.value === 'freehand') {
+    executeFreehandCommand('Edit Metadata', () => {
+      node.setAttr('metadata', metadata === undefined || Object.keys(metadata).length === 0 ? undefined : metadata)
+      updateBakedStrokeData()
+    })
+  } else {
+    // For other tools, apply directly (can be extended when adding polygon metadata support)
+    node.setAttr('metadata', metadata === undefined || Object.keys(metadata).length === 0 ? undefined : metadata)
   }
 }
 
@@ -766,8 +781,8 @@ onMounted(async () => {
     stage!.add(polygonSelectionLayer!)
 
     // Add metadata highlight layer on top
-    const metadataHighlightLayer = createMetadataHighlight()
-    stage!.add(metadataHighlightLayer)
+    const metadataHighlightLayer = ensureHighlightLayer(stage!)
+    // (No need to add to stage - ensureHighlightLayer handles that)
     
     // Initialize ancillary visualizations layer
     initAVLayer()
@@ -1164,7 +1179,7 @@ onUnmounted(() => {
       <!-- Smart Metadata Editor -->
       <div class="metadata-suite" v-if="showMetadataEditor">
         <VisualizationToggles />
-        <HierarchicalMetadataEditor />
+        <HierarchicalMetadataEditor :on-apply-metadata="handleApplyMetadata" />
       </div>
 
       <Timeline :strokes="freehandStrokes" :selectedStrokes="selectedStrokesForTimeline" :useRealTiming="useRealTiming"

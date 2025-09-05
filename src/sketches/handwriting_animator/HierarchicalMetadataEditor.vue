@@ -2,8 +2,23 @@
 import { watch, computed, shallowRef, onUnmounted } from 'vue'
 import Konva from 'konva'
 import MetadataEditor from './MetadataEditor.vue'
-import { setNodeMetadata, collectHierarchyFromRoot, updateMetadataHighlight, updateHoverHighlight } from './freehandTool'
+import { metadataToolkit } from '@/metadata'
 import { selected, getActiveSingleNode } from './appState'
+
+// Extract toolkit functions for convenience
+const { collectHierarchyFromRoot, updateMetadataHighlight, updateHoverHighlight } = metadataToolkit
+
+// Props interface
+interface Props {
+  onApplyMetadata?: (node: Konva.Node, metadata: any) => void
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  onApplyMetadata: (node: Konva.Node, metadata: any) => {
+    // Default behavior: use toolkit directly
+    metadataToolkit.setNodeMetadata(node, metadata)
+  }
+})
 
 // Auto-detect which mode to use and get root selection
 const singleNode = computed(() => getActiveSingleNode())
@@ -82,13 +97,13 @@ const selectNode = (node: any) => {
 
 const applyMetadataSingle = (meta: any) => {
   if (singleNode.value) {
-    setNodeMetadata(singleNode.value as Konva.Node, meta)
+    props.onApplyMetadata(singleNode.value as Konva.Node, meta)
   }
 }
 
 const applyMetadata = (meta: any) => {
   if (activeNode.value) {
-    setNodeMetadata(activeNode.value as Konva.Node, meta)
+    props.onApplyMetadata(activeNode.value as Konva.Node, meta)
   }
 }
 

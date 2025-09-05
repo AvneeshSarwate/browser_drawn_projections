@@ -179,12 +179,8 @@ export const setFreehandDrawingLayer = (dl: Konva.Layer) => freehandDrawingLayer
 export let freehandSelectionLayer: Konva.Layer | undefined = undefined
 export const setFreehandSelectionLayer = (sl: Konva.Layer) => freehandSelectionLayer = sl
 
-// Highlight layer for metadata editing
-export let metadataHighlightLayer: Konva.Layer | undefined = undefined
-export let metadataHighlightRect: Konva.Rect | undefined = undefined
-
-// Hover highlight layer for metadata tree navigation
-export let hoverHighlightRect: Konva.Rect | undefined = undefined
+// Import metadata utilities from generic module
+import { type HierarchyEntry, collectHierarchyFromRoot } from '@/metadata'
 
 // Drag selection state and rectangle
 export const dragSelectionState = ref({
@@ -196,66 +192,7 @@ export const dragSelectionState = ref({
 
 export let selectionRect: Konva.Rect | undefined = undefined
 
-export const createMetadataHighlight = () => {
-  metadataHighlightLayer = new Konva.Layer({ listening: false })
-  metadataHighlightRect = new Konva.Rect({
-    stroke: 'red',
-    strokeWidth: 2,
-    dash: [4, 4],
-    listening: false,
-    visible: false
-  })
-  hoverHighlightRect = new Konva.Rect({
-    stroke: 'green',
-    strokeWidth: 2,
-    dash: [4, 4],
-    listening: false,
-    visible: false
-  })
-  metadataHighlightLayer.add(metadataHighlightRect)
-  metadataHighlightLayer.add(hoverHighlightRect)
-  return metadataHighlightLayer
-}
-
-export const updateMetadataHighlight = (node?: Konva.Node) => {
-  if (!metadataHighlightRect || !metadataHighlightLayer) return
-
-  if (!node) {
-    metadataHighlightRect.visible(false)
-    metadataHighlightLayer.batchDraw()
-    return
-  }
-
-  const bbox = node.getClientRect({ relativeTo: node.getStage()! })
-  metadataHighlightRect.setAttrs({
-    x: bbox.x,
-    y: bbox.y,
-    width: bbox.width,
-    height: bbox.height,
-    visible: true
-  })
-  metadataHighlightLayer.batchDraw()
-}
-
-export const updateHoverHighlight = (node?: Konva.Node) => {
-  if (!hoverHighlightRect || !metadataHighlightLayer) return
-
-  if (!node) {
-    hoverHighlightRect.visible(false)
-    metadataHighlightLayer.batchDraw()
-    return
-  }
-
-  const bbox = node.getClientRect({ relativeTo: node.getStage()! })
-  hoverHighlightRect.setAttrs({
-    x: bbox.x,
-    y: bbox.y,
-    width: bbox.width,
-    height: bbox.height,
-    visible: true
-  })
-  metadataHighlightLayer.batchDraw()
-}
+// Highlight layer initialization is now handled by LivecodeHolder directly
 
 export const createSelectionRect = () => {
   if (!freehandSelectionLayer) return
@@ -1460,7 +1397,7 @@ export const getGroupStrokeIndices = (groupName: string): number[] => {
   return appState.freehandGroupMap[groupName] || []
 }
 
-// Undoable metadata mutator for nodes
+// Undoable metadata mutator for nodes with command history
 export const setNodeMetadata = (
   node: Konva.Node,
   meta: Record<string, any> | undefined
@@ -1476,29 +1413,7 @@ export const setNodeMetadata = (
   })
 }
 
-// Hierarchy utility for metadata editing
-export interface HierarchyEntry {
-  node: Konva.Node        // actual Konva node
-  depth: number           // depth == indent level (50px each)
-  indexPath: string       // e.g. "0/3/1" – handy for v-key
-}
-
-export const collectHierarchyFromRoot = (rootNodes: Konva.Node[]): HierarchyEntry[] => {
-  const out: HierarchyEntry[] = []
-
-  const walk = (node: Konva.Node, depth = 0, path = '') => {
-    out.push({ node, depth, indexPath: path })
-
-    if (node instanceof Konva.Group) {
-      node.getChildren().forEach((child, i) =>
-        walk(child, depth + 1, path ? `${path}/${i}` : `${i}`)
-      )
-    }
-  }
-
-  rootNodes.forEach((node, i) => walk(node, 0, `${i}`))
-  return out
-}
+// Hierarchy utilities are now accessed directly from the metadata module
 
 export const collectHierarchy = (): HierarchyEntry[] => {
   if (!freehandShapeLayer) return []
