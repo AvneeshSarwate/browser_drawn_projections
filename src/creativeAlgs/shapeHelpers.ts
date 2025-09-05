@@ -94,11 +94,21 @@ export function directionSweep(cellPoints:Point[], frac: number, direction: 'top
 
 
 export const lineToPointDistance = (p1: Point, p2: Point, point: Point): number => {
-  const a = p2.y - p1.y
-  const b = p1.x - p2.x
-  const c = p1.y * p2.x - p1.x * p2.y
-  const distance = (a * point.x + b * point.y + c) / Math.sqrt(a * a + b * b)
-  return Math.abs(distance)
+  const vx = p2.x - p1.x
+  const vy = p2.y - p1.y
+  const wx = point.x - p1.x
+  const wy = point.y - p1.y
+
+  const c1 = vx * wx + vy * wy
+  if (c1 <= 0) return Math.hypot(wx, wy) // point is before p1
+
+  const c2 = vx * vx + vy * vy
+  if (c2 <= c1) return Math.hypot(point.x - p2.x, point.y - p2.y) // point is after p2
+
+  const b = c1 / c2 // projection falls on segment
+  const pbx = p1.x + b * vx
+  const pby = p1.y + b * vy
+  return Math.hypot(point.x - pbx, point.y - pby)
 }
 
 
