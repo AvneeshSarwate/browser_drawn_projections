@@ -441,8 +441,9 @@ const freehandRefreshUI = () => {
   freehandSelectedCount.value = selected.length
   isFreehandGroupSelected.value = selected.length === 1 && selected[0] instanceof Konva.Group
 
+  //todo - allowing grouping single strokes as a quick hack because named-groups are the core way letters are defined
   // Update button states like working example
-  const canGroup = selected.length >= 2 && !hasAncestorConflict(selected)
+  const canGroup = selected.length >= 1 && !hasAncestorConflict(selected)
   freehandCanGroupRef.value = canGroup
 
   // Update timeline-related state
@@ -981,7 +982,8 @@ export const handleClick = (target: Konva.Node, shiftKey: boolean) => {
 
 // Group selected strokes - simplified from working example  
 export const groupSelectedStrokes = () => {
-  if (selected.length < 2) return
+  //todo - allowing grouping single strokes as a quick hack because named-groups are the core way letters are defined
+  // if (selected.length < 2) return 
 
   executeFreehandCommand('Group Strokes', () => {
     // compute common parent to insert new group into (layer by default)
