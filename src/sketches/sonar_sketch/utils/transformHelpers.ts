@@ -41,7 +41,7 @@ export function evaluateSliderExpression(
   const usedSliders = new Set<string>(sliderMatches)
 
   for (const sliderRef of sliderMatches) {
-    const idx = parseInt(sliderRef.slice(1)) - 1
+    const idx = parseInt(sliderRef.slice(1))
     if (idx >= 0 && idx < sliders.length) {
       sliderVars[sliderRef] = sliderScaleFunc(sliders[idx], origClip)
     }
