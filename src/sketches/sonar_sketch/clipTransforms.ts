@@ -470,6 +470,14 @@ function generateArpeggioIndices(n: number, pattern: string): number[] {
   }
 }
 
+export function velocityMultiply(clip: AbletonClip, factor: number): AbletonClip {
+  const newClip = clip.clone();
+  newClip.notes.forEach(note => {
+    note.velocity *= factor;
+  });
+  return newClip;
+}
+
 export function harmonizeClip(
   clip: AbletonClip,
   degree1?: number,
@@ -808,6 +816,13 @@ export const TRANSFORM_REGISTRY: Record<string, ClipTransform> = {
     transform: (clip, n, start) => nnotes(clip, n, start),
     argParser: (args: string[]) => [numParse(args[0]), numParse(args[1])],
     sliderScale: [(n, c) => Math.floor(n * c.notes.length), (n, c) => Math.floor(n * c.notes.length)]
+  },
+
+  velMul: {
+    name: 'velMul',
+    transform: (clip, factor) => velocityMultiply(clip, factor),
+    argParser: (args: string[]) => [numParse(args[0])],
+    sliderScale: [(n, c) => Math.floor(n * 10)]
   }
 };
 

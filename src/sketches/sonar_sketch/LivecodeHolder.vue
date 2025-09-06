@@ -500,7 +500,7 @@ onMounted(async() => {
     initializeCodeMirrorEditorComplete(
       'globals-livecode-editor-container',
       -1,
-      () => "//livecode global params here\n\n\n\n\n",
+      () => "//livecode global params here - (sliders, toggles, oneShots)\n\n\n\n\n",
       null,
       false,
       GLOBAL_PARAM_EDITOR_NAME
@@ -854,7 +854,7 @@ appState.voices.forEach((_, idx) => updateFxParams(idx))
     <div class="slider-column" v-for="(slider, idx) in appState.sliders" :key="idx">
       <div>{{ appState.sliders[idx] }}</div>
       <input type="range" v-model.number="appState.sliders[idx]" min="0" max="1" step="0.0001" />
-      <label>slider {{ idx + 1 }}</label>
+      <label>slider {{ idx }}</label>
     </div>
   </div>
 
@@ -862,7 +862,7 @@ appState.voices.forEach((_, idx) => updateFxParams(idx))
     <div class="toggle-column" v-for="(toggle, idx) in appState.toggles" :key="idx">
       <div>{{ appState.toggles[idx] ? 'ON' : 'OFF' }}</div>
       <input type="checkbox" v-model="appState.toggles[idx]" />
-      <label>toggle {{ idx + 1 }}</label>
+      <label>toggle {{ idx }}</label>
     </div>
   </div>
 
@@ -870,7 +870,7 @@ appState.voices.forEach((_, idx) => updateFxParams(idx))
     <div class="toggle-column" v-for="(oneShot, idx) in appState.oneShots" :key="idx">
       <div>{{ appState.oneShots[idx] ? 'ON' : 'OFF' }}</div>
       <input type="checkbox" v-model="appState.oneShots[idx]" />
-      <label>one-shot {{ idx + 1 }}</label>
+      <label>one-shot {{ idx }}</label>
     </div>
   </div>
 

@@ -172,7 +172,7 @@ export const preprocessJavaScript = (inputCode: string, voiceIndex: number): { v
    * you want to re-run the visualization code, but maintain the same UUID mappings for lines()
    */  
   const cacheKey = makeCacheKey(inputCode, voiceIndex)
-  if(uuidCache.has(cacheKey)) return uuidCache.get(cacheKey)
+  if(uuidCache.has(cacheKey)) return uuidCache.get(cacheKey)!
 
   const mappings: UUIDMapping[] = []
   let processedCode = inputCode
