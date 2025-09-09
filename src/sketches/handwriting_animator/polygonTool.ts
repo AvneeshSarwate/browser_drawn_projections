@@ -3,10 +3,11 @@
 import { TimeContext, CancelablePromisePoxy, launch } from "@/channels/base_time_context"
 import { findClosestPolygonLineAtPoint } from "@/creativeAlgs/shapeHelpers"
 import Konva from "konva"
-import { type ShallowReactive, shallowReactive, ref, computed, watch } from "vue"
+import { type ShallowReactive, shallowReactive, ref, watch } from "vue"
 import type { PolygonRenderData, FlattenedPolygon, TemplateAppState } from "./appState"
 import { globalStore, stage, activeNode, metadataText, showMetadataEditor, getActiveSingleNode } from "./appState"
-import { executeCommand } from "./core/commands"
+import { executeCommand, pushCommandWithStates } from "./core/commands"
+import { getCurrentFreehandStateString } from './freehandTool'
 import { uid } from './utils/canvasUtils'
 import { fromPolygon, fromGroup, getCanvasItem, removeCanvasItem } from './core/CanvasItem'
 import * as selectionStore from './core/selectionStore'
@@ -111,21 +112,6 @@ export const currentPolygonPoints = ref<number[]>([])
 export const polygonMode = ref<'draw' | 'edit'>('draw')
 export const polygonProximityThreshold = 10 // pixels
 
-// Separate Polygon Undo/Redo system
-interface PolygonCommand {
-  name: string
-  beforeState: string
-  afterState: string
-}
-
-export const polygonCommandHistory = ref<PolygonCommand[]>([])
-export const polygonHistoryIndex = ref(-1)
-export const maxPolygonHistorySize = 50
-
-// Track if we're currently in a polygon undo/redo operation
-export let isPolygonUndoRedoOperation = false
-export const setIsPolygonUndoRedoOperation = (isUndoRedo: boolean) => isPolygonUndoRedoOperation = isUndoRedo
-
 // Polygon Undo/Redo Functions
 // Get current polygon state for undo/redo
 export const getCurrentPolygonState = () => {
@@ -157,8 +143,6 @@ export const getCurrentPolygonStateString = (): string => {
 // Restore polygon state from string
 export const restorePolygonState = (stateString: string) => {
   if (!stateString) return
-  
-  isPolygonUndoRedoOperation = true
   try {
     // Temporarily store the state string
     const originalState = appState.polygonStateString
@@ -171,33 +155,7 @@ export const restorePolygonState = (stateString: string) => {
     appState.polygonStateString = originalState
   } catch (error) {
     console.warn('Failed to restore polygon state:', error)
-  } finally {
-    isPolygonUndoRedoOperation = false
   }
-}
-
-// Polygon Undo/Redo functions
-export const canPolygonUndo = computed(() => polygonHistoryIndex.value >= 0)
-export const canPolygonRedo = computed(() => polygonHistoryIndex.value < polygonCommandHistory.value.length - 1)
-
-export const polygonUndo = () => {
-  if (!canPolygonUndo.value) return
-  
-  const command = polygonCommandHistory.value[polygonHistoryIndex.value]
-  console.log(`Undoing polygon command: ${command.name}`)
-  
-  restorePolygonState(command.beforeState)
-  polygonHistoryIndex.value--
-}
-
-export const polygonRedo = () => {
-  if (!canPolygonRedo.value) return
-  
-  polygonHistoryIndex.value++
-  const command = polygonCommandHistory.value[polygonHistoryIndex.value]
-  console.log(`Redoing polygon command: ${command.name}`)
-  
-  restorePolygonState(command.afterState)
 }
 
 // Polygon drag tracking for drag operations
@@ -205,31 +163,24 @@ export let polygonDragStartState: string | null = null
 export const setPolygonDragStartState = (state: string | null) => polygonDragStartState = state
 
 export const startPolygonDragTracking = () => {
-  polygonDragStartState = getCurrentPolygonStateString()
+  // Capture combined state for unified undo/redo
+  const before = JSON.stringify({
+    freehand: getCurrentFreehandStateString(),
+    polygon: getCurrentPolygonStateString()
+  })
+  polygonDragStartState = before
 }
 
 export const finishPolygonDragTracking = (nodeName: string) => {
   if (!polygonDragStartState) return
   
-  const endState = getCurrentPolygonStateString()
-  if (polygonDragStartState !== endState) {
-    // Manually add to command history without using executeCommand to avoid double state capture
-    const command: PolygonCommand = {
-      name: `Transform ${nodeName}`,
-      beforeState: polygonDragStartState,
-      afterState: endState
-    }
-    
-    polygonCommandHistory.value = polygonCommandHistory.value.slice(0, polygonHistoryIndex.value + 1)
-    polygonCommandHistory.value.push(command)
-    polygonHistoryIndex.value = polygonCommandHistory.value.length - 1
-    
-    if (polygonCommandHistory.value.length > maxPolygonHistorySize) {
-      polygonCommandHistory.value.shift()
-      polygonHistoryIndex.value = polygonCommandHistory.value.length - 1
-    }
-    
-    console.log(`Polygon transform command added to history. Index: ${polygonHistoryIndex.value}`)
+  const endCombined = JSON.stringify({
+    freehand: getCurrentFreehandStateString(),
+    polygon: getCurrentPolygonStateString()
+  })
+  if (polygonDragStartState !== endCombined) {
+    // Push into unified command stack with combined state
+    pushCommandWithStates(`Transform ${nodeName}`, polygonDragStartState, endCombined)
     updateBakedPolygonData() // Update baked data after polygon transformation
   }
   

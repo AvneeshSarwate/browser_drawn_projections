@@ -7,6 +7,7 @@ import { getCurrentFreehandStateString, deepCloneWithNewIds, freehandShapeLayer,
 import { getCurrentPolygonStateString, polygonShapes, polygonShapesLayer, attachPolygonHandlers, serializePolygonState, updateBakedPolygonData } from '../polygonTool'
 import { hasAncestorConflict } from '../utils/canvasUtils'
 import { uid } from '../utils/canvasUtils'
+import { pushCommandWithStates } from './commands'
 
 // Drag selection state
 export const dragSelectionState = ref({
@@ -292,8 +293,8 @@ function finishSelectionDrag() {
   })
 
   if (selectionDragState.beforeState !== afterState) {
-    // Use executeCommand wrapper; the action is a no-op because changes already applied
-    executeCommand('Move Selection', () => { /* movement already applied */ })
+    // Push command with captured states so undo/redo works
+    pushCommandWithStates('Move Selection', selectionDragState.beforeState, afterState)
   }
 
   selectionDragState.isDragging = false

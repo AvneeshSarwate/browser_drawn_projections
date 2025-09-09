@@ -15,7 +15,7 @@ import VisualizationToggles from './VisualizationToggles.vue';
 import { clearFreehandSelection, createStrokeShape, currentPoints, currentTimestamps, deserializeFreehandState, drawingStartTime, freehandDrawingLayer, freehandSelectionLayer, freehandShapeLayer, freehandStrokes, getStrokePath, gridSize, isAnimating, isDrawing, serializeFreehandState, setCurrentPoints, setCurrentTimestamps, setDrawingStartTime, setFreehandDrawingLayer, setFreehandSelectionLayer, setFreehandShapeLayer, setIsDrawing, showGrid, updateBakedStrokeData, updateFreehandDraggableStates, updateTimelineState, type FreehandStroke, useRealTiming, selectedStrokesForTimeline, timelineDuration, handleTimeUpdate, maxInterStrokeDelay, setUpdateCursor, updateCursor, getGroupStrokeIndices, downloadFreehandDrawing, uploadFreehandDrawing, setRefreshAVs, type FreehandStrokeGroup, getCurrentFreehandStateString, restoreFreehandState } from './freehandTool';
 import { getPointsBounds } from './utils/canvasUtils';
 import { CommandStack } from './core/commandStack';
-import { setGlobalExecuteCommand } from './core/commands';
+import { setGlobalExecuteCommand, setGlobalPushCommand } from './core/commands';
 import { ensureHighlightLayer } from '@/metadata';
 import { DrawingScene } from './gpuStrokes/drawingScene';
 import { StrokeInterpolator } from './gpuStrokes/strokeInterpolator';
@@ -875,6 +875,7 @@ onMounted(async () => {
     
     // Set up executeCommand callbacks for tools
     setGlobalExecuteCommand(executeCommand)
+    setGlobalPushCommand((name, beforeState, afterState) => commandStack.pushCommand(name, beforeState, afterState))
 
     
     // Selection rectangle is created by core/selectTool.initializeSelectTool

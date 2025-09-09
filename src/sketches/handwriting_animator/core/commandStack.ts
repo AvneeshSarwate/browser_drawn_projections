@@ -55,6 +55,29 @@ export class CommandStack {
     console.log(`Command "${name}" added to history. Index: ${this.historyIndex}`)
   }
 
+  // Allow pushing a command when the caller already captured before/after state
+  pushCommand(name: string, beforeState: string, afterState: string) {
+    if (!beforeState || !afterState || beforeState === afterState) return
+
+    const command: Command = { name, beforeState, afterState }
+
+    // Truncate history after current index and add new command
+    this.history.splice(this.historyIndex + 1)
+    this.history.push(command)
+    this.historyIndex = this.history.length - 1
+
+    // Limit history size
+    if (this.history.length > this.maxHistorySize) {
+      this.history.shift()
+      this.historyIndex = this.history.length - 1
+    }
+
+    // Trigger state change callback
+    this.onStateChange?.()
+
+    console.log(`Command "${name}" pushed. Index: ${this.historyIndex}`)
+  }
+
   undo() {
     if (this.historyIndex < 0) return
 

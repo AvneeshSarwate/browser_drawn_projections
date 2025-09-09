@@ -1,7 +1,7 @@
 import Konva from 'konva'
 import { watch, computed } from 'vue'
 import * as selectionStore from './selectionStore'
-import { executeCommand } from './commands'
+import { pushCommandWithStates } from './commands'
 import { polygonMode } from '../polygonTool'
 
 let transformer: Konva.Transformer | undefined = undefined
@@ -79,14 +79,11 @@ function finishTransformTracking(operationName: string) {
         freehand: getCurrentFreehandStateString(),
         polygon: getCurrentPolygonStateString()
       })
-      
+
       if (dragStartState !== endState) {
-        executeCommand(operationName, () => {
-          // The transformation has already been applied
-          // This just captures it in the undo history
-        })
+        pushCommandWithStates(operationName, dragStartState!, endState)
       }
-      
+
       dragStartState = null
     })
   })
