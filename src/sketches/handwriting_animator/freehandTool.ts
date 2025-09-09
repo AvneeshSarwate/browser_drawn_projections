@@ -244,18 +244,9 @@ export const setDrawingStartTime = (ts: number) => drawingStartTime = ts
 
 
 // Transform controls - for freehand
-export let selTr: Konva.Transformer | undefined = undefined
-export const setSelTr = (tr: Konva.Transformer) => selTr = tr
-export let grpTr: Konva.Transformer | undefined = undefined
-export const setGrpTr = (tr: Konva.Transformer) => grpTr = tr
+// Legacy freehand-specific transformers removed; unified transformer lives in core/transformerManager
 
-// Helper functions from working example
-const freehandLockPivot = (node: Konva.Group | Konva.Node) => {
-  //@ts-ignore
-  const box = node.getClientRect({ relativeTo: node })
-  node.offset({ x: box.width / 2, y: box.height / 2 })
-  node.position({ x: node.x() + box.width / 2, y: node.y() + box.height / 2 })
-}
+// Legacy pivot lock removed (unified transformer manages pivot without mutating node offsets)
 
 // Return the top-most group (direct child of layer) for any descendant click
 const freehandTopGroup = (node: Konva.Node): Konva.Group | null => {
@@ -379,54 +370,7 @@ export const updateTimelineState = () => {
   }
 }
 
-// UI refresh function from working example
-const freehandRefreshUI = () => {
-  if (!selTr || !freehandShapeLayer) return
-
-  // Ensure stroke connections are up to date
-  refreshStrokeConnections()
-
-  const selectedNodes = selectionStore.selectedKonvaNodes.value
-
-  // transformers
-  if (selectedNodes.length === 1 && selectedNodes[0] instanceof Konva.Group) {
-    if (!grpTr) {
-      grpTr = new Konva.Transformer({ rotateEnabled: true, keepRatio: true, padding: 6 })
-
-      // Add transform tracking to group transformer
-      grpTr.on('transformstart', () => {
-        startFreehandDragTracking()
-      })
-
-      grpTr.on('transformend', () => {
-        finishFreehandDragTracking('Transform Group')
-      })
-
-      freehandSelectionLayer?.add(grpTr)
-    }
-    console.log('Using group transformer for:', selectedNodes[0].id())
-    grpTr.nodes([selectedNodes[0]])
-    selTr.nodes([])
-  } else {
-    console.log('Using selection transformer for:', selectedNodes.length, 'nodes:', selectedNodes.map((n: Konva.Node) => n.id()))
-    selTr.nodes(selectedNodes)
-    if (grpTr) grpTr.nodes([])
-  }
-
-  // Update UI refs like working example
-  freehandSelectedCount.value = selectedNodes.length
-  isFreehandGroupSelected.value = selectedNodes.length === 1 && selectedNodes[0] instanceof Konva.Group
-
-  //todo - allowing grouping single strokes as a quick hack because named-groups are the core way letters are defined
-  // Update button states like working example
-  const canGroup = selectedNodes.length >= 1 && !hasAncestorConflict(selectedNodes)
-  freehandCanGroupRef.value = canGroup
-
-  // Update timeline-related state
-  updateTimelineState()
-
-  freehandShapeLayer.batchDraw()
-}
+// Legacy freehand refresh UI removed; selection/transform handled by core modules
 
 // Stroke data structure
 export interface FreehandStroke {
@@ -450,9 +394,7 @@ export const freehandStrokes = new Map<string, FreehandStroke>()
 export const freehandStrokeGroups = new Map<string, FreehandStrokeGroup>()
 
 // Separate refs for UI state for freehand
-export const freehandSelectedCount = ref(0)
-export const isFreehandGroupSelected = ref(false)
-export const freehandCanGroupRef = ref(false)
+// Legacy UI refs removed; selection store drives UI in LivecodeHolder
 export const selectedStrokesForTimeline = ref(new Set<string>())
 export const timelineDuration = ref(0)
 export const showGrid = ref(false)
@@ -790,16 +732,6 @@ export const deserializeFreehandState = () => {
     refreshStrokeConnections() // Ensure all connections are properly established
     updateFreehandDraggableStates()
 
-    // Force refresh the transformers to ensure they work with restored shapes
-    if (selTr) {
-      selTr.nodes([])
-      selTr.forceUpdate()
-    }
-    if (grpTr) {
-      grpTr.nodes([])
-      grpTr.forceUpdate()
-    }
-
     freehandShapeLayer.batchDraw()
 
     console.log('Konva canvas state restored from hotreload')
@@ -935,84 +867,10 @@ export const handleClick = (target: Konva.Node, shiftKey: boolean) => {
 }
 
 // Group selected strokes - simplified from working example  
-export const groupSelectedStrokes = () => {
-  const selectedNodes = selectionStore.selectedKonvaNodes.value
-  // Disallow grouping if any polygon is selected
-  const hasPolygon = selectedNodes.some(n => n instanceof Konva.Line)
-  if (hasPolygon) {
-    console.warn('Grouping disabled: selection contains polygons')
-    return
-  }
-  // Groupable nodes are freehand Paths or existing Groups
-  const nodesToGroup = selectedNodes.filter(n => (n instanceof Konva.Path) || (n instanceof Konva.Group))
-  if (nodesToGroup.length < 1) return
-
-  executeCommand?.('Group Strokes', () => {
-    // compute common parent to insert new group into (layer by default)
-    let commonParent = nodesToGroup[0].getParent()
-    for (const n of nodesToGroup) if (n.getParent() !== commonParent) { commonParent = freehandShapeLayer!; break }
-
-    const superGroup = new Konva.Group({ draggable: false })
-    commonParent?.add(superGroup)
-
-    // Move nodes under superGroup preserving absolute transform
-    nodesToGroup.forEach((node: Konva.Node) => {
-      node.draggable(false)
-      const absPos = node.getAbsolutePosition()
-      const absRot = node.getAbsoluteRotation()
-      const absScale = node.getAbsoluteScale()
-      node.moveTo(superGroup)
-      node.position(absPos)
-      node.rotation(absRot)
-      node.scale(absScale)
-    })
-
-    freehandLockPivot(superGroup)
-
-    // Register the group as a CanvasItem and select it
-    const groupItem = fromGroup(superGroup)
-    selectionStore.clear()
-    selectionStore.add(groupItem)
-    updateFreehandDraggableStates()
-    freehandShapeLayer?.batchDraw()
-    updateBakedStrokeData()
-  })
-}
+// Legacy grouping moved to core/selectTool
 
 // Ungroup selected groups - simplified from working example
-export const ungroupSelectedStrokes = () => {
-  const selectedNodes = selectionStore.selectedKonvaNodes.value
-  if (!(selectedNodes.length === 1 && selectedNodes[0] instanceof Konva.Group)) return
-
-  executeCommand('Ungroup Strokes', () => {
-    const grp = selectedNodes[0] as Konva.Group
-    const parent = grp.getParent()
-    if (grpTr) grpTr.nodes([])
-
-    // Snapshot children so iteration is safe during re-parenting
-    const children = [...grp.getChildren()]
-    children.forEach((child) => {
-      const absPos = child.getAbsolutePosition()
-      const absRot = child.getAbsoluteRotation()
-      const absScale = child.getAbsoluteScale()
-      child.moveTo(parent!)
-      child.position(absPos)
-      child.rotation(absRot)
-      child.scale(absScale)
-      child.draggable(true)
-    })
-
-    grp.destroy()
-
-    // Update stroke data to ensure shapes are properly connected after ungrouping
-    refreshStrokeConnections()
-
-    clearFreehandSelection()
-    updateFreehandDraggableStates() // Update draggable states after ungrouping
-    freehandShapeLayer?.batchDraw()
-    updateBakedStrokeData() // Update baked data after ungrouping
-  })
-}
+// Legacy ungroup moved to core/selectTool
 
 // Delete selected freehand strokes/groups
 export const deleteFreehandSelected = () => {

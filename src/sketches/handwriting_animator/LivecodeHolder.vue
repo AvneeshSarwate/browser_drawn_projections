@@ -12,7 +12,7 @@ import Timeline from './Timeline.vue';
 import MetadataEditor from './MetadataEditor.vue';
 import HierarchicalMetadataEditor from './HierarchicalMetadataEditor.vue';
 import VisualizationToggles from './VisualizationToggles.vue';
-import { clearFreehandSelection, createStrokeShape, currentPoints, currentTimestamps, deserializeFreehandState, drawingStartTime, finishFreehandDragTracking, freehandDrawingLayer, freehandSelectionLayer, freehandShapeLayer, freehandStrokes, getStrokePath, gridSize, isAnimating, isDrawing, selTr, serializeFreehandState, setCurrentPoints, setCurrentTimestamps, setDrawingStartTime, setFreehandDrawingLayer, setFreehandSelectionLayer, setFreehandShapeLayer, setIsDrawing, setSelTr, showGrid, startFreehandDragTracking, updateBakedStrokeData, updateFreehandDraggableStates, updateTimelineState, type FreehandStroke, freehandSelectedCount, useRealTiming, deleteFreehandSelected, selectedStrokesForTimeline, timelineDuration, handleTimeUpdate, maxInterStrokeDelay, setUpdateCursor, updateCursor, getGroupStrokeIndices, duplicateFreehandSelected, downloadFreehandDrawing, uploadFreehandDrawing, setRefreshAVs, type FreehandStrokeGroup, getCurrentFreehandStateString, restoreFreehandState } from './freehandTool';
+import { clearFreehandSelection, createStrokeShape, currentPoints, currentTimestamps, deserializeFreehandState, drawingStartTime, freehandDrawingLayer, freehandSelectionLayer, freehandShapeLayer, freehandStrokes, getStrokePath, gridSize, isAnimating, isDrawing, serializeFreehandState, setCurrentPoints, setCurrentTimestamps, setDrawingStartTime, setFreehandDrawingLayer, setFreehandSelectionLayer, setFreehandShapeLayer, setIsDrawing, showGrid, updateBakedStrokeData, updateFreehandDraggableStates, updateTimelineState, type FreehandStroke, useRealTiming, deleteFreehandSelected, selectedStrokesForTimeline, timelineDuration, handleTimeUpdate, maxInterStrokeDelay, setUpdateCursor, updateCursor, getGroupStrokeIndices, duplicateFreehandSelected, downloadFreehandDrawing, uploadFreehandDrawing, setRefreshAVs, type FreehandStrokeGroup, getCurrentFreehandStateString, restoreFreehandState } from './freehandTool';
 import { getPointsBounds } from './utils/canvasUtils';
 import { CommandStack } from './core/commandStack';
 import { setGlobalExecuteCommand } from './core/commands';
@@ -1165,10 +1165,10 @@ onUnmounted(() => {
           {{ showGrid ? '⊞ Grid On' : '⊡ Grid Off' }}
         </button>
         <div class="button-group vertical">
-        <button @click="duplicateFreehandSelected" :disabled="freehandSelectedCount === 0 || isAnimating">
+        <button @click="duplicateFreehandSelected" :disabled="selectionStore.count() === 0 || isAnimating">
         📄 Duplicate
         </button>
-        <button @click="deleteFreehandSelected" :disabled="freehandSelectedCount === 0 || isAnimating">
+        <button @click="deleteFreehandSelected" :disabled="selectionStore.count() === 0 || isAnimating">
         🗑️ Delete
         </button>
         </div>
@@ -1218,7 +1218,7 @@ onUnmounted(() => {
         <span v-if="isDrawingPolygon" class="info">Drawing: {{ currentPolygonPoints.length / 2 }} points</span>
       </template>
       <span class="separator">|</span>
-      <span class="info">{{ freehandSelectedCount }} selected</span>
+      <span class="info">{{ selectionStore.count() }} selected</span>
     </div>
     <div class="canvas-wrapper">
       <div ref="konvaContainer" class="konva-container" :style="{
