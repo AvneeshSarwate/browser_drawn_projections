@@ -9,7 +9,6 @@ import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
 import Konva from 'konva';
 import Timeline from './Timeline.vue';
-import MetadataEditor from './MetadataEditor.vue';
 import HierarchicalMetadataEditor from './HierarchicalMetadataEditor.vue';
 import VisualizationToggles from './VisualizationToggles.vue';
 import { clearFreehandSelection, createStrokeShape, currentPoints, currentTimestamps, deserializeFreehandState, drawingStartTime, freehandDrawingLayer, freehandSelectionLayer, freehandShapeLayer, freehandStrokes, getStrokePath, gridSize, isAnimating, isDrawing, serializeFreehandState, setCurrentPoints, setCurrentTimestamps, setDrawingStartTime, setFreehandDrawingLayer, setFreehandSelectionLayer, setFreehandShapeLayer, setIsDrawing, showGrid, updateBakedStrokeData, updateFreehandDraggableStates, updateTimelineState, type FreehandStroke, useRealTiming, selectedStrokesForTimeline, timelineDuration, handleTimeUpdate, maxInterStrokeDelay, setUpdateCursor, updateCursor, getGroupStrokeIndices, downloadFreehandDrawing, uploadFreehandDrawing, setRefreshAVs, type FreehandStrokeGroup, getCurrentFreehandStateString, restoreFreehandState } from './freehandTool';
@@ -290,17 +289,26 @@ const applyMetadata = (metadata: any) => {
   }
 }
 
-// Callback for HierarchicalMetadataEditor to apply metadata with tool-specific command system
-const handleApplyMetadata = (node: Konva.Node, metadata: any) => {
-  // For freehand tool, wrap in undoable command
-  if (activeTool.value === 'freehand') {
-    executeCommand('Edit Metadata', () => {
+// Callback for HierarchicalMetadataEditor to apply metadata via unified selection tool
+const handleApplyMetadata = async (node: Konva.Node, metadata: any) => {
+  try {
+    const { getCanvasItem } = await import('./core/CanvasItem')
+    const item = getCanvasItem(node)
+    if (item) {
+      // Route through unified selection store (handles undo/redo + updates)
+      const selection = await import('./core/selectionStore')
+      selection.setMetadata(item, metadata)
+    } else {
+      // Fallback for non-registered nodes (should be rare)
       node.setAttr('metadata', metadata === undefined || Object.keys(metadata).length === 0 ? undefined : metadata)
       updateBakedStrokeData()
-    })
-  } else {
-    // For other tools, apply directly (can be extended when adding polygon metadata support)
+      updateBakedPolygonData()
+    }
+  } catch (e) {
+    // Safe fallback if dynamic import fails for any reason
     node.setAttr('metadata', metadata === undefined || Object.keys(metadata).length === 0 ? undefined : metadata)
+    updateBakedStrokeData()
+    updateBakedPolygonData()
   }
 }
 
@@ -1067,7 +1075,8 @@ onMounted(async () => {
       if (appState.polygonRenderData.length > 0) {
         p.push()
         appState.polygonRenderData.forEach((polygon, idx) => {
-          const color = randColor(idx)
+          const polygonMetadataColor = polygon.metadata?.color
+          const color = polygonMetadataColor ?? randColor(idx)
           p.fill(color.r, color.g, color.b, color.a)
           p.noStroke()
           p.beginShape()

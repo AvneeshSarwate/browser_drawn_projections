@@ -5,7 +5,7 @@ import { findClosestPolygonLineAtPoint } from "@/creativeAlgs/shapeHelpers"
 import Konva from "konva"
 import { type ShallowReactive, shallowReactive, ref, watch } from "vue"
 import type { PolygonRenderData, FlattenedPolygon, TemplateAppState } from "./appState"
-import { globalStore, stage, activeNode, metadataText, showMetadataEditor, getActiveSingleNode } from "./appState"
+import { globalStore, stage } from "./appState"
 import { executeCommand, pushCommandWithStates } from "./core/commands"
 import { getCurrentFreehandStateString } from './freehandTool'
 import { uid } from './utils/canvasUtils'

@@ -3,7 +3,8 @@ import { watch, computed, shallowRef, onUnmounted } from 'vue'
 import Konva from 'konva'
 import MetadataEditor from './MetadataEditor.vue'
 import { metadataToolkit } from '@/metadata'
-import { selected, getActiveSingleNode } from './appState'
+import * as selectionStore from './core/selectionStore'
+import { getCanvasItem } from './core/CanvasItem'
 
 // Extract toolkit functions for convenience
 const { collectHierarchyFromRoot, updateMetadataHighlight, updateHoverHighlight } = metadataToolkit
@@ -13,18 +14,25 @@ interface Props {
   onApplyMetadata?: (node: Konva.Node, metadata: any) => void
 }
 
+// Default: route through unified selection tool (with undo/redo + updates)
 const props = withDefaults(defineProps<Props>(), {
   onApplyMetadata: (node: Konva.Node, metadata: any) => {
-    // Default behavior: use toolkit directly
-    metadataToolkit.setNodeMetadata(node, metadata)
+    const item = getCanvasItem(node)
+    if (item) {
+      selectionStore.setMetadata(item, metadata)
+    } else {
+      // Fallback for non-registered nodes
+      metadataToolkit.setNodeMetadata(node, metadata)
+    }
   }
 })
 
-// Auto-detect which mode to use and get root selection
-const singleNode = computed(() => getActiveSingleNode())
-const multiSelected = computed(() => selected.length > 1)
-const groupSelected = computed(() => selected.length === 1 && selected[0] instanceof Konva.Group)
-const mode = computed(() => 
+// Helpers to read from unified selection store
+const selectedNodes = selectionStore.selectedKonvaNodes
+const singleNode = computed(() => selectionStore.getActiveSingleNode())
+const multiSelected = computed(() => selectionStore.count() > 1)
+const groupSelected = computed(() => selectionStore.count() === 1 && selectedNodes.value[0] instanceof Konva.Group)
+const mode = computed(() =>
   multiSelected.value || groupSelected.value ? 'hierarchical' : (singleNode.value ? 'simple' : 'none')
 )
 
@@ -32,10 +40,10 @@ const mode = computed(() =>
 const entries = computed(() => {
   if (multiSelected.value) {
     // Show only the selected nodes for multi-selection
-    return collectHierarchyFromRoot(selected as Konva.Node[])
+    return collectHierarchyFromRoot(selectedNodes.value as Konva.Node[])
   } else if (groupSelected.value) {
     // Show hierarchy rooted at selected group
-    return collectHierarchyFromRoot([selected[0]])
+    return collectHierarchyFromRoot([selectedNodes.value[0]])
   }
   return []
 })
@@ -46,8 +54,8 @@ const activeNode = shallowRef<Konva.Node | null>(null)
 watch([mode, groupSelected], ([newMode, isGroupSelected]) => {
   if (newMode === 'hierarchical' && isGroupSelected) {
     // If hierarchical mode with a single group selected, set it as active
-    activeNode.value = selected[0]
-    updateMetadataHighlight(selected[0] as Konva.Node)
+    activeNode.value = selectedNodes.value[0]
+    updateMetadataHighlight(selectedNodes.value[0] as Konva.Node)
   } else if (newMode === 'simple' && singleNode.value) {
     // If simple mode, set the single node as active
     activeNode.value = singleNode.value
@@ -115,6 +123,8 @@ const nodeLabel = (node: any) => {
     return `Group ${id} (${childCount} ${childCount === 1 ? 'child' : 'children'})`
   } else if (konvaNode instanceof Konva.Path) {
     return `Stroke ${id}`
+  } else if (konvaNode instanceof Konva.Line) {
+    return `Polygon ${id}`
   } else {
     return `${konvaNode.constructor.name} ${id}`
   }
@@ -150,9 +160,9 @@ const handleMouseLeave = () => {
     <template v-else-if="mode === 'hierarchical'">
       <div class="hierarchical-editor">
         <div class="header">
-          <h3 v-if="groupSelected">Group: {{ nodeLabel(selected[0] as any) }}</h3>
+          <h3 v-if="groupSelected">Group: {{ nodeLabel(selectedNodes[0] as any) }}</h3>
           <h3 v-else-if="multiSelected" class="multi-selection-header">
-            {{ selected.length }} items selected – single-item editing only
+            {{ selectedNodes.length }} items selected – single-item editing only
           </h3>
           <p class="help">{{ multiSelected ? 'Pick one below to edit its metadata:' : 'Select a node to edit its metadata:' }}</p>
         </div>
