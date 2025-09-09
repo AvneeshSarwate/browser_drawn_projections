@@ -218,6 +218,20 @@ watch(activeTool, (newTool) => {
   // Redraw stage
   stage?.batchDraw()
 
+  // Manage polygon control points visibility lifecycle across tools
+  if (newTool === 'polygon') {
+    if (polygonMode.value === 'edit') {
+      updatePolygonControlPoints()
+    } else {
+      polygonControlsLayer?.destroyChildren()
+      polygonControlsLayer?.batchDraw()
+    }
+  } else {
+    // Leaving polygon tool – remove control points
+    polygonControlsLayer?.destroyChildren()
+    polygonControlsLayer?.batchDraw()
+  }
+
   // Update node draggability to avoid conflicting with selection-drag logic
   const setAllDraggable = (draggable: boolean) => {
     freehandShapeLayer?.getChildren().forEach(node => {

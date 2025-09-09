@@ -443,9 +443,9 @@ export const handlePolygonEditMouseMove = () => {
       const wp1 = t ? t.point({ x: p1x, y: p1y }) : { x: p1x, y: p1y }
       const wp2 = t ? t.point({ x: p2x, y: p2y }) : { x: p2x, y: p2y }
       
-      // Calculate midpoint
-      const midX = (p1x + p2x) / 2
-      const midY = (p1y + p2y) / 2
+      // Calculate midpoint in world coordinates
+      const midWX = (wp1.x + wp2.x) / 2
+      const midWY = (wp1.y + wp2.y) / 2
       
       // Highlight the edge
       const edgeLine = new Konva.Line({
@@ -458,8 +458,8 @@ export const handlePolygonEditMouseMove = () => {
       
       // Show midpoint where new point would be added
       const midpointCircle = new Konva.Circle({
-        x: midX,
-        y: midY,
+        x: midWX,
+        y: midWY,
         radius: 5,
         fill: '#00ff00',
         stroke: '#00aa00',
@@ -643,12 +643,21 @@ export const updatePolygonControlPoints = () => {
       // Create control points for each vertex
       for (let i = 0; i < polygon.points.length; i += 2) {
         const pointIndex = i // Capture the index for the closure
-        const x = polygon.points[pointIndex]
-        const y = polygon.points[pointIndex + 1]
+        const localX = polygon.points[pointIndex]
+        const localY = polygon.points[pointIndex + 1]
+        // Convert local polygon coords to world coords for control point placement
+        let worldX = localX
+        let worldY = localY
+        if (polygon.konvaShape) {
+          const t = polygon.konvaShape.getAbsoluteTransform()
+          const wp = t.point({ x: localX, y: localY })
+          worldX = wp.x
+          worldY = wp.y
+        }
         
         const controlPoint = new Konva.Circle({
-          x: x,
-          y: y,
+          x: worldX,
+          y: worldY,
           radius: 6,
           fill: '#ff6600',
           stroke: '#ff4400',
@@ -677,9 +686,18 @@ export const updatePolygonControlPoints = () => {
         
         // Add drag handler to update polygon points
         controlPoint.on('dragmove', () => {
-          // Update the polygon points array
-          polygon.points[pointIndex] = controlPoint.x()
-          polygon.points[pointIndex + 1] = controlPoint.y()
+          // Convert control point world position back into polygon local coords
+          const wp = { x: controlPoint.x(), y: controlPoint.y() }
+          if (polygon.konvaShape) {
+            const inv = polygon.konvaShape.getAbsoluteTransform().copy()
+            inv.invert()
+            const lp = inv.point(wp)
+            polygon.points[pointIndex] = lp.x
+            polygon.points[pointIndex + 1] = lp.y
+          } else {
+            polygon.points[pointIndex] = wp.x
+            polygon.points[pointIndex + 1] = wp.y
+          }
           // Update the Konva shape
           if (polygon.konvaShape) {
             polygon.konvaShape.points(polygon.points)
