@@ -5,6 +5,7 @@ import getStroke from "perfect-freehand"
 import { type ShallowReactive, shallowReactive, ref, computed, watch } from "vue"
 import type { FreehandRenderData, FlattenedStroke, FlattenedStrokeGroup, TemplateAppState } from "./appState"
 import { globalStore, stage, selected } from "./appState"
+import { executeCommand } from "./core/commands"
 
 // Import AV refresh function - we'll import lazily to avoid circular deps
 let refreshAVs: (() => void) | undefined
@@ -496,7 +497,7 @@ const getCurrentFreehandState = () => {
   }
 }
 
-const getCurrentFreehandStateString = (): string => {
+export const getCurrentFreehandStateString = (): string => {
   const state = getCurrentFreehandState()
   return JSON.stringify(state)
 }
@@ -542,7 +543,7 @@ export const executeFreehandCommand = (commandName: string, action: () => void) 
 }
 
 // Restore state from string (freehand only)
-const restoreFreehandState = (stateString: string) => {
+export const restoreFreehandState = (stateString: string) => {
   if (!stateString) return
 
   isUndoRedoOperation = true
@@ -953,7 +954,7 @@ export const groupSelectedStrokes = () => {
   //todo - allowing grouping single strokes as a quick hack because named-groups are the core way letters are defined
   // if (selected.length < 2) return 
 
-  executeFreehandCommand('Group Strokes', () => {
+  executeCommand?.('Group Strokes', () => {
     // compute common parent to insert new group into (layer by default)
     let commonParent = selected[0].getParent()
     for (const n of selected) if (n.getParent() !== commonParent) { commonParent = freehandShapeLayer!; break }
@@ -1402,7 +1403,7 @@ export const setNodeMetadata = (
   node: Konva.Node,
   meta: Record<string, any> | undefined
 ) => {
-  executeFreehandCommand('Edit Metadata', () => {
+  executeCommand('Edit Metadata', () => {
     if (meta === undefined || Object.keys(meta).length === 0) {
       node.setAttr('metadata', undefined)   // keep export slim
     } else {

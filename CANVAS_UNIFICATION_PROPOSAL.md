@@ -28,11 +28,12 @@ The app currently operates as two separate tools sharing the same rendering canv
 
 Rather than one big refactor, break this into 6 logical, testable pieces:
 
-### 1. **Unify Undo/Redo** (safest, most isolated change)
-- Single command stack capturing both freehand AND polygon state
-- Keep existing `executeFreehandCommand` and `executePolygonCommand` as thin wrappers
-- Zero risk - no existing tool behavior changes
-- Test: All current operations still undo/redo correctly
+### 1. **Unified Command System**
+- Single `executeCommand` function replacing both tool-specific undo systems
+- Replace all calls to `executeFreehandCommand`/`executePolygonCommand` with unified `executeCommand`
+- Delete the two legacy wrapper functions entirely
+- All operations use same command stack and render refresh
+- Test: Draw stroke, draw polygon, undo both via same system
 
 ### 2. **Unify Selection + Metadata** (wiring existing systems together)
 - Create single selection store that works with both freehand and polygon shapes
@@ -142,6 +143,76 @@ const updateGPUAndVisualization = () => {
 }
 ```
 
+#### 1.4 Unified Metadata Handling (`core/metadataManager.ts`)
+```typescript
+// Tool-specific metadata toolkit interface
+interface MetadataToolkit {
+  setNodeMetadata(node: Konva.Node, metadata: any): void
+}
+
+// Freehand metadata toolkit (uses existing setNodeMetadata from freehandTool.ts)
+export const freehandMetadataToolkit: MetadataToolkit = {
+  setNodeMetadata: (node: Konva.Node, meta: any) => {
+    executeCommand('Edit Metadata', () => {
+      if (meta === undefined || Object.keys(meta).length === 0) {
+        node.setAttr('metadata', undefined)
+      } else {
+        node.setAttr('metadata', meta)
+      }
+      updateBakedStrokeData()     // Keep render data in sync
+      refreshAVs?.()              // Refresh ancillary visualizations
+    })
+  }
+}
+
+// New polygon metadata toolkit (currently missing)
+export const polygonMetadataToolkit: MetadataToolkit = {
+  setNodeMetadata: (node: Konva.Node, meta: any) => {
+    executeCommand('Edit Metadata', () => {
+      if (meta === undefined || Object.keys(meta).length === 0) {
+        node.setAttr('metadata', undefined)
+      } else {
+        node.setAttr('metadata', meta)
+      }
+      updateBakedPolygonData()    // Keep render data in sync
+      refreshAVs?.()              // Refresh ancillary visualizations
+    })
+  }
+}
+
+// Unified factory function
+export const getMetadataToolkit = (tool: ToolType): MetadataToolkit => {
+  switch (tool) {
+    case 'freehand': return freehandMetadataToolkit
+    case 'polygon': return polygonMetadataToolkit
+    default: return freehandMetadataToolkit // fallback
+  }
+}
+```
+
+#### 1.5 Updated LivecodeHolder.vue Metadata Handling
+```typescript
+// Replace the current applyMetadata and handleApplyMetadata functions
+const applyMetadata = (metadata: any) => {
+  if (!activeNode.value) return
+  
+  // Use unified toolkit approach - no more if/else branching
+  const toolkit = getMetadataToolkit(activeTool.value)
+  toolkit.setNodeMetadata(activeNode.value, metadata)
+}
+
+// Remove these functions entirely:
+// - Current applyMetadata with polygon-specific branch
+// - handleApplyMetadata with separate freehand/polygon paths
+// - All console.log('Polygon metadata updated') branches
+
+// The toolkit approach ensures consistent behavior:
+// ✓ Metadata changes go through appropriate command system (undo/redo)
+// ✓ Render data updates automatically (updateBakedStrokeData/updateBakedPolygonData)
+// ✓ Ancillary visualizations refresh (refreshAVs)
+// ✓ No tool-specific branching in UI code
+```
+
 ### Phase 2: Transformation & Commands (Steps 4-5)
 **Goal**: Single transformer and unified undo/redo system
 
@@ -239,12 +310,8 @@ export const redo = () => {
   inUndoRedo = false
 }
 
-// Legacy wrappers for existing code
-export const executeFreehandCommand = (name: string, action: () => void) => 
-  pushCommand(`Freehand: ${name}`, action)
-
-export const executePolygonCommand = (name: string, action: () => void) => 
-  pushCommand(`Polygon: ${name}`, action)
+// Note: executeFreehandCommand and executePolygonCommand wrappers are deleted
+// All code now uses executeCommand directly
 ```
 
 ### Phase 3: Tool System (Steps 6-7)
@@ -383,7 +450,7 @@ export const selectTool: CanvasTool = {
 #### 4.2 Freehand Tool Updates
 - Remove `selected` array, use `selectionStore` 
 - Remove `selTr`/`grpTr`, use `transformerManager`
-- Remove `executeFreehandCommand`, use unified `pushCommand`
+- Replace `executeFreehandCommand` calls with unified `executeCommand`
 - Keep existing grouping logic but check `item.type === 'stroke'`
 
 #### 4.3 Polygon Tool Updates  
@@ -813,143 +880,14 @@ Maintain existing functionality during migration:
 
 This ensures the UI works throughout the transition and allows for easy rollback if issues arise.
 
-## Critical Integration Points
+## Key Integration Points
 
-### GPU Strokes & Rendering Pipeline
-The existing GPU strokes system must continue working seamlessly:
+The unified system must preserve these critical behaviors:
 
-```typescript
-// In selectionStore.ts - trigger GPU updates on selection changes
-watch(selected, () => {
-  updateBakedStrokeData()
-  updateGPUStrokes() // Critical: preserve WebGPU rendering
-})
-
-// In commandStack.ts - trigger updates after any operation
-export const pushCommand = (name: string, action: () => void) => {
-  // ... existing logic ...
-  action()
-  // ... state capture ...
-  
-  // Trigger render data updates
-  updateBakedStrokeData()
-  updateGPUStrokes()
-  refreshAVs?.() // Ancillary visualizations
-}
-```
-
-### Backward Compatibility & Hot-reload
-Maintain compatibility with existing file formats and hot-reload:
-
-```typescript
-// Enhanced file operations with version detection
-const downloadCanvas = () => {
-  const canvasState = {
-    version: '2.0',
-    created: Date.now(),
-    // Maintain both formats for compatibility
-    legacy: {
-      freehandStateString: serializeFreehandState(),
-      polygonStateString: serializePolygonState()
-    },
-    unified: {
-      freehand: { renderData: freehandRenderData, groupMap: freehandGroupMap },
-      polygon: { renderData: polygonRenderData }
-    }
-  }
-  // ... save logic
-}
-
-const uploadCanvas = (file: File) => {
-  const state = JSON.parse(await file.text())
-  
-  if (state.version === '2.0') {
-    // New unified format
-    restoreUnifiedState(state.unified)
-  } else {
-    // Legacy format - use existing deserializers
-    if (state.freehandStateString) deserializeFreehandState(state.freehandStateString)
-    if (state.polygonStateString) deserializePolygonState(state.polygonStateString) 
-  }
-}
-```
-
-### Metadata Editor Integration
-Update metadata editors to work with unified selection system including polygons:
-
-```typescript
-// Enhanced selection system for metadata editing
-export const getActiveSingleNode = () => {
-  return selected.size === 1 ? [...selected][0].konvaNode : null
-}
-
-// Support for mixed selections in metadata editor
-export const getSelectionSummary = () => {
-  const summary = { strokes: 0, groups: 0, polygons: 0 }
-  for (const item of selected) {
-    if (item.type === 'stroke') summary.strokes++
-    else if (item.type === 'strokeGroup') summary.groups++
-    else if (item.type === 'polygon') summary.polygons++
-  }
-  return summary
-}
-
-// Unified metadata application with proper command system
-const handleApplyMetadata = (node: Konva.Node, metadata: any) => {
-  const canvasItem = getCanvasItemFromKonvaNode(node)
-  
-  pushCommand('Edit Metadata', () => {
-    node.setAttr('metadata', metadata === undefined || Object.keys(metadata).length === 0 ? undefined : metadata)
-    
-    // Trigger appropriate updates based on item type
-    if (canvasItem?.type === 'polygon') {
-      updateBakedPolygonData() // Update polygon render data
-    } else {
-      updateBakedStrokeData() // Update freehand render data
-    }
-    
-    refreshAVs?.() // Refresh ancillary visualizations for any type
-  })
-}
-
-// Update LivecodeHolder selection watching to include both types
-watch(selected, () => {
-  const newActiveNode = getActiveSingleNode()
-  activeNode.value = newActiveNode
-
-  // Show metadata editor for any selection (freehand OR polygon)
-  showMetadataEditor.value = selected.size > 0
-  
-  if (newActiveNode) {
-    // Single node selected (stroke, group, OR polygon)
-    const metadata = newActiveNode.getAttr('metadata') ?? {}
-    metadataText.value = JSON.stringify(metadata, null, 2)
-  } else if (selected.size > 0) {
-    // Multiple selection - clear single-node metadata display
-    metadataText.value = ''
-  }
-  
-  updateMetadataHighlight(newActiveNode)
-})
-```
-
-### Timeline & Animation Compatibility
-Preserve existing timeline functionality (freehand-only for now):
-
-```typescript
-// In selectionStore.ts - maintain freehand-specific timeline data
-export const getSelectedFreehandStrokes = () => {
-  return [...selected]
-    .filter(item => item.type === 'stroke' || item.type === 'strokeGroup')
-    .map(item => /* extract freehand stroke data */)
-}
-
-// Timeline continues to work with freehand data only
-const updateTimelineState = () => {
-  const freehandStrokes = getSelectedFreehandStrokes()
-  selectedStrokesForTimeline.value = new Set(freehandStrokes.map(s => s.id))
-}
-```
+- **GPU rendering updates**: `executeCommand` automatically triggers `updateBakedStrokeData()` and `updateBakedPolygonData()`
+- **Hot-reload compatibility**: Existing serialization/deserialization functions remain unchanged  
+- **Timeline functionality**: Continues to work with freehand strokes only (filter `selected` by type)
+- **Metadata editing**: Works on any selected node via unified `applyMetadata` function
 
 ## Benefits
 

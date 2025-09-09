@@ -6,7 +6,7 @@ import Konva from "konva"
 import { type ShallowReactive, shallowReactive, ref, computed, watch } from "vue"
 import type { PolygonRenderData, FlattenedPolygon, TemplateAppState } from "./appState"
 import { globalStore, stage, activeNode, metadataText, showMetadataEditor, getActiveSingleNode, selectedPolygons } from "./appState"
-
+import { executeCommand } from "./core/commands"
 const store = globalStore()
 export const appState = store.appStateRef
 
@@ -178,46 +178,6 @@ export const getCurrentPolygonStateString = (): string => {
   return JSON.stringify(state)
 }
 
-// Execute a polygon command with undo/redo support
-export const executePolygonCommand = (commandName: string, action: () => void) => {
-  if (isPolygonUndoRedoOperation) {
-    // If we're in a polygon undo/redo, just execute the action without tracking
-    action()
-    return
-  }
-  
-  const beforeState = getCurrentPolygonStateString()
-  if (!beforeState) return
-  
-  // Execute the action
-  action()
-  
-  const afterState = getCurrentPolygonStateString()
-  if (!afterState || beforeState === afterState) return
-  
-  // Add command to polygon history
-  const command: PolygonCommand = {
-    name: commandName,
-    beforeState,
-    afterState
-  }
-  
-  // Remove any commands after current index (when doing new action after undo)
-  polygonCommandHistory.value = polygonCommandHistory.value.slice(0, polygonHistoryIndex.value + 1)
-  
-  // Add new command
-  polygonCommandHistory.value.push(command)
-  polygonHistoryIndex.value = polygonCommandHistory.value.length - 1
-  
-  // Limit history size
-  if (polygonCommandHistory.value.length > maxPolygonHistorySize) {
-    polygonCommandHistory.value.shift()
-    polygonHistoryIndex.value = polygonCommandHistory.value.length - 1
-  }
-  
-  console.log(`Polygon Command "${commandName}" added to history. Index: ${polygonHistoryIndex.value}`)
-}
-
 // Restore polygon state from string
 export const restorePolygonState = (stateString: string) => {
   if (!stateString) return
@@ -277,7 +237,7 @@ export const finishPolygonDragTracking = (nodeName: string) => {
   
   const endState = getCurrentPolygonStateString()
   if (polygonDragStartState !== endState) {
-    // Manually add to polygon history without using executePolygonCommand to avoid double state capture
+    // Manually add to command history without using executeCommand to avoid double state capture
     const command: PolygonCommand = {
       name: `Transform ${nodeName}`,
       beforeState: polygonDragStartState,
@@ -458,7 +418,7 @@ export const handlePolygonClick = (pos: { x: number, y: number }) => {
         const polygon = polygonShapes.get(polygonId)
         
         if (polygon && polygon.konvaShape) {
-          executePolygonCommand('Add Polygon Point', () => {
+          executeCommand('Add Polygon Point', () => {
             const points = polygon.points
             const insertIndex = (result.lineIndex + 1) * 2 // Convert to flat array index
             
@@ -637,7 +597,7 @@ export const updatePolygonPreview = () => {
 export const finishPolygon = () => {
   if (currentPolygonPoints.value.length < 6) return // Need at least 3 points
   
-  executePolygonCommand('Create Polygon', () => {
+  executeCommand('Create Polygon', () => {
     const polygonId = `polygon-${Date.now()}`
     const polygon: PolygonShape = {
       id: polygonId,
@@ -692,7 +652,7 @@ export const clearCurrentPolygon = () => {
 export const deleteSelectedPolygon = () => {
   if (selectedPolygons.length === 0) return
   
-  executePolygonCommand('Delete Selected Polygon', () => {
+  executeCommand('Delete Selected Polygon', () => {
     selectedPolygons.forEach(node => {
       const polygonId = node.id()
       node.destroy()

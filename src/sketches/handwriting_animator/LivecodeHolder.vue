@@ -11,7 +11,9 @@ import Timeline from './Timeline.vue';
 import MetadataEditor from './MetadataEditor.vue';
 import HierarchicalMetadataEditor from './HierarchicalMetadataEditor.vue';
 import VisualizationToggles from './VisualizationToggles.vue';
-import { clearFreehandSelection, createStrokeShape, currentPoints, currentTimestamps, deserializeFreehandState, drawingStartTime, executeFreehandCommand, finishFreehandDragTracking, freehandDrawingLayer, freehandDrawMode, freehandSelectionLayer, freehandShapeLayer, freehandStrokes, getPointsBounds, getStrokePath, gridSize, isAnimating, isDrawing, selTr, serializeFreehandState, setCurrentPoints, setCurrentTimestamps, setDrawingStartTime, setFreehandDrawingLayer, setFreehandSelectionLayer, setFreehandShapeLayer, setIsDrawing, setSelTr, showGrid, startFreehandDragTracking, updateBakedStrokeData, updateFreehandDraggableStates, updateTimelineState, type FreehandStroke, groupSelectedStrokes, ungroupSelectedStrokes, freehandCanGroupRef, isFreehandGroupSelected, freehandSelectedCount, undoFreehand, canUndoFreehand, canRedoFreehand, redoFreehand, useRealTiming, deleteFreehandSelected, selectedStrokesForTimeline, timelineDuration, handleTimeUpdate, maxInterStrokeDelay, setUpdateCursor, updateCursor, getGroupStrokeIndices, duplicateFreehandSelected, downloadFreehandDrawing, uploadFreehandDrawing, dragSelectionState, createSelectionRect, updateSelectionRect, completeSelectionRect, resetSelectionRect, setRefreshAVs, type FreehandStrokeGroup } from './freehandTool';
+import { clearFreehandSelection, createStrokeShape, currentPoints, currentTimestamps, deserializeFreehandState, drawingStartTime, finishFreehandDragTracking, freehandDrawingLayer, freehandDrawMode, freehandSelectionLayer, freehandShapeLayer, freehandStrokes, getPointsBounds, getStrokePath, gridSize, isAnimating, isDrawing, selTr, serializeFreehandState, setCurrentPoints, setCurrentTimestamps, setDrawingStartTime, setFreehandDrawingLayer, setFreehandSelectionLayer, setFreehandShapeLayer, setIsDrawing, setSelTr, showGrid, startFreehandDragTracking, updateBakedStrokeData, updateFreehandDraggableStates, updateTimelineState, type FreehandStroke, groupSelectedStrokes, ungroupSelectedStrokes, freehandCanGroupRef, isFreehandGroupSelected, freehandSelectedCount, useRealTiming, deleteFreehandSelected, selectedStrokesForTimeline, timelineDuration, handleTimeUpdate, maxInterStrokeDelay, setUpdateCursor, updateCursor, getGroupStrokeIndices, duplicateFreehandSelected, downloadFreehandDrawing, uploadFreehandDrawing, dragSelectionState, createSelectionRect, updateSelectionRect, completeSelectionRect, resetSelectionRect, setRefreshAVs, type FreehandStrokeGroup, getCurrentFreehandStateString, restoreFreehandState } from './freehandTool';
+import { CommandStack } from './core/commandStack';
+import { setGlobalExecuteCommand } from './core/commands';
 import { ensureHighlightLayer } from '@/metadata';
 import { DrawingScene } from './gpuStrokes/drawingScene';
 import { StrokeInterpolator } from './gpuStrokes/strokeInterpolator';
@@ -21,8 +23,8 @@ import Stats from '@/rendering/stats';
 import { EditorView, basicSetup } from 'codemirror';
 import { javascript } from '@codemirror/lang-javascript';
 import { oneDark } from '@codemirror/theme-one-dark';
-import { polygonShapesLayer, polygonPreviewLayer, polygonControlsLayer, polygonSelectionLayer, clearPolygonSelection, updatePolygonControlPoints, deserializePolygonState, polygonMode, handlePolygonClick, isDrawingPolygon, handlePolygonMouseMove, handlePolygonEditMouseMove, currentPolygonPoints, finishPolygon, clearCurrentPolygon, serializePolygonState, setPolygonControlsLayer, setPolygonPreviewLayer, setPolygonSelectionLayer, setPolygonShapesLayer, polygonUndo, polygonRedo, canPolygonUndo, canPolygonRedo, deleteSelectedPolygon } from './polygonTool';
-import { initAVLayer, refreshAVs } from './ancillaryVisualizations';
+import { polygonShapesLayer, polygonPreviewLayer, polygonControlsLayer, polygonSelectionLayer, clearPolygonSelection, updatePolygonControlPoints, deserializePolygonState, polygonMode, handlePolygonClick, isDrawingPolygon, handlePolygonMouseMove, handlePolygonEditMouseMove, currentPolygonPoints, finishPolygon, clearCurrentPolygon, serializePolygonState, setPolygonControlsLayer, setPolygonPreviewLayer, setPolygonSelectionLayer, setPolygonShapesLayer, deleteSelectedPolygon, getCurrentPolygonStateString, restorePolygonState, updateBakedPolygonData } from './polygonTool';
+import { initAVLayer, refreshAnciliaryViz } from './ancillaryVisualizations';
 import type { StrokePoint } from './gpuStrokes/strokeTypes';
 import type { AnchorKind } from './gpuStrokes/coordinateUtils';
 import type { LoopHandle } from '@/channels/base_time_context';
@@ -32,6 +34,49 @@ import { combineBoundingBoxes } from './gpuStrokes/strokeTextureManager';
 const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
 let timeLoops: CancelablePromisePoxy<any>[] = []
+
+// ==================== Unified Command Stack ====================
+const captureCanvasState = () => {
+  const freehandState = getCurrentFreehandStateString()
+  const polygonState = getCurrentPolygonStateString()
+  
+  return JSON.stringify({
+    freehand: freehandState,
+    polygon: polygonState
+  })
+}
+
+const restoreCanvasState = (stateString: string) => {
+  if (!stateString) return
+  
+  try {
+    const state = JSON.parse(stateString)
+    if (state.freehand) {
+      restoreFreehandState(state.freehand)
+    }
+    if (state.polygon) {
+      restorePolygonState(state.polygon)
+    }
+  } catch (error) {
+    console.warn('Failed to restore canvas state:', error)
+  }
+}
+
+const onCanvasStateChange = () => {
+  updateBakedStrokeData()
+  updateBakedPolygonData()
+  refreshAnciliaryViz()
+}
+
+// Create unified command stack instance
+const commandStack = new CommandStack(captureCanvasState, restoreCanvasState, onCanvasStateChange)
+
+// Expose command stack methods for use in templates and other functions
+const executeCommand = (name: string, action: () => void) => commandStack.executeCommand(name, action)
+const undo = () => commandStack.undo()
+const redo = () => commandStack.redo()
+const canUndo = () => commandStack.canUndo()
+const canRedo = () => commandStack.canRedo()
 
 const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromisePoxy<any> => {
   const loop = launch(block)
@@ -190,18 +235,18 @@ const applyMetadata = (metadata: any) => {
     // For polygons - need to implement polygon command history if not exists
     console.log('Polygon metadata updated')
   } else {
-    // For freehand shapes
-    executeFreehandCommand('Edit Metadata', () => {
-      // The actual change has already been applied above
-    })
+  // For freehand shapes
+  executeCommand('Edit Metadata', () => {
+  // The actual change has already been applied above
+  })
   }
 }
 
 // Callback for HierarchicalMetadataEditor to apply metadata with tool-specific command system
-const handleApplyMetadata = (node: any, metadata: any) => {
+const handleApplyMetadata = (node: Konva.Node, metadata: any) => {
   // For freehand tool, wrap in undoable command
   if (activeTool.value === 'freehand') {
-    executeFreehandCommand('Edit Metadata', () => {
+    executeCommand('Edit Metadata', () => {
       node.setAttr('metadata', metadata === undefined || Object.keys(metadata).length === 0 ? undefined : metadata)
       updateBakedStrokeData()
     })
@@ -786,7 +831,11 @@ onMounted(async () => {
     
     // Initialize ancillary visualizations layer
     initAVLayer()
-    setRefreshAVs(refreshAVs)
+    setRefreshAVs(refreshAnciliaryViz)
+    
+    // Set up executeCommand callbacks for tools
+    setGlobalExecuteCommand(executeCommand)
+
     
     // Create selection rectangle for drag selection
     createSelectionRect()
@@ -929,7 +978,7 @@ onMounted(async () => {
         freehandDrawingLayer?.destroyChildren()
 
         if (currentPoints.length > 2) {
-          executeFreehandCommand('Draw Stroke', () => {
+          executeCommand('Draw Stroke', () => {
             // Create new stroke
             const creationTime = Date.now()
             const strokeId = `stroke-${creationTime}`
@@ -1076,6 +1125,17 @@ onUnmounted(() => {
         <option value="polygon">⬟ Polygon</option>
       </select>
       <span class="separator">|</span>
+      
+      <!-- Unified Undo/Redo (works for both tools) -->
+      <div class="button-group vertical">
+        <button @click="undo" :disabled="!canUndo() || isAnimating" title="Undo (Ctrl/Cmd+Z)">
+          ↶ Undo
+        </button>
+        <button @click="redo" :disabled="!canRedo() || isAnimating" title="Redo (Ctrl/Cmd+Shift+Z)">
+          ↷ Redo
+        </button>
+      </div>
+      <span class="separator">|</span>
 
       <!-- Freehand Tool Toolbar -->
       <template v-if="activeTool === 'freehand'">
@@ -1102,15 +1162,6 @@ onUnmounted(() => {
         </button>
         <button @click="deleteFreehandSelected" :disabled="freehandSelectedCount === 0 || isAnimating">
         🗑️ Delete
-        </button>
-        </div>
-        <span class="separator">|</span>
-        <div class="button-group vertical">
-        <button @click="undoFreehand" :disabled="!canUndoFreehand || isAnimating" title="Undo (Ctrl/Cmd+Z)">
-        ↶ Undo
-        </button>
-        <button @click="redoFreehand" :disabled="!canRedoFreehand || isAnimating" title="Redo (Ctrl/Cmd+Shift+Z)">
-        ↷ Redo
         </button>
         </div>
         <span class="separator">|</span>
@@ -1144,15 +1195,6 @@ onUnmounted(() => {
         <button @click="showGrid = !showGrid" :class="{ active: showGrid }" :disabled="isAnimating">
           {{ showGrid ? '⊞ Grid On' : '⊡ Grid Off' }}
         </button>
-        <span class="separator">|</span>
-        <div class="button-group vertical">
-        <button @click="polygonUndo" :disabled="!canPolygonUndo || isAnimating" title="Undo (Ctrl/Cmd+Z)">
-        ↶ Undo
-        </button>
-        <button @click="polygonRedo" :disabled="!canPolygonRedo || isAnimating" title="Redo (Ctrl/Cmd+Shift+Z)">
-        ↷ Redo
-        </button>
-        </div>
         <span class="separator">|</span>
         <button @click="clearCurrentPolygon" :disabled="!isDrawingPolygon || isAnimating">
         🗑️ Cancel Shape

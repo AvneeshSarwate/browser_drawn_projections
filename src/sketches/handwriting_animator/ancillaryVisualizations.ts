@@ -43,7 +43,7 @@ const scheduleAVRefresh = () => {
   if (rafToken !== null) return // already queued this frame
   rafToken = requestAnimationFrame(() => {
     rafToken = null
-    refreshAVs() // existing brute-force rebuild
+    refreshAnciliaryViz() // existing brute-force rebuild
   })
 }
 
@@ -60,7 +60,7 @@ export const initAVLayer = () => {
     stage.on('dragmove.av transform.av', scheduleAVRefresh)
     
     // Final update when interaction ends (ensures perfect positioning)
-    stage.on('dragend.av transformend.av', refreshAVs)
+    stage.on('dragend.av transformend.av', refreshAnciliaryViz)
     
     // Node removal - automatically cleanup orphaned visualizations
     stage.on('destroy.av', scheduleAVRefresh)
@@ -71,7 +71,7 @@ export const initAVLayer = () => {
 
 // call whenever metadata OR active set changes OR node moved/scaled/…
 // we purposely brute-force re-evaluate only top-level nodes for simplicity
-export const refreshAVs = () => {
+export const refreshAnciliaryViz = () => {
   if (!stage) return
   initAVLayer()
 
@@ -129,8 +129,8 @@ export const setNodeMetadataWithAV = (
   meta: Record<string, any> | undefined
 ) => {
   origSetNodeMetadata(node, meta)
-  refreshAVs()
+  refreshAnciliaryViz()
 }
 
 // watch for toggle changes
-watch(activeAVs, refreshAVs, { deep: true })
+watch(activeAVs, refreshAnciliaryViz, { deep: true })
