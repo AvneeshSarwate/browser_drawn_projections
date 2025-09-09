@@ -5,8 +5,11 @@ import { findClosestPolygonLineAtPoint } from "@/creativeAlgs/shapeHelpers"
 import Konva from "konva"
 import { type ShallowReactive, shallowReactive, ref, computed, watch } from "vue"
 import type { PolygonRenderData, FlattenedPolygon, TemplateAppState } from "./appState"
-import { globalStore, stage, activeNode, metadataText, showMetadataEditor, getActiveSingleNode, selectedPolygons } from "./appState"
+import { globalStore, stage, activeNode, metadataText, showMetadataEditor, getActiveSingleNode } from "./appState"
 import { executeCommand } from "./core/commands"
+import { uid } from './utils/canvasUtils'
+import { fromPolygon, getCanvasItem, removeCanvasItem } from './core/CanvasItem'
+import * as selectionStore from './core/selectionStore'
 const store = globalStore()
 export const appState = store.appStateRef
 
@@ -40,47 +43,20 @@ interface PolygonGroup {
 export const polygonShapes = new Map<string, PolygonShape>()
 export const polygonGroups = new Map<string, PolygonGroup>()
 
-// Selection state tracking for visual feedback
-export const polygonOriginalStyles = new Map<string, { stroke: string, strokeWidth: number }>()
-
-// Function to toggle polygon selection
+// Function to toggle polygon selection - now using unified selection store
 export const togglePolygonSelection = (polygonId: string) => {
   const polygon = stage?.findOne(`#${polygonId}`) as Konva.Line
   if (!polygon) return
 
-  // Clear previous selection
-  clearPolygonSelection()
-
-  // Select the clicked polygon
-  selectedPolygons.push(polygon)
-  
-  // Store original styling
-  polygonOriginalStyles.set(polygonId, {
-    stroke: polygon.stroke() as string,
-    strokeWidth: polygon.strokeWidth()
-  })
-  
-  // Apply highlight styling
-  polygon.stroke('#ff6b35') // Orange highlight
-  polygon.strokeWidth(4)
-  
-  polygonShapesLayer?.batchDraw()
+  const item = getCanvasItem(polygon)
+  if (item) {
+    selectionStore.toggle(item, false) // not additive for polygons
+  }
 }
 
-// Function to clear polygon selection
+// Function to clear polygon selection - now using unified selection store  
 export const clearPolygonSelection = () => {
-  selectedPolygons.forEach(node => {
-    const polygon = node as Konva.Line
-    const originalStyle = polygonOriginalStyles.get(polygon.id())
-    if (originalStyle) {
-      polygon.stroke(originalStyle.stroke)
-      polygon.strokeWidth(originalStyle.strokeWidth)
-    }
-  })
-  
-  selectedPolygons.length = 0
-  polygonOriginalStyles.clear()
-  polygonShapesLayer?.batchDraw()
+  selectionStore.clear()
 }
 
 // Function to generate baked polygon data for external rendering (p5, three.js, etc.)
@@ -284,16 +260,30 @@ export const serializePolygonState = () => {
 export const attachPolygonHandlers = (node: Konva.Line) => {
   console.log('Attaching polygon handlers to:', node.id())
   
-  node.draggable(false) // Polygons are not draggable, controlled by control points
+  node.draggable(true) // Make polygons draggable for transformation
 
   // Add any polygon-specific event handlers here if needed
-  node.on('click', () => {
+  node.on('click', (e) => {
     if(polygonMode.value === 'draw') {
       console.log('Polygon clicked draw:', node.id())
     } else if(polygonMode.value === 'edit') {
-        console.log('Polygon clicked edit:', node.id())
-        togglePolygonSelection(node.id())
+      console.log('Polygon clicked edit:', node.id())
+      e.cancelBubble = true
+      const item = getCanvasItem(node)
+      if (item) {
+        selectionStore.toggle(item, e.evt.shiftKey)
+      }
     }
+  })
+
+  // Add drag tracking handlers for undo/redo
+  node.on('dragstart', () => {
+    startPolygonDragTracking()
+  })
+
+  node.on('dragend', () => {
+    finishPolygonDragTracking('Polygon Drag')
+    serializePolygonState()
   })
 }
 
@@ -312,7 +302,7 @@ export const deserializePolygonState = () => {
     polygonShapesLayer.destroyChildren()
     polygonShapes.clear()
     polygonGroups.clear()
-    selectedPolygons.length = 0
+    selectionStore.clear() // Clear selection using unified store
     
     // Restore polygon layer content using Konva.Node.create
     const layerData = polygonState.layer
@@ -623,6 +613,9 @@ export const finishPolygon = () => {
     polygonShapes.set(polygonId, polygon)
     polygonShapesLayer?.add(polygonLine)
     
+    // Register as CanvasItem
+    fromPolygon(polygonLine)
+    
     // Reset drawing state to allow drawing new shapes
     isDrawingPolygon.value = false
     currentPolygonPoints.value = []
@@ -650,14 +643,17 @@ export const clearCurrentPolygon = () => {
 
 // Delete selected polygon
 export const deleteSelectedPolygon = () => {
-  if (selectedPolygons.length === 0) return
+  const selectedNodes = selectionStore.selectedKonvaNodes.value
+  if (selectedNodes.length === 0) return
   
   executeCommand('Delete Selected Polygon', () => {
-    selectedPolygons.forEach(node => {
+    selectedNodes.forEach((node: Konva.Node) => {
       const polygonId = node.id()
       node.destroy()
       // Remove from polygons map
       polygonShapes.delete(polygonId)
+      // Remove from registry
+      removeCanvasItem(polygonId)
     })
     clearPolygonSelection()
     polygonShapesLayer?.batchDraw()
@@ -751,10 +747,24 @@ watch(polygonMode, (newMode) => {
     currentPolygonPoints.value = []
     polygonPreviewLayer?.destroyChildren()
     polygonPreviewLayer?.batchDraw()
+    
+    // Enable dragging for transformation
+    polygonShapes.forEach(polygon => {
+      if (polygon.konvaShape) {
+        polygon.konvaShape.draggable(true)
+      }
+    })
   } else if (newMode === 'edit') {
     // When switching to edit mode, clear any drawing preview
     polygonPreviewLayer?.destroyChildren()
     polygonPreviewLayer?.batchDraw()
+    
+    // Disable dragging during vertex editing
+    polygonShapes.forEach(polygon => {
+      if (polygon.konvaShape) {
+        polygon.konvaShape.draggable(false)
+      }
+    })
   }
   updatePolygonControlPoints()
   clearPolygonSelection()

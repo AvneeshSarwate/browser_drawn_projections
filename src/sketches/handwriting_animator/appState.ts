@@ -78,7 +78,7 @@ export const resolution = {
 //todo api - add caching/rehydrating of appState from local storage
 
 // UI refs that should persist across hot reloads
-export const activeTool = ref<'freehand' | 'polygon'>('freehand')
+export const activeTool = ref<'select' | 'freehand' | 'polygon'>('select')
 export const availableStrokes = ref<Array<{index: number, name: string}>>([])
 export const animationParams = ref({
   strokeA: 0,
