@@ -1,10 +1,12 @@
 import Konva from 'konva'
 import { ref } from 'vue'
 import * as selectionStore from './selectionStore'
-import { getCanvasItem } from './CanvasItem'
+import { getCanvasItem, fromGroup, removeCanvasItem } from './CanvasItem'
 import { executeCommand } from './commands'
 import { getCurrentFreehandStateString } from '../freehandTool'
 import { getCurrentPolygonStateString } from '../polygonTool'
+import { hasAncestorConflict } from '../utils/canvasUtils'
+import { updateBakedStrokeData } from '../freehandTool'
 
 // Drag selection state
 export const dragSelectionState = ref({
@@ -295,4 +297,106 @@ function finishSelectionDrag() {
 
   selectionDragState.isDragging = false
   selectionDragState.startNodePositions.clear()
+}
+
+// ---------------- Grouping / Ungrouping (freehand-only groups) ----------------
+
+function getSelectedNodes(): Konva.Node[] {
+  return selectionStore.selectedKonvaNodes.value
+}
+
+function nodeLayer(node: Konva.Node): Konva.Layer | null {
+  let p: Konva.Node | null = node
+  while (p && !(p instanceof Konva.Layer)) p = p.getParent() as Konva.Node | null
+  return (p instanceof Konva.Layer) ? p : null
+}
+
+export function canGroupSelection(): boolean {
+  const nodes = getSelectedNodes()
+  if (nodes.length < 1) return false
+  // Polygons cannot participate
+  if (nodes.some(n => n instanceof Konva.Line)) return false
+  // Must all be in the same layer
+  const layers = new Set(nodes.map(n => nodeLayer(n)))
+  if (layers.size !== 1) return false
+  // Groupable nodes are Paths or Groups
+  const groupable = nodes.filter(n => (n instanceof Konva.Path) || (n instanceof Konva.Group))
+  if (groupable.length < 1) return false
+  // Prevent ancestor/descendant conflicts
+  if (hasAncestorConflict(groupable)) return false
+  return true
+}
+
+export function groupSelection() {
+  if (!canGroupSelection()) return
+  const nodes = getSelectedNodes().filter(n => (n instanceof Konva.Path) || (n instanceof Konva.Group))
+  if (nodes.length < 1) return
+
+  executeCommand('Group Selection', () => {
+    // Use top-level nodes only (no descendant/ancestor pairs)
+    const topLevel = nodes.filter(node => !nodes.some(other => other !== node && other.isAncestorOf(node)))
+    // Determine common parent or fallback to layer of first node
+    const targetLayer = nodeLayer(topLevel[0])
+    if (!targetLayer) return
+    let commonParent: Konva.Container = topLevel[0].getParent() as Konva.Container
+    if (!topLevel.every(n => n.getParent() === commonParent)) commonParent = targetLayer
+
+    const superGroup = new Konva.Group({ draggable: false })
+    commonParent.add(superGroup)
+
+    topLevel.forEach((node) => {
+      const absPos = node.getAbsolutePosition()
+      const absRot = node.getAbsoluteRotation()
+      const absScale = node.getAbsoluteScale()
+      node.moveTo(superGroup)
+      node.position(absPos)
+      node.rotation(absRot)
+      node.scale(absScale)
+    })
+
+    // Register group and select it
+    const item = fromGroup(superGroup)
+    selectionStore.clear()
+    selectionStore.add(item)
+
+    superGroup.getLayer()?.batchDraw()
+    updateBakedStrokeData()
+  })
+}
+
+export function canUngroupSelection(): boolean {
+  const nodes = getSelectedNodes()
+  if (nodes.length !== 1) return false
+  // Polygons cannot participate
+  if (nodes[0] instanceof Konva.Line) return false
+  return nodes[0] instanceof Konva.Group
+}
+
+export function ungroupSelection() {
+  if (!canUngroupSelection()) return
+  const grp = getSelectedNodes()[0] as Konva.Group
+  const parent = grp.getParent()
+  if (!parent) return
+
+  executeCommand('Ungroup Selection', () => {
+    const children = [...grp.getChildren()]
+    children.forEach(child => {
+      const absPos = child.getAbsolutePosition()
+      const absRot = child.getAbsoluteRotation()
+      const absScale = child.getAbsoluteScale()
+      child.moveTo(parent)
+      child.position(absPos)
+      child.rotation(absRot)
+      child.scale(absScale)
+      child.draggable(false)
+    })
+
+    const id = grp.id()
+    grp.destroy()
+    removeCanvasItem(id)
+
+    selectionStore.clear()
+    parent.getLayer()?.batchDraw()
+    updateBakedStrokeData()
+  })
 }

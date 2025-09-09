@@ -12,7 +12,7 @@ import Timeline from './Timeline.vue';
 import MetadataEditor from './MetadataEditor.vue';
 import HierarchicalMetadataEditor from './HierarchicalMetadataEditor.vue';
 import VisualizationToggles from './VisualizationToggles.vue';
-import { clearFreehandSelection, createStrokeShape, currentPoints, currentTimestamps, deserializeFreehandState, drawingStartTime, finishFreehandDragTracking, freehandDrawingLayer, freehandSelectionLayer, freehandShapeLayer, freehandStrokes, getStrokePath, gridSize, isAnimating, isDrawing, selTr, serializeFreehandState, setCurrentPoints, setCurrentTimestamps, setDrawingStartTime, setFreehandDrawingLayer, setFreehandSelectionLayer, setFreehandShapeLayer, setIsDrawing, setSelTr, showGrid, startFreehandDragTracking, updateBakedStrokeData, updateFreehandDraggableStates, updateTimelineState, type FreehandStroke, groupSelectedStrokes, ungroupSelectedStrokes, freehandCanGroupRef, isFreehandGroupSelected, freehandSelectedCount, useRealTiming, deleteFreehandSelected, selectedStrokesForTimeline, timelineDuration, handleTimeUpdate, maxInterStrokeDelay, setUpdateCursor, updateCursor, getGroupStrokeIndices, duplicateFreehandSelected, downloadFreehandDrawing, uploadFreehandDrawing, setRefreshAVs, type FreehandStrokeGroup, getCurrentFreehandStateString, restoreFreehandState } from './freehandTool';
+import { clearFreehandSelection, createStrokeShape, currentPoints, currentTimestamps, deserializeFreehandState, drawingStartTime, finishFreehandDragTracking, freehandDrawingLayer, freehandSelectionLayer, freehandShapeLayer, freehandStrokes, getStrokePath, gridSize, isAnimating, isDrawing, selTr, serializeFreehandState, setCurrentPoints, setCurrentTimestamps, setDrawingStartTime, setFreehandDrawingLayer, setFreehandSelectionLayer, setFreehandShapeLayer, setIsDrawing, setSelTr, showGrid, startFreehandDragTracking, updateBakedStrokeData, updateFreehandDraggableStates, updateTimelineState, type FreehandStroke, freehandSelectedCount, useRealTiming, deleteFreehandSelected, selectedStrokesForTimeline, timelineDuration, handleTimeUpdate, maxInterStrokeDelay, setUpdateCursor, updateCursor, getGroupStrokeIndices, duplicateFreehandSelected, downloadFreehandDrawing, uploadFreehandDrawing, setRefreshAVs, type FreehandStrokeGroup, getCurrentFreehandStateString, restoreFreehandState } from './freehandTool';
 import { getPointsBounds } from './utils/canvasUtils';
 import { CommandStack } from './core/commandStack';
 import { setGlobalExecuteCommand } from './core/commands';
@@ -28,7 +28,7 @@ import { oneDark } from '@codemirror/theme-one-dark';
 import { polygonShapesLayer, polygonPreviewLayer, polygonControlsLayer, polygonSelectionLayer, clearPolygonSelection, updatePolygonControlPoints, deserializePolygonState, polygonMode, handlePolygonClick, isDrawingPolygon, handlePolygonMouseMove, handlePolygonEditMouseMove, currentPolygonPoints, finishPolygon, clearCurrentPolygon, serializePolygonState, setPolygonControlsLayer, setPolygonPreviewLayer, setPolygonSelectionLayer, setPolygonShapesLayer, deleteSelectedPolygon, getCurrentPolygonStateString, restorePolygonState, updateBakedPolygonData } from './polygonTool';
 import { initAVLayer, refreshAnciliaryViz } from './ancillaryVisualizations';
 import { initializeTransformer } from './core/transformerManager';
-import { initializeSelectTool, handleSelectPointerDown, handleSelectPointerMove, handleSelectPointerUp } from './core/selectTool';
+import { initializeSelectTool, handleSelectPointerDown, handleSelectPointerMove, handleSelectPointerUp, groupSelection, ungroupSelection, canGroupSelection, canUngroupSelection } from './core/selectTool';
 import type { StrokePoint } from './gpuStrokes/strokeTypes';
 import type { AnchorKind } from './gpuStrokes/coordinateUtils';
 import type { LoopHandle } from '@/channels/base_time_context';
@@ -92,6 +92,8 @@ const clearDrawFuncs = () => {
   appState.drawFunctions = []
   appState.drawFuncMap = new Map()
 }
+
+// Grouping logic moved to core/selectTool
 
 // Tool switching - now imported from appState
 
@@ -1144,21 +1146,24 @@ onUnmounted(() => {
       </div>
       <span class="separator">|</span>
 
+      <!-- Select Tool Toolbar -->
+      <template v-if="activeTool === 'select'">
+        <div class="button-group vertical">
+          <button @click="groupSelection" :disabled="!canGroupSelection() || isAnimating">
+            Group
+          </button>
+          <button @click="ungroupSelection" :disabled="!canUngroupSelection() || isAnimating">
+            Ungroup
+          </button>
+        </div>
+        <span class="separator">|</span>
+      </template>
+
       <!-- Freehand Tool Toolbar -->
       <template v-if="activeTool === 'freehand'">
         <button @click="showGrid = !showGrid" :class="{ active: showGrid }" :disabled="isAnimating">
           {{ showGrid ? '⊞ Grid On' : '⊡ Grid Off' }}
         </button>
-        <span class="separator">|</span>
-        <div class="button-group vertical">
-        <button @click="groupSelectedStrokes" :disabled="!freehandCanGroupRef || isAnimating">
-            Group
-          </button>
-        <button @click="ungroupSelectedStrokes" :disabled="!isFreehandGroupSelected || isAnimating">
-            Ungroup
-           </button>
-         </div>
-        <span class="separator">|</span>
         <div class="button-group vertical">
         <button @click="duplicateFreehandSelected" :disabled="freehandSelectedCount === 0 || isAnimating">
         📄 Duplicate

@@ -937,30 +937,26 @@ export const handleClick = (target: Konva.Node, shiftKey: boolean) => {
 // Group selected strokes - simplified from working example  
 export const groupSelectedStrokes = () => {
   const selectedNodes = selectionStore.selectedKonvaNodes.value
-  //todo - allowing grouping single strokes as a quick hack because named-groups are the core way letters are defined
-  // if (selectedNodes.length < 2) return 
+  // Disallow grouping if any polygon is selected
+  const hasPolygon = selectedNodes.some(n => n instanceof Konva.Line)
+  if (hasPolygon) {
+    console.warn('Grouping disabled: selection contains polygons')
+    return
+  }
+  // Groupable nodes are freehand Paths or existing Groups
+  const nodesToGroup = selectedNodes.filter(n => (n instanceof Konva.Path) || (n instanceof Konva.Group))
+  if (nodesToGroup.length < 1) return
 
   executeCommand?.('Group Strokes', () => {
     // compute common parent to insert new group into (layer by default)
-    let commonParent = selectedNodes[0].getParent()
-    for (const n of selectedNodes) if (n.getParent() !== commonParent) { commonParent = freehandShapeLayer!; break }
+    let commonParent = nodesToGroup[0].getParent()
+    for (const n of nodesToGroup) if (n.getParent() !== commonParent) { commonParent = freehandShapeLayer!; break }
 
-    const superGroup = new Konva.Group({ draggable: true })
+    const superGroup = new Konva.Group({ draggable: false })
     commonParent?.add(superGroup)
 
-    // Add drag tracking handlers to the group
-    superGroup.on('dragstart', () => {
-      startFreehandDragTracking()
-    })
-
-    superGroup.on('dragend', () => {
-      finishFreehandDragTracking('Group')
-    })
-
-    if (selTr) selTr.nodes([])
-    if (grpTr) grpTr.nodes([])
-
-    selectedNodes.forEach((node: Konva.Node) => {
+    // Move nodes under superGroup preserving absolute transform
+    nodesToGroup.forEach((node: Konva.Node) => {
       node.draggable(false)
       const absPos = node.getAbsolutePosition()
       const absRot = node.getAbsoluteRotation()
@@ -977,10 +973,9 @@ export const groupSelectedStrokes = () => {
     const groupItem = fromGroup(superGroup)
     selectionStore.clear()
     selectionStore.add(groupItem)
-    freehandRefreshUI()
-    updateFreehandDraggableStates() // Update draggable states after grouping
+    updateFreehandDraggableStates()
     freehandShapeLayer?.batchDraw()
-    updateBakedStrokeData() // Update baked data after grouping
+    updateBakedStrokeData()
   })
 }
 

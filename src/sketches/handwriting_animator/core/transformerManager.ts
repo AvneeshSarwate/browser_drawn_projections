@@ -49,23 +49,12 @@ function updateTransformer(selectedNodes: Konva.Node[]) {
     return true
   })
   
-  // Handle group pivot locking
-  if (filteredNodes.length === 1 && filteredNodes[0] instanceof Konva.Group) {
-    const group = filteredNodes[0] as Konva.Group
-    lockPivot(group)
-  }
-  
   transformer.nodes(filteredNodes)
   transformerLayer.batchDraw()
 }
 
-// Lock pivot for group transformation (preserves existing behavior)
-function lockPivot(node: Konva.Group | Konva.Node) {
-  //@ts-ignore
-  const box = node.getClientRect({ relativeTo: node })
-  node.offset({ x: box.width / 2, y: box.height / 2 })
-  node.position({ x: node.x() + box.width / 2, y: node.y() + box.height / 2 })
-}
+// Note: We do not change node.offset or position here.
+// Konva.Transformer rotates/scales around the selection center by default.
 
 // State capture for undo/redo
 function startTransformTracking() {
