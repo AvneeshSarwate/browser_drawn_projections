@@ -43,6 +43,21 @@ export function handleSelectPointerDown(stage: Konva.Stage, e: Konva.KonvaEventO
   const pos = stage.getPointerPosition()
   if (!pos) return
 
+  // Ignore interactions that begin on the transformer or its handles
+  const isInTransformer = (node: Konva.Node): boolean => {
+    let cur: Konva.Node | null = node
+    while (cur && !(cur instanceof Konva.Stage)) {
+      if (cur instanceof Konva.Transformer) return true
+      cur = cur.getParent() as Konva.Node | null
+    }
+    return false
+  }
+
+  if (e.target && isInTransformer(e.target)) {
+    // Let transformer manage transform; do not interfere with selection state or start drag-select
+    return
+  }
+
   // If clicking on a shape, handle selection
   if (e.target !== stage) {
     // Escalate to top-most group whose parent is a Layer
@@ -73,15 +88,17 @@ export function handleSelectPointerDown(stage: Konva.Stage, e: Konva.KonvaEventO
     }
   }
 
-  // If clicking on empty space, prepare for drag selection or clear selection
-  // Start drag selection; whether to clear will be decided on pointer up
-  dragSelectionState.value = {
-    isSelecting: true,
-    startPos: { x: pos.x, y: pos.y },
-    currentPos: { x: pos.x, y: pos.y },
-    isShiftHeld: e.evt.shiftKey
+  // If clicking on empty canvas area, prepare drag selection.
+  // Avoid starting drag selection when clicking the selection layer (which hosts the transformer).
+  if (e.target === stage || (e.target instanceof Konva.Layer && e.target !== selectionLayer)) {
+    dragSelectionState.value = {
+      isSelecting: true,
+      startPos: { x: pos.x, y: pos.y },
+      currentPos: { x: pos.x, y: pos.y },
+      isShiftHeld: e.evt.shiftKey
+    }
+    resetSelectionRect(pos.x, pos.y)
   }
-  resetSelectionRect(pos.x, pos.y)
 }
 
 export function handleSelectPointerMove(stage: Konva.Stage, e: Konva.KonvaEventObject<MouseEvent>) {
