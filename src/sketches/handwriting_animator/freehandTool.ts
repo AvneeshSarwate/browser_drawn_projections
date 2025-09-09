@@ -67,7 +67,7 @@ export const attachHandlersRecursively = (node: Konva.Node) => {
 }
 
 // Simplified deep clone - Konva clones children automatically!
-const deepCloneWithNewIds = (
+export const deepCloneWithNewIds = (
   origNode: Konva.Node,
   offsetX: number = 0,
   offsetY: number = 0
@@ -584,7 +584,7 @@ export const finishFreehandDragTracking = (nodeName: string) => {
 }
 
 // Function to refresh stroke-shape connections
-const refreshStrokeConnections = () => {
+export const refreshStrokeConnections = () => {
   freehandStrokes.forEach((stroke, id) => {
     const currentShape = stage?.findOne(`#${id}`) as Konva.Path
     if (currentShape && currentShape !== stroke.shape) {

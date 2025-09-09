@@ -1,12 +1,12 @@
 import Konva from 'konva'
 import { ref } from 'vue'
 import * as selectionStore from './selectionStore'
-import { getCanvasItem, fromGroup, removeCanvasItem } from './CanvasItem'
+import { getCanvasItem, fromGroup, fromPolygon, removeCanvasItem } from './CanvasItem'
 import { executeCommand } from './commands'
-import { getCurrentFreehandStateString } from '../freehandTool'
-import { getCurrentPolygonStateString } from '../polygonTool'
+import { getCurrentFreehandStateString, deepCloneWithNewIds, freehandShapeLayer, updateBakedStrokeData, updateTimelineState, refreshStrokeConnections } from '../freehandTool'
+import { getCurrentPolygonStateString, polygonShapes, polygonShapesLayer, attachPolygonHandlers, serializePolygonState, updateBakedPolygonData } from '../polygonTool'
 import { hasAncestorConflict } from '../utils/canvasUtils'
-import { updateBakedStrokeData } from '../freehandTool'
+import { uid } from '../utils/canvasUtils'
 
 // Drag selection state
 export const dragSelectionState = ref({
@@ -90,9 +90,9 @@ export function handleSelectPointerDown(stage: Konva.Stage, e: Konva.KonvaEventO
     }
   }
 
-  // If clicking on empty canvas area, prepare drag selection.
-  // Avoid starting drag selection when clicking the selection layer (which hosts the transformer).
-  if (e.target === stage || (e.target instanceof Konva.Layer && e.target !== selectionLayer)) {
+  // If clicking on empty canvas area (stage or any layer), prepare drag selection.
+  // Transformer handles are already excluded above.
+  if (e.target === stage || (e.target instanceof Konva.Layer)) {
     dragSelectionState.value = {
       isSelecting: true,
       startPos: { x: pos.x, y: pos.y },
@@ -193,19 +193,19 @@ function completeSelectionRect(isShiftHeld: boolean = false) {
     return node instanceof Konva.Path || node instanceof Konva.Line || node instanceof Konva.Group
   }
 
-  // Check all layers that contain selectable items
+  // Check only canonical shape layers to avoid accidental matches in helper/preview layers
   const layersToCheck: Konva.Layer[] = []
-  
-  // Find freehand and polygon layers dynamically
   const stage = selectionLayer?.getStage()
   if (stage) {
-    stage.getLayers().forEach(layer => {
-      // Check if this layer contains selectable content
-      const hasSelectableItems = layer.getChildren().some(child => isSelectableNode(child))
-      if (hasSelectableItems) {
-        layersToCheck.push(layer)
-      }
-    })
+    if (freehandShapeLayer) layersToCheck.push(freehandShapeLayer)
+    if (polygonShapesLayer) layersToCheck.push(polygonShapesLayer)
+    // Fallback: if neither available, scan for layers with selectable content
+    if (layersToCheck.length === 0) {
+      stage.getLayers().forEach(layer => {
+        const hasSelectableItems = layer.getChildren().some(child => isSelectableNode(child))
+        if (hasSelectableItems) layersToCheck.push(layer)
+      })
+    }
   }
   
   // Check all selectable nodes in the found layers
@@ -230,6 +230,7 @@ function completeSelectionRect(isShiftHeld: boolean = false) {
   // Clear existing selection if not holding shift
   if (!isShiftHeld) {
     selectionStore.clear()
+    updateTimelineState()
   }
   
   // Add intersecting items to selection
@@ -311,6 +312,25 @@ function nodeLayer(node: Konva.Node): Konva.Layer | null {
   return (p instanceof Konva.Layer) ? p : null
 }
 
+// Preserve visual appearance when reparenting by recomputing local transform
+function reparentPreserveAbsolute(node: Konva.Node, newParent: Konva.Container) {
+  const absBefore = node.getAbsoluteTransform().copy()
+  node.moveTo(newParent)
+  const parentAbs = (newParent as unknown as Konva.Node).getAbsoluteTransform().copy()
+  parentAbs.invert()
+  const local = parentAbs.multiply(absBefore)
+  const dec = local.decompose()
+  node.setAttrs({
+    x: dec.x,
+    y: dec.y,
+    scaleX: dec.scaleX,
+    scaleY: dec.scaleY,
+    rotation: dec.rotation,
+    skewX: dec.skewX,
+    skewY: dec.skewY
+  })
+}
+
 export function canGroupSelection(): boolean {
   const nodes = getSelectedNodes()
   if (nodes.length < 1) return false
@@ -345,13 +365,7 @@ export function groupSelection() {
     commonParent.add(superGroup)
 
     topLevel.forEach((node) => {
-      const absPos = node.getAbsolutePosition()
-      const absRot = node.getAbsoluteRotation()
-      const absScale = node.getAbsoluteScale()
-      node.moveTo(superGroup)
-      node.position(absPos)
-      node.rotation(absRot)
-      node.scale(absScale)
+      reparentPreserveAbsolute(node, superGroup)
     })
 
     // Register group and select it
@@ -381,13 +395,7 @@ export function ungroupSelection() {
   executeCommand('Ungroup Selection', () => {
     const children = [...grp.getChildren()]
     children.forEach(child => {
-      const absPos = child.getAbsolutePosition()
-      const absRot = child.getAbsoluteRotation()
-      const absScale = child.getAbsoluteScale()
-      child.moveTo(parent)
-      child.position(absPos)
-      child.rotation(absRot)
-      child.scale(absScale)
+      reparentPreserveAbsolute(child, parent)
       child.draggable(false)
     })
 
@@ -397,6 +405,140 @@ export function ungroupSelection() {
 
     selectionStore.clear()
     parent.getLayer()?.batchDraw()
+    // Rebuild stroke connections after ungroup to keep data in sync
+    try { refreshStrokeConnections() } catch {}
     updateBakedStrokeData()
+  })
+}
+
+// ---------------- Duplicate / Delete (unified) ----------------
+
+function getTopLevelSelectedNodes(): Konva.Node[] {
+  const nodes = selectionStore.selectedKonvaNodes.value
+  // keep only nodes that are not descendants of any other selected node
+  return nodes.filter((node) => !nodes.some((other) => other !== node && other.isAncestorOf(node)))
+}
+
+export function duplicateSelection() {
+  const selectedNodes = selectionStore.selectedKonvaNodes.value
+  if (selectedNodes.length === 0) return
+
+  executeCommand('Duplicate', () => {
+    const topLevelNodes = getTopLevelSelectedNodes()
+    const duplicates: Konva.Node[] = []
+
+    topLevelNodes.forEach((node) => {
+      // Freehand strokes and groups
+      if (node instanceof Konva.Path || node instanceof Konva.Group) {
+        const dup = deepCloneWithNewIds(node, 50, 50)
+        const parent = node.getParent()
+        if (parent) parent.add(dup)
+        duplicates.push(dup)
+      }
+      // Polygons
+      else if (node instanceof Konva.Line) {
+        const clone = node.clone({ x: node.x() + 50, y: node.y() + 50 }) as Konva.Line
+        // assign new id and register in polygon state
+        const newId = uid('poly_')
+        clone.id(newId)
+        const parent = node.getParent()
+        if (parent) parent.add(clone)
+
+        // register data structures and handlers
+        fromPolygon(clone)
+        attachPolygonHandlers(clone)
+        polygonShapes.set(newId, {
+          id: newId,
+          points: [...clone.points()],
+          closed: !!clone.closed(),
+          creationTime: Date.now(),
+          konvaShape: clone
+        } as any)
+
+        duplicates.push(clone)
+      }
+    })
+
+    // Update selection to new duplicates
+    selectionStore.clear()
+    duplicates.forEach((node) => {
+      const item = getCanvasItem(node)
+      if (item) selectionStore.add(item, true)
+    })
+
+    // Refresh visuals/state
+    freehandShapeLayer?.batchDraw()
+    polygonShapesLayer?.batchDraw()
+    updateBakedStrokeData()
+    updateBakedPolygonData()
+    serializePolygonState()
+  })
+}
+
+export function deleteSelection() {
+  const selectedNodes = selectionStore.selectedKonvaNodes.value
+  if (selectedNodes.length === 0) return
+
+  executeCommand('Delete Selected', () => {
+    const topLevelNodes = getTopLevelSelectedNodes()
+
+    topLevelNodes.forEach((node) => {
+      // Collect descendants we need to clean from registries before destroy
+      const collect: Konva.Node[] = []
+      const walk = (n: Konva.Node) => {
+        collect.push(n)
+        if (n instanceof Konva.Container) {
+          n.getChildren().forEach((c) => walk(c))
+        }
+      }
+      walk(node)
+
+      // Remove registry/state entries for all collected nodes
+      collect.forEach((n) => {
+        // Freehand stroke record cleanup
+        if (n instanceof Konva.Path) {
+          // remove from strokes map
+          import('../freehandTool').then(({ freehandStrokes, freehandStrokeGroups }) => {
+            // delete stroke entry matching this node id or shape
+            freehandStrokes.delete(n.id())
+            // fallback: by shape reference
+            Array.from(freehandStrokes.entries()).forEach(([id, s]) => {
+              if (s.shape === n) freehandStrokes.delete(id)
+            })
+            // remove from any group stroke lists
+            Array.from(freehandStrokeGroups.values()).forEach((g) => {
+              g.strokeIds = g.strokeIds.filter((sid) => sid !== n.id())
+            })
+          })
+        }
+        // Freehand group record cleanup
+        if (n instanceof Konva.Group) {
+          import('../freehandTool').then(({ freehandStrokeGroups }) => {
+            freehandStrokeGroups.delete(n.id())
+          })
+        }
+        // Polygon record cleanup
+        if (n instanceof Konva.Line) {
+          polygonShapes.delete(n.id())
+        }
+        // Remove from CanvasItem registry
+        removeCanvasItem(n.id())
+      })
+
+      // Destroy the node subtree
+      node.destroy()
+    })
+
+    selectionStore.clear()
+
+    // Redraw/refresh
+    freehandShapeLayer?.batchDraw()
+    polygonShapesLayer?.batchDraw()
+    updateBakedStrokeData()
+    updateBakedPolygonData()
+    serializePolygonState()
+
+    // Ancillary viz cleanup (best-effort)
+    import('../ancillaryVisualizations').then(({ refreshAnciliaryViz }) => refreshAnciliaryViz()).catch(() => {})
   })
 }

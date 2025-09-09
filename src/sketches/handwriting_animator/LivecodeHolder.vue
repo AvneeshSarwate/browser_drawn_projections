@@ -12,7 +12,7 @@ import Timeline from './Timeline.vue';
 import MetadataEditor from './MetadataEditor.vue';
 import HierarchicalMetadataEditor from './HierarchicalMetadataEditor.vue';
 import VisualizationToggles from './VisualizationToggles.vue';
-import { clearFreehandSelection, createStrokeShape, currentPoints, currentTimestamps, deserializeFreehandState, drawingStartTime, freehandDrawingLayer, freehandSelectionLayer, freehandShapeLayer, freehandStrokes, getStrokePath, gridSize, isAnimating, isDrawing, serializeFreehandState, setCurrentPoints, setCurrentTimestamps, setDrawingStartTime, setFreehandDrawingLayer, setFreehandSelectionLayer, setFreehandShapeLayer, setIsDrawing, showGrid, updateBakedStrokeData, updateFreehandDraggableStates, updateTimelineState, type FreehandStroke, useRealTiming, deleteFreehandSelected, selectedStrokesForTimeline, timelineDuration, handleTimeUpdate, maxInterStrokeDelay, setUpdateCursor, updateCursor, getGroupStrokeIndices, duplicateFreehandSelected, downloadFreehandDrawing, uploadFreehandDrawing, setRefreshAVs, type FreehandStrokeGroup, getCurrentFreehandStateString, restoreFreehandState } from './freehandTool';
+import { clearFreehandSelection, createStrokeShape, currentPoints, currentTimestamps, deserializeFreehandState, drawingStartTime, freehandDrawingLayer, freehandSelectionLayer, freehandShapeLayer, freehandStrokes, getStrokePath, gridSize, isAnimating, isDrawing, serializeFreehandState, setCurrentPoints, setCurrentTimestamps, setDrawingStartTime, setFreehandDrawingLayer, setFreehandSelectionLayer, setFreehandShapeLayer, setIsDrawing, showGrid, updateBakedStrokeData, updateFreehandDraggableStates, updateTimelineState, type FreehandStroke, useRealTiming, selectedStrokesForTimeline, timelineDuration, handleTimeUpdate, maxInterStrokeDelay, setUpdateCursor, updateCursor, getGroupStrokeIndices, downloadFreehandDrawing, uploadFreehandDrawing, setRefreshAVs, type FreehandStrokeGroup, getCurrentFreehandStateString, restoreFreehandState } from './freehandTool';
 import { getPointsBounds } from './utils/canvasUtils';
 import { CommandStack } from './core/commandStack';
 import { setGlobalExecuteCommand } from './core/commands';
@@ -25,10 +25,10 @@ import Stats from '@/rendering/stats';
 import { EditorView, basicSetup } from 'codemirror';
 import { javascript } from '@codemirror/lang-javascript';
 import { oneDark } from '@codemirror/theme-one-dark';
-import { polygonShapesLayer, polygonPreviewLayer, polygonControlsLayer, polygonSelectionLayer, clearPolygonSelection, updatePolygonControlPoints, deserializePolygonState, polygonMode, handlePolygonClick, isDrawingPolygon, handlePolygonMouseMove, handlePolygonEditMouseMove, currentPolygonPoints, finishPolygon, clearCurrentPolygon, serializePolygonState, setPolygonControlsLayer, setPolygonPreviewLayer, setPolygonSelectionLayer, setPolygonShapesLayer, deleteSelectedPolygon, getCurrentPolygonStateString, restorePolygonState, updateBakedPolygonData } from './polygonTool';
+import { polygonShapesLayer, polygonPreviewLayer, polygonControlsLayer, polygonSelectionLayer, clearPolygonSelection, updatePolygonControlPoints, deserializePolygonState, polygonMode, handlePolygonClick, isDrawingPolygon, handlePolygonMouseMove, handlePolygonEditMouseMove, currentPolygonPoints, finishPolygon, clearCurrentPolygon, serializePolygonState, setPolygonControlsLayer, setPolygonPreviewLayer, setPolygonSelectionLayer, setPolygonShapesLayer, getCurrentPolygonStateString, restorePolygonState, updateBakedPolygonData } from './polygonTool';
 import { initAVLayer, refreshAnciliaryViz } from './ancillaryVisualizations';
 import { initializeTransformer } from './core/transformerManager';
-import { initializeSelectTool, handleSelectPointerDown, handleSelectPointerMove, handleSelectPointerUp, groupSelection, ungroupSelection, canGroupSelection, canUngroupSelection } from './core/selectTool';
+import { initializeSelectTool, handleSelectPointerDown, handleSelectPointerMove, handleSelectPointerUp, groupSelection, ungroupSelection, canGroupSelection, canUngroupSelection, duplicateSelection, deleteSelection } from './core/selectTool';
 import type { StrokePoint } from './gpuStrokes/strokeTypes';
 import type { AnchorKind } from './gpuStrokes/coordinateUtils';
 import type { LoopHandle } from '@/channels/base_time_context';
@@ -1157,6 +1157,15 @@ onUnmounted(() => {
           </button>
         </div>
         <span class="separator">|</span>
+        <div class="button-group vertical">
+          <button @click="duplicateSelection" :disabled="selectionStore.count() === 0 || isAnimating">
+            📄 Duplicate
+          </button>
+          <button @click="deleteSelection" :disabled="selectionStore.count() === 0 || isAnimating">
+            🗑️ Delete
+          </button>
+        </div>
+        <span class="separator">|</span>
       </template>
 
       <!-- Freehand Tool Toolbar -->
@@ -1165,12 +1174,12 @@ onUnmounted(() => {
           {{ showGrid ? '⊞ Grid On' : '⊡ Grid Off' }}
         </button>
         <div class="button-group vertical">
-        <button @click="duplicateFreehandSelected" :disabled="selectionStore.count() === 0 || isAnimating">
-        📄 Duplicate
-        </button>
-        <button @click="deleteFreehandSelected" :disabled="selectionStore.count() === 0 || isAnimating">
-        🗑️ Delete
-        </button>
+          <button @click="duplicateSelection" :disabled="selectionStore.count() === 0 || isAnimating">
+            📄 Duplicate
+          </button>
+          <button @click="deleteSelection" :disabled="selectionStore.count() === 0 || isAnimating">
+            🗑️ Delete
+          </button>
         </div>
         <span class="separator">|</span>
         <button @click="useRealTiming = !useRealTiming" :class="{ active: useRealTiming }">
@@ -1207,8 +1216,8 @@ onUnmounted(() => {
         <button @click="clearCurrentPolygon" :disabled="!isDrawingPolygon || isAnimating">
         🗑️ Cancel Shape
         </button>
-        <button @click="deleteSelectedPolygon" :disabled="selectionStore.isEmpty() || isAnimating">
-        🗑️ Delete
+        <button @click="deleteSelection" :disabled="selectionStore.isEmpty() || isAnimating">
+          🗑️ Delete
         </button>
         <span class="separator">|</span>
         <button @click="showMetadataEditor = !showMetadataEditor" :class="{ active: showMetadataEditor }"
