@@ -935,16 +935,11 @@ onMounted(async () => {
         // Clear selection when starting to draw
         selectionStore.clear()
       } else if (activeTool.value === 'polygon') {
-        // Polygon tool handles polygon-specific interactions
+        // Polygon tool handles polygon-specific interactions only (no selection)
         const parent = e.target.getParent?.()
         const isControlPoint = parent === polygonControlsLayer
         if (!isControlPoint) {
-          if (polygonMode.value === 'draw') {
-            handlePolygonClick(pos)
-          } else {
-            // In edit mode, delegate selection to select tool for consistency
-            handleSelectPointerDown(stage!, e)
-          }
+          handlePolygonClick(pos)
         }
       }
     })

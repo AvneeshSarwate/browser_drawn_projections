@@ -211,19 +211,14 @@ export const serializePolygonState = () => {
 export const attachPolygonHandlers = (node: Konva.Line) => {
   console.log('Attaching polygon handlers to:', node.id())
   
-  node.draggable(true) // Make polygons draggable for transformation
+  node.draggable(false) // Do not drag polygons directly; use transformer in select mode
 
   // Selection handled by stage-level select tool; avoid node-level click toggles
 
   // Add drag tracking handlers for undo/redo
-  node.on('dragstart', () => {
-    startPolygonDragTracking()
-  })
-
-  node.on('dragend', () => {
-    finishPolygonDragTracking('Polygon Drag')
-    serializePolygonState()
-  })
+  // If we ever re-enable node drags (e.g., special mode), these handlers keep undo/redo correct
+  node.on('dragstart', () => startPolygonDragTracking())
+  node.on('dragend', () => { finishPolygonDragTracking('Polygon Drag'); serializePolygonState() })
 }
 
 export const deserializePolygonState = () => {
@@ -340,15 +335,25 @@ export const handlePolygonClick = (pos: { x: number, y: number }) => {
     updatePolygonPreview()
   } else if (polygonMode.value === 'edit') {
     // Edit shape mode - add points to existing polygons only if not clicking on a control point
-    const polygonArray = Array.from(polygonShapes.values()).map(p => ({ 
-      points: p.points.map((val, idx) => idx % 2 === 0 ? { x: val, y: p.points[idx + 1] } : null)
-        .filter(p => p !== null) as { x: number, y: number }[] 
-    }))
+    const polygonArray = Array.from(polygonShapes.values()).map(p => {
+      const line = p.konvaShape
+      const t = line ? line.getAbsoluteTransform() : null
+      const pts: { x: number, y: number }[] = []
+      for (let i = 0; i < p.points.length; i += 2) {
+        if (t) {
+          const wp = t.point({ x: p.points[i], y: p.points[i + 1] })
+          pts.push({ x: wp.x, y: wp.y })
+        } else {
+          pts.push({ x: p.points[i], y: p.points[i + 1] })
+        }
+      }
+      return { points: pts }
+    })
     
     if (polygonArray.length > 0) {
       const result = findClosestPolygonLineAtPoint(polygonArray, pos)
       
-      if (result.polygonIndex >= 0 && result.distance < 20) {
+      if (result.polygonIndex >= 0 && result.distance < polygonProximityThreshold * 2) {
         // Add point to the middle of the closest line segment
         const polygonId = Array.from(polygonShapes.keys())[result.polygonIndex]
         const polygon = polygonShapes.get(polygonId)
@@ -375,6 +380,7 @@ export const handlePolygonClick = (pos: { x: number, y: number }) => {
             updatePolygonControlPoints() // Refresh control points
             serializePolygonState() // Serialize for hotreload
             polygonShapesLayer?.batchDraw()
+            updateBakedPolygonData() // ensure baked data reflects edit
           })
         }
       }
@@ -402,11 +408,21 @@ export const handlePolygonEditMouseMove = () => {
     return
   }
   
-  // Find the closest polygon edge
-  const polygonArray = Array.from(polygonShapes.values()).map(p => ({ 
-    points: p.points.map((val, idx) => idx % 2 === 0 ? { x: val, y: p.points[idx + 1] } : null)
-      .filter(p => p !== null) as { x: number, y: number }[] 
-  }))
+  // Find the closest polygon edge (in world coordinates)
+  const polygonArray = Array.from(polygonShapes.values()).map(p => {
+    const line = p.konvaShape
+    const t = line ? line.getAbsoluteTransform() : null
+    const pts: { x: number, y: number }[] = []
+    for (let i = 0; i < p.points.length; i += 2) {
+      if (t) {
+        const wp = t.point({ x: p.points[i], y: p.points[i + 1] })
+        pts.push({ x: wp.x, y: wp.y })
+      } else {
+        pts.push({ x: p.points[i], y: p.points[i + 1] })
+      }
+    }
+    return { points: pts }
+  })
   
   if (polygonArray.length > 0) {
     const result = findClosestPolygonLineAtPoint(polygonArray, mousePos)
@@ -416,12 +432,16 @@ export const handlePolygonEditMouseMove = () => {
     if (result.polygonIndex >= 0 && result.distance < 20) {
       const polygon = Array.from(polygonShapes.values())[result.polygonIndex]
       const points = polygon.points
+      const line = polygon.konvaShape
+      const t = line ? line.getAbsoluteTransform() : null
       
       // Get the edge endpoints
       const p1x = points[result.lineIndex * 2]
       const p1y = points[result.lineIndex * 2 + 1]
       const p2x = points[((result.lineIndex + 1) * 2) % points.length]
       const p2y = points[((result.lineIndex + 1) * 2 + 1) % points.length]
+      const wp1 = t ? t.point({ x: p1x, y: p1y }) : { x: p1x, y: p1y }
+      const wp2 = t ? t.point({ x: p2x, y: p2y }) : { x: p2x, y: p2y }
       
       // Calculate midpoint
       const midX = (p1x + p2x) / 2
@@ -429,7 +449,7 @@ export const handlePolygonEditMouseMove = () => {
       
       // Highlight the edge
       const edgeLine = new Konva.Line({
-        points: [p1x, p1y, p2x, p2y],
+        points: [wp1.x, wp1.y, wp2.x, wp2.y],
         stroke: '#00ff00',
         strokeWidth: 4,
         opacity: 0.8
@@ -694,23 +714,15 @@ watch(polygonMode, (newMode) => {
     polygonPreviewLayer?.destroyChildren()
     polygonPreviewLayer?.batchDraw()
     
-    // Enable dragging for transformation
-    polygonShapes.forEach(polygon => {
-      if (polygon.konvaShape) {
-        polygon.konvaShape.draggable(true)
-      }
-    })
+    // Disable dragging in polygon tool mode; drawing only
+    polygonShapes.forEach(polygon => { polygon.konvaShape?.draggable(false) })
   } else if (newMode === 'edit') {
     // When switching to edit mode, clear any drawing preview
     polygonPreviewLayer?.destroyChildren()
     polygonPreviewLayer?.batchDraw()
     
     // Disable dragging during vertex editing
-    polygonShapes.forEach(polygon => {
-      if (polygon.konvaShape) {
-        polygon.konvaShape.draggable(false)
-      }
-    })
+    polygonShapes.forEach(polygon => { polygon.konvaShape?.draggable(false) })
   }
   updatePolygonControlPoints()
   clearPolygonSelection()
