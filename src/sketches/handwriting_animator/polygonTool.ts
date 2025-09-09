@@ -8,7 +8,7 @@ import type { PolygonRenderData, FlattenedPolygon, TemplateAppState } from "./ap
 import { globalStore, stage, activeNode, metadataText, showMetadataEditor, getActiveSingleNode } from "./appState"
 import { executeCommand } from "./core/commands"
 import { uid } from './utils/canvasUtils'
-import { fromPolygon, getCanvasItem, removeCanvasItem } from './core/CanvasItem'
+import { fromPolygon, fromGroup, getCanvasItem, removeCanvasItem } from './core/CanvasItem'
 import * as selectionStore from './core/selectionStore'
 const store = globalStore()
 export const appState = store.appStateRef
@@ -262,19 +262,7 @@ export const attachPolygonHandlers = (node: Konva.Line) => {
   
   node.draggable(true) // Make polygons draggable for transformation
 
-  // Add any polygon-specific event handlers here if needed
-  node.on('click', (e) => {
-    if(polygonMode.value === 'draw') {
-      console.log('Polygon clicked draw:', node.id())
-    } else if(polygonMode.value === 'edit') {
-      console.log('Polygon clicked edit:', node.id())
-      e.cancelBubble = true
-      const item = getCanvasItem(node)
-      if (item) {
-        selectionStore.toggle(item, e.evt.shiftKey)
-      }
-    }
-  })
+  // Selection handled by stage-level select tool; avoid node-level click toggles
 
   // Add drag tracking handlers for undo/redo
   node.on('dragstart', () => {
@@ -310,12 +298,19 @@ export const deserializePolygonState = () => {
       console.log('Restoring', layerData.children.length, 'polygon shapes')
       layerData.children.forEach((childData: any, index: number) => {
         console.log('Creating polygon node', index, 'of type', childData.className)
-        const node = Konva.Node.create(JSON.stringify(childData)) as Konva.Line
+        const node = Konva.Node.create(JSON.stringify(childData)) as Konva.Node
         polygonShapesLayer!.add(node)
         console.log('Added polygon node to layer:', node.id(), node.isVisible())
         
-        // Attach handlers to this polygon node
-        attachPolygonHandlers(node)
+        if (node instanceof Konva.Line) {
+          // Attach handlers to this polygon node
+          attachPolygonHandlers(node)
+          // Register as CanvasItem for unified selection
+          fromPolygon(node)
+        } else if (node instanceof Konva.Group) {
+          // Register groups for selection escalation
+          fromGroup(node)
+        }
       })
     }
     

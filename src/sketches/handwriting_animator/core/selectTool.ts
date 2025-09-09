@@ -2,6 +2,9 @@ import Konva from 'konva'
 import { ref } from 'vue'
 import * as selectionStore from './selectionStore'
 import { getCanvasItem } from './CanvasItem'
+import { executeCommand } from './commands'
+import { getCurrentFreehandStateString } from '../freehandTool'
+import { getCurrentPolygonStateString } from '../polygonTool'
 
 // Drag selection state
 export const dragSelectionState = ref({
@@ -13,6 +16,14 @@ export const dragSelectionState = ref({
 
 let selectionRect: Konva.Rect | undefined = undefined
 let selectionLayer: Konva.Layer | undefined = undefined
+
+// Selection drag state (drag entire selection by grabbing any selected node)
+const selectionDragState = {
+  isDragging: false,
+  startPos: { x: 0, y: 0 },
+  startNodePositions: new Map<Konva.Node, { x: number, y: number }>(),
+  beforeState: '' as string
+}
 
 export function initializeSelectTool(layer: Konva.Layer) {
   selectionLayer = layer
@@ -34,28 +45,51 @@ export function handleSelectPointerDown(stage: Konva.Stage, e: Konva.KonvaEventO
 
   // If clicking on a shape, handle selection
   if (e.target !== stage) {
-    const item = getCanvasItem(e.target)
+    // Escalate to top-most group whose parent is a Layer
+    let node: Konva.Node = e.target
+    let parent = node.getParent()
+    while (parent && !(parent instanceof Konva.Layer)) {
+      node = parent
+      parent = node.getParent()
+    }
+
+    const item = getCanvasItem(node)
     if (item) {
-      selectionStore.toggle(item, e.evt.shiftKey)
+      // Update selection depending on modifier and whether the clicked item is already selected
+      const wasSelected = selectionStore.has(item)
+      if (e.evt.shiftKey) {
+        selectionStore.toggle(item, true)
+      } else if (!wasSelected) {
+        selectionStore.clear()
+        selectionStore.add(item, true)
+      }
+
+      // Start selection drag if the clicked item is (now) part of the selection
+      const nowSelected = selectionStore.has(item)
+      if (nowSelected) {
+        startSelectionDrag(stage)
+      }
       return
     }
   }
 
   // If clicking on empty space, prepare for drag selection or clear selection
-  if (!e.evt.shiftKey) {
-    // Will clear selection if this ends up being just a click (not a drag)
-    dragSelectionState.value = {
-      isSelecting: true,
-      startPos: { x: pos.x, y: pos.y },
-      currentPos: { x: pos.x, y: pos.y },
-      isShiftHeld: e.evt.shiftKey
-    }
-    
-    resetSelectionRect(pos.x, pos.y)
+  // Start drag selection; whether to clear will be decided on pointer up
+  dragSelectionState.value = {
+    isSelecting: true,
+    startPos: { x: pos.x, y: pos.y },
+    currentPos: { x: pos.x, y: pos.y },
+    isShiftHeld: e.evt.shiftKey
   }
+  resetSelectionRect(pos.x, pos.y)
 }
 
 export function handleSelectPointerMove(stage: Konva.Stage, e: Konva.KonvaEventObject<MouseEvent>) {
+  // Selection drag has priority
+  if (selectionDragState.isDragging) {
+    updateSelectionDrag(stage)
+    return
+  }
   if (!dragSelectionState.value.isSelecting) return
   
   const pos = stage.getPointerPosition()
@@ -66,10 +100,15 @@ export function handleSelectPointerMove(stage: Konva.Stage, e: Konva.KonvaEventO
 }
 
 export function handleSelectPointerUp(stage: Konva.Stage, e: Konva.KonvaEventObject<MouseEvent>) {
+  // Finish selection drag if active
+  if (selectionDragState.isDragging) {
+    finishSelectionDrag()
+    return
+  }
+
   if (!dragSelectionState.value.isSelecting) return
 
   completeSelectionRect(dragSelectionState.value.isShiftHeld)
-  
   dragSelectionState.value.isSelecting = false
 }
 
@@ -129,6 +168,12 @@ function completeSelectionRect(isShiftHeld: boolean = false) {
   // Get the actual rectangle dimensions for intersection testing
   const rectBox = selectionRect.getClientRect()
   
+  // Helper: filter only selectable nodes (exclude transformers and helpers)
+  const isSelectableNode = (node: Konva.Node): boolean => {
+    if (node instanceof Konva.Transformer) return false
+    return node instanceof Konva.Path || node instanceof Konva.Line || node instanceof Konva.Group
+  }
+
   // Check all layers that contain selectable items
   const layersToCheck: Konva.Layer[] = []
   
@@ -137,11 +182,7 @@ function completeSelectionRect(isShiftHeld: boolean = false) {
   if (stage) {
     stage.getLayers().forEach(layer => {
       // Check if this layer contains selectable content
-      const hasSelectableItems = layer.getChildren().some(child => 
-        child instanceof Konva.Path || 
-        child instanceof Konva.Line ||
-        child instanceof Konva.Group
-      )
+      const hasSelectableItems = layer.getChildren().some(child => isSelectableNode(child))
       if (hasSelectableItems) {
         layersToCheck.push(layer)
       }
@@ -151,18 +192,17 @@ function completeSelectionRect(isShiftHeld: boolean = false) {
   // Check all selectable nodes in the found layers
   layersToCheck.forEach(layer => {
     layer.getChildren().forEach(node => {
-      if (node instanceof Konva.Path || node instanceof Konva.Line || node instanceof Konva.Group) {
-        const nodeBox = node.getClientRect()
-        
-        // Check if rectangles intersect
-        if (!(rectBox.x + rectBox.width < nodeBox.x || 
-              nodeBox.x + nodeBox.width < rectBox.x ||
-              rectBox.y + rectBox.height < nodeBox.y ||
-              nodeBox.y + nodeBox.height < rectBox.y)) {
-          const item = getCanvasItem(node)
-          if (item) {
-            intersectingItems.push(item)
-          }
+      if (!isSelectableNode(node)) return
+      const nodeBox = node.getClientRect()
+
+      // Check if rectangles intersect
+      if (!(rectBox.x + rectBox.width < nodeBox.x || 
+            nodeBox.x + nodeBox.width < rectBox.x ||
+            rectBox.y + rectBox.height < nodeBox.y ||
+            nodeBox.y + nodeBox.height < rectBox.y)) {
+        const item = getCanvasItem(node)
+        if (item) {
+          intersectingItems.push(item)
         }
       }
     })
@@ -179,4 +219,63 @@ function completeSelectionRect(isShiftHeld: boolean = false) {
   // Hide and reset selection rectangle to prevent stale data
   selectionRect.setAttrs({ x: 0, y: 0, width: 0, height: 0, visible: false })
   selectionLayer?.batchDraw()
+}
+
+// ---------------- Selection Drag Implementation ----------------
+
+function startSelectionDrag(stage: Konva.Stage) {
+  const pos = stage.getPointerPosition()
+  if (!pos) return
+  selectionDragState.isDragging = true
+  selectionDragState.startPos = { x: pos.x, y: pos.y }
+  selectionDragState.startNodePositions.clear()
+
+  // Capture before-state for undo/redo
+  selectionDragState.beforeState = JSON.stringify({
+    freehand: getCurrentFreehandStateString(),
+    polygon: getCurrentPolygonStateString()
+  })
+
+  // Store absolute start positions so we can move across different parents
+  const nodes = selectionStore.selectedKonvaNodes.value
+  nodes.forEach(node => {
+    const abs = node.getAbsolutePosition()
+    selectionDragState.startNodePositions.set(node, { x: abs.x, y: abs.y })
+  })
+}
+
+function updateSelectionDrag(stage: Konva.Stage) {
+  const pos = stage.getPointerPosition()
+  if (!pos) return
+  const dx = pos.x - selectionDragState.startPos.x
+  const dy = pos.y - selectionDragState.startPos.y
+
+  selectionDragState.startNodePositions.forEach((startPos, node) => {
+    node.absolutePosition({ x: startPos.x + dx, y: startPos.y + dy })
+  })
+
+  // Redraw affected layers
+  const layers = new Set<Konva.Layer>()
+  selectionDragState.startNodePositions.forEach((_, node) => {
+    let p = node.getParent()
+    while (p && !(p instanceof Konva.Layer)) p = p.getParent()
+    if (p instanceof Konva.Layer) layers.add(p)
+  })
+  layers.forEach(l => l.batchDraw())
+}
+
+function finishSelectionDrag() {
+  // Capture after-state and push a unified command if changed
+  const afterState = JSON.stringify({
+    freehand: getCurrentFreehandStateString(),
+    polygon: getCurrentPolygonStateString()
+  })
+
+  if (selectionDragState.beforeState !== afterState) {
+    // Use executeCommand wrapper; the action is a no-op because changes already applied
+    executeCommand('Move Selection', () => { /* movement already applied */ })
+  }
+
+  selectionDragState.isDragging = false
+  selectionDragState.startNodePositions.clear()
 }

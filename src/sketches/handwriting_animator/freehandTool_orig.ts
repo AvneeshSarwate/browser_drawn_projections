@@ -4,8 +4,7 @@ import Konva from "konva"
 import getStroke from "perfect-freehand"
 import { type ShallowReactive, shallowReactive, ref, computed, watch } from "vue"
 import type { FreehandRenderData, FlattenedStroke, FlattenedStrokeGroup, TemplateAppState } from "./appState"
-import { globalStore, stage, activeTool } from "./appState"
-import { executeCommand } from "./core/commands"
+import { globalStore, stage, selected } from "./appState"
 
 // Import AV refresh function - we'll import lazily to avoid circular deps
 let refreshAVs: (() => void) | undefined
@@ -13,22 +12,10 @@ let refreshAVs: (() => void) | undefined
 const store = globalStore()
 const appState = store.appStateRef
 
-// Import shared utilities
-import { uid, getPointsBounds, hasAncestorConflict } from './utils/canvasUtils'
-import { fromStroke, fromGroup, getCanvasItem, removeCanvasItem, type CanvasItem } from './core/CanvasItem'
-import * as selectionStore from './core/selectionStore'
+// Utility functions for duplication
+const uid = (prefix = 'id_') => `${prefix}${crypto.randomUUID()}`
 
 // Konva clone behavior confirmed: recursively clones children but keeps same IDs
-
-// Register nodes recursively in the CanvasItem registry
-const registerCanvasItemsRecursively = (node: Konva.Node) => {
-  if (node instanceof Konva.Path) {
-    fromStroke(node)
-  } else if (node instanceof Konva.Group) {
-    fromGroup(node)
-    node.getChildren().forEach(child => registerCanvasItemsRecursively(child))
-  }
-}
 
 // Extracted handler attachment logic for reuse in duplication
 export const attachHandlersRecursively = (node: Konva.Node) => {
@@ -43,7 +30,10 @@ export const attachHandlersRecursively = (node: Konva.Node) => {
     node.off('dragstart.freehand')
     node.off('dragend.freehand')
 
-    // Selection is handled by the stage-level select tool; no node-level click handler
+    node.on('click.freehand', (e) => {
+      e.cancelBubble = true
+      handleClick(node, e.evt.shiftKey)
+    })
 
     node.on('dragstart.freehand', () => {
       startFreehandDragTracking()
@@ -127,8 +117,6 @@ const deepCloneWithNewIds = (
 
   // Attach event handlers to all nodes in the cloned tree
   attachHandlersRecursively(clone)
-  // Register all cloned nodes as CanvasItems
-  registerCanvasItemsRecursively(clone)
 
   console.log('Successfully cloned', origNode.className, 'with new ID:', clone.id())
 
@@ -137,18 +125,17 @@ const deepCloneWithNewIds = (
 
 // Main duplicate function
 export const duplicateFreehandSelected = () => {
-  const selectedNodes = selectionStore.selectedKonvaNodes.value
-  if (selectedNodes.length === 0) {
+  if (selected.length === 0) {
     console.log('No items selected for duplication')
     return
   }
 
-  console.log('Duplicating', selectedNodes.length, 'selected items')
+  console.log('Duplicating', selected.length, 'selected items')
 
-  executeCommand('Duplicate', () => {
+  executeFreehandCommand('Duplicate', () => {
     // Filter to top-level nodes only (avoid ancestor/descendant conflicts)
-    const topLevelNodes = selectedNodes.filter((node: Konva.Node) => {
-      return !selectedNodes.some((other: Konva.Node) => other !== node && other.isAncestorOf(node))
+    const topLevelNodes = selected.filter(node => {
+      return !selected.some(other => other !== node && other.isAncestorOf(node))
     })
 
     console.log('Top-level nodes to duplicate:', topLevelNodes.length)
@@ -269,14 +256,22 @@ const freehandTopGroup = (node: Konva.Node): Konva.Group | null => {
   return candidate
 }
 
-// hasAncestorConflict now imported from utils/canvasUtils
+// Guard against selecting ancestor & descendant simultaneously
+const hasAncestorConflict = (nodes: Konva.Node[]): boolean => {
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i + 1; j < nodes.length; j++) {
+      if (nodes[i].isAncestorOf(nodes[j]) || nodes[j].isAncestorOf(nodes[i])) return true
+    }
+  }
+  return false
+}
 
 // Helper function to get all strokes that are selected (including those in groups)
 const getSelectedStrokes = (): FreehandStroke[] => {
   const selectedStrokes: FreehandStroke[] = []
   const processedStrokeIds = new Set<string>()
 
-  selectionStore.selectedKonvaNodes.value.forEach(node => {
+  selected.forEach(node => {
     if (node instanceof Konva.Group) {
       // If it's a group, find all strokes in that group
       const findStrokesInGroup = (group: Konva.Group) => {
@@ -310,24 +305,23 @@ const getSelectedStrokes = (): FreehandStroke[] => {
   return selectedStrokes
 }
 
-// Selection functions - now using unified selection store
+// Selection functions from working example
 export const freehandAddSelection = (node: Konva.Node) => {
   console.log('Adding to selection:', node.id(), node.constructor.name)
-  const item = getCanvasItem(node)
-  if (item) {
-    selectionStore.add(item, true) // additive = true
-  }
+  if (!selected.includes(node)) selected.push(node)
+  console.log('Selected array now has:', selected.length, 'items')
+  freehandRefreshUI()
 }
 
 const freehandToggleSelection = (node: Konva.Node) => {
-  const item = getCanvasItem(node)
-  if (item) {
-    selectionStore.toggle(item, true) // additive = true
-  }
+  const idx = selected.indexOf(node)
+  idx >= 0 ? selected.splice(idx, 1) : selected.push(node)
+  freehandRefreshUI()
 }
 
 export const clearFreehandSelection = () => {
-  selectionStore.clear()
+  selected.length = 0
+  freehandRefreshUI()
 }
 
 // Update timeline state based on current selection
@@ -335,7 +329,7 @@ export const updateTimelineState = () => {
   const oldDuration = timelineDuration.value
   let newDuration = 0
 
-  if (selectionStore.isEmpty()) {
+  if (selected.length === 0) {
     // No selection - use all strokes
     selectedStrokesForTimeline.value = new Set()
     timelineDuration.value = 0 // Timeline component will calculate total duration
@@ -386,10 +380,8 @@ const freehandRefreshUI = () => {
   // Ensure stroke connections are up to date
   refreshStrokeConnections()
 
-  const selectedNodes = selectionStore.selectedKonvaNodes.value
-
   // transformers
-  if (selectedNodes.length === 1 && selectedNodes[0] instanceof Konva.Group) {
+  if (selected.length === 1 && selected[0] instanceof Konva.Group) {
     if (!grpTr) {
       grpTr = new Konva.Transformer({ rotateEnabled: true, keepRatio: true, padding: 6 })
 
@@ -404,22 +396,22 @@ const freehandRefreshUI = () => {
 
       freehandSelectionLayer?.add(grpTr)
     }
-    console.log('Using group transformer for:', selectedNodes[0].id())
-    grpTr.nodes([selectedNodes[0]])
+    console.log('Using group transformer for:', selected[0].id())
+    grpTr.nodes([selected[0]])
     selTr.nodes([])
   } else {
-    console.log('Using selection transformer for:', selectedNodes.length, 'nodes:', selectedNodes.map((n: Konva.Node) => n.id()))
-    selTr.nodes(selectedNodes)
+    console.log('Using selection transformer for:', selected.length, 'nodes:', selected.map(n => n.id()))
+    selTr.nodes(selected)
     if (grpTr) grpTr.nodes([])
   }
 
   // Update UI refs like working example
-  freehandSelectedCount.value = selectedNodes.length
-  isFreehandGroupSelected.value = selectedNodes.length === 1 && selectedNodes[0] instanceof Konva.Group
+  freehandSelectedCount.value = selected.length
+  isFreehandGroupSelected.value = selected.length === 1 && selected[0] instanceof Konva.Group
 
   //todo - allowing grouping single strokes as a quick hack because named-groups are the core way letters are defined
   // Update button states like working example
-  const canGroup = selectedNodes.length >= 1 && !hasAncestorConflict(selectedNodes)
+  const canGroup = selected.length >= 1 && !hasAncestorConflict(selected)
   freehandCanGroupRef.value = canGroup
 
   // Update timeline-related state
@@ -504,7 +496,7 @@ const getCurrentFreehandState = () => {
   }
 }
 
-export const getCurrentFreehandStateString = (): string => {
+const getCurrentFreehandStateString = (): string => {
   const state = getCurrentFreehandState()
   return JSON.stringify(state)
 }
@@ -550,7 +542,7 @@ export const executeFreehandCommand = (commandName: string, action: () => void) 
 }
 
 // Restore state from string (freehand only)
-export const restoreFreehandState = (stateString: string) => {
+const restoreFreehandState = (stateString: string) => {
   if (!stateString) return
 
   isUndoRedoOperation = true
@@ -734,7 +726,7 @@ export const deserializeFreehandState = () => {
     freehandShapeLayer.destroyChildren()
     freehandStrokes.clear()
     freehandStrokeGroups.clear()
-    selectionStore.clear() // Clear selection using unified store
+    selected.length = 0
 
     // Use the extracted handler attachment logic
 
@@ -750,8 +742,6 @@ export const deserializeFreehandState = () => {
 
         // Recursively attach handlers to this node and all its children
         attachHandlersRecursively(node)
-        // Register this node and children in the CanvasItem registry
-        registerCanvasItemsRecursively(node)
       })
     }
 
@@ -816,17 +806,31 @@ export const deserializeFreehandState = () => {
 
 // Function to update draggable state based on mode and group membership
 export const updateFreehandDraggableStates = () => {
-  // In the unified system, node-level dragging is disabled in Select tool because we implement
-  // selection dragging at the stage level and use the Transformer for transforms.
-  const isSelectTool = activeTool.value === 'select'
+  console.log('updateDraggableStates called, drawMode:', freehandDrawMode.value, 'strokes count:', freehandStrokes.size)
 
-  freehandStrokes.forEach((stroke) => {
-    if (stroke.shape) stroke.shape.draggable(false)
+  // Update all shapes
+  freehandStrokes.forEach((stroke, id) => {
+    if (stroke.shape) {
+      // Check if stroke is in a group by looking at parent
+      const parent = stroke.shape.getParent()
+      const isInGroup = parent && parent !== freehandShapeLayer
+
+      const shouldBeDraggable = !freehandDrawMode.value && !isInGroup
+      console.log('Stroke', id, 'parent:', parent?.constructor.name, 'isInGroup:', isInGroup, 'shouldBeDraggable:', shouldBeDraggable)
+
+      // Only draggable if in select mode AND not in a group
+      stroke.shape.draggable(shouldBeDraggable)
+    } else {
+      console.log('Stroke', id, 'has no shape!')
+    }
   })
 
+  // Update all groups
   if (freehandShapeLayer) {
     freehandShapeLayer.getChildren().forEach(child => {
-      if (child instanceof Konva.Group) child.draggable(false)
+      if (child instanceof Konva.Group) {
+        child.draggable(!freehandDrawMode.value)
+      }
     })
   }
 }
@@ -876,7 +880,16 @@ export const getStrokePath = (points: number[], normalize: boolean = false): str
   return `${d} Z`
 }
 
-// getPointsBounds now imported from utils/canvasUtils
+export const getPointsBounds = (points: number[]): { minX: number, minY: number, maxX: number, maxY: number } => {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  for (let i = 0; i < points.length; i += 2) {
+    minX = Math.min(minX, points[i])
+    maxX = Math.max(maxX, points[i])
+    minY = Math.min(minY, points[i + 1])
+    maxY = Math.max(maxY, points[i + 1])
+  }
+  return { minX, minY, maxX, maxY }
+}
 
 // Helper function to create a new stroke shape
 export const createStrokeShape = (points: number[], id: string): Konva.Path => {
@@ -900,7 +913,11 @@ export const createStrokeShape = (points: number[], id: string): Konva.Path => {
     draggable: true, // Start draggable like working example
   })
 
-  // Selection is handled by stage-level select tool; no node-level click handler
+  // Add click handler for selection
+  path.on('click', (e) => {
+    e.cancelBubble = true
+    handleClick(path, e.evt.shiftKey)
+  })
 
   // Add drag tracking handlers
   path.on('dragstart', () => {
@@ -911,9 +928,6 @@ export const createStrokeShape = (points: number[], id: string): Konva.Path => {
     finishFreehandDragTracking('Stroke')
     freehandShapeLayer?.batchDraw()
   })
-
-  // Register as CanvasItem
-  fromStroke(path)
 
   return path
 }
@@ -936,14 +950,13 @@ export const handleClick = (target: Konva.Node, shiftKey: boolean) => {
 
 // Group selected strokes - simplified from working example  
 export const groupSelectedStrokes = () => {
-  const selectedNodes = selectionStore.selectedKonvaNodes.value
   //todo - allowing grouping single strokes as a quick hack because named-groups are the core way letters are defined
-  // if (selectedNodes.length < 2) return 
+  // if (selected.length < 2) return 
 
-  executeCommand?.('Group Strokes', () => {
+  executeFreehandCommand('Group Strokes', () => {
     // compute common parent to insert new group into (layer by default)
-    let commonParent = selectedNodes[0].getParent()
-    for (const n of selectedNodes) if (n.getParent() !== commonParent) { commonParent = freehandShapeLayer!; break }
+    let commonParent = selected[0].getParent()
+    for (const n of selected) if (n.getParent() !== commonParent) { commonParent = freehandShapeLayer!; break }
 
     const superGroup = new Konva.Group({ draggable: true })
     commonParent?.add(superGroup)
@@ -960,7 +973,7 @@ export const groupSelectedStrokes = () => {
     if (selTr) selTr.nodes([])
     if (grpTr) grpTr.nodes([])
 
-    selectedNodes.forEach((node: Konva.Node) => {
+    selected.forEach((node) => {
       node.draggable(false)
       const absPos = node.getAbsolutePosition()
       const absRot = node.getAbsoluteRotation()
@@ -973,10 +986,8 @@ export const groupSelectedStrokes = () => {
 
     freehandLockPivot(superGroup)
 
-    // Register the group as a CanvasItem and select it
-    const groupItem = fromGroup(superGroup)
-    selectionStore.clear()
-    selectionStore.add(groupItem)
+    clearFreehandSelection()
+    selected.push(superGroup)
     freehandRefreshUI()
     updateFreehandDraggableStates() // Update draggable states after grouping
     freehandShapeLayer?.batchDraw()
@@ -986,11 +997,10 @@ export const groupSelectedStrokes = () => {
 
 // Ungroup selected groups - simplified from working example
 export const ungroupSelectedStrokes = () => {
-  const selectedNodes = selectionStore.selectedKonvaNodes.value
-  if (!(selectedNodes.length === 1 && selectedNodes[0] instanceof Konva.Group)) return
+  if (!(selected.length === 1 && selected[0] instanceof Konva.Group)) return
 
-  executeCommand('Ungroup Strokes', () => {
-    const grp = selectedNodes[0] as Konva.Group
+  executeFreehandCommand('Ungroup Strokes', () => {
+    const grp = selected[0] as Konva.Group
     const parent = grp.getParent()
     if (grpTr) grpTr.nodes([])
 
@@ -1021,11 +1031,10 @@ export const ungroupSelectedStrokes = () => {
 
 // Delete selected freehand strokes/groups
 export const deleteFreehandSelected = () => {
-  const selectedNodes = selectionStore.selectedKonvaNodes.value
-  if (selectedNodes.length === 0) return
+  if (selected.length === 0) return
 
-  executeCommand('Delete Selected', () => {
-    selectedNodes.forEach((node: Konva.Node) => {
+  executeFreehandCommand('Delete Selected', () => {
+    selected.forEach(node => {
       node.destroy()
       // Also remove from strokes map if it's a stroke
       freehandStrokes.forEach((stroke, id) => {
@@ -1033,8 +1042,6 @@ export const deleteFreehandSelected = () => {
           freehandStrokes.delete(id)
         }
       })
-      // Remove from registry
-      removeCanvasItem(node.id())
     })
     clearFreehandSelection()
     updateTimelineState() // Update timeline state after deletion
@@ -1050,7 +1057,7 @@ export const handleTimeUpdate = (time: number) => {
 
   // Get strokes to animate and sort them
   let strokesToAnimate: FreehandStroke[] = []
-  const isSelection = !selectionStore.isEmpty()
+  const isSelection = selected.length > 0
 
   if (isSelection) {
     // Get selected strokes including those in groups, but only freehand ones
@@ -1395,7 +1402,7 @@ export const setNodeMetadata = (
   node: Konva.Node,
   meta: Record<string, any> | undefined
 ) => {
-  executeCommand('Edit Metadata', () => {
+  executeFreehandCommand('Edit Metadata', () => {
     if (meta === undefined || Object.keys(meta).length === 0) {
       node.setAttr('metadata', undefined)   // keep export slim
     } else {
@@ -1489,7 +1496,17 @@ export const completeSelectionRect = (isShiftHeld: boolean = false) => {
 }
 
 // Watch for draw mode changes - simplified based on working example
-// Legacy freehand draw-mode selection watcher removed in favor of explicit tool modes
+watch(freehandDrawMode, () => {
+  updateCursor?.()
+
+  // Update draggable states when mode changes
+  updateFreehandDraggableStates()
+
+  // Clear selection when switching to draw mode
+  if (freehandDrawMode.value) {
+    clearFreehandSelection()
+  }
+})
 
 // Function to set the AV refresh callback (called from LivecodeHolder)
 export const setRefreshAVs = (fn: () => void) => {

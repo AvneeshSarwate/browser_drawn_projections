@@ -1,5 +1,6 @@
 import Konva from "konva"
 import type { FreehandStroke } from "../freehandTool"
+import { uid } from "../utils/canvasUtils"
 
 export type ItemType = 'stroke' | 'strokeGroup' | 'polygon'
 
@@ -17,6 +18,9 @@ export const canvasItemRegistry = new Map<string, CanvasItem>()
 
 // Factory functions
 export const fromStroke = (shape: Konva.Path, strokeData?: FreehandStroke): CanvasItem => {
+  if (!shape.id()) {
+    shape.id(uid('stroke_'))
+  }
   const item: CanvasItem = {
     id: shape.id(),
     type: 'stroke',
@@ -47,6 +51,9 @@ export const fromStroke = (shape: Konva.Path, strokeData?: FreehandStroke): Canv
 }
 
 export const fromGroup = (group: Konva.Group): CanvasItem => {
+  if (!group.id()) {
+    group.id(uid('group_'))
+  }
   const item: CanvasItem = {
     id: group.id(),
     type: 'strokeGroup',
@@ -77,6 +84,9 @@ export const fromGroup = (group: Konva.Group): CanvasItem => {
 }
 
 export const fromPolygon = (line: Konva.Line): CanvasItem => {
+  if (!line.id()) {
+    line.id(uid('poly_'))
+  }
   const item: CanvasItem = {
     id: line.id(),
     type: 'polygon',

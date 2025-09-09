@@ -1,7 +1,6 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
-import { type TemplateAppState, appStateName, resolution, type FreehandRenderData, type FlattenedStroke, type FlattenedStrokeGroup, type PolygonRenderData, type FlattenedPolygon, drawFlattenedStrokeGroup, stage, setStage, activeNode, metadataText, showMetadataEditor, getActiveSingleNode, activeTool, availableStrokes, animationParams, gpuStrokesReady, launchByName, selectedGroupName, scriptCode, scriptExecuting, SCRIPT_STORAGE_KEY } from './appState';
-import * as selectionStore from './core/selectionStore';
+import { type TemplateAppState, appStateName, resolution, type FreehandRenderData, type FlattenedStroke, type FlattenedStrokeGroup, type PolygonRenderData, type FlattenedPolygon, drawFlattenedStrokeGroup, stage, setStage, activeNode, metadataText, showMetadataEditor, getActiveSingleNode, selectedPolygons, selected, activeTool, availableStrokes, animationParams, gpuStrokesReady, launchByName, selectedGroupName, scriptCode, scriptExecuting, SCRIPT_STORAGE_KEY } from './appState';
 import { inject, onMounted, onUnmounted, ref, watch, computed, shallowReactive, type ShallowReactive, shallowRef, nextTick, h } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
@@ -12,10 +11,7 @@ import Timeline from './Timeline.vue';
 import MetadataEditor from './MetadataEditor.vue';
 import HierarchicalMetadataEditor from './HierarchicalMetadataEditor.vue';
 import VisualizationToggles from './VisualizationToggles.vue';
-import { clearFreehandSelection, createStrokeShape, currentPoints, currentTimestamps, deserializeFreehandState, drawingStartTime, finishFreehandDragTracking, freehandDrawingLayer, freehandSelectionLayer, freehandShapeLayer, freehandStrokes, getStrokePath, gridSize, isAnimating, isDrawing, selTr, serializeFreehandState, setCurrentPoints, setCurrentTimestamps, setDrawingStartTime, setFreehandDrawingLayer, setFreehandSelectionLayer, setFreehandShapeLayer, setIsDrawing, setSelTr, showGrid, startFreehandDragTracking, updateBakedStrokeData, updateFreehandDraggableStates, updateTimelineState, type FreehandStroke, groupSelectedStrokes, ungroupSelectedStrokes, freehandCanGroupRef, isFreehandGroupSelected, freehandSelectedCount, useRealTiming, deleteFreehandSelected, selectedStrokesForTimeline, timelineDuration, handleTimeUpdate, maxInterStrokeDelay, setUpdateCursor, updateCursor, getGroupStrokeIndices, duplicateFreehandSelected, downloadFreehandDrawing, uploadFreehandDrawing, setRefreshAVs, type FreehandStrokeGroup, getCurrentFreehandStateString, restoreFreehandState } from './freehandTool';
-import { getPointsBounds } from './utils/canvasUtils';
-import { CommandStack } from './core/commandStack';
-import { setGlobalExecuteCommand } from './core/commands';
+import { clearFreehandSelection, createStrokeShape, currentPoints, currentTimestamps, deserializeFreehandState, drawingStartTime, executeFreehandCommand, finishFreehandDragTracking, freehandDrawingLayer, freehandDrawMode, freehandSelectionLayer, freehandShapeLayer, freehandStrokes, getPointsBounds, getStrokePath, gridSize, isAnimating, isDrawing, selTr, serializeFreehandState, setCurrentPoints, setCurrentTimestamps, setDrawingStartTime, setFreehandDrawingLayer, setFreehandSelectionLayer, setFreehandShapeLayer, setIsDrawing, setSelTr, showGrid, startFreehandDragTracking, updateBakedStrokeData, updateFreehandDraggableStates, updateTimelineState, type FreehandStroke, groupSelectedStrokes, ungroupSelectedStrokes, freehandCanGroupRef, isFreehandGroupSelected, freehandSelectedCount, undoFreehand, canUndoFreehand, canRedoFreehand, redoFreehand, useRealTiming, deleteFreehandSelected, selectedStrokesForTimeline, timelineDuration, handleTimeUpdate, maxInterStrokeDelay, setUpdateCursor, updateCursor, getGroupStrokeIndices, duplicateFreehandSelected, downloadFreehandDrawing, uploadFreehandDrawing, dragSelectionState, createSelectionRect, updateSelectionRect, completeSelectionRect, resetSelectionRect, setRefreshAVs, type FreehandStrokeGroup } from './freehandTool';
 import { ensureHighlightLayer } from '@/metadata';
 import { DrawingScene } from './gpuStrokes/drawingScene';
 import { StrokeInterpolator } from './gpuStrokes/strokeInterpolator';
@@ -25,10 +21,8 @@ import Stats from '@/rendering/stats';
 import { EditorView, basicSetup } from 'codemirror';
 import { javascript } from '@codemirror/lang-javascript';
 import { oneDark } from '@codemirror/theme-one-dark';
-import { polygonShapesLayer, polygonPreviewLayer, polygonControlsLayer, polygonSelectionLayer, clearPolygonSelection, updatePolygonControlPoints, deserializePolygonState, polygonMode, handlePolygonClick, isDrawingPolygon, handlePolygonMouseMove, handlePolygonEditMouseMove, currentPolygonPoints, finishPolygon, clearCurrentPolygon, serializePolygonState, setPolygonControlsLayer, setPolygonPreviewLayer, setPolygonSelectionLayer, setPolygonShapesLayer, deleteSelectedPolygon, getCurrentPolygonStateString, restorePolygonState, updateBakedPolygonData } from './polygonTool';
-import { initAVLayer, refreshAnciliaryViz } from './ancillaryVisualizations';
-import { initializeTransformer } from './core/transformerManager';
-import { initializeSelectTool, handleSelectPointerDown, handleSelectPointerMove, handleSelectPointerUp } from './core/selectTool';
+import { polygonShapesLayer, polygonPreviewLayer, polygonControlsLayer, polygonSelectionLayer, clearPolygonSelection, updatePolygonControlPoints, deserializePolygonState, polygonMode, handlePolygonClick, isDrawingPolygon, handlePolygonMouseMove, handlePolygonEditMouseMove, currentPolygonPoints, finishPolygon, clearCurrentPolygon, serializePolygonState, setPolygonControlsLayer, setPolygonPreviewLayer, setPolygonSelectionLayer, setPolygonShapesLayer, polygonUndo, polygonRedo, canPolygonUndo, canPolygonRedo, deleteSelectedPolygon } from './polygonTool';
+import { initAVLayer, refreshAVs } from './ancillaryVisualizations';
 import type { StrokePoint } from './gpuStrokes/strokeTypes';
 import type { AnchorKind } from './gpuStrokes/coordinateUtils';
 import type { LoopHandle } from '@/channels/base_time_context';
@@ -38,49 +32,6 @@ import { combineBoundingBoxes } from './gpuStrokes/strokeTextureManager';
 const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
 let timeLoops: CancelablePromisePoxy<any>[] = []
-
-// ==================== Unified Command Stack ====================
-const captureCanvasState = () => {
-  const freehandState = getCurrentFreehandStateString()
-  const polygonState = getCurrentPolygonStateString()
-  
-  return JSON.stringify({
-    freehand: freehandState,
-    polygon: polygonState
-  })
-}
-
-const restoreCanvasState = (stateString: string) => {
-  if (!stateString) return
-  
-  try {
-    const state = JSON.parse(stateString)
-    if (state.freehand) {
-      restoreFreehandState(state.freehand)
-    }
-    if (state.polygon) {
-      restorePolygonState(state.polygon)
-    }
-  } catch (error) {
-    console.warn('Failed to restore canvas state:', error)
-  }
-}
-
-const onCanvasStateChange = () => {
-  updateBakedStrokeData()
-  updateBakedPolygonData()
-  refreshAnciliaryViz()
-}
-
-// Create unified command stack instance
-const commandStack = new CommandStack(captureCanvasState, restoreCanvasState, onCanvasStateChange)
-
-// Expose command stack methods for use in templates and other functions
-const executeCommand = (name: string, action: () => void) => commandStack.executeCommand(name, action)
-const undo = () => commandStack.undo()
-const redo = () => commandStack.redo()
-const canUndo = () => commandStack.canUndo()
-const canRedo = () => commandStack.canRedo()
 
 const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromisePoxy<any> => {
   const loop = launch(block)
@@ -171,73 +122,46 @@ const drawGrid = () => {
   gridLayer.batchDraw()
 }
 
-// Watch for tool changes - new three-tool system
+// Watch for tool changes to manage layer interactivity (not visibility)
 watch(activeTool, (newTool) => {
-  // Clear selections when switching tools
-  selectionStore.clear()
-
-  if (newTool === 'select') {
-    // In select mode, enable interaction with all shape layers for selection
-    freehandShapeLayer?.listening(true)
-    polygonShapesLayer?.listening(true)
-    
-    // Disable drawing-specific layers
-    freehandDrawingLayer?.listening(false)
-    polygonPreviewLayer?.listening(false)
-    polygonControlsLayer?.listening(false)
-    
-    // Keep selection layers active
-    freehandSelectionLayer?.listening(true)
-    polygonSelectionLayer?.listening(true)
-  } else if (newTool === 'freehand') {
-    // In freehand mode, enable freehand shape layer and drawing layer
+  if (newTool === 'freehand') {
+    // Enable freehand layers interaction, disable polygon layers interaction
     freehandShapeLayer?.listening(true)
     freehandDrawingLayer?.listening(true)
     freehandSelectionLayer?.listening(true)
 
-    // Keep polygon shapes visible but not interactive for drawing
     polygonShapesLayer?.listening(false)
     polygonPreviewLayer?.listening(false)
     polygonControlsLayer?.listening(false)
     polygonSelectionLayer?.listening(false)
   } else if (newTool === 'polygon') {
-    // In polygon mode, enable polygon layers
+    // Disable freehand layers interaction, enable polygon layers interaction
+    freehandShapeLayer?.listening(false)
+    freehandDrawingLayer?.listening(false)
+    freehandSelectionLayer?.listening(false)
+
     polygonShapesLayer?.listening(true)
     polygonPreviewLayer?.listening(true)
     polygonControlsLayer?.listening(true)
     polygonSelectionLayer?.listening(true)
-
-    // Keep freehand shapes visible but not interactive for drawing
-    freehandShapeLayer?.listening(false)
-    freehandDrawingLayer?.listening(false)
-    freehandSelectionLayer?.listening(false)
   }
+
+  // Clear selections when switching tools
+  clearFreehandSelection()
+  clearPolygonSelection()
 
   // Redraw stage
   stage?.batchDraw()
-
-  // Update node draggability to avoid conflicting with selection-drag logic
-  const setAllDraggable = (draggable: boolean) => {
-    freehandShapeLayer?.getChildren().forEach(node => {
-      if (node instanceof Konva.Path || node instanceof Konva.Group) node.draggable(draggable)
-    })
-    polygonShapesLayer?.getChildren().forEach(node => {
-      if (node instanceof Konva.Line || node instanceof Konva.Group) node.draggable(draggable)
-    })
-  }
-  // In Select tool we disable node-level dragging so we can drag the whole selection
-  if (newTool === 'select') setAllDraggable(false)
-  else setAllDraggable(false) // default off for other tools; transformer/control points manage interactions
 })
 
 
 // Watch for selection changes to update metadata editor
-watch([() => selectionStore.count(), activeNode], () => {
-  const newActiveNode = selectionStore.getActiveSingleNode()
+watch([() => selected.length, () => selectedPolygons.length, activeNode], () => {
+  const newActiveNode = getActiveSingleNode()
   activeNode.value = newActiveNode
 
   // Show metadata editor if there's any selection (single nodes, groups, or multiple items)
-  const hasAnySelection = selectionStore.count() > 0
+  const hasAnySelection = selected.length > 0 || selectedPolygons.length > 0
 
   if (newActiveNode) {
     // Single node selected - populate the old metadata text for compatibility
@@ -262,23 +186,22 @@ const applyMetadata = (metadata: any) => {
   activeNode.value.setAttr('metadata', metadata)
 
   // Add to undo history
-  const selectedNodes = selectionStore.selectedKonvaNodes.value
-  if (selectedNodes.some((node: any) => node.id() === activeNode.value?.id())) {
+  if (selectedPolygons.some(node => node.id() === activeNode.value?.id())) {
     // For polygons - need to implement polygon command history if not exists
     console.log('Polygon metadata updated')
   } else {
-  // For freehand shapes
-  executeCommand('Edit Metadata', () => {
-  // The actual change has already been applied above
-  })
+    // For freehand shapes
+    executeFreehandCommand('Edit Metadata', () => {
+      // The actual change has already been applied above
+    })
   }
 }
 
 // Callback for HierarchicalMetadataEditor to apply metadata with tool-specific command system
-const handleApplyMetadata = (node: Konva.Node, metadata: any) => {
+const handleApplyMetadata = (node: any, metadata: any) => {
   // For freehand tool, wrap in undoable command
   if (activeTool.value === 'freehand') {
-    executeCommand('Edit Metadata', () => {
+    executeFreehandCommand('Edit Metadata', () => {
       node.setAttr('metadata', metadata === undefined || Object.keys(metadata).length === 0 ? undefined : metadata)
       updateBakedStrokeData()
     })
@@ -827,10 +750,10 @@ onMounted(async () => {
       height: resolution.height,
     }))
 
-    // Update cursor based on active tool
+    // Update cursor based on mode
     setUpdateCursor(() => {
       if (stage && konvaContainer.value) {
-        konvaContainer.value.style.cursor = activeTool.value === 'freehand' ? 'crosshair' : 'default'
+        konvaContainer.value.style.cursor = freehandDrawMode.value ? 'crosshair' : 'default'
       }
     })
     updateCursor!()
@@ -856,12 +779,6 @@ onMounted(async () => {
     stage!.add(polygonPreviewLayer!)
     stage!.add(polygonControlsLayer!)
     stage!.add(polygonSelectionLayer!)
-    
-    // Initialize unified transformer
-    initializeTransformer(freehandSelectionLayer!)
-    
-    // Initialize select tool
-    initializeSelectTool(freehandSelectionLayer!)
 
     // Add metadata highlight layer on top
     const metadataHighlightLayer = ensureHighlightLayer(stage!)
@@ -869,13 +786,10 @@ onMounted(async () => {
     
     // Initialize ancillary visualizations layer
     initAVLayer()
-    setRefreshAVs(refreshAnciliaryViz)
+    setRefreshAVs(refreshAVs)
     
-    // Set up executeCommand callbacks for tools
-    setGlobalExecuteCommand(executeCommand)
-
-    
-    // Selection rectangle is created by core/selectTool.initializeSelectTool
+    // Create selection rectangle for drag selection
+    createSelectionRect()
 
     // Set initial listening states based on active tool
     if (activeTool.value === 'freehand') {
@@ -889,7 +803,25 @@ onMounted(async () => {
       freehandSelectionLayer!.listening(false)
     }
 
-    // Unified transformer is initialized by core/transformerManager
+    // Create transformers like working example
+    setSelTr(new Konva.Transformer({
+      rotateEnabled: true,
+      keepRatio: true,
+      padding: 6,
+      rotationSnaps: [0, 45, 90, 135, 180, 225, 270, 315],
+      rotationSnapTolerance: 5,
+    }))
+
+    // Add transform tracking to main transformer
+    selTr!.on('transformstart', () => {
+      startFreehandDragTracking()
+    })
+
+    selTr!.on('transformend', () => {
+      finishFreehandDragTracking('Transform Selection')
+    })
+
+    freehandSelectionLayer!.add(selTr!)
 
     // Initial grid draw
     drawGrid()
@@ -897,7 +829,8 @@ onMounted(async () => {
     // Initialize polygon control points if needed  
     updatePolygonControlPoints()
 
-    // Initialize cursor
+    // Start in select mode for testing
+    freehandDrawMode.value = false
     updateCursor!()
 
     // Try to restore canvas state from hotreload (after all setup is complete)
@@ -914,78 +847,89 @@ onMounted(async () => {
     await nextTick() // Ensure DOM elements are ready
     initializeScriptEditor()
 
-    // Mouse/touch event handlers - new three-tool system
+    // Mouse/touch event handlers
     stage!.on('mousedown touchstart', (e) => {
       const pos = stage!.getPointerPosition()
       if (!pos) return
 
-      if (activeTool.value === 'select') {
-        // Universal select tool handles all selection for both freehand and polygon
-        handleSelectPointerDown(stage!, e)
-      } else if (activeTool.value === 'freehand') {
-        // Freehand tool always draws in this mode; selection via Select tool
-        setIsDrawing(true)
-        setCurrentPoints([pos.x, pos.y])
-        setDrawingStartTime(performance.now())
-        setCurrentTimestamps([0])
+      if (activeTool.value === 'freehand') {
+        // Freehand tool logic
+        if (freehandDrawMode.value) {
+          // Drawing mode
+          // if (e.target !== stage) return
 
-        // Clear selection when starting to draw
-        selectionStore.clear()
+          setIsDrawing(true)
+          setCurrentPoints([pos.x, pos.y])
+          setDrawingStartTime(performance.now())
+          setCurrentTimestamps([0])
+
+          // Clear selection when starting to draw
+          clearFreehandSelection()
+        } else {
+          // Selection mode
+          if (e.target === stage) {
+            // Prepare for potential drag selection, but don't clear selection yet
+            dragSelectionState.value = {
+              isSelecting: true,
+              startPos: { x: pos.x, y: pos.y },
+              currentPos: { x: pos.x, y: pos.y },
+              isShiftHeld: e.evt.shiftKey
+            }
+            
+            // Reset selection rectangle to prevent stale data from affecting drag detection
+            resetSelectionRect(pos.x, pos.y)
+          }
+        }
       } else if (activeTool.value === 'polygon') {
-        // Polygon tool handles polygon-specific interactions
+        // Polygon tool logic - allow clicks anywhere except on control points
         const parent = e.target.getParent?.()
         const isControlPoint = parent === polygonControlsLayer
         if (!isControlPoint) {
-          if (polygonMode.value === 'draw') {
-            handlePolygonClick(pos)
-          } else {
-            // In edit mode, delegate selection to select tool for consistency
-            handleSelectPointerDown(stage!, e)
-          }
+          handlePolygonClick(pos)
         }
       }
     })
 
     stage!.on('mousemove touchmove', (e) => {
-      if (activeTool.value === 'select') {
-        // Handle drag selection for select tool
-        handleSelectPointerMove(stage!, e)
-      } else if (activeTool.value === 'freehand') {
-        if (isDrawing) {
-          // Handle drawing
-          const pos = stage!.getPointerPosition()
-          if (!pos) return
+      if (activeTool.value === 'freehand' && isDrawing) {
+        const pos = stage!.getPointerPosition()
+        if (!pos) return
 
-          currentPoints.push(pos.x, pos.y)
-          currentTimestamps.push(performance.now() - drawingStartTime)
+        currentPoints.push(pos.x, pos.y)
+        currentTimestamps.push(performance.now() - drawingStartTime)
 
-          // Update preview
-          freehandDrawingLayer?.destroyChildren()
-          const previewPath = new Konva.Path({
-            data: getStrokePath(currentPoints),
-            fill: '#666',
-            strokeWidth: 0,
-          })
-          freehandDrawingLayer?.add(previewPath)
-          freehandDrawingLayer?.batchDraw()
-        }
+        // Update preview
+        freehandDrawingLayer?.destroyChildren()
+        const previewPath = new Konva.Path({
+          data: getStrokePath(currentPoints),
+          fill: '#666',
+          strokeWidth: 0,
+        })
+        freehandDrawingLayer?.add(previewPath)
+        freehandDrawingLayer?.batchDraw()
+      } else if (activeTool.value === 'freehand' && !freehandDrawMode.value && dragSelectionState.value.isSelecting) {
+        // Drag selection in progress
+        const pos = stage!.getPointerPosition()
+        if (!pos) return
+        
+        dragSelectionState.value.currentPos = { x: pos.x, y: pos.y }
+        updateSelectionRect()
       } else if (activeTool.value === 'polygon') {
         if (polygonMode.value === 'draw' && isDrawingPolygon.value) {
           handlePolygonMouseMove()
         } else if (polygonMode.value === 'edit') {
           handlePolygonEditMouseMove()
         }
-        // Note: selection drag is handled by select tool when appropriate
       }
     })
 
-    stage!.on('mouseup touchend', (e) => {
+    stage!.on('mouseup touchend', () => {
       if (activeTool.value === 'freehand' && isDrawing) {
         setIsDrawing(false)
         freehandDrawingLayer?.destroyChildren()
 
         if (currentPoints.length > 2) {
-          executeCommand('Draw Stroke', () => {
+          executeFreehandCommand('Draw Stroke', () => {
             // Create new stroke
             const creationTime = Date.now()
             const strokeId = `stroke-${creationTime}`
@@ -1026,9 +970,10 @@ onMounted(async () => {
 
         setCurrentPoints([])
         setCurrentTimestamps([])
-      } else {
-        // Delegate to select tool for all other cases
-        handleSelectPointerUp(stage!, e)
+      } else if (activeTool.value === 'freehand' && !freehandDrawMode.value && dragSelectionState.value.isSelecting) {
+        // Complete drag selection
+        completeSelectionRect(dragSelectionState.value.isShiftHeld)
+        dragSelectionState.value.isSelecting = false
       }
     })
 
@@ -1127,25 +1072,17 @@ onUnmounted(() => {
     <div class="control-panel">
       <!-- Tool Switcher Dropdown -->
       <select v-model="activeTool" :disabled="isAnimating" class="tool-dropdown">
-        <option value="select">👆 Select</option>
         <option value="freehand">✏️ Freehand</option>
         <option value="polygon">⬟ Polygon</option>
       </select>
       <span class="separator">|</span>
-      
-      <!-- Unified Undo/Redo (works for both tools) -->
-      <div class="button-group vertical">
-        <button @click="undo" :disabled="!canUndo() || isAnimating" title="Undo (Ctrl/Cmd+Z)">
-          ↶ Undo
-        </button>
-        <button @click="redo" :disabled="!canRedo() || isAnimating" title="Redo (Ctrl/Cmd+Shift+Z)">
-          ↷ Redo
-        </button>
-      </div>
-      <span class="separator">|</span>
 
       <!-- Freehand Tool Toolbar -->
       <template v-if="activeTool === 'freehand'">
+        <button @click="freehandDrawMode = !freehandDrawMode" :class="{ active: freehandDrawMode }"
+          :disabled="isAnimating">
+          {{ freehandDrawMode ? '✏️ Draw' : '👆 Select' }}
+        </button>
         <button @click="showGrid = !showGrid" :class="{ active: showGrid }" :disabled="isAnimating">
           {{ showGrid ? '⊞ Grid On' : '⊡ Grid Off' }}
         </button>
@@ -1165,6 +1102,15 @@ onUnmounted(() => {
         </button>
         <button @click="deleteFreehandSelected" :disabled="freehandSelectedCount === 0 || isAnimating">
         🗑️ Delete
+        </button>
+        </div>
+        <span class="separator">|</span>
+        <div class="button-group vertical">
+        <button @click="undoFreehand" :disabled="!canUndoFreehand || isAnimating" title="Undo (Ctrl/Cmd+Z)">
+        ↶ Undo
+        </button>
+        <button @click="redoFreehand" :disabled="!canRedoFreehand || isAnimating" title="Redo (Ctrl/Cmd+Shift+Z)">
+        ↷ Redo
         </button>
         </div>
         <span class="separator">|</span>
@@ -1199,10 +1145,19 @@ onUnmounted(() => {
           {{ showGrid ? '⊞ Grid On' : '⊡ Grid Off' }}
         </button>
         <span class="separator">|</span>
+        <div class="button-group vertical">
+        <button @click="polygonUndo" :disabled="!canPolygonUndo || isAnimating" title="Undo (Ctrl/Cmd+Z)">
+        ↶ Undo
+        </button>
+        <button @click="polygonRedo" :disabled="!canPolygonRedo || isAnimating" title="Redo (Ctrl/Cmd+Shift+Z)">
+        ↷ Redo
+        </button>
+        </div>
+        <span class="separator">|</span>
         <button @click="clearCurrentPolygon" :disabled="!isDrawingPolygon || isAnimating">
         🗑️ Cancel Shape
         </button>
-        <button @click="deleteSelectedPolygon" :disabled="selectionStore.isEmpty() || isAnimating">
+        <button @click="deleteSelectedPolygon" :disabled="selectedPolygons.length === 0 || isAnimating">
         🗑️ Delete
         </button>
         <span class="separator">|</span>
