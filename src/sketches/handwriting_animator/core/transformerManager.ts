@@ -3,6 +3,7 @@ import { watch, computed } from 'vue'
 import * as selectionStore from './selectionStore'
 import { pushCommandWithStates } from './commands'
 import { polygonMode } from '../polygonTool'
+import { activeTool } from '../appState'
 
 let transformer: Konva.Transformer | undefined = undefined
 let transformerLayer: Konva.Layer | undefined = undefined
@@ -42,8 +43,8 @@ function updateTransformer(selectedNodes: Konva.Node[]) {
   
   // Filter out nodes that shouldn't be transformed
   const filteredNodes = selectedNodes.filter(node => {
-    // Skip polygons when in edit mode (vertex editing active)
-    if (node instanceof Konva.Line && polygonMode.value === 'edit') {
+    // Skip polygons ONLY while actively in polygon edit mode
+    if (node instanceof Konva.Line && polygonMode.value === 'edit' && activeTool.value === 'polygon') {
       return false
     }
     return true

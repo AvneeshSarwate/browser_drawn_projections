@@ -5,7 +5,7 @@ import { findClosestPolygonLineAtPoint } from "@/creativeAlgs/shapeHelpers"
 import Konva from "konva"
 import { type ShallowReactive, shallowReactive, ref, watch } from "vue"
 import type { PolygonRenderData, FlattenedPolygon, TemplateAppState } from "./appState"
-import { globalStore, stage } from "./appState"
+import { globalStore, stage, activeTool } from "./appState"
 import { executeCommand, pushCommandWithStates } from "./core/commands"
 import { getCurrentFreehandStateString } from './freehandTool'
 import { uid } from './utils/canvasUtils'
@@ -294,8 +294,8 @@ export const deserializePolygonState = () => {
     // Clear any existing control points first
     polygonControlsLayer?.destroyChildren()
     
-    // Update polygon control points if in edit mode
-    if (polygonMode.value === 'edit') {
+    // Only create control points if polygon tool is active AND we're in edit mode
+    if (activeTool.value === 'polygon' && polygonMode.value === 'edit') {
       updatePolygonControlPoints()
     }
     
@@ -723,6 +723,13 @@ export const updatePolygonControlPoints = () => {
 
 // Watch for polygon mode changes to update control points and reset state
 watch(polygonMode, (newMode) => {
+  // If polygon tool is not active, don't create/show control points
+  if (activeTool.value !== 'polygon') {
+    polygonControlsLayer?.destroyChildren()
+    polygonControlsLayer?.batchDraw()
+    return
+  }
+
   // Clear selection when switching modes
   clearPolygonSelection()
   

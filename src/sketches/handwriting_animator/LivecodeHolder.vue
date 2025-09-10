@@ -1,6 +1,6 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
-import { type TemplateAppState, appStateName, resolution, type FreehandRenderData, type FlattenedStroke, type FlattenedStrokeGroup, type PolygonRenderData, type FlattenedPolygon, drawFlattenedStrokeGroup, stage, setStage, activeNode, metadataText, showMetadataEditor, getActiveSingleNode, activeTool, availableStrokes, animationParams, gpuStrokesReady, launchByName, selectedGroupName, scriptCode, scriptExecuting, SCRIPT_STORAGE_KEY } from './appState';
+import { type TemplateAppState, appStateName, resolution, type FreehandRenderData, type FlattenedStroke, type FlattenedStrokeGroup, type PolygonRenderData, type FlattenedPolygon, drawFlattenedStrokeGroup, stage, setStage, showMetadataEditor, activeTool, availableStrokes, animationParams, gpuStrokesReady, launchByName, selectedGroupName, scriptCode, scriptExecuting, SCRIPT_STORAGE_KEY } from './appState';
 import * as selectionStore from './core/selectionStore';
 import { inject, onMounted, onUnmounted, ref, watch, computed, shallowReactive, type ShallowReactive, shallowRef, nextTick, h } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
@@ -172,53 +172,54 @@ const drawGrid = () => {
   gridLayer.batchDraw()
 }
 
-// Watch for tool changes - new three-tool system
-watch(activeTool, (newTool) => {
+// Helper to consistently apply layer listening per tool
+const applyToolMode = (tool: 'select' | 'freehand' | 'polygon') => {
   // Clear selections when switching tools
   selectionStore.clear()
 
-  if (newTool === 'select') {
-    // In select mode, enable interaction with all shape layers for selection
+  if (tool === 'select') {
+    // Enable interaction with shape layers for selection
     freehandShapeLayer?.listening(true)
     polygonShapesLayer?.listening(true)
-    
+
     // Disable drawing-specific layers
     freehandDrawingLayer?.listening(false)
     polygonPreviewLayer?.listening(false)
     polygonControlsLayer?.listening(false)
-    
-    // Keep selection layers active
+
+    // Keep selection layers active (transformer lives here)
     freehandSelectionLayer?.listening(true)
     polygonSelectionLayer?.listening(true)
-  } else if (newTool === 'freehand') {
-    // In freehand mode, enable freehand shape layer and drawing layer
+
+    // Ensure transformer/selection overlay sits above shapes
+    freehandSelectionLayer?.moveToTop()
+    if (stage) ensureHighlightLayer(stage).moveToTop()
+  } else if (tool === 'freehand') {
+    // Freehand drawing mode
     freehandShapeLayer?.listening(true)
     freehandDrawingLayer?.listening(true)
     freehandSelectionLayer?.listening(true)
 
-    // Keep polygon shapes visible but not interactive for drawing
+    // Disable polygon interactive layers
     polygonShapesLayer?.listening(false)
     polygonPreviewLayer?.listening(false)
     polygonControlsLayer?.listening(false)
     polygonSelectionLayer?.listening(false)
-  } else if (newTool === 'polygon') {
-    // In polygon mode, enable polygon layers
+  } else if (tool === 'polygon') {
+    // Polygon mode
     polygonShapesLayer?.listening(true)
     polygonPreviewLayer?.listening(true)
     polygonControlsLayer?.listening(true)
     polygonSelectionLayer?.listening(true)
 
-    // Keep freehand shapes visible but not interactive for drawing
+    // Disable freehand interactive layers
     freehandShapeLayer?.listening(false)
     freehandDrawingLayer?.listening(false)
     freehandSelectionLayer?.listening(false)
   }
 
-  // Redraw stage
-  stage?.batchDraw()
-
   // Manage polygon control points visibility lifecycle across tools
-  if (newTool === 'polygon') {
+  if (tool === 'polygon') {
     if (polygonMode.value === 'edit') {
       updatePolygonControlPoints()
     } else {
@@ -240,54 +241,20 @@ watch(activeTool, (newTool) => {
       if (node instanceof Konva.Line || node instanceof Konva.Group) node.draggable(draggable)
     })
   }
-  // In Select tool we disable node-level dragging so we can drag the whole selection
-  if (newTool === 'select') setAllDraggable(false)
-  else setAllDraggable(false) // default off for other tools; transformer/control points manage interactions
-})
+  // Disable node-level drags; selection drag and transformer manage moves
+  setAllDraggable(false)
 
-
-// Watch for selection changes to update metadata editor
-watch([() => selectionStore.count(), activeNode], () => {
-  const newActiveNode = selectionStore.getActiveSingleNode()
-  activeNode.value = newActiveNode
-
-  // Show metadata editor if there's any selection (single nodes, groups, or multiple items)
-  const hasAnySelection = selectionStore.count() > 0
-
-  if (newActiveNode) {
-    // Single node selected - populate the old metadata text for compatibility
-    const metadata = newActiveNode.getAttr('metadata') ?? {}
-    metadataText.value = JSON.stringify(metadata, null, 2)
-    showMetadataEditor.value = true
-  } else if (hasAnySelection) {
-    // Group or multiple selection - show editor but clear old metadata text
-    metadataText.value = ''
-    showMetadataEditor.value = true
-  } else {
-    // No selection - hide editor
-    metadataText.value = ''
-    showMetadataEditor.value = false
-  }
-})
-
-// Function to apply metadata changes
-const applyMetadata = (metadata: any) => {
-  if (!activeNode.value) return
-
-  activeNode.value.setAttr('metadata', metadata)
-
-  // Add to undo history
-  const selectedNodes = selectionStore.selectedKonvaNodes.value
-  if (selectedNodes.some((node: any) => node.id() === activeNode.value?.id())) {
-    // For polygons - need to implement polygon command history if not exists
-    console.log('Polygon metadata updated')
-  } else {
-  // For freehand shapes
-  executeCommand('Edit Metadata', () => {
-  // The actual change has already been applied above
-  })
-  }
+  // Redraw
+  stage?.batchDraw()
 }
+
+// Watch for tool changes - new three-tool system
+watch(activeTool, (newTool) => {
+  applyToolMode(newTool)
+})
+
+
+// Old metadata watchers removed – unified editor reads directly from selectionStore
 
 // Callback for HierarchicalMetadataEditor to apply metadata via unified selection tool
 const handleApplyMetadata = async (node: Konva.Node, metadata: any) => {
@@ -658,6 +625,8 @@ const handleBabylonCanvasClick = (event: MouseEvent) => {
         return
       }
 
+      
+
       //call launchLoop() to manage animation progress
       launchLoop(async (ctx) => {
         const hangTimeFrac = 0.3 //amount of time to hang with whole group written out
@@ -889,7 +858,12 @@ onMounted(async () => {
 
     // Add metadata highlight layer on top
     const metadataHighlightLayer = ensureHighlightLayer(stage!)
-    // (No need to add to stage - ensureHighlightLayer handles that)
+    // Keep transformer layer above all interactive shape layers to prevent pointer blocking
+    freehandSelectionLayer!.moveToTop()
+    // Keep highlight visuals on top (non-listening, so it won't block interaction)
+    metadataHighlightLayer.moveToTop()
+
+    
     
     // Initialize ancillary visualizations layer
     initAVLayer()
@@ -902,25 +876,18 @@ onMounted(async () => {
     
     // Selection rectangle is created by core/selectTool.initializeSelectTool
 
-    // Set initial listening states based on active tool
-    if (activeTool.value === 'freehand') {
-      polygonShapesLayer!.listening(false)
-      polygonPreviewLayer!.listening(false)
-      polygonControlsLayer!.listening(false)
-      polygonSelectionLayer!.listening(false)
-    } else {
-      freehandShapeLayer!.listening(false)
-      freehandDrawingLayer!.listening(false)
-      freehandSelectionLayer!.listening(false)
-    }
+    // Apply initial tool mode AFTER layers exist (important for transformer interactivity post-HMR)
+    applyToolMode(activeTool.value)
 
     // Unified transformer is initialized by core/transformerManager
 
     // Initial grid draw
     drawGrid()
 
-    // Initialize polygon control points if needed  
-    updatePolygonControlPoints()
+    // Initialize polygon control points only if polygon tool is active and editing
+    if (activeTool.value === 'polygon' && polygonMode.value === 'edit') {
+      updatePolygonControlPoints()
+    }
 
     // Initialize cursor
     updateCursor!()
@@ -928,6 +895,9 @@ onMounted(async () => {
     // Try to restore canvas state from hotreload (after all setup is complete)
     deserializeFreehandState()
     deserializePolygonState()
+
+    // Re-apply tool mode after deserialization to ensure control points/transformer states are correct
+    applyToolMode(activeTool.value)
 
     // Initialize GPU Strokes
     await initializeGPUStrokes()
