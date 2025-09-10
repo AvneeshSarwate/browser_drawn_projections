@@ -244,7 +244,8 @@ export const deserializePolygonState = () => {
       console.log('Restoring', layerData.children.length, 'polygon shapes')
       layerData.children.forEach((childData: any, index: number) => {
         console.log('Creating polygon node', index, 'of type', childData.className)
-        const node = Konva.Node.create(JSON.stringify(childData)) as Konva.Node
+        //todo - add zod and improve typing
+        const node = Konva.Node.create(JSON.stringify(childData))
         polygonShapesLayer!.add(node)
         console.log('Added polygon node to layer:', node.id(), node.isVisible())
         
