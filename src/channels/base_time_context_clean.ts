@@ -3,18 +3,9 @@
 
 const LOG_DELAYS = false
 
-//todo cleanup - copy paste between this and channels.ts
-function dateDelay(callback: () => void, nowTime: number, delayTime: number): void {
-    setTimeout(() => {
-      callback()
-    }, delayTime * 1000)
-  }
-const startTime = performance.now() / 1000
-export const dateNow = () => performance.now() / 1000 - startTime
-export const beatNow = (bpm: number) => dateNow() * bpm / 60
 
-const now = dateNow
-const delayFunc = dateDelay
+const START_TIME = performance.now() / 1000
+export const dateNow = () => performance.now() / 1000 - START_TIME
 
 
 export class CancelablePromiseProxy<T> implements Promise<T> {
@@ -29,8 +20,6 @@ export class CancelablePromiseProxy<T> implements Promise<T> {
   public cancel() {
     this.abortController.abort()
     this.timeContext?.cancel() //todo api - need to detangle relations between promise, context, abort controller
-    //cancel all child contexts
-    // this.timeContext?.childContexts.forEach((ctx) => ctx.cancel()) //todo core - need to cancel child contexts properly
   }
 
   [Symbol.toStringTag]: string = '[object CancelablePromisePoxy]'
@@ -67,9 +56,6 @@ export function createAndLaunchContext<T, C extends TimeContext>(block: (ctx: C)
   newContext.debugName = debugName
   promiseProxy.timeContext = newContext
   if (parentContext) {
-    // newContext.rootContext = parentContext.rootContext
-    // newContext.bpm = parentContext.bpm
-    // parentContext.childContexts.add(newContext)
     parentContext.connectChildContext(newContext)
   } else {
     newContext.rootContext = newContext
@@ -83,7 +69,6 @@ export function createAndLaunchContext<T, C extends TimeContext>(block: (ctx: C)
     })
   if (parentContext) {
     bp.finally(() => { //todo core - need to cancel child contexts properly
-      //todo bug - should be able to always update parent right? why does this only work when both flagged and awaited
       if (updateParent) parentContext.time = Math.max(newContext.time, parentContext.time) 
       parentContext.childContexts.delete(newContext)
     })
@@ -91,10 +76,7 @@ export function createAndLaunchContext<T, C extends TimeContext>(block: (ctx: C)
   return promiseProxy
 }
 
-// const USE_TONE = false
 export function launch<T>(block: (ctx: TimeContext) => Promise<T>): CancelablePromiseProxy<T> {
-  // if(USE_TONE) return createAndLaunchContext(block, Tone.Transport.immediate(), ToneTimeContext, false)
-  // else return createAndLaunchContext(block, dateNow(), DateTimeContext, false)
   return createAndLaunchContext(block, dateNow(), DateTimeContext, false)
 }
 
@@ -103,7 +85,6 @@ export type LoopHandle = {
   finally: (finalFunc: () => void) => void
 }
 
-//todo draft - need to test generalized TimeContext implementation in loops
 export abstract class TimeContext {
   public rootContext: TimeContext | undefined
   public mostRecentDescendentTime: number = 0
@@ -163,8 +144,7 @@ export abstract class TimeContext {
    * the call to branchRet() is what gets you the extra layer to only apply the time update if the branch is awaited
    */
   public branch<T>(block: (ctx: TimeContext) => Promise<T>, debugName: string = ""): LoopHandle {
-    //todo bug - instead of now(), should use this.rootContext!.mostRecentDescendentTime?
-    const promise = createAndLaunchContext(block, this.rootContext!.mostRecentDescendentTime, Object.getPrototypeOf(this).constructor, false, this, debugName)
+    const cpp = createAndLaunchContext(block, this.rootContext!.mostRecentDescendentTime, Object.getPrototypeOf(this).constructor, false, this, debugName)
     //todo api - this allows you to manage a branch without accidentally awaiting on it in a way that
     //would screw up parent context time. but in general, awaiting on anything other than
     //ctx.wait[Time] or ctx.branchWait will screw up contextTime <=> wallClock time relationship.
@@ -172,10 +152,10 @@ export abstract class TimeContext {
     //could make a linter here to warn users?
     return {
       finally: (finalFunc: () => void) => {
-        promise.finally(finalFunc)
+        cpp.finally(finalFunc)
       },
       cancel: () => {
-        promise.cancel()
+        cpp.cancel()
       }
     }
   }
@@ -185,25 +165,8 @@ export abstract class TimeContext {
   } 
 
   //usage: await ctx.segmentWait((prog) => { filterMidi.sendCC(50 + prog) *20) }, 4)
-  // public segmentWait<T>(block: (prog: number) => void, segmentBeats: number, frameTime: number = 0, debugName: string = ""): CancelablePromisePoxy<void> {
-  //   return this.branchWait(async (ctx) => {
-  //     const segmentStartBeats = this.beats
-  //     const loopHandle = this.branch(async (ctx) => {
-  //       while(beatNow(this.bpm) - segmentStartBeats < segmentBeats) {
-  //         block((beatNow(this.bpm) - segmentStartBeats) / segmentBeats)
-          
-  //         if(frameTime > 0) {
-  //           await ctx.waitSec(frameTime)
-  //         } else {
-  //           await ctx.waitFrame()
-  //         }
-  //       }
-  //     })
-  //     await this.wait(segmentBeats)
-  //     loopHandle.cancel()
-  //     block(1)
-  //   })
-  // }
+  //have this be a utility not on the main context?
+  // segmentWait(ctx, duration, progCallback)
   
 
   public cancel() {
@@ -215,43 +178,8 @@ export abstract class TimeContext {
   public wait(beats: number) {
     return beats === 0 ? Promise.resolve() : this.waitSec(beats * 60 / this.bpm) //todo api - should this be in waitSec?
   }
-
-  //todo api - need to change launchLoop() calls to return a BrowserTimeContext, untill then, keep this implemented here to not break old sketches
-  public waitFrame(): Promise<void> {
-    if (this.isCanceled) {
-      throw new Error('context is canceled')
-    }
-    const ctx = this
-    return new Promise<void>((resolve, reject) => {
-      const listener = () => { reject(); console.log('abort') }
-      ctx.abortController.signal.addEventListener('abort', listener)
-      //resolve the promise on the call to requestanimationframe
-
-      requestAnimationFrame(() => {
-        ctx.abortController.signal.removeEventListener('abort', listener)
-        resolve()
-      })
-    })
-  }
 }
 
-// class ToneTimeContext extends TimeContext {
-//   public async waitSec(sec: number) {
-//     if (this.isCanceled) {
-//       throw new Error('context is canceled')
-//     }
-//     const ctx = this
-//     return new Promise<void>((resolve, reject) => {
-//       const listener = () => { reject(); console.log('abort') }
-//       ctx.abortController.signal.addEventListener('abort', listener)
-//       Tone.Transport.scheduleOnce(() => {
-//         ctx.time += sec
-//         ctx.abortController.signal.removeEventListener('abort', listener)
-//         resolve()
-//       }, ctx.time + sec)
-//     })
-//   }
-// }
 
 export class DateTimeContext extends TimeContext{
   public async waitSec(sec: number) {

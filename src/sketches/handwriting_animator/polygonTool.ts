@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable prefer-const */
-import { TimeContext, CancelablePromisePoxy, launch } from "@/channels/base_time_context"
+import { TimeContext, CancelablePromiseProxy, launch } from "@/channels/base_time_context"
 import { findClosestPolygonLineAtPoint } from "@/creativeAlgs/shapeHelpers"
 import Konva from "konva"
 import { type ShallowReactive, shallowReactive, ref, watch } from "vue"

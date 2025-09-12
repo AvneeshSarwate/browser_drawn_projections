@@ -1,4 +1,4 @@
-import { CancelablePromisePoxy, createAndLaunchContext, TimeContext, type LoopHandle } from "./base_time_context"
+import { CancelablePromiseProxy, createAndLaunchContext, TimeContext, type LoopHandle } from "./base_time_context"
 
 
 const scWebsocket = new WebSocket('ws://localhost:57130')
@@ -97,6 +97,6 @@ export class SuperColliderTimeContext extends TimeContext{
   }
 }
 
-export function launchSC<T>(block: (ctx: SuperColliderTimeContext) => Promise<T>): CancelablePromisePoxy<T> {
+export function launchSC<T>(block: (ctx: SuperColliderTimeContext) => Promise<T>): CancelablePromiseProxy<T> {
   return createAndLaunchContext(block, 0, SuperColliderTimeContext, false)
 }

@@ -1,5 +1,12 @@
 
 
+## feature todos and bug notes
+- dragging working on whole group not robust for nested groups
+- transformations on single strokes don't propogate to stroke launcher
+- select highlighting still not robust
+- slider replay not robust when nothing selected
+
+
 ## basic plan of dynamic page layout 
 - get an alphabet annotated with top/bottom lines 
 - write script that takes ascii and generates the launch-start and scale for each character (using top/bottom line alignment)

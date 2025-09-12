@@ -5,10 +5,10 @@
 // import p5 from 'p5'
 // import { runTests } from './channelTests'
 
-import { CancelablePromisePoxy, DateTimeContext, TimeContext, createAndLaunchContext } from './base_time_context'
+import { CancelablePromiseProxy, DateTimeContext, TimeContext, createAndLaunchContext } from './base_time_context'
 
 
-export type { CancelablePromisePoxy }
+export type { CancelablePromiseProxy as CancelablePromisePoxy }
 export type { DateTimeContext, TimeContext }
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t
@@ -35,7 +35,7 @@ export class BrowserTimeContext extends DateTimeContext {
 }
 
 // const USE_TONE = false
-export function launch<T>(block: (ctx: TimeContext) => Promise<T>): CancelablePromisePoxy<T> {
+export function launch<T>(block: (ctx: TimeContext) => Promise<T>): CancelablePromiseProxy<T> {
   // if(USE_TONE) return createAndLaunchContext(block, Tone.Transport.immediate(), ToneTimeContext, false)
   // else return createAndLaunchContext(block, dateNow(), DateTimeContext, false)
   return createAndLaunchContext(block, dateNow(), BrowserTimeContext, false)
