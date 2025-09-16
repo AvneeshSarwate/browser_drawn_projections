@@ -3,10 +3,10 @@ import { ref } from 'vue'
 import * as selectionStore from './selectionStore'
 import { getCanvasItem, fromGroup, fromPolygon, removeCanvasItem } from './CanvasItem'
 import { executeCommand } from './commands'
-import { getCurrentFreehandStateString, deepCloneWithNewIds, freehandShapeLayer, updateBakedStrokeData, updateTimelineState, refreshStrokeConnections } from '../freehandTool'
-import { getCurrentPolygonStateString, polygonShapes, polygonShapesLayer, attachPolygonHandlers, serializePolygonState, updateBakedPolygonData } from '../polygonTool'
-import { hasAncestorConflict } from '../utils/canvasUtils'
-import { uid } from '../utils/canvasUtils'
+import { getCurrentFreehandStateString, deepCloneWithNewIds, freehandShapeLayer, updateBakedStrokeData, updateTimelineState, refreshStrokeConnections } from './freehandTool'
+import { getCurrentPolygonStateString, polygonShapes, polygonShapesLayer, attachPolygonHandlers, serializePolygonState, updateBakedPolygonData } from './polygonTool'
+import { hasAncestorConflict } from './canvasUtils'
+import { uid } from './canvasUtils'
 import { pushCommandWithStates } from './commands'
 
 // Drag selection state
@@ -407,7 +407,9 @@ export function ungroupSelection() {
     selectionStore.clear()
     parent.getLayer()?.batchDraw()
     // Rebuild stroke connections after ungroup to keep data in sync
-    try { refreshStrokeConnections() } catch {}
+    try { refreshStrokeConnections() } catch {
+      console.error('refreshStrokeConnections failed')
+    }
     updateBakedStrokeData()
   })
 }
@@ -499,7 +501,7 @@ export function deleteSelection() {
         // Freehand stroke record cleanup
         if (n instanceof Konva.Path) {
           // remove from strokes map
-          import('../freehandTool').then(({ freehandStrokes, freehandStrokeGroups }) => {
+          import('./freehandTool').then(({ freehandStrokes, freehandStrokeGroups }) => {
             // delete stroke entry matching this node id or shape
             freehandStrokes.delete(n.id())
             // fallback: by shape reference
@@ -514,7 +516,7 @@ export function deleteSelection() {
         }
         // Freehand group record cleanup
         if (n instanceof Konva.Group) {
-          import('../freehandTool').then(({ freehandStrokeGroups }) => {
+          import('./freehandTool').then(({ freehandStrokeGroups }) => {
             freehandStrokeGroups.delete(n.id())
           })
         }
@@ -540,6 +542,6 @@ export function deleteSelection() {
     serializePolygonState()
 
     // Ancillary viz cleanup (best-effort)
-    import('../ancillaryVisualizations').then(({ refreshAnciliaryViz }) => refreshAnciliaryViz()).catch(() => {})
+    import('./ancillaryVisualizations').then(({ refreshAnciliaryViz }) => refreshAnciliaryViz()).catch(() => {})
   })
 }

@@ -4,13 +4,13 @@ import { TimeContext, CancelablePromiseProxy, launch } from "@/channels/base_tim
 import { findClosestPolygonLineAtPoint } from "@/creativeAlgs/shapeHelpers"
 import Konva from "konva"
 import { type ShallowReactive, shallowReactive, ref, watch } from "vue"
-import type { PolygonRenderData, FlattenedPolygon, TemplateAppState } from "./appState"
-import { globalStore, stage, activeTool } from "./appState"
-import { executeCommand, pushCommandWithStates } from "./core/commands"
+import type { PolygonRenderData, FlattenedPolygon, TemplateAppState } from "../appState"
+import { globalStore, stage, activeTool } from "../appState"
+import { executeCommand, pushCommandWithStates } from "./commands"
 import { getCurrentFreehandStateString } from './freehandTool'
-import { uid } from './utils/canvasUtils'
-import { fromPolygon, fromGroup, getCanvasItem, removeCanvasItem } from './core/CanvasItem'
-import * as selectionStore from './core/selectionStore'
+import { uid } from './canvasUtils'
+import { fromPolygon, fromGroup, getCanvasItem, removeCanvasItem } from './CanvasItem'
+import * as selectionStore from './selectionStore'
 const store = globalStore()
 export const appState = store.appStateRef
 

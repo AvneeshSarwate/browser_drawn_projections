@@ -3,9 +3,9 @@
 import Konva from "konva"
 import getStroke from "perfect-freehand"
 import { type ShallowReactive, shallowReactive, ref, computed, watch } from "vue"
-import type { FreehandRenderData, FlattenedStroke, FlattenedStrokeGroup, TemplateAppState } from "./appState"
-import { globalStore, stage, activeTool } from "./appState"
-import { executeCommand } from "./core/commands"
+import type { FreehandRenderData, FlattenedStroke, FlattenedStrokeGroup, TemplateAppState } from "../appState"
+import { globalStore, stage, activeTool } from "../appState"
+import { executeCommand } from "../canvas/commands"
 
 // Import AV refresh function - we'll import lazily to avoid circular deps
 let refreshAVs: (() => void) | undefined
@@ -14,9 +14,9 @@ const store = globalStore()
 const appState = store.appStateRef
 
 // Import shared utilities
-import { uid, getPointsBounds, hasAncestorConflict } from './utils/canvasUtils'
-import { fromStroke, fromGroup, getCanvasItem, removeCanvasItem, type CanvasItem } from './core/CanvasItem'
-import * as selectionStore from './core/selectionStore'
+import { uid, getPointsBounds, hasAncestorConflict } from './canvasUtils'
+import { fromStroke, fromGroup, getCanvasItem, removeCanvasItem, type CanvasItem } from './CanvasItem'
+import * as selectionStore from './selectionStore'
 
 // Konva clone behavior confirmed: recursively clones children but keeps same IDs
 

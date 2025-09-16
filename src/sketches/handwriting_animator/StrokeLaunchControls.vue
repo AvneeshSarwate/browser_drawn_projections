@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { resolution, availableStrokes, animationParams, gpuStrokesReady, launchByName, selectedGroupName, scriptExecuting } from './appState'
-import { getGroupStrokeIndices } from './freehandTool'
+import { getGroupStrokeIndices } from './canvas/freehandTool'
 import { babylonContainer, webGPUSupported, availableGroups, handleBabylonCanvasClick, handleBabylonCanvasMove, clearLoopedAnimations, executeScript, launchLayout, scriptEditorRef } from './strokeLauncher'
 </script>
 

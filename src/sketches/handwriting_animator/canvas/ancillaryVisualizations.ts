@@ -1,6 +1,6 @@
 import Konva from 'konva'
 import { ref, watch } from 'vue'
-import { stage } from './appState'
+import { stage } from '../appState'
 import { collectHierarchy, setNodeMetadata } from './freehandTool'
 
 // ----- public reactive API -----

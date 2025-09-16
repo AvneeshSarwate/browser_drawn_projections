@@ -141,16 +141,16 @@ function redrawAffectedLayers() {
 // Trigger updates for dependent systems
 function updateGPUAndVisualization() {
   // Import the update functions dynamically to avoid circular deps
-  import('../freehandTool').then(({ updateBakedStrokeData }) => {
+  import('./freehandTool').then(({ updateBakedStrokeData }) => {
     updateBakedStrokeData()
   })
   
-  import('../polygonTool').then(({ updateBakedPolygonData }) => {
+  import('./polygonTool').then(({ updateBakedPolygonData }) => {
     updateBakedPolygonData()
   })
 
   // Refresh ancillary visualizations if available
-  import('../ancillaryVisualizations').then(({ refreshAnciliaryViz }) => {
+  import('./ancillaryVisualizations').then(({ refreshAnciliaryViz }) => {
     refreshAnciliaryViz()
   }).catch(() => {
     // Ancillary viz might not be available, that's okay

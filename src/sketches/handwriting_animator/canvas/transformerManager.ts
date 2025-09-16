@@ -2,12 +2,12 @@ import Konva from 'konva'
 import { watch, computed } from 'vue'
 import * as selectionStore from './selectionStore'
 import { pushCommandWithStates } from './commands'
-import { polygonMode } from '../polygonTool'
+import { polygonMode } from './polygonTool'
 import { activeTool } from '../appState'
 
 let transformer: Konva.Transformer | undefined = undefined
 let transformerLayer: Konva.Layer | undefined = undefined
-let isDragging = false
+
 
 // State tracking for undo/redo
 let dragStartState: string | null = null
@@ -60,8 +60,8 @@ function updateTransformer(selectedNodes: Konva.Node[]) {
 // State capture for undo/redo
 function startTransformTracking() {
   // Import dynamically to avoid circular dependencies
-  import('../freehandTool').then(({ getCurrentFreehandStateString }) => {
-    import('../polygonTool').then(({ getCurrentPolygonStateString }) => {
+  import('./freehandTool').then(({ getCurrentFreehandStateString }) => {
+    import('./polygonTool').then(({ getCurrentPolygonStateString }) => {
       dragStartState = JSON.stringify({
         freehand: getCurrentFreehandStateString(),
         polygon: getCurrentPolygonStateString()
@@ -74,8 +74,8 @@ function finishTransformTracking(operationName: string) {
   if (!dragStartState) return
   
   // Import dynamically to avoid circular dependencies
-  import('../freehandTool').then(({ getCurrentFreehandStateString }) => {
-    import('../polygonTool').then(({ getCurrentPolygonStateString }) => {
+  import('./freehandTool').then(({ getCurrentFreehandStateString }) => {
+    import('./polygonTool').then(({ getCurrentPolygonStateString }) => {
       const endState = JSON.stringify({
         freehand: getCurrentFreehandStateString(),
         polygon: getCurrentPolygonStateString()

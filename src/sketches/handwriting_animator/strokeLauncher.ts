@@ -1,5 +1,5 @@
 import { computed, ref } from 'vue'
-import { appState, availableStrokes, animationParams, gpuStrokesReady, launchByName, resolution, selectedGroupName, scriptCode, scriptExecuting, SCRIPT_STORAGE_KEY } from './appState'
+import { availableStrokes, animationParams, gpuStrokesReady, launchByName, resolution, selectedGroupName, scriptCode, scriptExecuting, SCRIPT_STORAGE_KEY, globalStore } from './appState'
 import { DrawingScene } from './gpuStrokes/drawingScene'
 import { StrokeInterpolator } from './gpuStrokes/strokeInterpolator'
 import { DRAWING_CONSTANTS } from './gpuStrokes/constants'
@@ -12,8 +12,11 @@ import Stats from '@/rendering/stats'
 import { EditorView, basicSetup } from 'codemirror'
 import { javascript } from '@codemirror/lang-javascript'
 import { oneDark } from '@codemirror/theme-one-dark'
-import { getGroupStrokeIndices } from './freehandTool'
+import { getGroupStrokeIndices } from './canvas/freehandTool'
 import { launch, type CancelablePromisePoxy, type TimeContext } from '@/channels/channels'
+
+const store = globalStore()
+const appState = store.appStateRef
 
 type GPUStroke = {
   index: number

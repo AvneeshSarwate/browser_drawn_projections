@@ -1,24 +1,24 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
 import { type TemplateAppState, appStateName, resolution, drawFlattenedStrokeGroup, stage, setStage, showMetadataEditor, activeTool } from './appState';
-import * as selectionStore from './core/selectionStore';
+import * as selectionStore from './canvas/selectionStore';
 import { inject, onMounted, onUnmounted, ref, watch, nextTick } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
 import Konva from 'konva';
-import Timeline from './Timeline.vue';
-import HierarchicalMetadataEditor from './HierarchicalMetadataEditor.vue';
-import VisualizationToggles from './VisualizationToggles.vue';
-import { clearFreehandSelection, createStrokeShape, currentPoints, currentTimestamps, deserializeFreehandState, drawingStartTime, freehandDrawingLayer, freehandSelectionLayer, freehandShapeLayer, freehandStrokes, getStrokePath, gridSize, isAnimating, isDrawing, serializeFreehandState, setCurrentPoints, setCurrentTimestamps, setDrawingStartTime, setFreehandDrawingLayer, setFreehandSelectionLayer, setFreehandShapeLayer, setIsDrawing, showGrid, updateBakedStrokeData, updateFreehandDraggableStates, updateTimelineState, type FreehandStroke, useRealTiming, selectedStrokesForTimeline, timelineDuration, handleTimeUpdate, maxInterStrokeDelay, setUpdateCursor, updateCursor, downloadFreehandDrawing, uploadFreehandDrawing, setRefreshAVs, getCurrentFreehandStateString, restoreFreehandState } from './freehandTool';
-import { getPointsBounds } from './utils/canvasUtils';
-import { CommandStack } from './core/commandStack';
-import { setGlobalExecuteCommand, setGlobalPushCommand } from './core/commands';
+import Timeline from './canvas/Timeline.vue';
+import HierarchicalMetadataEditor from './canvas/HierarchicalMetadataEditor.vue';
+import VisualizationToggles from './canvas/VisualizationToggles.vue';
+import { clearFreehandSelection, createStrokeShape, currentPoints, currentTimestamps, deserializeFreehandState, drawingStartTime, freehandDrawingLayer, freehandSelectionLayer, freehandShapeLayer, freehandStrokes, getStrokePath, gridSize, isAnimating, isDrawing, serializeFreehandState, setCurrentPoints, setCurrentTimestamps, setDrawingStartTime, setFreehandDrawingLayer, setFreehandSelectionLayer, setFreehandShapeLayer, setIsDrawing, showGrid, updateBakedStrokeData, updateFreehandDraggableStates, updateTimelineState, type FreehandStroke, useRealTiming, selectedStrokesForTimeline, timelineDuration, handleTimeUpdate, maxInterStrokeDelay, setUpdateCursor, updateCursor, downloadFreehandDrawing, uploadFreehandDrawing, setRefreshAVs, getCurrentFreehandStateString, restoreFreehandState } from './canvas/freehandTool';
+import { getPointsBounds } from './canvas/canvasUtils';
+import { CommandStack } from './canvas/commandStack';
+import { setGlobalExecuteCommand, setGlobalPushCommand } from './canvas/commands';
 import { ensureHighlightLayer } from '@/metadata';
-import { polygonShapesLayer, polygonPreviewLayer, polygonControlsLayer, polygonSelectionLayer, clearPolygonSelection, updatePolygonControlPoints, deserializePolygonState, polygonMode, handlePolygonClick, isDrawingPolygon, handlePolygonMouseMove, handlePolygonEditMouseMove, currentPolygonPoints, finishPolygon, clearCurrentPolygon, serializePolygonState, setPolygonControlsLayer, setPolygonPreviewLayer, setPolygonSelectionLayer, setPolygonShapesLayer, getCurrentPolygonStateString, restorePolygonState, updateBakedPolygonData } from './polygonTool';
-import { initAVLayer, refreshAnciliaryViz } from './ancillaryVisualizations';
-import { initializeTransformer } from './core/transformerManager';
-import { initializeSelectTool, handleSelectPointerDown, handleSelectPointerMove, handleSelectPointerUp, groupSelection, ungroupSelection, canGroupSelection, canUngroupSelection, duplicateSelection, deleteSelection } from './core/selectTool';
+import { polygonShapesLayer, polygonPreviewLayer, polygonControlsLayer, polygonSelectionLayer, clearPolygonSelection, updatePolygonControlPoints, deserializePolygonState, polygonMode, handlePolygonClick, isDrawingPolygon, handlePolygonMouseMove, handlePolygonEditMouseMove, currentPolygonPoints, finishPolygon, clearCurrentPolygon, serializePolygonState, setPolygonControlsLayer, setPolygonPreviewLayer, setPolygonSelectionLayer, setPolygonShapesLayer, getCurrentPolygonStateString, restorePolygonState, updateBakedPolygonData } from './canvas/polygonTool';
+import { initAVLayer, refreshAnciliaryViz } from './canvas/ancillaryVisualizations';
+import { initializeTransformer } from './canvas/transformerManager';
+import { initializeSelectTool, handleSelectPointerDown, handleSelectPointerMove, handleSelectPointerUp, groupSelection, ungroupSelection, canGroupSelection, canUngroupSelection, duplicateSelection, deleteSelection } from './canvas/selectTool';
 import StrokeLaunchControls from './StrokeLaunchControls.vue';
 import { initializeGPUStrokes, updateGPUStrokes, initializeScriptEditor, disposeStrokeLauncher } from './strokeLauncher';
 import { sinN } from '@/channels/channels';
@@ -187,11 +187,11 @@ watch(activeTool, (newTool) => {
 // Callback for HierarchicalMetadataEditor to apply metadata via unified selection tool
 const handleApplyMetadata = async (node: Konva.Node, metadata: any) => {
   try {
-    const { getCanvasItem } = await import('./core/CanvasItem')
+    const { getCanvasItem } = await import('./canvas/CanvasItem')
     const item = getCanvasItem(node)
     if (item) {
       // Route through unified selection store (handles undo/redo + updates)
-      const selection = await import('./core/selectionStore')
+      const selection = await import('./canvas/selectionStore')
       selection.setMetadata(item, metadata)
     } else {
       // Fallback for non-registered nodes (should be rare)

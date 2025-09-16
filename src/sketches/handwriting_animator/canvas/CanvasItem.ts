@@ -1,6 +1,6 @@
 import Konva from "konva"
-import type { FreehandStroke } from "../freehandTool"
-import { uid } from "../utils/canvasUtils"
+import type { FreehandStroke } from "./freehandTool"
+import { uid } from "./canvasUtils"
 
 export type ItemType = 'stroke' | 'strokeGroup' | 'polygon'
 
