@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import { resolution } from './appState'
+import { resolution } from '@/components/handwritingTool'
 
 const resRef = ref(resolution)
 

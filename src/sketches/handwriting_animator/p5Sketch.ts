@@ -1,4 +1,4 @@
-import { type TemplateAppState, resolution } from './appState'
+import { type TemplateAppState, resolution } from '@/components/handwritingTool'
 import p5 from 'p5'
 
 export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => TemplateAppState): p5 {

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { createP5Sketch } from './p5Sketch';
-import { appStateName, type TemplateAppState } from './appState';
+import { appStateName, type TemplateAppState } from '@/components/handwritingTool';
 import type p5 from 'p5';
 import * as THREE from 'three';
 import { inject, onMounted, onUnmounted } from 'vue';

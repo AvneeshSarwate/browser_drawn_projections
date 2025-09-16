@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import SketchHtml from './SketchHtml.vue';
 import SketchInitializer from './SketchInitializer.vue';
-import LivecodeHolder from './LivecodeHolder.vue';
+import { HandwritingTool, appStateName, globalStore } from '@/components/handwritingTool';
 import { provide } from 'vue';
-import { appStateName, globalStore } from './appState';
 
 
 // Get the reactive store
@@ -16,5 +15,5 @@ provide(appStateName, store.appStateRef);
 <template>
   <SketchHtml></SketchHtml>
   <SketchInitializer></SketchInitializer>
-  <LivecodeHolder></LivecodeHolder>
+  <HandwritingTool></HandwritingTool>
 </template>
