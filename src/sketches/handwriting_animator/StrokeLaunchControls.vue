@@ -191,6 +191,9 @@ onUnmounted(() => {
   padding: 20px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
   width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .gpu-strokes-section h3 {
@@ -346,7 +349,10 @@ onUnmounted(() => {
   margin-top: 20px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
   width: 100%;
-  max-width: 800px;
+  /* max-width: 800px; */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .script-editor-section h3 {
