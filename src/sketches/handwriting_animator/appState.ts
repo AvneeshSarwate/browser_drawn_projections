@@ -40,6 +40,8 @@ export type TemplateAppState = {
   stats?: { begin: () => void, end: () => void }
   paused: boolean
   drawing: boolean
+
+  //canvas state
   freehandStateString: string
   freehandRenderData: FreehandRenderData
   freehandGroupMap: Record<string, number[]>
@@ -77,6 +79,8 @@ export const resolution = {
 
 //todo api - add caching/rehydrating of appState from local storage
 
+
+//canvas state
 // UI refs that should persist across hot reloads
 export const activeTool = ref<'select' | 'freehand' | 'polygon'>('select')
 export const availableStrokes = ref<Array<{index: number, name: string}>>([])
