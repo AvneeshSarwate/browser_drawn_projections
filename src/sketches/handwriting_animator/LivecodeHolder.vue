@@ -2,7 +2,7 @@
 <script setup lang="ts">
 import { type TemplateAppState, appStateName, resolution, drawFlattenedStrokeGroup, stage, setStage, showMetadataEditor, activeTool } from './appState';
 import * as selectionStore from './canvas/selectionStore';
-import { inject, onMounted, onUnmounted, ref, watch, nextTick } from 'vue';
+import { inject, onMounted, onUnmounted, ref, watch } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
@@ -20,7 +20,7 @@ import { initAVLayer, refreshAnciliaryViz } from './canvas/ancillaryVisualizatio
 import { initializeTransformer } from './canvas/transformerManager';
 import { initializeSelectTool, handleSelectPointerDown, handleSelectPointerMove, handleSelectPointerUp, groupSelection, ungroupSelection, canGroupSelection, canUngroupSelection, duplicateSelection, deleteSelection } from './canvas/selectTool';
 import StrokeLaunchControls from './StrokeLaunchControls.vue';
-import { initializeGPUStrokes, updateGPUStrokes, initializeScriptEditor, disposeStrokeLauncher } from './strokeLauncher';
+import { updateGPUStrokes } from './strokeLauncher';
 import { sinN } from '@/channels/channels';
 
 // ==================== common stuff ====================
@@ -208,9 +208,10 @@ const handleApplyMetadata = async (node: Konva.Node, metadata: any) => {
 }
 
 
-// GPU stroke logic lives in strokeLauncher.ts
 
-
+// Set up the freehand data update callback
+//main link betwen canvas and stroke animation modules
+appState.freehandDataUpdateCallback = updateGPUStrokes
 
 onMounted(async () => {
   try {
@@ -305,15 +306,6 @@ onMounted(async () => {
     // Re-apply tool mode after deserialization to ensure control points/transformer states are correct
     applyToolMode(activeTool.value)
 
-    // Initialize GPU Strokes
-    await initializeGPUStrokes()
-
-    // Set up the freehand data update callback
-    appState.freehandDataUpdateCallback = updateGPUStrokes
-
-    // Initialize script editor
-    await nextTick() // Ensure DOM elements are ready
-    initializeScriptEditor()
 
     // Mouse/touch event handlers - new three-tool system
     stage!.on('mousedown touchstart', (e) => {
@@ -504,9 +496,6 @@ onUnmounted(() => {
   // Save state before unmounting (for hot reload)
   serializeFreehandState()
   serializePolygonState()
-
-  // Clean up GPU resources
-  disposeStrokeLauncher()
 
   shaderGraphEndNode?.disposeAll()
   clearListeners()

@@ -12,11 +12,14 @@ import Stats from '@/rendering/stats'
 import { EditorView, basicSetup } from 'codemirror'
 import { javascript } from '@codemirror/lang-javascript'
 import { oneDark } from '@codemirror/theme-one-dark'
-import { getGroupStrokeIndices } from './canvas/freehandTool'
 import { launch, type CancelablePromisePoxy, type TimeContext } from '@/channels/channels'
 
 const store = globalStore()
 const appState = store.appStateRef
+
+const getGroupStrokeIndices = (groupName: string): number[] => {
+  return appState.freehandGroupMap[groupName] || []
+}
 
 type GPUStroke = {
   index: number

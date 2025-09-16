@@ -1238,11 +1238,6 @@ export const updateBakedStrokeData = () => {
   appState.freehandDataUpdateCallback?.()
 }
 
-// Utility function to get stroke indices for a named group
-export const getGroupStrokeIndices = (groupName: string): number[] => {
-  return appState.freehandGroupMap[groupName] || []
-}
-
 // Undoable metadata mutator for nodes with command history
 export const setNodeMetadata = (
   node: Konva.Node,
