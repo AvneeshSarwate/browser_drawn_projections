@@ -1,5 +1,5 @@
 import type { CanvasRuntimeState } from "./canvasState"
-import { getCurrentCanvasState } from "./canvasStateFallback"
+import { getGlobalCanvasState as getCurrentCanvasState } from "./canvasState"
 
 // State-based command functions
 export const executeCommandWithState = (state: CanvasRuntimeState, name: string, action: () => void) => {

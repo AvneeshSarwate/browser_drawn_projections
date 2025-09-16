@@ -48,6 +48,7 @@ export interface CanvasRuntimeState {
     polygonSelection?: Konva.Layer
     ancillaryViz?: Konva.Layer
     metadataHighlight?: Konva.Layer
+    selectionOverlay?: Konva.Layer
   }
   canvasItems: Map<string, CanvasItem>
   callbacks: {
@@ -93,6 +94,21 @@ export interface CanvasRuntimeState {
     items: ShallowReactive<Set<CanvasItem>>
     originalStyles: Map<string, { node: Konva.Node, stroke: string, strokeWidth: number }>
     selectedKonvaNodes: ComputedRef<Konva.Node[]>
+    
+    // NEW - generic marquee / drag helpers
+    dragSelectionState: Ref<{
+      isSelecting: boolean
+      startPos: { x: number, y: number }
+      currentPos: { x: number, y: number }
+      isShiftHeld: boolean
+    }>
+    selectionRect?: Konva.Rect
+    selectionDragState: {
+      isDragging: boolean
+      startPos: { x: number, y: number }
+      startNodePositions: Map<Konva.Node, {x: number, y: number}>
+      beforeState: string
+    }
   }
   command: {
     stack?: CommandStack
@@ -114,7 +130,9 @@ export const createCanvasRuntimeState = (): CanvasRuntimeState => {
   return {
     stage: undefined,
     konvaContainer: undefined,
-    layers: {},
+    layers: {
+      selectionOverlay: undefined
+    },
     canvasItems: new Map(),
     callbacks: {},
     freehand: {
@@ -153,7 +171,20 @@ export const createCanvasRuntimeState = (): CanvasRuntimeState => {
     selection: {
       items: selectionItems,
       originalStyles,
-      selectedKonvaNodes
+      selectedKonvaNodes,
+      dragSelectionState: ref({
+        isSelecting: false,
+        startPos: { x: 0, y: 0 },
+        currentPos: { x: 0, y: 0 },
+        isShiftHeld: false
+      }),
+      selectionRect: undefined,
+      selectionDragState: {
+        isDragging: false,
+        startPos: { x: 0, y: 0 },
+        startNodePositions: new Map(),
+        beforeState: ''
+      }
     },
     command: {},
     metadata: {

@@ -10,14 +10,13 @@ import { executeCommand } from "../canvas/commands"
 // Import AV refresh function - we'll import lazily to avoid circular deps
 let refreshAVs: (() => void) | undefined
 
-const store = globalStore()
-const appState = store.appStateRef
+
 
 // Import shared utilities
 import { uid, getPointsBounds, hasAncestorConflict } from './canvasUtils'
 import { createStrokeItem, createGroupItem, getCanvasItem, removeCanvasItem, type CanvasItem } from './CanvasItem'
 import * as selectionStore from './selectionStore'
-import { freehandStrokes, freehandStrokeGroups, freehandLayers, getGlobalCanvasState, type CanvasRuntimeState } from './canvasState'
+import { freehandStrokes, freehandStrokeGroups, freehandLayers, getGlobalCanvasState, type CanvasRuntimeState, type FreehandStrokeRuntime, type FreehandStrokeGroupRuntime } from './canvasState'
 
 // Konva clone behavior confirmed: recursively clones children but keeps same IDs
 
@@ -53,6 +52,7 @@ export const attachHandlersRecursively = (node: Konva.Node) => {
 
     node.on('dragend.freehand', () => {
       finishFreehandDragTracking(node.constructor.name)
+      const freehandShapeLayer = getGlobalCanvasState().layers.freehandShape
       freehandShapeLayer?.batchDraw()
     })
 
@@ -181,6 +181,7 @@ export const duplicateFreehandSelected = () => {
     // Update UI and data structures
     updateFreehandDraggableStates()
     updateBakedStrokeData()
+    const freehandShapeLayer = getGlobalCanvasState().layers.freehandShape
     freehandShapeLayer?.batchDraw()
 
     console.log('Duplication complete')
@@ -198,42 +199,21 @@ export const initFreehandLayers = (state: CanvasRuntimeState, stage: Konva.Stage
   stage.add(state.layers.freehandSelection)
 }
 
-// Legacy wrappers - REMOVE IN PHASE 7
-export let freehandShapeLayer: Konva.Layer | undefined = undefined
-export const setFreehandShapeLayer = (ls: Konva.Layer) => {
-  freehandShapeLayer = ls
-  getGlobalCanvasState().layers.freehandShape = ls
-}
-export let freehandDrawingLayer: Konva.Layer | undefined = undefined
-export const setFreehandDrawingLayer = (dl: Konva.Layer) => {
-  freehandDrawingLayer = dl
-  getGlobalCanvasState().layers.freehandDrawing = dl
-}
-export let freehandSelectionLayer: Konva.Layer | undefined = undefined
-export const setFreehandSelectionLayer = (sl: Konva.Layer) => {
-  freehandSelectionLayer = sl
-  getGlobalCanvasState().layers.freehandSelection = sl
-}
+
 
 // Import metadata utilities from generic module
 import { type HierarchyEntry, collectHierarchyFromRoot } from '@/metadata'
 
-// Drag selection state and rectangle
-export const dragSelectionState = ref({
-  isSelecting: false,
-  startPos: { x: 0, y: 0 },
-  currentPos: { x: 0, y: 0 },
-  isShiftHeld: false
-})
 
-export let selectionRect: Konva.Rect | undefined = undefined
 
 // Highlight layer initialization is now handled by LivecodeHolder directly
 
 export const createSelectionRect = () => {
+  const state = getGlobalCanvasState()
+  const freehandSelectionLayer = state.layers.freehandSelection
   if (!freehandSelectionLayer) return
   
-  selectionRect = new Konva.Rect({
+  state.freehand.selectionRect = new Konva.Rect({
     stroke: '#4A90E2',
     strokeWidth: 1,
     dash: [3, 3],
@@ -241,12 +221,13 @@ export const createSelectionRect = () => {
     listening: false,
     visible: false
   })
-  freehandSelectionLayer.add(selectionRect)
+  freehandSelectionLayer.add(state.freehand.selectionRect)
 }
 
 export const resetSelectionRect = (x: number, y: number) => {
-  if (!selectionRect) return
-  selectionRect.setAttrs({
+  const state = getGlobalCanvasState()
+  if (!state.freehand.selectionRect) return
+  state.freehand.selectionRect.setAttrs({
     x: x,
     y: y,
     width: 0,
@@ -255,31 +236,9 @@ export const resetSelectionRect = (x: number, y: number) => {
   })
 }
 
-// Drawing state - now synced with CanvasRuntimeState
-export let isDrawing = false
-export let currentPoints: number[] = []
-export let currentTimestamps: number[] = []
-export let drawingStartTime = 0
 
-export const setIsDrawing = (id: boolean) => {
-  isDrawing = id
-  getGlobalCanvasState().freehand.isDrawing = id
-}
 
-export const setCurrentPoints = (pts: number[]) => {
-  currentPoints = pts
-  getGlobalCanvasState().freehand.currentPoints = pts
-}
 
-export const setCurrentTimestamps = (ts: number[]) => {
-  currentTimestamps = ts
-  getGlobalCanvasState().freehand.currentTimestamps = ts
-}
-
-export const setDrawingStartTime = (ts: number) => {
-  drawingStartTime = ts
-  getGlobalCanvasState().freehand.drawingStartTime = ts
-}
 
 // State-based functions for direct use
 export const freehandToolWithState = {
@@ -305,6 +264,7 @@ export const freehandToolWithState = {
 
 // Return the top-most group (direct child of layer) for any descendant click
 const freehandTopGroup = (node: Konva.Node): Konva.Group | null => {
+  const freehandShapeLayer = getGlobalCanvasState().layers.freehandShape
   if (!freehandShapeLayer) return null
   let cur = node
   let candidate: Konva.Group | null = null
@@ -379,20 +339,21 @@ export const clearFreehandSelection = () => {
 
 // Update timeline state based on current selection
 export const updateTimelineState = () => {
-  const oldDuration = timelineDuration.value
+  const state = getGlobalCanvasState()
+  const oldDuration = state.freehand.timelineDuration.value
   let newDuration = 0
 
   if (selectionStore.isEmpty()) {
     // No selection - use all strokes
-    selectedStrokesForTimeline.value = new Set()
-    timelineDuration.value = 0 // Timeline component will calculate total duration
+    state.freehand.selectedStrokesForTimeline.value = new Set()
+    state.freehand.timelineDuration.value = 0 // Timeline component will calculate total duration
   } else {
     // Selection exists - calculate selected strokes and trimmed duration
     const selectedStrokes = getSelectedStrokes().filter(stroke => stroke.isFreehand)
 
     // Update selected strokes set for timeline
     const strokeIds = new Set(selectedStrokes.map(s => s.id))
-    selectedStrokesForTimeline.value = strokeIds
+    state.freehand.selectedStrokesForTimeline.value = strokeIds
 
     // Calculate trimmed timeline duration
     if (selectedStrokes.length > 0) {
@@ -412,15 +373,15 @@ export const updateTimelineState = () => {
       })
 
       newDuration = totalDuration
-      timelineDuration.value = totalDuration
+      state.freehand.timelineDuration.value = totalDuration
     } else {
-      timelineDuration.value = 0
+      state.freehand.timelineDuration.value = 0
     }
   }
 
   // Reset playback time if it's beyond the new duration
-  if (newDuration > 0 && currentPlaybackTime.value > newDuration) {
-    currentPlaybackTime.value = 0
+  if (newDuration > 0 && state.freehand.currentPlaybackTime.value > newDuration) {
+    state.freehand.currentPlaybackTime.value = 0
     // Trigger time update to reset visual state
     handleTimeUpdate(0)
   }
@@ -448,16 +409,40 @@ export interface FreehandStrokeGroup {
 
 // All stroke data now accessed via convenience getters from canvasState.ts
 
-// Direct state access - no more helper functions needed
+// State management functions
+export const clearStrokesInState = (state: CanvasRuntimeState) => {
+  state.freehand.strokes.clear()
+  state.freehand.strokeGroups.clear()
+}
 
-// UI state refs - kept as-is for now, will be fully integrated in later phases
-export const selectedStrokesForTimeline = ref(new Set<string>())
-export const timelineDuration = ref(0)
-export const showGrid = ref(false)
-export const currentPlaybackTime = ref(0)
-export const freehandDrawMode = ref(true)
-export const useRealTiming = ref(false)
-export const isAnimating = ref(false)
+export const setStrokeInState = (state: CanvasRuntimeState, id: string, stroke: FreehandStroke) => {
+  const runtimeStroke: FreehandStrokeRuntime = {
+    id: stroke.id,
+    points: stroke.points,
+    timestamps: stroke.timestamps,
+    shape: stroke.shape,
+    selected: stroke.selected,
+    originalPath: stroke.originalPath,
+    creationTime: stroke.creationTime,
+    isFreehand: stroke.isFreehand
+  }
+  state.freehand.strokes.set(id, runtimeStroke)
+}
+
+export const setStrokeGroupInState = (state: CanvasRuntimeState, id: string, group: FreehandStrokeGroup) => {
+  const runtimeGroup: FreehandStrokeGroupRuntime = {
+    id: group.id,
+    strokeIds: group.strokeIds,
+    group: group.group
+  }
+  state.freehand.strokeGroups.set(id, runtimeGroup)
+}
+
+export const deleteStrokeFromState = (state: CanvasRuntimeState, id: string) => {
+  state.freehand.strokes.delete(id)
+}
+
+// UI state refs - now accessed through global state
 export const gridSize = 20
 export const maxInterStrokeDelay = 300
 
@@ -482,6 +467,7 @@ const setIsUndoRedoOperation = (isUndoRedo: boolean) => isUndoRedoOperation = is
 
 // Get current canvas state for undo/redo (freehand only)
 const getCurrentFreehandState = () => {
+  const freehandShapeLayer = getGlobalCanvasState().layers.freehandShape
   if (!stage || !freehandShapeLayer) return null
 
   try {
@@ -554,11 +540,13 @@ export const restoreFreehandState = (stateString: string) => {
   isUndoRedoOperation = true
   try {
     // Reset animation state to prevent interference
-    const wasAnimating = currentPlaybackTime.value > 0
-    currentPlaybackTime.value = 0
-    isAnimating.value = false
+    const state = getGlobalCanvasState()
+    const wasAnimating = state.freehand.currentPlaybackTime.value > 0
+    state.freehand.currentPlaybackTime.value = 0
+    state.freehand.isAnimating.value = false
 
     // Temporarily store the state string
+    const appState = globalStore().appStateRef
     const originalState = appState.freehandStateString
     appState.freehandStateString = stateString
 
@@ -579,29 +567,6 @@ export const restoreFreehandState = (stateString: string) => {
   }
 }
 
-// Undo/Redo functions
-export const canUndoFreehand = computed(() => freehandHistoryIndex.value >= 0)
-export const canRedoFreehand = computed(() => freehandHistoryIndex.value < freehandCommandHistory.value.length - 1)
-
-export const undoFreehand = () => {
-  if (!canUndoFreehand.value) return
-
-  const command = freehandCommandHistory.value[freehandHistoryIndex.value]
-  console.log(`Undoing command: ${command.name}`)
-
-  restoreFreehandState(command.beforeState)
-  freehandHistoryIndex.value--
-}
-
-export const redoFreehand = () => {
-  if (!canRedoFreehand.value) return
-
-  freehandHistoryIndex.value++
-  const command = freehandCommandHistory.value[freehandHistoryIndex.value]
-  console.log(`Redoing command: ${command.name}`)
-
-  restoreFreehandState(command.afterState)
-}
 
 // Transform tracking for drag operations
 let freehandDragStartState: string | null = null
@@ -652,11 +617,12 @@ export const refreshStrokeConnections = () => {
 
 // Serialization functions for hotreloading
 export const serializeFreehandState = () => {
+  const freehandShapeLayer = getGlobalCanvasState().layers.freehandShape
   if (!stage || !freehandShapeLayer) return
 
   try {
     const canvasState = getCurrentFreehandState()
-
+    const appState = globalStore().appStateRef
     appState.freehandStateString = JSON.stringify(canvasState)
     console.log('Serialized canvas state:', {
       layerChildren: canvasState!.layer?.children?.length || 0,
@@ -703,6 +669,7 @@ export const uploadFreehandDrawing = () => {
         JSON.parse(content)
         
         // Set the state string and deserialize
+        const appState = globalStore().appStateRef
         appState.freehandStateString = content
         deserializeFreehandState()
         
@@ -718,6 +685,8 @@ export const uploadFreehandDrawing = () => {
 }
 
 export const deserializeFreehandState = () => {
+  const freehandShapeLayer = getGlobalCanvasState().layers.freehandShape
+  const appState = globalStore().appStateRef
   if (!appState.freehandStateString || !stage || !freehandShapeLayer) return
 
   try {
@@ -806,13 +775,14 @@ export const updateFreehandDraggableStates = () => {
   // In the unified system, node-level dragging is disabled in Select tool because we implement
   // selection dragging at the stage level and use the Transformer for transforms.
   const isSelectTool = activeTool.value === 'select'
+  const freehandShapeLayer = getGlobalCanvasState().layers.freehandShape
 
   freehandStrokes().forEach((stroke) => {
     if (stroke.shape) stroke.shape.draggable(false)
   })
 
   if (freehandShapeLayer) {
-    freehandShapeLayer.getChildren().forEach(child => {
+    freehandShapeLayer.getChildren().forEach((child: Konva.Node) => {
       if (child instanceof Konva.Group) child.draggable(false)
     })
   }
@@ -867,6 +837,7 @@ export const getStrokePath = (points: number[], normalize: boolean = false): str
 
 // Helper function to create a new stroke shape
 export const createStrokeShape = (points: number[], id: string): Konva.Path => {
+  const freehandShapeLayer = getGlobalCanvasState().layers.freehandShape
   // Get bounds to position the shape
   const bounds = getPointsBounds(points)
 
@@ -908,7 +879,7 @@ export const createStrokeShape = (points: number[], id: string): Konva.Path => {
 // Handle click following working example pattern
 export const handleClick = (target: Konva.Node, shiftKey: boolean) => {
   // Only allow selection in select mode  
-  if (freehandDrawMode.value) return
+  if (getGlobalCanvasState().freehand.freehandDrawMode.value) return
 
   console.log('Handle click on:', target.id(), target.constructor.name)
 
@@ -947,6 +918,7 @@ export const deleteFreehandSelected = () => {
     })
     clearFreehandSelection()
     updateTimelineState() // Update timeline state after deletion
+    const freehandShapeLayer = getGlobalCanvasState().layers.freehandShape
     freehandShapeLayer?.batchDraw()
     updateBakedStrokeData() // Update baked data after deletion
     refreshAVs?.() // Clean up any orphaned ancillary visualizations
@@ -955,7 +927,9 @@ export const deleteFreehandSelected = () => {
 
 // Handle timeline updates and stroke animation - restored full logic
 export const handleTimeUpdate = (time: number) => {
-  currentPlaybackTime.value = time
+  const state = getGlobalCanvasState()
+  const freehandShapeLayer = state.layers.freehandShape
+  state.freehand.currentPlaybackTime.value = time
 
   // Get strokes to animate and sort them
   let strokesToAnimate: FreehandStroke[] = []
@@ -1074,7 +1048,7 @@ export const handleTimeUpdate = (time: number) => {
         // Gap is between end of previous stroke and start of current stroke
         let gap = Math.max(0, stroke.creationTime - lastEndTime)
         // Apply max threshold if not using real timing
-        if (!useRealTiming.value && gap > maxInterStrokeDelay) {
+        if (!state.freehand.useRealTiming.value && gap > maxInterStrokeDelay) {
           gap = maxInterStrokeDelay
         }
         const startTime = currentTimeOffset + gap
@@ -1160,6 +1134,7 @@ export const handleTimeUpdate = (time: number) => {
 
 // Function to generate baked stroke data for external rendering (p5, three.js, etc.)
 const generateBakedStrokeData = (): { data: FreehandRenderData, groupMap: Record<string, number[]> } => {
+  const freehandShapeLayer = getGlobalCanvasState().layers.freehandShape
   if (!freehandShapeLayer) return { data: [], groupMap: {} }
 
   // Helper function to transform points using world transform
@@ -1289,6 +1264,7 @@ const generateBakedStrokeData = (): { data: FreehandRenderData, groupMap: Record
 // Function to update baked data in app state
 export const updateBakedStrokeData = () => {
   const result = generateBakedStrokeData()
+  const appState = globalStore().appStateRef
   appState.freehandRenderData = result.data
   appState.freehandGroupMap = result.groupMap
   appState.freehandDataUpdateCallback?.()
@@ -1313,6 +1289,7 @@ export const setNodeMetadata = (
 // Hierarchy utilities are now accessed directly from the metadata module
 
 export const collectHierarchy = (): HierarchyEntry[] => {
+  const freehandShapeLayer = getGlobalCanvasState().layers.freehandShape
   if (!freehandShapeLayer) return []
   return collectHierarchyFromRoot(freehandShapeLayer.getChildren())
 }
@@ -1322,29 +1299,34 @@ export let updateCursor: (() => void) | undefined
 export const setUpdateCursor = (uc: (() => void)) => updateCursor = uc
 
 export const updateSelectionRect = () => {
-  if (!selectionRect || !dragSelectionState.value.isSelecting) return
+  const state = getGlobalCanvasState()
+  if (!state.freehand.selectionRect || !state.freehand.dragSelectionState.value.isSelecting) return
   
-  const { startPos, currentPos } = dragSelectionState.value
+  const { startPos, currentPos } = state.freehand.dragSelectionState.value
   const minX = Math.min(startPos.x, currentPos.x)
   const minY = Math.min(startPos.y, currentPos.y)
   const width = Math.abs(currentPos.x - startPos.x)
   const height = Math.abs(currentPos.y - startPos.y)
   
-  selectionRect.setAttrs({
+  state.freehand.selectionRect.setAttrs({
     x: minX,
     y: minY,
     width,
     height,
     visible: width > 5 || height > 5 // Only show if significant drag
   })
+  const freehandSelectionLayer = state.layers.freehandSelection
   freehandSelectionLayer?.batchDraw()
 }
 
 export const completeSelectionRect = (isShiftHeld: boolean = false) => {
-  if (!selectionRect || !freehandShapeLayer) return
+  const state = getGlobalCanvasState()
+  const freehandShapeLayer = state.layers.freehandShape
+  const freehandSelectionLayer = state.layers.freehandSelection
+  if (!state.freehand.selectionRect || !freehandShapeLayer) return
   
   // Check if this was actually a drag based on pointer movement, not rectangle size
-  const { startPos, currentPos } = dragSelectionState.value
+  const { startPos, currentPos } = state.freehand.dragSelectionState.value
   const dx = Math.abs(currentPos.x - startPos.x)
   const dy = Math.abs(currentPos.y - startPos.y)
   const wasDragged = dx >= 5 || dy >= 5
@@ -1355,7 +1337,7 @@ export const completeSelectionRect = (isShiftHeld: boolean = false) => {
       clearFreehandSelection()
     }
     // Hide selection rectangle and return
-    selectionRect.visible(false)
+    state.freehand.selectionRect.visible(false)
     freehandSelectionLayer?.batchDraw()
     return
   }
@@ -1369,7 +1351,7 @@ export const completeSelectionRect = (isShiftHeld: boolean = false) => {
   }
   
   // Get the actual rectangle dimensions for intersection testing
-  const rectBox = selectionRect.getClientRect()
+  const rectBox = state.freehand.selectionRect.getClientRect()
   
   // Check all top-level nodes in shape layer
   freehandShapeLayer.getChildren().forEach(node => {
@@ -1388,7 +1370,7 @@ export const completeSelectionRect = (isShiftHeld: boolean = false) => {
   intersectingNodes.forEach(node => freehandAddSelection(node))
   
   // Hide and reset selection rectangle to prevent stale data
-  selectionRect.setAttrs({ x: 0, y: 0, width: 0, height: 0, visible: false })
+  state.freehand.selectionRect.setAttrs({ x: 0, y: 0, width: 0, height: 0, visible: false })
   freehandSelectionLayer?.batchDraw()
 }
 
