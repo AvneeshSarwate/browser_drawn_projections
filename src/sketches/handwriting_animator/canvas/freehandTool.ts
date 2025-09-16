@@ -15,17 +15,19 @@ const appState = store.appStateRef
 
 // Import shared utilities
 import { uid, getPointsBounds, hasAncestorConflict } from './canvasUtils'
-import { fromStroke, fromGroup, getCanvasItem, removeCanvasItem, type CanvasItem } from './CanvasItem'
+import { createStrokeItem, createGroupItem, getCanvasItem, removeCanvasItem, type CanvasItem } from './CanvasItem'
 import * as selectionStore from './selectionStore'
+import { freehandStrokes, freehandStrokeGroups, freehandLayers, getGlobalCanvasState, type CanvasRuntimeState } from './canvasState'
 
 // Konva clone behavior confirmed: recursively clones children but keeps same IDs
 
 // Register nodes recursively in the CanvasItem registry
 const registerCanvasItemsRecursively = (node: Konva.Node) => {
+  const state = getGlobalCanvasState()
   if (node instanceof Konva.Path) {
-    fromStroke(node)
+    createStrokeItem(state, node)
   } else if (node instanceof Konva.Group) {
-    fromGroup(node)
+    createGroupItem(state, node)
     node.getChildren().forEach(child => registerCanvasItemsRecursively(child))
   }
 }
@@ -87,7 +89,7 @@ export const deepCloneWithNewIds = (
 
     // Update data structures
     if (node instanceof Konva.Path) {
-      const originalStroke = Array.from(freehandStrokes.values())
+      const originalStroke = Array.from(freehandStrokes().values())
         .find(s => s.shape === originalNode)
 
       if (originalStroke) {
@@ -96,7 +98,7 @@ export const deepCloneWithNewIds = (
           id: newId,
           shape: node
         }
-        freehandStrokes.set(newId, newStroke)
+        freehandStrokes().set(newId, newStroke)
         console.log('Created stroke data for cloned Path:', newId)
       }
     } else if (node instanceof Konva.Group) {
@@ -112,7 +114,7 @@ export const deepCloneWithNewIds = (
       // Create group data structure
       const strokeIds = clonedGroup.find('Path').map(p => p.id())
       if (strokeIds.length > 0) {
-        freehandStrokeGroups.set(newId, {
+        freehandStrokeGroups().set(newId, {
           id: newId,
           strokeIds,
           group: clonedGroup
@@ -185,12 +187,33 @@ export const duplicateFreehandSelected = () => {
   })
 }
 
+// State-based layer initialization functions  
+export const initFreehandLayers = (state: CanvasRuntimeState, stage: Konva.Stage) => {
+  state.layers.freehandShape = new Konva.Layer()
+  state.layers.freehandDrawing = new Konva.Layer()  
+  state.layers.freehandSelection = new Konva.Layer()
+  
+  stage.add(state.layers.freehandShape)
+  stage.add(state.layers.freehandDrawing)
+  stage.add(state.layers.freehandSelection)
+}
+
+// Legacy wrappers - REMOVE IN PHASE 7
 export let freehandShapeLayer: Konva.Layer | undefined = undefined
-export const setFreehandShapeLayer = (ls: Konva.Layer) => freehandShapeLayer = ls
+export const setFreehandShapeLayer = (ls: Konva.Layer) => {
+  freehandShapeLayer = ls
+  getGlobalCanvasState().layers.freehandShape = ls
+}
 export let freehandDrawingLayer: Konva.Layer | undefined = undefined
-export const setFreehandDrawingLayer = (dl: Konva.Layer) => freehandDrawingLayer = dl
+export const setFreehandDrawingLayer = (dl: Konva.Layer) => {
+  freehandDrawingLayer = dl
+  getGlobalCanvasState().layers.freehandDrawing = dl
+}
 export let freehandSelectionLayer: Konva.Layer | undefined = undefined
-export const setFreehandSelectionLayer = (sl: Konva.Layer) => freehandSelectionLayer = sl
+export const setFreehandSelectionLayer = (sl: Konva.Layer) => {
+  freehandSelectionLayer = sl
+  getGlobalCanvasState().layers.freehandSelection = sl
+}
 
 // Import metadata utilities from generic module
 import { type HierarchyEntry, collectHierarchyFromRoot } from '@/metadata'
@@ -232,15 +255,47 @@ export const resetSelectionRect = (x: number, y: number) => {
   })
 }
 
-// Drawing state
+// Drawing state - now synced with CanvasRuntimeState
 export let isDrawing = false
-export const setIsDrawing = (id: boolean) => isDrawing = id
 export let currentPoints: number[] = []
-export const setCurrentPoints = (pts: number[]) => currentPoints = pts
 export let currentTimestamps: number[] = []
-export const setCurrentTimestamps = (ts: number[]) => currentTimestamps = ts
 export let drawingStartTime = 0
-export const setDrawingStartTime = (ts: number) => drawingStartTime = ts
+
+export const setIsDrawing = (id: boolean) => {
+  isDrawing = id
+  getGlobalCanvasState().freehand.isDrawing = id
+}
+
+export const setCurrentPoints = (pts: number[]) => {
+  currentPoints = pts
+  getGlobalCanvasState().freehand.currentPoints = pts
+}
+
+export const setCurrentTimestamps = (ts: number[]) => {
+  currentTimestamps = ts
+  getGlobalCanvasState().freehand.currentTimestamps = ts
+}
+
+export const setDrawingStartTime = (ts: number) => {
+  drawingStartTime = ts
+  getGlobalCanvasState().freehand.drawingStartTime = ts
+}
+
+// State-based functions for direct use
+export const freehandToolWithState = {
+  setIsDrawing: (state: CanvasRuntimeState, isDrawing: boolean) => {
+    state.freehand.isDrawing = isDrawing
+  },
+  setCurrentPoints: (state: CanvasRuntimeState, pts: number[]) => {
+    state.freehand.currentPoints = pts
+  },
+  setCurrentTimestamps: (state: CanvasRuntimeState, ts: number[]) => {
+    state.freehand.currentTimestamps = ts
+  },
+  setDrawingStartTime: (state: CanvasRuntimeState, ts: number) => {
+    state.freehand.drawingStartTime = ts
+  }
+}
 
 
 // Transform controls - for freehand
@@ -277,7 +332,7 @@ const getSelectedStrokes = (): FreehandStroke[] => {
             findStrokesInGroup(child)
           } else if (child instanceof Konva.Path) {
             // Find corresponding stroke
-            freehandStrokes.forEach(stroke => {
+            Array.from(freehandStrokes().values()).forEach(stroke => {
               if (stroke.shape === child && !processedStrokeIds.has(stroke.id)) {
                 selectedStrokes.push(stroke)
                 processedStrokeIds.add(stroke.id)
@@ -289,7 +344,7 @@ const getSelectedStrokes = (): FreehandStroke[] => {
       findStrokesInGroup(node)
     } else if (node instanceof Konva.Path) {
       // Individual stroke
-      freehandStrokes.forEach(stroke => {
+      Array.from(freehandStrokes().values()).forEach(stroke => {
         if (stroke.shape === node && !processedStrokeIds.has(stroke.id)) {
           selectedStrokes.push(stroke)
           processedStrokeIds.add(stroke.id)
@@ -304,14 +359,15 @@ const getSelectedStrokes = (): FreehandStroke[] => {
 // Selection functions - now using unified selection store
 export const freehandAddSelection = (node: Konva.Node) => {
   console.log('Adding to selection:', node.id(), node.constructor.name)
-  const item = getCanvasItem(node)
+  const state = getGlobalCanvasState()
+  const item = getCanvasItem(node) // Still uses legacy fallback
   if (item) {
     selectionStore.add(item, true) // additive = true
   }
 }
 
 const freehandToggleSelection = (node: Konva.Node) => {
-  const item = getCanvasItem(node)
+  const item = getCanvasItem(node) // Still uses legacy fallback
   if (item) {
     selectionStore.toggle(item, true) // additive = true
   }
@@ -390,19 +446,20 @@ export interface FreehandStrokeGroup {
   group?: Konva.Group
 }
 
-export const freehandStrokes = new Map<string, FreehandStroke>()
-export const freehandStrokeGroups = new Map<string, FreehandStrokeGroup>()
+// All stroke data now accessed via convenience getters from canvasState.ts
 
-// Separate refs for UI state for freehand
-// Legacy UI refs removed; selection store drives UI in LivecodeHolder
+// Direct state access - no more helper functions needed
+
+// UI state refs - kept as-is for now, will be fully integrated in later phases
 export const selectedStrokesForTimeline = ref(new Set<string>())
 export const timelineDuration = ref(0)
 export const showGrid = ref(false)
-export const gridSize = 20
 export const currentPlaybackTime = ref(0)
-export const freehandDrawMode = ref(true) // true = draw mode, false = select mode
-export const useRealTiming = ref(false) // false = use max threshold, true = use actual timing
-export const maxInterStrokeDelay = 300 // 0.3 seconds max gap between strokes
+export const freehandDrawMode = ref(true)
+export const useRealTiming = ref(false)
+export const isAnimating = ref(false)
+export const gridSize = 20
+export const maxInterStrokeDelay = 300
 
 // Undo/Redo system for freehand
 interface FreehandCommand {
@@ -419,8 +476,7 @@ const maxHistorySize = 50
 let isUndoRedoOperation = false
 const setIsUndoRedoOperation = (isUndoRedo: boolean) => isUndoRedoOperation = isUndoRedo
 
-// Track if animation is currently playing for UI locking
-export const isAnimating = ref(false)
+// Track if animation is currently playing for UI locking - defined with other UI refs above
 
 
 
@@ -430,8 +486,8 @@ const getCurrentFreehandState = () => {
 
   try {
     const layerData = freehandShapeLayer.toObject()
-    const strokesData = Array.from(freehandStrokes.entries())
-    const strokeGroupsData = Array.from(freehandStrokeGroups.entries())
+    const strokesData = Array.from(freehandStrokes().entries())
+    const strokeGroupsData = Array.from(freehandStrokeGroups().entries())
 
     const canvasState = {
       layer: layerData,
@@ -585,7 +641,7 @@ export const finishFreehandDragTracking = (nodeName: string) => {
 
 // Function to refresh stroke-shape connections
 export const refreshStrokeConnections = () => {
-  freehandStrokes.forEach((stroke, id) => {
+  freehandStrokes().forEach((stroke, id) => {
     const currentShape = stage?.findOne(`#${id}`) as Konva.Path
     if (currentShape && currentShape !== stroke.shape) {
       console.log('Updating stroke connection for:', id)
@@ -674,8 +730,7 @@ export const deserializeFreehandState = () => {
 
     // Clear existing content
     freehandShapeLayer.destroyChildren()
-    freehandStrokes.clear()
-    freehandStrokeGroups.clear()
+    clearStrokesInState(getGlobalCanvasState())
     selectionStore.clear() // Clear selection using unified store
 
     // Use the extracted handler attachment logic
@@ -712,7 +767,7 @@ export const deserializeFreehandState = () => {
           isFreehand: strokeData.isFreehand,
           shape: shape,
         }
-        freehandStrokes.set(id, stroke)
+        setStrokeInState(getGlobalCanvasState(), id, stroke)
       })
     }
 
@@ -724,7 +779,7 @@ export const deserializeFreehandState = () => {
           strokeIds: groupData.strokeIds,
           group: stage!.findOne(`#${id}`) as Konva.Group,
         }
-        freehandStrokeGroups.set(id, group)
+        setStrokeGroupInState(getGlobalCanvasState(), id, group)
       })
     }
 
@@ -752,7 +807,7 @@ export const updateFreehandDraggableStates = () => {
   // selection dragging at the stage level and use the Transformer for transforms.
   const isSelectTool = activeTool.value === 'select'
 
-  freehandStrokes.forEach((stroke) => {
+  freehandStrokes().forEach((stroke) => {
     if (stroke.shape) stroke.shape.draggable(false)
   })
 
@@ -845,7 +900,7 @@ export const createStrokeShape = (points: number[], id: string): Konva.Path => {
   })
 
   // Register as CanvasItem
-  fromStroke(path)
+  createStrokeItem(getGlobalCanvasState(), path)
 
   return path
 }
@@ -881,9 +936,10 @@ export const deleteFreehandSelected = () => {
     selectedNodes.forEach((node: Konva.Node) => {
       node.destroy()
       // Also remove from strokes map if it's a stroke
-      freehandStrokes.forEach((stroke, id) => {
+      const state = getGlobalCanvasState()
+      freehandStrokes().forEach((stroke, id) => {
         if (stroke.shape === node) {
-          freehandStrokes.delete(id)
+          deleteStrokeFromState(state, id)
         }
       })
       // Remove from registry
@@ -911,7 +967,7 @@ export const handleTimeUpdate = (time: number) => {
     strokesToAnimate = selectedStrokes.filter(stroke => stroke.isFreehand)
   } else {
     // All freehand strokes
-    strokesToAnimate = Array.from(freehandStrokes.values()).filter(stroke => stroke.isFreehand)
+    strokesToAnimate = Array.from(freehandStrokes().values()).filter(stroke => stroke.isFreehand)
   }
 
   // Sort by creation time
@@ -942,7 +998,7 @@ export const handleTimeUpdate = (time: number) => {
       groupsToShow.forEach(group => group.show())
     } else {
       // Restore all freehand strokes and all groups
-      freehandStrokes.forEach(stroke => {
+      freehandStrokes().forEach(stroke => {
         if (stroke.shape && stroke.originalPath && stroke.isFreehand) {
           stroke.shape.show()
           stroke.shape.data(stroke.originalPath)
@@ -971,7 +1027,7 @@ export const handleTimeUpdate = (time: number) => {
     })
   } else {
     // Hide all freehand strokes and all groups
-    freehandStrokes.forEach(stroke => {
+    freehandStrokes().forEach(stroke => {
       if (stroke.shape && stroke.isFreehand) stroke.shape.hide()
     })
 
@@ -1140,7 +1196,7 @@ const generateBakedStrokeData = (): { data: FreehandRenderData, groupMap: Record
   const processNode = (node: Konva.Node): FlattenedStroke | FlattenedStrokeGroup | null => {
     if (node instanceof Konva.Path) {
       // Find the corresponding stroke data
-      const stroke = Array.from(freehandStrokes.values()).find(s => s.shape === node)
+      const stroke = Array.from(freehandStrokes().values()).find(s => s.shape === node)
       if (!stroke) return null
 
       const transformedPoints = transformPoints(stroke.points, node)

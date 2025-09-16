@@ -1,10 +1,12 @@
 import Konva from 'konva'
 import { ref } from 'vue'
 import * as selectionStore from './selectionStore'
-import { getCanvasItem, fromGroup, fromPolygon, removeCanvasItem } from './CanvasItem'
+import { getCanvasItem, createGroupItem, createPolygonItem, removeCanvasItem } from './CanvasItem'
+import { getGlobalCanvasState, polygonShapes, freehandStrokes, freehandStrokeGroups } from './canvasState'
+import type { CanvasRuntimeState } from './canvasState'
 import { executeCommand } from './commands'
 import { getCurrentFreehandStateString, deepCloneWithNewIds, freehandShapeLayer, updateBakedStrokeData, updateTimelineState, refreshStrokeConnections } from './freehandTool'
-import { getCurrentPolygonStateString, polygonShapes, polygonShapesLayer, attachPolygonHandlers, serializePolygonState, updateBakedPolygonData } from './polygonTool'
+import { getCurrentPolygonStateString, polygonShapesLayer, attachPolygonHandlers, serializePolygonState, updateBakedPolygonData } from './polygonTool'
 import { hasAncestorConflict } from './canvasUtils'
 import { uid } from './canvasUtils'
 import { pushCommandWithStates } from './commands'
@@ -370,7 +372,7 @@ export function groupSelection() {
     })
 
     // Register group and select it
-    const item = fromGroup(superGroup)
+    const item = createGroupItem(getGlobalCanvasState(), superGroup)
     selectionStore.clear()
     selectionStore.add(item)
 
@@ -448,9 +450,9 @@ export function duplicateSelection() {
         if (parent) parent.add(clone)
 
         // register data structures and handlers
-        fromPolygon(clone)
+        createPolygonItem(getGlobalCanvasState(), clone)
         attachPolygonHandlers(clone)
-        polygonShapes.set(newId, {
+        polygonShapes().set(newId, {
           id: newId,
           points: [...clone.points()],
           closed: !!clone.closed(),
@@ -500,29 +502,24 @@ export function deleteSelection() {
       collect.forEach((n) => {
         // Freehand stroke record cleanup
         if (n instanceof Konva.Path) {
-          // remove from strokes map
-          import('./freehandTool').then(({ freehandStrokes, freehandStrokeGroups }) => {
-            // delete stroke entry matching this node id or shape
-            freehandStrokes.delete(n.id())
-            // fallback: by shape reference
-            Array.from(freehandStrokes.entries()).forEach(([id, s]) => {
-              if (s.shape === n) freehandStrokes.delete(id)
-            })
-            // remove from any group stroke lists
-            Array.from(freehandStrokeGroups.values()).forEach((g) => {
-              g.strokeIds = g.strokeIds.filter((sid) => sid !== n.id())
-            })
+          // delete stroke entry matching this node id or shape
+          freehandStrokes().delete(n.id())
+          // fallback: by shape reference
+          Array.from(freehandStrokes().entries()).forEach(([id, s]) => {
+            if (s.shape === n) freehandStrokes().delete(id)
+          })
+          // remove from any group stroke lists
+          Array.from(freehandStrokeGroups().values()).forEach((g) => {
+            g.strokeIds = g.strokeIds.filter((sid) => sid !== n.id())
           })
         }
         // Freehand group record cleanup
         if (n instanceof Konva.Group) {
-          import('./freehandTool').then(({ freehandStrokeGroups }) => {
-            freehandStrokeGroups.delete(n.id())
-          })
+          freehandStrokeGroups().delete(n.id())
         }
         // Polygon record cleanup
         if (n instanceof Konva.Line) {
-          polygonShapes.delete(n.id())
+          polygonShapes().delete(n.id())
         }
         // Remove from CanvasItem registry
         removeCanvasItem(n.id())

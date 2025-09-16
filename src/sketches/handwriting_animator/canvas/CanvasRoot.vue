@@ -1,6 +1,7 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
 import { type TemplateAppState, appStateName, resolution, drawFlattenedStrokeGroup, stage, setStage, showMetadataEditor, activeTool } from '../appState';
+import { createCanvasRuntimeState, type CanvasRuntimeState, setGlobalCanvasState } from './canvasState';
 import * as selectionStore from './selectionStore';
 import { getCanvasItem } from './CanvasItem';
 import { inject, onMounted, onUnmounted, ref, watch } from 'vue';
@@ -11,12 +12,12 @@ import Konva from 'konva';
 import Timeline from './Timeline.vue';
 import HierarchicalMetadataEditor from './HierarchicalMetadataEditor.vue';
 import VisualizationToggles from './VisualizationToggles.vue';
-import { clearFreehandSelection, createStrokeShape, currentPoints, currentTimestamps, deserializeFreehandState, drawingStartTime, freehandDrawingLayer, freehandSelectionLayer, freehandShapeLayer, freehandStrokes, getStrokePath, gridSize, isAnimating, isDrawing, serializeFreehandState, setCurrentPoints, setCurrentTimestamps, setDrawingStartTime, setFreehandDrawingLayer, setFreehandSelectionLayer, setFreehandShapeLayer, setIsDrawing, showGrid, updateBakedStrokeData, updateFreehandDraggableStates, updateTimelineState, type FreehandStroke, useRealTiming, selectedStrokesForTimeline, timelineDuration, handleTimeUpdate, maxInterStrokeDelay, setUpdateCursor, updateCursor, downloadFreehandDrawing, uploadFreehandDrawing, setRefreshAVs, getCurrentFreehandStateString, restoreFreehandState } from './freehandTool';
+import { clearFreehandSelection, createStrokeShape, currentPoints, currentTimestamps, deserializeFreehandState, drawingStartTime, freehandDrawingLayer, freehandSelectionLayer, freehandShapeLayer, freehandStrokes, getStrokePath, gridSize, isAnimating, isDrawing, serializeFreehandState, setCurrentPoints, setCurrentTimestamps, setDrawingStartTime, setFreehandDrawingLayer, setFreehandSelectionLayer, setFreehandShapeLayer, setIsDrawing, showGrid, updateBakedStrokeData, updateFreehandDraggableStates, updateTimelineState, type FreehandStroke, useRealTiming, selectedStrokesForTimeline, timelineDuration, handleTimeUpdate, maxInterStrokeDelay, setUpdateCursor, updateCursor, downloadFreehandDrawing, uploadFreehandDrawing, setRefreshAVs, getCurrentFreehandStateString, restoreFreehandState, initFreehandLayers } from './freehandTool';
 import { getPointsBounds } from './canvasUtils';
 import { CommandStack } from './commandStack';
 import { setGlobalExecuteCommand, setGlobalPushCommand } from './commands';
 import { ensureHighlightLayer } from '@/metadata';
-import { polygonShapesLayer, polygonPreviewLayer, polygonControlsLayer, polygonSelectionLayer, clearPolygonSelection, updatePolygonControlPoints, deserializePolygonState, polygonMode, handlePolygonClick, isDrawingPolygon, handlePolygonMouseMove, handlePolygonEditMouseMove, currentPolygonPoints, finishPolygon, clearCurrentPolygon, serializePolygonState, setPolygonControlsLayer, setPolygonPreviewLayer, setPolygonSelectionLayer, setPolygonShapesLayer, getCurrentPolygonStateString, restorePolygonState, updateBakedPolygonData } from './polygonTool';
+import { polygonShapesLayer, polygonPreviewLayer, polygonControlsLayer, polygonSelectionLayer, clearPolygonSelection, updatePolygonControlPoints, deserializePolygonState, polygonMode, handlePolygonClick, isDrawingPolygon, handlePolygonMouseMove, handlePolygonEditMouseMove, currentPolygonPoints, finishPolygon, clearCurrentPolygon, serializePolygonState, setPolygonControlsLayer, setPolygonPreviewLayer, setPolygonSelectionLayer, setPolygonShapesLayer, getCurrentPolygonStateString, restorePolygonState, updateBakedPolygonData, initPolygonLayers } from './polygonTool';
 import { initAVLayer, refreshAnciliaryViz } from './ancillaryVisualizations';
 import { initializeTransformer } from './transformerManager';
 import { initializeSelectTool, handleSelectPointerDown, handleSelectPointerMove, handleSelectPointerUp, groupSelection, ungroupSelection, canGroupSelection, canUngroupSelection, duplicateSelection, deleteSelection } from './selectTool';
@@ -24,6 +25,18 @@ import { sinN } from '@/channels/channels';
 
 // ==================== common stuff ====================
 const appState = inject<TemplateAppState>(appStateName)!!
+
+// Create and initialize canvas runtime state
+const canvasState: CanvasRuntimeState = createCanvasRuntimeState()
+
+// Set the global canvas state for all modules to access
+setGlobalCanvasState(canvasState)
+
+// Set up callbacks for data updates
+canvasState.callbacks.freehandDataUpdate = updateBakedStrokeData
+canvasState.callbacks.polygonDataUpdate = updateBakedPolygonData
+canvasState.callbacks.refreshAncillaryViz = refreshAnciliaryViz
+
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
 
 const clearDrawFuncs = () => {
@@ -67,12 +80,21 @@ const onCanvasStateChange = () => {
 // Create unified command stack instance
 const commandStack = new CommandStack(captureCanvasState, restoreCanvasState, onCanvasStateChange)
 
+// Store in canvas state
+canvasState.command.stack = commandStack
+
 // Expose command stack methods for use in templates and other functions
 const executeCommand = (name: string, action: () => void) => commandStack.executeCommand(name, action)
 const undo = () => commandStack.undo()
 const redo = () => commandStack.redo()
 const canUndo = () => commandStack.canUndo()
 const canRedo = () => commandStack.canRedo()
+
+// Set up command callbacks in state
+canvasState.command.executeCommand = executeCommand
+canvasState.command.pushCommand = (name: string, beforeState: string, afterState: string) => {
+  commandStack.pushCommand(name, beforeState, afterState)
+}
 
 // Grouping logic moved to core/selectTool
 
@@ -217,39 +239,37 @@ onMounted(async () => {
     }
 
     // Initialize Konva using the ref
-    setStage(new Konva.Stage({
+    const stageInstance = new Konva.Stage({
       container: konvaContainer.value,
       width: resolution.width,
       height: resolution.height,
-    }))
+    })
+    setStage(stageInstance)
+    canvasState.stage = stageInstance
+    canvasState.konvaContainer = konvaContainer.value
 
     // Update cursor based on active tool
-    setUpdateCursor(() => {
-      if (stage && konvaContainer.value) {
+    const updateCursorFn = () => {
+      if (stageInstance && konvaContainer.value) {
         konvaContainer.value.style.cursor = activeTool.value === 'freehand' ? 'crosshair' : 'default'
       }
-    })
+    }
+    setUpdateCursor(updateCursorFn)
+    canvasState.callbacks.updateCursor = updateCursorFn
     updateCursor!()
 
-    // Create layers
-
-    setFreehandShapeLayer(new Konva.Layer())
-    setFreehandDrawingLayer(new Konva.Layer())
-    setFreehandSelectionLayer(new Konva.Layer())
-
-    // Create polygon layers
-    setPolygonShapesLayer(new Konva.Layer())
-    setPolygonPreviewLayer(new Konva.Layer())
-    setPolygonControlsLayer(new Konva.Layer())
-    setPolygonSelectionLayer(new Konva.Layer())
-
-    stage!.add(freehandShapeLayer!)
-    stage!.add(freehandDrawingLayer!)
-    stage!.add(freehandSelectionLayer!)
-    stage!.add(polygonShapesLayer!)
-    stage!.add(polygonPreviewLayer!)
-    stage!.add(polygonControlsLayer!)
-    stage!.add(polygonSelectionLayer!)
+    // Create layers using state-based initialization
+    initFreehandLayers(canvasState, stageInstance)
+    initPolygonLayers(canvasState, stageInstance)
+    
+    // Set legacy layer references for backward compatibility
+    setFreehandShapeLayer(canvasState.layers.freehandShape!)
+    setFreehandDrawingLayer(canvasState.layers.freehandDrawing!)
+    setFreehandSelectionLayer(canvasState.layers.freehandSelection!)
+    setPolygonShapesLayer(canvasState.layers.polygonShapes!)
+    setPolygonPreviewLayer(canvasState.layers.polygonPreview!)
+    setPolygonControlsLayer(canvasState.layers.polygonControls!)
+    setPolygonSelectionLayer(canvasState.layers.polygonSelection!)
     
     // Initialize unified transformer
     initializeTransformer(freehandSelectionLayer!)

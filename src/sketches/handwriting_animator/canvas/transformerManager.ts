@@ -4,6 +4,7 @@ import * as selectionStore from './selectionStore'
 import { pushCommandWithStates } from './commands'
 import { polygonMode } from './polygonTool'
 import { activeTool } from '../appState'
+import type { CanvasRuntimeState } from './canvasState'
 
 let transformer: Konva.Transformer | undefined = undefined
 let transformerLayer: Konva.Layer | undefined = undefined
@@ -12,6 +13,34 @@ let transformerLayer: Konva.Layer | undefined = undefined
 // State tracking for undo/redo
 let dragStartState: string | null = null
 
+// State-based transformer initialization
+export function initializeTransformerWithState(state: CanvasRuntimeState, layer: Konva.Layer) {
+  const transformer = new Konva.Transformer({ 
+    rotateEnabled: true, 
+    keepRatio: false,
+    padding: 6 
+  })
+  
+  // Add transform tracking
+  transformer.on('transformstart', () => {
+    startTransformTrackingWithState(state)
+  })
+  
+  transformer.on('transformend', () => {
+    finishTransformTrackingWithState(state, 'Transform')
+  })
+  
+  layer.add(transformer)
+  
+  // Watch selection changes and update transformer
+  watch(state.selection.selectedKonvaNodes, (selectedNodes) => {
+    updateTransformerWithState(state, selectedNodes, transformer, layer)
+  }, { immediate: true })
+  
+  return transformer
+}
+
+// Legacy function
 export function initializeTransformer(layer: Konva.Layer) {
   transformerLayer = layer
   
@@ -38,6 +67,22 @@ export function initializeTransformer(layer: Konva.Layer) {
   }, { immediate: true })
 }
 
+// State-based transformer update
+function updateTransformerWithState(state: CanvasRuntimeState, selectedNodes: Konva.Node[], transformer: Konva.Transformer, layer: Konva.Layer) {
+  // Filter out nodes that shouldn't be transformed
+  const filteredNodes = selectedNodes.filter(node => {
+    // Skip polygons ONLY while actively in polygon edit mode
+    if (node instanceof Konva.Line && polygonMode.value === 'edit' && activeTool.value === 'polygon') {
+      return false
+    }
+    return true
+  })
+  
+  transformer.nodes(filteredNodes)
+  layer.batchDraw()
+}
+
+// Legacy function
 function updateTransformer(selectedNodes: Konva.Node[]) {
   if (!transformer || !transformerLayer) return
   
@@ -57,7 +102,43 @@ function updateTransformer(selectedNodes: Konva.Node[]) {
 // Note: We do not change node.offset or position here.
 // Konva.Transformer rotates/scales around the selection center by default.
 
-// State capture for undo/redo
+// State-based transform tracking
+function startTransformTrackingWithState(state: CanvasRuntimeState) {
+  // Import dynamically to avoid circular dependencies
+  import('./freehandTool').then(({ getCurrentFreehandStateString }) => {
+    import('./polygonTool').then(({ getCurrentPolygonStateString }) => {
+      const startState = JSON.stringify({
+        freehand: getCurrentFreehandStateString(),
+        polygon: getCurrentPolygonStateString()
+      })
+      // Store in state rather than module global
+      state.metadata.metadataText.value = startState // Temporarily using metadata field to store drag state
+    })
+  })
+}
+
+function finishTransformTrackingWithState(state: CanvasRuntimeState, operationName: string) {
+  const dragStartState = state.metadata.metadataText.value
+  if (!dragStartState) return
+  
+  // Import dynamically to avoid circular dependencies
+  import('./freehandTool').then(({ getCurrentFreehandStateString }) => {
+    import('./polygonTool').then(({ getCurrentPolygonStateString }) => {
+      const endState = JSON.stringify({
+        freehand: getCurrentFreehandStateString(),
+        polygon: getCurrentPolygonStateString()
+      })
+
+      if (dragStartState !== endState) {
+        pushCommandWithStates(operationName, dragStartState!, endState)
+      }
+
+      state.metadata.metadataText.value = '' // Clear the temp state
+    })
+  })
+}
+
+// Legacy state capture for undo/redo
 function startTransformTracking() {
   // Import dynamically to avoid circular dependencies
   import('./freehandTool').then(({ getCurrentFreehandStateString }) => {

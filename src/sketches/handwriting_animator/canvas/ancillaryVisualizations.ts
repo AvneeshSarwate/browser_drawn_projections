@@ -2,6 +2,7 @@ import Konva from 'konva'
 import { ref, watch } from 'vue'
 import { stage } from '../appState'
 import { collectHierarchy, setNodeMetadata } from './freehandTool'
+import { getGlobalCanvasState, type CanvasRuntimeState } from './canvasState'
 
 // ----- public reactive API -----
 export const activeAVs = ref<Set<string>>(new Set())
@@ -29,17 +30,69 @@ export const registerAV = (def: AncillaryVisDefinition) => REG.set(def.key, def)
 export const getRegisteredAVs = () => Array.from(REG.values())
 
 // ------------------------------------------------------------------
-// runtime manager (singleton – initialised on first call)
+// State-based runtime manager  
 // ------------------------------------------------------------------
+export const initAVLayerInState = (state: CanvasRuntimeState) => {
+  if (state.layers.ancillaryViz || !state.stage) return
+  
+  state.layers.ancillaryViz = new Konva.Layer({ listening: false, name: 'ancillary-vis' })
+  state.stage.add(state.layers.ancillaryViz)
+  
+  // Install global listeners once (events bubble from child nodes)
+  const handlers = createAVEventHandlers(state)
+  state.stage.on('dragmove.av transform.av', handlers.onDragMove)
+  state.stage.on('dragend.av transformend.av', handlers.onTransformEnd)
+  state.stage.on('destroy.av', handlers.onDestroy)
+  
+  state.stage.batchDraw()
+}
+
+// Legacy runtime manager (singleton – initialised on first call)
 let layer: Konva.Layer | undefined
 const nodeToVis = new Map<string, {def: AncillaryVisDefinition, vis: Konva.Node | Konva.Node[]}>()
 let listenersInstalled = false
 
-// RAF-throttled scheduler for smooth real-time updates
+// State-based refresh functions
+export const refreshAnciliaryVizWithState = (state: CanvasRuntimeState) => {
+  if (!state.stage) return
+  initAVLayerInState(state)
+
+  const roots = collectHierarchy().filter(h => h.depth === 0).map(h => h.node)
+  const needed = new Map<string, {ctx: AVContext, def: AncillaryVisDefinition}>()
+
+  roots.forEach(node => {
+    const md = node.getAttr('metadata') ?? {}
+    const bbox = node.getClientRect({ relativeTo: state.stage })
+    const ctx: AVContext = { node, metadata: md, bbox }
+    activeAVs.value.forEach(key => {
+      const def = REG.get(key)
+      if (def && def.validate(ctx)) {
+        needed.set(`${key}|${node.id()}`, {ctx, def})
+      }
+    })
+  })
+
+  // For now, delegate to legacy implementation for actual vis management
+  refreshAnciliaryViz()
+}
+
+const scheduleAVRefresh = (state: CanvasRuntimeState) => {
+  // For simplicity, just call refresh directly for now
+  refreshAnciliaryVizWithState(state)
+}
+
+// Event handlers that use the current state
+const createAVEventHandlers = (state: CanvasRuntimeState) => ({
+  onDragMove: () => scheduleAVRefresh(state),
+  onTransformEnd: () => refreshAnciliaryVizWithState(state),
+  onDestroy: () => scheduleAVRefresh(state)
+})
+
+// RAF-throttled scheduler for smooth real-time updates (legacy)
 let rafToken: number | null = null
 
-// Call this instead of refreshAVs() directly from event handlers
-const scheduleAVRefresh = () => {
+// Call this instead of refreshAVs() directly from event handlers (legacy)
+const scheduleAVRefreshLegacy = () => {
   if (rafToken !== null) return // already queued this frame
   rafToken = requestAnimationFrame(() => {
     rafToken = null
@@ -52,18 +105,26 @@ export const initAVLayer = () => {
   layer = new Konva.Layer({ listening: false, name: 'ancillary-vis' })
   stage.add(layer)
   
+  // Also sync with state
+  try {
+    const state = getGlobalCanvasState()
+    state.layers.ancillaryViz = layer
+  } catch (e) {
+    // State not initialized yet
+  }
+  
   // Install global listeners once (events bubble from child nodes)
   if (!listenersInstalled) {
     listenersInstalled = true
     
     // Real-time position updates during dragging/transforming
-    stage.on('dragmove.av transform.av', scheduleAVRefresh)
+    stage.on('dragmove.av transform.av', scheduleAVRefreshLegacy)
     
     // Final update when interaction ends (ensures perfect positioning)
     stage.on('dragend.av transformend.av', refreshAnciliaryViz)
     
     // Node removal - automatically cleanup orphaned visualizations
-    stage.on('destroy.av', scheduleAVRefresh)
+    stage.on('destroy.av', scheduleAVRefreshLegacy)
   }
   
   stage.batchDraw()

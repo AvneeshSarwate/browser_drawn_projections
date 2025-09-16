@@ -1,4 +1,34 @@
-// Simple global command function that will be set by LivecodeHolder
+import type { CanvasRuntimeState } from "./canvasState"
+import { getCurrentCanvasState } from "./canvasStateFallback"
+
+// State-based command functions
+export const executeCommandWithState = (state: CanvasRuntimeState, name: string, action: () => void) => {
+  if (!state.command.executeCommand) {
+    console.warn('executeCommand called before setup - falling back to direct execution')
+    action()
+    return
+  }
+  state.command.executeCommand(name, action)
+}
+
+export const pushCommandWithStatesAndState = (state: CanvasRuntimeState, name: string, beforeState: string, afterState: string) => {
+  if (!state.command.pushCommand) {
+    console.warn('pushCommandWithStates called before setup - ignoring')
+    return
+  }
+  state.command.pushCommand(name, beforeState, afterState)
+}
+
+// Setup functions for CanvasRoot.vue to call
+export const setCommandExecutor = (state: CanvasRuntimeState, fn: (name: string, action: () => void) => void) => {
+  state.command.executeCommand = fn
+}
+
+export const setCommandPusher = (state: CanvasRuntimeState, fn: (name: string, beforeState: string, afterState: string) => void) => {
+  state.command.pushCommand = fn
+}
+
+// TEMPORARY FALLBACK WRAPPERS - REMOVE IN PHASE 7
 let globalExecuteCommand: ((name: string, action: () => void) => void) | undefined
 let globalPushCommand: ((name: string, beforeState: string, afterState: string) => void) | undefined
 
@@ -6,27 +36,24 @@ export const setGlobalExecuteCommand = (fn: (name: string, action: () => void) =
   globalExecuteCommand = fn
 }
 
-export const executeCommand = (name: string, action: () => void) => {
-  if (!globalExecuteCommand) {
-    console.warn('executeCommand called before setup - falling back to direct execution')
-    action()
-    return
-  }
-  globalExecuteCommand(name, action)
-}
-
-//todo - would be nice to not have to have this module-global var type pattern and integrate the CommandStack into the app state,
-// but then it gets a bit tricky as to how to provide that state to individual tool modules
-
-// Direct push for commands when before/after are already captured (e.g., transformer moves)
 export const setGlobalPushCommand = (fn: (name: string, beforeState: string, afterState: string) => void) => {
   globalPushCommand = fn
 }
 
-export const pushCommandWithStates = (name: string, beforeState: string, afterState: string) => {
-  if (!globalPushCommand) {
-    console.warn('pushCommandWithStates called before setup - ignoring')
-    return
+export const executeCommand = (name: string, action: () => void) => {
+  if (globalExecuteCommand) {
+    globalExecuteCommand(name, action)
+  } else {
+    // Fall back to state-based approach
+    executeCommandWithState(getCurrentCanvasState(), name, action)
   }
-  globalPushCommand(name, beforeState, afterState)
+}
+
+export const pushCommandWithStates = (name: string, beforeState: string, afterState: string) => {
+  if (globalPushCommand) {
+    globalPushCommand(name, beforeState, afterState)
+  } else {
+    // Fall back to state-based approach
+    pushCommandWithStatesAndState(getCurrentCanvasState(), name, beforeState, afterState)
+  }
 }

@@ -1,6 +1,7 @@
 import Konva from "konva"
 import type { FreehandStroke } from "./freehandTool"
 import { uid } from "./canvasUtils"
+import { getGlobalCanvasState, type CanvasRuntimeState } from "./canvasState"
 
 export type ItemType = 'stroke' | 'strokeGroup' | 'polygon'
 
@@ -13,11 +14,8 @@ export interface CanvasItem {
   setMetadata(meta: Record<string, any> | undefined): void
 }
 
-// Global registry of all canvas items
-export const canvasItemRegistry = new Map<string, CanvasItem>()
-
-// Factory functions
-export const fromStroke = (shape: Konva.Path, strokeData?: FreehandStroke): CanvasItem => {
+// State-based factory functions
+export const createStrokeItem = (state: CanvasRuntimeState, shape: Konva.Path, strokeData?: FreehandStroke): CanvasItem => {
   if (!shape.id()) {
     shape.id(uid('stroke_'))
   }
@@ -46,11 +44,11 @@ export const fromStroke = (shape: Konva.Path, strokeData?: FreehandStroke): Canv
     }
   }
   
-  canvasItemRegistry.set(item.id, item)
+  state.canvasItems.set(item.id, item)
   return item
 }
 
-export const fromGroup = (group: Konva.Group): CanvasItem => {
+export const createGroupItem = (state: CanvasRuntimeState, group: Konva.Group): CanvasItem => {
   if (!group.id()) {
     group.id(uid('group_'))
   }
@@ -79,11 +77,11 @@ export const fromGroup = (group: Konva.Group): CanvasItem => {
     }
   }
   
-  canvasItemRegistry.set(item.id, item)
+  state.canvasItems.set(item.id, item)
   return item
 }
 
-export const fromPolygon = (line: Konva.Line): CanvasItem => {
+export const createPolygonItem = (state: CanvasRuntimeState, line: Konva.Line): CanvasItem => {
   if (!line.id()) {
     line.id(uid('poly_'))
   }
@@ -112,16 +110,36 @@ export const fromPolygon = (line: Konva.Line): CanvasItem => {
     }
   }
   
-  canvasItemRegistry.set(item.id, item)
+  state.canvasItems.set(item.id, item)
   return item
 }
 
-// Helper to get CanvasItem from Konva node
-export const getCanvasItem = (node: Konva.Node): CanvasItem | undefined => {
-  return canvasItemRegistry.get(node.id())
+// State-based helper functions  
+export const getCanvasItemFromState = (state: CanvasRuntimeState, node: Konva.Node): CanvasItem | undefined => {
+  return state.canvasItems.get(node.id())
 }
 
-// Helper to remove item from registry
+export const removeCanvasItemFromState = (state: CanvasRuntimeState, id: string) => {
+  state.canvasItems.delete(id)
+}
+
+// TEMPORARY FALLBACK WRAPPERS - REMOVE IN PHASE 7
+export const fromStroke = (shape: Konva.Path, strokeData?: FreehandStroke): CanvasItem => {
+  return createStrokeItem(getGlobalCanvasState(), shape, strokeData)
+}
+
+export const fromGroup = (group: Konva.Group): CanvasItem => {
+  return createGroupItem(getGlobalCanvasState(), group)
+}
+
+export const fromPolygon = (line: Konva.Line): CanvasItem => {
+  return createPolygonItem(getGlobalCanvasState(), line)
+}
+
+export const getCanvasItem = (node: Konva.Node): CanvasItem | undefined => {
+  return getCanvasItemFromState(getGlobalCanvasState(), node)
+}
+
 export const removeCanvasItem = (id: string) => {
-  canvasItemRegistry.delete(id)
+  removeCanvasItemFromState(getGlobalCanvasState(), id)
 }

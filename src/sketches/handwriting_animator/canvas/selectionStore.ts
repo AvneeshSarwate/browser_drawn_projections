@@ -1,99 +1,92 @@
 import { shallowReactive, computed } from 'vue'
 import type { CanvasItem, ItemType } from './CanvasItem'
-import { executeCommand } from './commands'
+import { executeCommandWithState } from './commands'
+import { getGlobalCanvasState } from './canvasState'
+import type { CanvasRuntimeState } from './canvasState'
 import Konva from 'konva'
 
-// Selection storage - reactive set for UI updates
-export const selected = shallowReactive<Set<CanvasItem>>(new Set())
-
-// Original styling storage for highlights - store node reference to avoid lookup issues
-const originalStyles = new Map<string, { node: Konva.Node, stroke: string, strokeWidth: number }>()
-
-export function add(item: CanvasItem, additive = false) {
-  if (!additive) clear()
-  selected.add(item)
-  applyHighlight()
-  updateGPUAndVisualization()
+// State-based selection functions (not exported, used internally)
+function addToState(state: CanvasRuntimeState, item: CanvasItem, additive = false) {
+  if (!additive) clearState(state)
+  state.selection.items.add(item)
+  applyHighlight(state)
+  updateGPUAndVisualization(state)
 }
 
-export function remove(item: CanvasItem) {
-  selected.delete(item)
-  applyHighlight()
-  updateGPUAndVisualization()
+function removeFromState(state: CanvasRuntimeState, item: CanvasItem) {
+  state.selection.items.delete(item)
+  applyHighlight(state)
+  updateGPUAndVisualization(state)
 }
 
-export function toggle(item: CanvasItem, additive = false) {
-  if (selected.has(item)) {
-    selected.delete(item)
+function toggleInState(state: CanvasRuntimeState, item: CanvasItem, additive = false) {
+  if (state.selection.items.has(item)) {
+    state.selection.items.delete(item)
   } else {
-    if (!additive) clear()
-    selected.add(item)
+    if (!additive) clearState(state)
+    state.selection.items.add(item)
   }
-  applyHighlight()
-  updateGPUAndVisualization()
+  applyHighlight(state)
+  updateGPUAndVisualization(state)
 }
 
-export function clear() {
+function clearState(state: CanvasRuntimeState) {
   // First restore highlights while we still have the selected items
-  restoreHighlights()
+  restoreHighlights(state)
   // Then clear the selection
-  selected.clear()
-  updateGPUAndVisualization()
+  state.selection.items.clear()
+  updateGPUAndVisualization(state)
 }
 
-export function has(item: CanvasItem): boolean {
-  return selected.has(item)
+function hasInState(state: CanvasRuntimeState, item: CanvasItem): boolean {
+  return state.selection.items.has(item)
 }
 
-export function isEmpty(): boolean {
-  return selected.size === 0
+function isEmptyInState(state: CanvasRuntimeState): boolean {
+  return state.selection.items.size === 0
 }
 
-export function count(): number {
-  return selected.size
+function countInState(state: CanvasRuntimeState): number {
+  return state.selection.items.size
 }
 
-export function containsType(type: ItemType): boolean {
-  for (const item of selected) {
+function containsTypeInState(state: CanvasRuntimeState, type: ItemType): boolean {
+  for (const item of state.selection.items) {
     if (item.type === type) return true
   }
   return false
 }
 
-// For feeding the transformer
-export const selectedKonvaNodes = computed(() => 
-  [...selected].map(item => item.konvaNode)
-)
-
-export const getActiveSingleNode = () =>
-  selected.size === 1 ? [...selected][0].konvaNode : null
+function getActiveSingleNodeFromState(state: CanvasRuntimeState) {
+  return state.selection.items.size === 1 ? [...state.selection.items][0].konvaNode : null
+}
 
 // Restore highlights for all previously highlighted items
-function restoreHighlights() {
-  originalStyles.forEach((originalStyle) => {
+function restoreHighlights(state: CanvasRuntimeState) {
+  state.selection.originalStyles.forEach((originalStyle) => {
     const node = originalStyle.node
     if (node && (node instanceof Konva.Path || node instanceof Konva.Line)) {
       node.stroke(originalStyle.stroke)
       node.strokeWidth(originalStyle.strokeWidth)
     }
   })
-  originalStyles.clear()
+  state.selection.originalStyles.clear()
   
   // Redraw affected layers
-  redrawAffectedLayers()
+  redrawAffectedLayers(state)
 }
 
 // Apply visual highlighting to currently selected items
-function applyHighlight() {
+function applyHighlight(state: CanvasRuntimeState) {
   // First restore any existing highlights
-  restoreHighlights()
+  restoreHighlights(state)
 
   // Apply highlights to currently selected items
-  for (const item of selected) {
+  for (const item of state.selection.items) {
     const node = item.konvaNode
     if (node instanceof Konva.Path || node instanceof Konva.Line) {
       // Store original style with node reference
-      originalStyles.set(item.id, {
+      state.selection.originalStyles.set(item.id, {
         node: node,
         stroke: node.stroke() as string,
         strokeWidth: node.strokeWidth()
@@ -106,15 +99,15 @@ function applyHighlight() {
   }
 
   // Redraw affected layers
-  redrawAffectedLayers()
+  redrawAffectedLayers(state)
 }
 
 // Helper to redraw all affected layers
-function redrawAffectedLayers() {
+function redrawAffectedLayers(state: CanvasRuntimeState) {
   const layersToRedraw = new Set<Konva.Layer>()
   
   // Add layers from currently selected items
-  for (const item of selected) {
+  for (const item of state.selection.items) {
     let parent = item.konvaNode.getParent()
     while (parent && !(parent instanceof Konva.Layer)) {
       parent = parent.getParent()
@@ -125,7 +118,7 @@ function redrawAffectedLayers() {
   }
   
   // Add layers from previously highlighted items
-  originalStyles.forEach((style) => {
+  state.selection.originalStyles.forEach((style) => {
     let parent = style.node.getParent()
     while (parent && !(parent instanceof Konva.Layer)) {
       parent = parent.getParent()
@@ -139,43 +132,125 @@ function redrawAffectedLayers() {
 }
 
 // Trigger updates for dependent systems
-function updateGPUAndVisualization() {
-  // Import the update functions dynamically to avoid circular deps
-  import('./freehandTool').then(({ updateBakedStrokeData }) => {
-    updateBakedStrokeData()
-  })
-  
-  import('./polygonTool').then(({ updateBakedPolygonData }) => {
-    updateBakedPolygonData()
-  })
-
-  // Refresh ancillary visualizations if available
-  import('./ancillaryVisualizations').then(({ refreshAnciliaryViz }) => {
-    refreshAnciliaryViz()
-  }).catch(() => {
-    // Ancillary viz might not be available, that's okay
-  })
+function updateGPUAndVisualization(state: CanvasRuntimeState) {
+  // Use the callbacks stored in state instead of dynamic imports
+  state.callbacks.freehandDataUpdate?.()
+  state.callbacks.polygonDataUpdate?.()
+  state.callbacks.refreshAncillaryViz?.()
 }
 
 // Metadata operations with command integration
-export function setMetadata(
+function setMetadataForState(
+  state: CanvasRuntimeState,
   item: CanvasItem,
   meta: Record<string, any> | undefined
 ) {
-  executeCommand('Edit Metadata', () => {
+  executeCommandWithState(state, 'Edit Metadata', () => {
     item.setMetadata(meta)
-    updateGPUAndVisualization()
+    updateGPUAndVisualization(state)
   })
 }
 
 // Multi-item metadata operations
-export function setMetadataForSelected(meta: Record<string, any> | undefined) {
-  if (selected.size === 0) return
+function setMetadataForSelectedInState(state: CanvasRuntimeState, meta: Record<string, any> | undefined) {
+  if (state.selection.items.size === 0) return
   
-  executeCommand('Edit Multiple Metadata', () => {
-    for (const item of selected) {
+  executeCommandWithState(state, 'Edit Multiple Metadata', () => {
+    for (const item of state.selection.items) {
       item.setMetadata(meta)
     }
-    updateGPUAndVisualization()
+    updateGPUAndVisualization(state)
   })
+}
+
+// LEGACY API - Keep the global reactive state for components that still depend on it
+export const selected = shallowReactive<Set<CanvasItem>>(new Set())
+
+// For feeding the transformer - expose the state-based version for now
+export const selectedKonvaNodes = computed(() => {
+  try {
+    const state = getGlobalCanvasState()
+    return state.selection.selectedKonvaNodes.value
+  } catch {
+    // Fallback to legacy reactive if state not initialized yet
+    return [...selected].map(item => item.konvaNode)
+  }
+})
+
+// Legacy functions that forward to current state and sync with reactive
+export function add(item: CanvasItem, additive = false) {
+  const state = getGlobalCanvasState()
+  addToState(state, item, additive)
+  // Also update the legacy reactive for components that still use it
+  if (!additive) selected.clear()
+  selected.add(item)
+}
+
+export function remove(item: CanvasItem) {
+  const state = getGlobalCanvasState()
+  removeFromState(state, item)
+  selected.delete(item)
+}
+
+export function toggle(item: CanvasItem, additive = false) {
+  const state = getGlobalCanvasState()
+  toggleInState(state, item, additive)
+  // Sync with legacy reactive
+  if (selected.has(item)) {
+    selected.delete(item)
+  } else {
+    if (!additive) selected.clear()
+    selected.add(item)
+  }
+}
+
+export function clear() {
+  const state = getGlobalCanvasState()
+  clearState(state)
+  selected.clear()
+}
+
+export function has(item: CanvasItem): boolean {
+  return hasInState(getGlobalCanvasState(), item)
+}
+
+export function isEmpty(): boolean {
+  return isEmptyInState(getGlobalCanvasState())
+}
+
+export function count(): number {
+  return countInState(getGlobalCanvasState())
+}
+
+export function containsType(type: ItemType): boolean {
+  return containsTypeInState(getGlobalCanvasState(), type)
+}
+
+export const getActiveSingleNode = () =>
+  getActiveSingleNodeFromState(getGlobalCanvasState())
+
+export function setMetadata(
+  item: CanvasItem,
+  meta: Record<string, any> | undefined
+) {
+  setMetadataForState(getGlobalCanvasState(), item, meta)
+}
+
+export function setMetadataForSelected(meta: Record<string, any> | undefined) {
+  setMetadataForSelectedInState(getGlobalCanvasState(), meta)
+}
+
+// Export state-based functions for direct use with state
+export const selectionStoreWithState = {
+  add: addToState,
+  remove: removeFromState,
+  toggle: toggleInState,
+  clear: clearState,
+  has: hasInState,
+  isEmpty: isEmptyInState,
+  count: countInState,
+  containsType: containsTypeInState,
+  getActiveSingleNode: getActiveSingleNodeFromState,
+  setMetadata: setMetadataForState,
+  setMetadataForSelected: setMetadataForSelectedInState
 }
