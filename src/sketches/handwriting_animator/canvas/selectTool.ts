@@ -222,7 +222,7 @@ function completeSelectionRect(state: CanvasRuntimeState, isShiftHeld: boolean =
   // Clear existing selection if not holding shift
   if (!isShiftHeld) {
     selectionStore.clear(state)
-    updateTimelineState()
+    updateTimelineState(state)
   }
   
   // Add intersecting items to selection
@@ -426,7 +426,7 @@ export function duplicateSelection(state: CanvasRuntimeState) {
       topLevelNodes.forEach((node) => {
         // Freehand strokes and groups
         if (node instanceof Konva.Path || node instanceof Konva.Group) {
-          const dup = deepCloneWithNewIds(node, 50, 50)
+          const dup = deepCloneWithNewIds(state, node, 50, 50)
           const parent = node.getParent()
           if (parent) parent.add(dup)
           duplicates.push(dup)
@@ -442,7 +442,7 @@ export function duplicateSelection(state: CanvasRuntimeState) {
 
           // register data structures and handlers
           createPolygonItem(state, clone)
-          attachPolygonHandlers(clone)
+          attachPolygonHandlers(state, clone)
           polygonShapes().set(newId, {
             id: newId,
             points: [...clone.points()],

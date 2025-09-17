@@ -12,13 +12,13 @@ import Konva from 'konva';
 import Timeline from './Timeline.vue';
 import HierarchicalMetadataEditor from './HierarchicalMetadataEditor.vue';
 import VisualizationToggles from './VisualizationToggles.vue';
-import { clearFreehandSelection, createStrokeShape, deserializeFreehandState, getStrokePath, gridSize, serializeFreehandState, updateBakedStrokeData, updateFreehandDraggableStates, updateTimelineState, type FreehandStroke, handleTimeUpdate, maxInterStrokeDelay, setUpdateCursor, updateCursor, downloadFreehandDrawing, uploadFreehandDrawing, setRefreshAVs, getCurrentFreehandStateString, restoreFreehandState, initFreehandLayers } from './freehandTool';
+import { clearFreehandSelection as clearFreehandSelectionImpl, createStrokeShape as createStrokeShapeImpl, deserializeFreehandState, getStrokePath, gridSize, serializeFreehandState, updateBakedStrokeData, updateFreehandDraggableStates as updateFreehandDraggableStatesImpl, updateTimelineState as updateTimelineStateImpl, type FreehandStroke, handleTimeUpdate as handleTimeUpdateImpl, maxInterStrokeDelay, setUpdateCursor, updateCursor, downloadFreehandDrawing as downloadFreehandDrawingImpl, uploadFreehandDrawing as uploadFreehandDrawingImpl, setRefreshAVs, getCurrentFreehandStateString, restoreFreehandState, initFreehandLayers } from './freehandTool';
 import { freehandStrokes, getGlobalCanvasState } from './canvasState';
 import { getPointsBounds } from './canvasUtils';
 import { CommandStack } from './commandStack';
 import { setGlobalExecuteCommand, setGlobalPushCommand } from './commands';
 import { ensureHighlightLayer } from '@/metadata';
-import { clearPolygonSelection, updatePolygonControlPoints, deserializePolygonState, handlePolygonClick, handlePolygonMouseMove, handlePolygonEditMouseMove, finishPolygon, clearCurrentPolygon, serializePolygonState, getCurrentPolygonStateString, restorePolygonState, updateBakedPolygonData, initPolygonLayers, setupPolygonModeWatcher } from './polygonTool';
+import { clearPolygonSelection as clearPolygonSelectionImpl, updatePolygonControlPoints as updatePolygonControlPointsImpl, deserializePolygonState, handlePolygonClick as handlePolygonClickImpl, handlePolygonMouseMove as handlePolygonMouseMoveImpl, handlePolygonEditMouseMove as handlePolygonEditMouseMoveImpl, finishPolygon as finishPolygonImpl, clearCurrentPolygon as clearCurrentPolygonImpl, serializePolygonState, getCurrentPolygonStateString, restorePolygonState, updateBakedPolygonData, initPolygonLayers, setupPolygonModeWatcher as setupPolygonModeWatcherImpl } from './polygonTool';
 import { initAVLayer, refreshAnciliaryViz } from './ancillaryVisualizations';
 import { initializeTransformer } from './transformerManager';
 import {
@@ -55,6 +55,25 @@ const duplicateSelectionStateful = () => duplicateSelectionImpl(canvasState)
 const deleteSelectionStateful = () => deleteSelectionImpl(canvasState)
 const canGroupSelectionStateful = computed<boolean>(() => canGroupSelectionImpl(canvasState))
 const canUngroupSelectionStateful = computed<boolean>(() => canUngroupSelectionImpl(canvasState))
+
+// Stateful wrappers for freehand helpers
+const clearFreehandSelection = () => clearFreehandSelectionImpl(canvasState)
+const createStrokeShape = (points: number[], id: string) => createStrokeShapeImpl(canvasState, points, id)
+const updateFreehandDraggableStates = () => updateFreehandDraggableStatesImpl(canvasState)
+const updateTimelineState = () => updateTimelineStateImpl(canvasState)
+const handleTimeUpdate = (time: number) => handleTimeUpdateImpl(canvasState, time)
+const downloadFreehandDrawing = () => downloadFreehandDrawingImpl(canvasState)
+const uploadFreehandDrawing = () => uploadFreehandDrawingImpl(canvasState)
+
+// Stateful wrappers for polygon helpers
+const clearPolygonSelection = () => clearPolygonSelectionImpl(canvasState)
+const updatePolygonControlPoints = () => updatePolygonControlPointsImpl(canvasState)
+const handlePolygonClick = (pos: { x: number, y: number }) => handlePolygonClickImpl(canvasState, pos)
+const handlePolygonMouseMove = () => handlePolygonMouseMoveImpl(canvasState)
+const handlePolygonEditMouseMove = () => handlePolygonEditMouseMoveImpl(canvasState)
+const finishPolygon = () => finishPolygonImpl(canvasState)
+const clearCurrentPolygon = () => clearCurrentPolygonImpl(canvasState)
+const setupPolygonModeWatcher = () => setupPolygonModeWatcherImpl(canvasState)
 
 // Set up callbacks for data updates
 canvasState.callbacks.freehandDataUpdate = () => updateBakedStrokeData(canvasState, appState)

@@ -109,8 +109,8 @@ function startTransformTrackingWithState(state: CanvasRuntimeState) {
   import('./freehandTool').then(({ getCurrentFreehandStateString }) => {
     import('./polygonTool').then(({ getCurrentPolygonStateString }) => {
       const startState = JSON.stringify({
-        freehand: getCurrentFreehandStateString(),
-        polygon: getCurrentPolygonStateString()
+        freehand: getCurrentFreehandStateString(state),
+        polygon: getCurrentPolygonStateString(state)
       })
       // Store in state rather than module global
       state.metadata.metadataText.value = startState // Temporarily using metadata field to store drag state
@@ -126,8 +126,8 @@ function finishTransformTrackingWithState(state: CanvasRuntimeState, operationNa
   import('./freehandTool').then(({ getCurrentFreehandStateString }) => {
     import('./polygonTool').then(({ getCurrentPolygonStateString }) => {
       const endState = JSON.stringify({
-        freehand: getCurrentFreehandStateString(),
-        polygon: getCurrentPolygonStateString()
+        freehand: getCurrentFreehandStateString(state),
+        polygon: getCurrentPolygonStateString(state)
       })
 
       if (dragStartState !== endState) {
@@ -144,9 +144,10 @@ function startTransformTracking() {
   // Import dynamically to avoid circular dependencies
   import('./freehandTool').then(({ getCurrentFreehandStateString }) => {
     import('./polygonTool').then(({ getCurrentPolygonStateString }) => {
+      const state = getGlobalCanvasState()
       dragStartState = JSON.stringify({
-        freehand: getCurrentFreehandStateString(),
-        polygon: getCurrentPolygonStateString()
+        freehand: getCurrentFreehandStateString(state),
+        polygon: getCurrentPolygonStateString(state)
       })
     })
   })
@@ -158,9 +159,10 @@ function finishTransformTracking(operationName: string) {
   // Import dynamically to avoid circular dependencies
   import('./freehandTool').then(({ getCurrentFreehandStateString }) => {
     import('./polygonTool').then(({ getCurrentPolygonStateString }) => {
+      const state = getGlobalCanvasState()
       const endState = JSON.stringify({
-        freehand: getCurrentFreehandStateString(),
-        polygon: getCurrentPolygonStateString()
+        freehand: getCurrentFreehandStateString(state),
+        polygon: getCurrentPolygonStateString(state)
       })
 
       if (dragStartState !== endState) {
