@@ -125,7 +125,7 @@ export const getCurrentPolygonState = () => {
   const polygonShapesLayer = getGlobalCanvasState().layers.polygonShapes
   if (!stage || !polygonShapesLayer) return null
 
-try {
+  try {
     const layerData = polygonShapesLayer.toObject()
     const polygonsData = Array.from(polygonShapes().entries())
     const polygonGroupsData = Array.from(polygonGroups().entries())
@@ -166,41 +166,33 @@ export const restorePolygonState = (stateString: string) => {
   }
 }
 
-// Polygon drag tracking - sync with state
-export let polygonDragStartState: string | null = null
-export const setPolygonDragStartState = (dragState: string | null) => {
-  polygonDragStartState = dragState
-  try {
-    const state = getGlobalCanvasState()
-    state.polygon.dragStartState = dragState
-  } catch (e) {
-    // State not initialized yet
-  }
-}
+// Polygon drag tracking now handled via global state
 
 export const startPolygonDragTracking = () => {
+  const state = getGlobalCanvasState()
   // Capture combined state for unified undo/redo
   const before = JSON.stringify({
     freehand: getCurrentFreehandStateString(),
     polygon: getCurrentPolygonStateString()
   })
-  polygonDragStartState = before
+  state.polygon.dragStartState = before
 }
 
 export const finishPolygonDragTracking = (nodeName: string) => {
-  if (!polygonDragStartState) return
+  const state = getGlobalCanvasState()
+  if (!state.polygon.dragStartState) return
   
   const endCombined = JSON.stringify({
     freehand: getCurrentFreehandStateString(),
     polygon: getCurrentPolygonStateString()
   })
-  if (polygonDragStartState !== endCombined) {
+  if (state.polygon.dragStartState !== endCombined) {
     // Push into unified command stack with combined state
-    pushCommandWithStates(`Transform ${nodeName}`, polygonDragStartState, endCombined)
+    pushCommandWithStates(`Transform ${nodeName}`, state.polygon.dragStartState, endCombined)
     updateBakedPolygonData() // Update baked data after polygon transformation
   }
   
-  polygonDragStartState = null
+  state.polygon.dragStartState = null
 }
 
 // Polygon state serialization functions

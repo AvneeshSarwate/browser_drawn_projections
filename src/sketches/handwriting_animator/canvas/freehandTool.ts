@@ -5,7 +5,7 @@ import getStroke from "perfect-freehand"
 import { type ShallowReactive, shallowReactive, ref, computed, watch } from "vue"
 import type { FreehandRenderData, FlattenedStroke, FlattenedStrokeGroup, TemplateAppState } from "../appState"
 import { globalStore, stage, activeTool } from "../appState"
-import { executeCommand } from "../canvas/commands"
+import { executeCommand, pushCommandWithStates } from "../canvas/commands"
 
 // Import AV refresh function - we'll import lazily to avoid circular deps
 let refreshAVs: (() => void) | undefined
@@ -446,17 +446,6 @@ export const deleteStrokeFromState = (state: CanvasRuntimeState, id: string) => 
 export const gridSize = 20
 export const maxInterStrokeDelay = 300
 
-// Undo/Redo system for freehand
-interface FreehandCommand {
-  name: string
-  beforeState: string
-  afterState: string
-}
-
-const freehandCommandHistory = ref<FreehandCommand[]>([])
-const freehandHistoryIndex = ref(-1)
-const maxHistorySize = 50
-
 // Track if we're currently in an undo/redo operation to prevent adding to history
 let isUndoRedoOperation = false
 const setIsUndoRedoOperation = (isUndoRedo: boolean) => isUndoRedoOperation = isUndoRedo
@@ -540,23 +529,14 @@ export const finishFreehandDragTracking = (nodeName: string) => {
 
   const endState = getCurrentFreehandStateString()
   if (state.freehand.freehandDragStartState !== endState) {
-    // Manually add to history without using executeCommand to avoid double state capture
-    const command: FreehandCommand = {
-      name: `Transform ${nodeName}`,
-      beforeState: state.freehand.freehandDragStartState,
-      afterState: endState
-    }
-
-    freehandCommandHistory.value = freehandCommandHistory.value.slice(0, freehandHistoryIndex.value + 1)
-    freehandCommandHistory.value.push(command)
-    freehandHistoryIndex.value = freehandCommandHistory.value.length - 1
-
-    if (freehandCommandHistory.value.length > maxHistorySize) {
-      freehandCommandHistory.value.shift()
-      freehandHistoryIndex.value = freehandCommandHistory.value.length - 1
-    }
-
-    console.log(`Transform command added to history. Index: ${freehandHistoryIndex.value}`)
+    // Use the global command system instead of the redundant freehand-specific one
+    pushCommandWithStates(
+      `Transform ${nodeName}`,
+      state.freehand.freehandDragStartState,
+      endState
+    )
+    
+    console.log(`Transform command added to global history`)
     updateBakedStrokeData() // Update baked data after transformation
   }
 
