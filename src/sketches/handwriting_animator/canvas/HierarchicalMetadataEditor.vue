@@ -20,7 +20,7 @@ const props = withDefaults(defineProps<Props>(), {
   onApplyMetadata: (node: Konva.Node, metadata: any) => {
     const item = getCanvasItem(node)
     if (item) {
-      selectionStore.setMetadata(item, metadata)
+      selectionStore.setMetadata(getGlobalCanvasState(), item, metadata)
     } else {
       // Fallback for non-registered nodes
       metadataToolkit.setNodeMetadata(node, metadata)
@@ -31,9 +31,9 @@ const props = withDefaults(defineProps<Props>(), {
 // Helpers to read from unified selection store
 const state = getGlobalCanvasState()
 const selectedNodes = state.selection.selectedKonvaNodes
-const singleNode = computed(() => selectionStore.getActiveSingleNode())
-const multiSelected = computed(() => selectionStore.count() > 1)
-const groupSelected = computed(() => selectionStore.count() === 1 && selectedNodes.value[0] instanceof Konva.Group)
+const singleNode = computed(() => selectionStore.getActiveSingleNode(state))
+const multiSelected = computed(() => selectionStore.count(state) > 1)
+const groupSelected = computed(() => selectionStore.count(state) === 1 && selectedNodes.value[0] instanceof Konva.Group)
 const mode = computed(() =>
   multiSelected.value || groupSelected.value ? 'hierarchical' : (singleNode.value ? 'simple' : 'none')
 )

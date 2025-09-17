@@ -272,19 +272,20 @@ export const freehandAddSelection = (node: Konva.Node) => {
   const state = getGlobalCanvasState()
   const item = getCanvasItem(node) // Still uses legacy fallback
   if (item) {
-    selectionStore.add(item, true) // additive = true
+    selectionStore.add(state, item, true) // additive = true
   }
 }
 
 const freehandToggleSelection = (node: Konva.Node) => {
+  const state = getGlobalCanvasState()
   const item = getCanvasItem(node) // Still uses legacy fallback
   if (item) {
-    selectionStore.toggle(item, true) // additive = true
+    selectionStore.toggle(state, item, true) // additive = true
   }
 }
 
 export const clearFreehandSelection = () => {
-  selectionStore.clear()
+  selectionStore.clear(getGlobalCanvasState())
 }
 
 // Update timeline state based on current selection
@@ -293,7 +294,7 @@ export const updateTimelineState = () => {
   const oldDuration = state.freehand.timelineDuration.value
   let newDuration = 0
 
-  if (selectionStore.isEmpty()) {
+  if (selectionStore.isEmpty(state)) {
     // No selection - use all strokes
     state.freehand.selectedStrokesForTimeline.value = new Set()
     state.freehand.timelineDuration.value = 0 // Timeline component will calculate total duration
@@ -607,7 +608,7 @@ export const deserializeFreehandState = (
 
     freehandShapeLayer.destroyChildren()
     clearStrokesInState(canvasState)
-    selectionStore.clear()
+    selectionStore.clear(canvasState)
 
     const layerData = parsedState.layer
     if (layerData && layerData.children) {
@@ -781,7 +782,7 @@ export const handleTimeUpdate = (time: number) => {
 
   // Get strokes to animate and sort them
   let strokesToAnimate: FreehandStroke[] = []
-  const isSelection = !selectionStore.isEmpty()
+  const isSelection = !selectionStore.isEmpty(state)
 
   if (isSelection) {
     // Get selected strokes including those in groups, but only freehand ones

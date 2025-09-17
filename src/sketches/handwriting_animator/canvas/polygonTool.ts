@@ -57,13 +57,13 @@ export const togglePolygonSelection = (polygonId: string) => {
 
   const item = getCanvasItem(polygon)
   if (item) {
-    selectionStore.toggle(item, false) // not additive for polygons
+    selectionStore.toggle(getGlobalCanvasState(), item, false) // not additive for polygons
   }
 }
 
 // Function to clear polygon selection - now using unified selection store  
 export const clearPolygonSelection = () => {
-  selectionStore.clear()
+  selectionStore.clear(getGlobalCanvasState())
 }
 
 // Function to generate baked polygon data for external rendering (p5, three.js, etc.)
@@ -263,7 +263,7 @@ export const deserializePolygonState = (
     polygonShapesLayer.destroyChildren()
     canvasState.polygon.shapes.clear()
     canvasState.polygon.groups.clear()
-    selectionStore.clear()
+    selectionStore.clear(canvasState)
 
     const layerData = polygonState.layer
     if (layerData && layerData.children) {

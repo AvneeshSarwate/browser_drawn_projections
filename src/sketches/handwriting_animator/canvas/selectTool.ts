@@ -65,16 +65,16 @@ export function handleSelectPointerDown(stage: Konva.Stage, e: Konva.KonvaEventO
     const item = getCanvasItem(node)
     if (item) {
       // Update selection depending on modifier and whether the clicked item is already selected
-      const wasSelected = selectionStore.has(item)
+      const wasSelected = selectionStore.has(state, item)
       if (e.evt.shiftKey) {
-        selectionStore.toggle(item, true)
+        selectionStore.toggle(state, item, true)
       } else if (!wasSelected) {
-        selectionStore.clear()
-        selectionStore.add(item, true)
+        selectionStore.clear(state)
+        selectionStore.add(state, item, true)
       }
 
       // Start selection drag if the clicked item is (now) part of the selection
-      const nowSelected = selectionStore.has(item)
+      const nowSelected = selectionStore.has(state, item)
       if (nowSelected) {
         startSelectionDrag(stage)
       }
@@ -170,7 +170,7 @@ function completeSelectionRect(isShiftHeld: boolean = false) {
   if (!wasDragged) {
     // This was just a click, not a drag - clear selection if not holding shift
     if (!isShiftHeld) {
-      selectionStore.clear()
+      selectionStore.clear(state)
     }
     // Hide selection rectangle and return
     state.selection.selectionRect.visible(false)
@@ -228,12 +228,12 @@ function completeSelectionRect(isShiftHeld: boolean = false) {
   
   // Clear existing selection if not holding shift
   if (!isShiftHeld) {
-    selectionStore.clear()
+    selectionStore.clear(state)
     updateTimelineState()
   }
   
   // Add intersecting items to selection
-  intersectingItems.forEach(item => selectionStore.add(item, true)) // additive = true
+  intersectingItems.forEach(item => selectionStore.add(state, item, true)) // additive = true
   
   // Hide and reset selection rectangle to prevent stale data
   state.selection.selectionRect.setAttrs({ x: 0, y: 0, width: 0, height: 0, visible: false })
@@ -352,7 +352,8 @@ export function canGroupSelection(): boolean {
 
 export function groupSelection() {
   if (!canGroupSelection()) return
-  const nodes = getSelectedNodes().filter(n => (n instanceof Konva.Path) || (n instanceof Konva.Group))
+  const state = getGlobalCanvasState()
+  const nodes = state.selection.selectedKonvaNodes.value.filter(n => (n instanceof Konva.Path) || (n instanceof Konva.Group))
   if (nodes.length < 1) return
 
   executeCommand('Group Selection', () => {
@@ -372,12 +373,12 @@ export function groupSelection() {
     })
 
     // Register group and select it
-    const item = createGroupItem(getGlobalCanvasState(), superGroup)
-    selectionStore.clear()
-    selectionStore.add(item)
+    const item = createGroupItem(state, superGroup)
+    selectionStore.clear(state)
+    selectionStore.add(state, item)
 
     superGroup.getLayer()?.batchDraw()
-    updateBakedStrokeData(getGlobalCanvasState(), store.appStateRef)
+    updateBakedStrokeData(state, store.appStateRef)
   })
 }
 
@@ -391,7 +392,8 @@ export function canUngroupSelection(): boolean {
 
 export function ungroupSelection() {
   if (!canUngroupSelection()) return
-  const grp = getSelectedNodes()[0] as Konva.Group
+  const state = getGlobalCanvasState()
+  const grp = state.selection.selectedKonvaNodes.value[0] as Konva.Group
   const parent = grp.getParent()
   if (!parent) return
 
@@ -406,13 +408,13 @@ export function ungroupSelection() {
     grp.destroy()
     removeCanvasItem(id)
 
-    selectionStore.clear()
+    selectionStore.clear(state)
     parent.getLayer()?.batchDraw()
     // Rebuild stroke connections after ungroup to keep data in sync
     try { refreshStrokeConnections() } catch {
       console.error('refreshStrokeConnections failed')
     }
-    updateBakedStrokeData(getGlobalCanvasState(), store.appStateRef)
+    updateBakedStrokeData(state, store.appStateRef)
   })
 }
 
@@ -432,54 +434,56 @@ export function duplicateSelection() {
   if (selectedNodes.length === 0) return
 
   executeCommand('Duplicate', () => {
-    const topLevelNodes = getTopLevelSelectedNodes()
-    const duplicates: Konva.Node[] = []
+    selectionStore.withSelectionHighlightSuppressed(state, () => {
+      const topLevelNodes = getTopLevelSelectedNodes()
+      const duplicates: Konva.Node[] = []
 
-    topLevelNodes.forEach((node) => {
-      // Freehand strokes and groups
-      if (node instanceof Konva.Path || node instanceof Konva.Group) {
-        const dup = deepCloneWithNewIds(node, 50, 50)
-        const parent = node.getParent()
-        if (parent) parent.add(dup)
-        duplicates.push(dup)
-      }
-      // Polygons
-      else if (node instanceof Konva.Line) {
-        const clone = node.clone({ x: node.x() + 50, y: node.y() + 50 }) as Konva.Line
-        // assign new id and register in polygon state
-        const newId = uid('poly_')
-        clone.id(newId)
-        const parent = node.getParent()
-        if (parent) parent.add(clone)
+      topLevelNodes.forEach((node) => {
+        // Freehand strokes and groups
+        if (node instanceof Konva.Path || node instanceof Konva.Group) {
+          const dup = deepCloneWithNewIds(node, 50, 50)
+          const parent = node.getParent()
+          if (parent) parent.add(dup)
+          duplicates.push(dup)
+        }
+        // Polygons
+        else if (node instanceof Konva.Line) {
+          const clone = node.clone({ x: node.x() + 50, y: node.y() + 50 }) as Konva.Line
+          // assign new id and register in polygon state
+          const newId = uid('poly_')
+          clone.id(newId)
+          const parent = node.getParent()
+          if (parent) parent.add(clone)
 
-        // register data structures and handlers
-        createPolygonItem(getGlobalCanvasState(), clone)
-        attachPolygonHandlers(clone)
-        polygonShapes().set(newId, {
-          id: newId,
-          points: [...clone.points()],
-          closed: !!clone.closed(),
-          creationTime: Date.now(),
-          konvaShape: clone
-        } as any)
+          // register data structures and handlers
+          createPolygonItem(state, clone)
+          attachPolygonHandlers(clone)
+          polygonShapes().set(newId, {
+            id: newId,
+            points: [...clone.points()],
+            closed: !!clone.closed(),
+            creationTime: Date.now(),
+            konvaShape: clone
+          } as any)
 
-        duplicates.push(clone)
-      }
+          duplicates.push(clone)
+        }
+      })
+
+      // Update selection to new duplicates
+      selectionStore.clear(state)
+      duplicates.forEach((node) => {
+        const item = getCanvasItem(node)
+        if (item) selectionStore.add(state, item, true)
+      })
+
+      // Refresh visuals/state
+      freehandShapeLayer?.batchDraw()
+      state.layers.polygonShapes?.batchDraw()
+      updateBakedStrokeData(state, store.appStateRef)
+      updateBakedPolygonData(state, store.appStateRef)
+      serializePolygonState(state, store.appStateRef)
     })
-
-    // Update selection to new duplicates
-    selectionStore.clear()
-    duplicates.forEach((node) => {
-      const item = getCanvasItem(node)
-      if (item) selectionStore.add(item, true)
-    })
-
-    // Refresh visuals/state
-    freehandShapeLayer?.batchDraw()
-    getGlobalCanvasState().layers.polygonShapes?.batchDraw()
-    updateBakedStrokeData(getGlobalCanvasState(), store.appStateRef)
-    updateBakedPolygonData(getGlobalCanvasState(), store.appStateRef)
-    serializePolygonState(getGlobalCanvasState(), store.appStateRef)
   })
 }
 
@@ -534,14 +538,14 @@ export function deleteSelection() {
       node.destroy()
     })
 
-    selectionStore.clear()
+    selectionStore.clear(state)
 
     // Redraw/refresh
     freehandShapeLayer?.batchDraw()
-    getGlobalCanvasState().layers.polygonShapes?.batchDraw()
-    updateBakedStrokeData(getGlobalCanvasState(), store.appStateRef)
-    updateBakedPolygonData(getGlobalCanvasState(), store.appStateRef)
-    serializePolygonState(getGlobalCanvasState(), store.appStateRef)
+    state.layers.polygonShapes?.batchDraw()
+    updateBakedStrokeData(state, store.appStateRef)
+    updateBakedPolygonData(state, store.appStateRef)
+    serializePolygonState(state, store.appStateRef)
 
     // Ancillary viz cleanup (best-effort)
     import('./ancillaryVisualizations').then(({ refreshAnciliaryViz }) => refreshAnciliaryViz()).catch(() => {})

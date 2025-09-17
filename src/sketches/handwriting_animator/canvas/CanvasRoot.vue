@@ -137,7 +137,7 @@ const applyToolMode = (tool: 'select' | 'freehand' | 'polygon') => {
   const freehandDrawingLayer = getGlobalCanvasState().layers.freehandDrawing
   const freehandSelectionLayer = getGlobalCanvasState().layers.freehandSelection
   // Clear selections when switching tools
-  selectionStore.clear()
+  selectionStore.clear(canvasState)
 
   if (tool === 'select') {
     // Enable interaction with shape layers for selection
@@ -224,7 +224,7 @@ const handleApplyMetadata = (node: Konva.Node, metadata: any) => {
     const item = getCanvasItem(node)
     if (item) {
       // Route through unified selection store (handles undo/redo + updates)
-      selectionStore.setMetadata(item, metadata)
+      selectionStore.setMetadata(canvasState, item, metadata)
     } else {
       // Fallback for non-registered nodes (should be rare)
       node.setAttr('metadata', metadata === undefined || Object.keys(metadata).length === 0 ? undefined : metadata)
@@ -338,7 +338,7 @@ onMounted(async () => {
         canvasState.freehand.currentTimestamps = [0]
 
         // Clear selection when starting to draw
-        selectionStore.clear()
+        selectionStore.clear(canvasState)
       } else if (activeTool.value === 'polygon') {
         // Polygon tool handles polygon-specific interactions only (no selection)
         const parent = e.target.getParent?.()
@@ -566,11 +566,11 @@ onUnmounted(() => {
         <span class="separator">|</span>
         <div class="button-group vertical">
           <button @click="duplicateSelection"
-            :disabled="selectionStore.count() === 0 || canvasState.freehand.isAnimating.value">
+            :disabled="selectionStore.count(canvasState) === 0 || canvasState.freehand.isAnimating.value">
             📄 Duplicate
           </button>
           <button @click="deleteSelection"
-            :disabled="selectionStore.count() === 0 || canvasState.freehand.isAnimating.value">
+            :disabled="selectionStore.count(canvasState) === 0 || canvasState.freehand.isAnimating.value">
             🗑️ Delete
           </button>
         </div>
@@ -585,11 +585,11 @@ onUnmounted(() => {
         </button>
         <div class="button-group vertical">
           <button @click="duplicateSelection"
-            :disabled="selectionStore.count() === 0 || canvasState.freehand.isAnimating.value">
+            :disabled="selectionStore.count(canvasState) === 0 || canvasState.freehand.isAnimating.value">
             📄 Duplicate
           </button>
           <button @click="deleteSelection"
-            :disabled="selectionStore.count() === 0 || canvasState.freehand.isAnimating.value">
+            :disabled="selectionStore.count(canvasState) === 0 || canvasState.freehand.isAnimating.value">
             🗑️ Delete
           </button>
         </div>
@@ -632,7 +632,7 @@ onUnmounted(() => {
         <button @click="clearCurrentPolygon" :disabled="!canvasState.polygon.isDrawing.value || canvasState.freehand.isAnimating.value">
           🗑️ Cancel Shape
         </button>
-        <button @click="deleteSelection" :disabled="selectionStore.isEmpty() || canvasState.freehand.isAnimating.value">
+        <button @click="deleteSelection" :disabled="selectionStore.isEmpty(canvasState) || canvasState.freehand.isAnimating.value">
           🗑️ Delete
         </button>
         <span class="separator">|</span>
@@ -643,7 +643,7 @@ onUnmounted(() => {
         <span v-if="canvasState.polygon.isDrawing.value" class="info">Drawing: {{ canvasState.polygon.currentPoints.value.length / 2 }} points</span>
       </template>
       <span class="separator">|</span>
-      <span class="info">{{ selectionStore.count() }} selected</span>
+      <span class="info">{{ selectionStore.count(canvasState) }} selected</span>
     </div>
     <div class="canvas-wrapper">
       <div ref="konvaContainer" class="konva-container" :style="{

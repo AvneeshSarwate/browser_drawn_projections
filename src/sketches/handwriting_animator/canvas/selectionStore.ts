@@ -1,7 +1,6 @@
 
 import type { CanvasItem, ItemType } from './CanvasItem'
 import { executeCommandWithState } from './commands'
-import { getGlobalCanvasState } from './canvasState'
 import type { CanvasRuntimeState } from './canvasState'
 import Konva from 'konva'
 
@@ -188,51 +187,52 @@ function setMetadataForSelectedInState(state: CanvasRuntimeState, meta: Record<s
 
 
 
-// Public API functions - now fully use global state
-export function add(item: CanvasItem, additive = false) {
-  addToState(getGlobalCanvasState(), item, additive)
+// Public API functions expect explicit canvas state
+export function add(state: CanvasRuntimeState, item: CanvasItem, additive = false) {
+  addToState(state, item, additive)
 }
 
-export function remove(item: CanvasItem) {
-  removeFromState(getGlobalCanvasState(), item)
+export function remove(state: CanvasRuntimeState, item: CanvasItem) {
+  removeFromState(state, item)
 }
 
-export function toggle(item: CanvasItem, additive = false) {
-  toggleInState(getGlobalCanvasState(), item, additive)
+export function toggle(state: CanvasRuntimeState, item: CanvasItem, additive = false) {
+  toggleInState(state, item, additive)
 }
 
-export function clear() {
-  clearState(getGlobalCanvasState())
+export function clear(state: CanvasRuntimeState) {
+  clearState(state)
 }
 
-export function has(item: CanvasItem): boolean {
-  return hasInState(getGlobalCanvasState(), item)
+export function has(state: CanvasRuntimeState, item: CanvasItem): boolean {
+  return hasInState(state, item)
 }
 
-export function isEmpty(): boolean {
-  return isEmptyInState(getGlobalCanvasState())
+export function isEmpty(state: CanvasRuntimeState): boolean {
+  return isEmptyInState(state)
 }
 
-export function count(): number {
-  return countInState(getGlobalCanvasState())
+export function count(state: CanvasRuntimeState): number {
+  return countInState(state)
 }
 
-export function containsType(type: ItemType): boolean {
-  return containsTypeInState(getGlobalCanvasState(), type)
+export function containsType(state: CanvasRuntimeState, type: ItemType): boolean {
+  return containsTypeInState(state, type)
 }
 
-export const getActiveSingleNode = () =>
-  getActiveSingleNodeFromState(getGlobalCanvasState())
+export const getActiveSingleNode = (state: CanvasRuntimeState) =>
+  getActiveSingleNodeFromState(state)
 
 export function setMetadata(
+  state: CanvasRuntimeState,
   item: CanvasItem,
   meta: Record<string, any> | undefined
 ) {
-  setMetadataForState(getGlobalCanvasState(), item, meta)
+  setMetadataForState(state, item, meta)
 }
 
-export function setMetadataForSelected(meta: Record<string, any> | undefined) {
-  setMetadataForSelectedInState(getGlobalCanvasState(), meta)
+export function setMetadataForSelected(state: CanvasRuntimeState, meta: Record<string, any> | undefined) {
+  setMetadataForSelectedInState(state, meta)
 }
 
 // Export state-based functions for direct use with state
