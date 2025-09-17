@@ -205,58 +205,6 @@ export const initFreehandLayers = (state: CanvasRuntimeState, stage: Konva.Stage
 import { type HierarchyEntry, collectHierarchyFromRoot } from '@/metadata'
 
 
-
-// Highlight layer initialization is now handled by LivecodeHolder directly
-
-export const createSelectionRect = () => {
-  const state = getGlobalCanvasState()
-  const freehandSelectionLayer = state.layers.freehandSelection
-  if (!freehandSelectionLayer) return
-  
-  state.freehand.selectionRect = new Konva.Rect({
-    stroke: '#4A90E2',
-    strokeWidth: 1,
-    dash: [3, 3],
-    fill: 'rgba(74, 144, 226, 0.1)',
-    listening: false,
-    visible: false
-  })
-  freehandSelectionLayer.add(state.freehand.selectionRect)
-}
-
-export const resetSelectionRect = (x: number, y: number) => {
-  const state = getGlobalCanvasState()
-  if (!state.freehand.selectionRect) return
-  state.freehand.selectionRect.setAttrs({
-    x: x,
-    y: y,
-    width: 0,
-    height: 0,
-    visible: false
-  })
-}
-
-
-
-
-
-// State-based functions for direct use
-export const freehandToolWithState = {
-  setIsDrawing: (state: CanvasRuntimeState, isDrawing: boolean) => {
-    state.freehand.isDrawing = isDrawing
-  },
-  setCurrentPoints: (state: CanvasRuntimeState, pts: number[]) => {
-    state.freehand.currentPoints = pts
-  },
-  setCurrentTimestamps: (state: CanvasRuntimeState, ts: number[]) => {
-    state.freehand.currentTimestamps = ts
-  },
-  setDrawingStartTime: (state: CanvasRuntimeState, ts: number) => {
-    state.freehand.drawingStartTime = ts
-  }
-}
-
-
 // Transform controls - for freehand
 // Legacy freehand-specific transformers removed; unified transformer lives in core/transformerManager
 
@@ -815,55 +763,6 @@ export const createStrokeShape = (points: number[], id: string): Konva.Path => {
   return path
 }
 
-// Handle click following working example pattern
-export const handleClick = (target: Konva.Node, shiftKey: boolean) => {
-  // Only allow selection in select mode  
-  if (getGlobalCanvasState().freehand.freehandDrawMode.value) return
-
-  console.log('Handle click on:', target.id(), target.constructor.name)
-
-  const group = freehandTopGroup(target)
-  const nodeToSelect = group ?? target // escalate to top-group if exists
-
-  console.log('Node to select:', nodeToSelect.id(), nodeToSelect.constructor.name)
-
-  if (shiftKey) freehandToggleSelection(nodeToSelect)
-  else { clearFreehandSelection(); freehandAddSelection(nodeToSelect) }
-}
-
-// Group selected strokes - simplified from working example  
-// Legacy grouping moved to core/selectTool
-
-// Ungroup selected groups - simplified from working example
-// Legacy ungroup moved to core/selectTool
-
-// Delete selected freehand strokes/groups
-export const deleteFreehandSelected = () => {
-  const selectedNodes = selectionStore.selectedKonvaNodes.value
-  if (selectedNodes.length === 0) return
-
-  executeCommand('Delete Selected', () => {
-    selectedNodes.forEach((node: Konva.Node) => {
-      node.destroy()
-      // Also remove from strokes map if it's a stroke
-      const state = getGlobalCanvasState()
-      freehandStrokes().forEach((stroke, id) => {
-        if (stroke.shape === node) {
-          deleteStrokeFromState(state, id)
-        }
-      })
-      // Remove from registry
-      removeCanvasItem(node.id())
-    })
-    clearFreehandSelection()
-    updateTimelineState() // Update timeline state after deletion
-    const freehandShapeLayer = getGlobalCanvasState().layers.freehandShape
-    freehandShapeLayer?.batchDraw()
-    updateBakedStrokeData() // Update baked data after deletion
-    refreshAVs?.() // Clean up any orphaned ancillary visualizations
-  })
-}
-
 // Handle timeline updates and stroke animation - restored full logic
 export const handleTimeUpdate = (time: number) => {
   const state = getGlobalCanvasState()
@@ -1237,81 +1136,6 @@ export const collectHierarchy = (): HierarchyEntry[] => {
 export let updateCursor: (() => void) | undefined
 export const setUpdateCursor = (uc: (() => void)) => updateCursor = uc
 
-export const updateSelectionRect = () => {
-  const state = getGlobalCanvasState()
-  if (!state.freehand.selectionRect || !state.freehand.dragSelectionState.value.isSelecting) return
-  
-  const { startPos, currentPos } = state.freehand.dragSelectionState.value
-  const minX = Math.min(startPos.x, currentPos.x)
-  const minY = Math.min(startPos.y, currentPos.y)
-  const width = Math.abs(currentPos.x - startPos.x)
-  const height = Math.abs(currentPos.y - startPos.y)
-  
-  state.freehand.selectionRect.setAttrs({
-    x: minX,
-    y: minY,
-    width,
-    height,
-    visible: width > 5 || height > 5 // Only show if significant drag
-  })
-  const freehandSelectionLayer = state.layers.freehandSelection
-  freehandSelectionLayer?.batchDraw()
-}
-
-export const completeSelectionRect = (isShiftHeld: boolean = false) => {
-  const state = getGlobalCanvasState()
-  const freehandShapeLayer = state.layers.freehandShape
-  const freehandSelectionLayer = state.layers.freehandSelection
-  if (!state.freehand.selectionRect || !freehandShapeLayer) return
-  
-  // Check if this was actually a drag based on pointer movement, not rectangle size
-  const { startPos, currentPos } = state.freehand.dragSelectionState.value
-  const dx = Math.abs(currentPos.x - startPos.x)
-  const dy = Math.abs(currentPos.y - startPos.y)
-  const wasDragged = dx >= 5 || dy >= 5
-  
-  if (!wasDragged) {
-    // This was just a click, not a drag - handle click-to-clear behavior
-    if (!isShiftHeld) {
-      clearFreehandSelection()
-    }
-    // Hide selection rectangle and return
-    state.freehand.selectionRect.visible(false)
-    freehandSelectionLayer?.batchDraw()
-    return
-  }
-  
-  // This was a drag - handle drag selection
-  const intersectingNodes: Konva.Node[] = []
-  
-  // Clear existing selection if not holding shift
-  if (!isShiftHeld) {
-    clearFreehandSelection()
-  }
-  
-  // Get the actual rectangle dimensions for intersection testing
-  const rectBox = state.freehand.selectionRect.getClientRect()
-  
-  // Check all top-level nodes in shape layer
-  freehandShapeLayer.getChildren().forEach(node => {
-    const nodeBox = node.getClientRect()
-    
-    // Check if rectangles intersect
-    if (!(rectBox.x + rectBox.width < nodeBox.x || 
-          nodeBox.x + nodeBox.width < rectBox.x ||
-          rectBox.y + rectBox.height < nodeBox.y ||
-          nodeBox.y + nodeBox.height < rectBox.y)) {
-      intersectingNodes.push(node)
-    }
-  })
-  
-  // Add intersecting nodes to selection
-  intersectingNodes.forEach(node => freehandAddSelection(node))
-  
-  // Hide and reset selection rectangle to prevent stale data
-  state.freehand.selectionRect.setAttrs({ x: 0, y: 0, width: 0, height: 0, visible: false })
-  freehandSelectionLayer?.batchDraw()
-}
 
 // Watch for draw mode changes - simplified based on working example
 // Legacy freehand draw-mode selection watcher removed in favor of explicit tool modes
