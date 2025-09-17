@@ -16,23 +16,22 @@ let refreshAVs: (() => void) | undefined
 import { uid, getPointsBounds, hasAncestorConflict } from './canvasUtils'
 import { createStrokeItem, createGroupItem, getCanvasItem, removeCanvasItem, type CanvasItem } from './CanvasItem'
 import * as selectionStore from './selectionStore'
-import { freehandStrokes, freehandStrokeGroups, freehandLayers, getGlobalCanvasState, type CanvasRuntimeState, type FreehandStrokeRuntime, type FreehandStrokeGroupRuntime } from './canvasState'
+import { freehandStrokes, freehandStrokeGroups, type CanvasRuntimeState, type FreehandStrokeRuntime, type FreehandStrokeGroupRuntime } from './canvasState'
 
 // Konva clone behavior confirmed: recursively clones children but keeps same IDs
 
 // Register nodes recursively in the CanvasItem registry
-const registerCanvasItemsRecursively = (node: Konva.Node) => {
-  const state = getGlobalCanvasState()
+const registerCanvasItemsRecursively = (state: CanvasRuntimeState, node: Konva.Node) => {
   if (node instanceof Konva.Path) {
     createStrokeItem(state, node)
   } else if (node instanceof Konva.Group) {
     createGroupItem(state, node)
-    node.getChildren().forEach(child => registerCanvasItemsRecursively(child))
+    node.getChildren().forEach(child => registerCanvasItemsRecursively(state, child))
   }
 }
 
 // Extracted handler attachment logic for reuse in duplication
-export const attachHandlersRecursively = (node: Konva.Node) => {
+export const attachHandlersRecursively = (state: CanvasRuntimeState, node: Konva.Node) => {
   // Shared setup for both Path and Group nodes
   if (node instanceof Konva.Path || node instanceof Konva.Group) {
     const nodeType = node instanceof Konva.Path ? 'path' : 'group'
@@ -47,12 +46,12 @@ export const attachHandlersRecursively = (node: Konva.Node) => {
     // Selection is handled by the stage-level select tool; no node-level click handler
 
     node.on('dragstart.freehand', () => {
-      startFreehandDragTracking()
+      startFreehandDragTracking(state)
     })
 
     node.on('dragend.freehand', () => {
-      finishFreehandDragTracking(node.constructor.name)
-      const freehandShapeLayer = getGlobalCanvasState().layers.freehandShape
+      finishFreehandDragTracking(state, node.constructor.name)
+      const freehandShapeLayer = state.layers.freehandShape
       freehandShapeLayer?.batchDraw()
     })
 
@@ -62,7 +61,7 @@ export const attachHandlersRecursively = (node: Konva.Node) => {
     // Group-specific logic: recursively attach handlers to all children
     if (node instanceof Konva.Group) {
       node.getChildren().forEach(child => {
-        attachHandlersRecursively(child)
+        attachHandlersRecursively(state, child)
       })
     }
   }
@@ -70,6 +69,7 @@ export const attachHandlersRecursively = (node: Konva.Node) => {
 
 // Simplified deep clone - Konva clones children automatically!
 export const deepCloneWithNewIds = (
+  state: CanvasRuntimeState,
   origNode: Konva.Node,
   offsetX: number = 0,
   offsetY: number = 0
@@ -128,9 +128,9 @@ export const deepCloneWithNewIds = (
   updateIdsRecursively(clone, origNode)
 
   // Attach event handlers to all nodes in the cloned tree
-  attachHandlersRecursively(clone)
+  attachHandlersRecursively(state, clone)
   // Register all cloned nodes as CanvasItems
-  registerCanvasItemsRecursively(clone)
+  registerCanvasItemsRecursively(state, clone)
 
   console.log('Successfully cloned', origNode.className, 'with new ID:', clone.id())
 
@@ -138,8 +138,7 @@ export const deepCloneWithNewIds = (
 }
 
 // Main duplicate function
-export const duplicateFreehandSelected = () => {
-  const state = getGlobalCanvasState()
+export const duplicateFreehandSelected = (state: CanvasRuntimeState) => {
   const selectedNodes = state.selection.selectedKonvaNodes.value
   if (selectedNodes.length === 0) {
     console.log('No items selected for duplication')
@@ -161,7 +160,7 @@ export const duplicateFreehandSelected = () => {
     // Clone each top-level node with 50px offset
     topLevelNodes.forEach((node, index) => {
       console.log(`Duplicating node ${index + 1}:`, node.id(), node.className)
-      const duplicate = deepCloneWithNewIds(node, 50, 50)
+      const duplicate = deepCloneWithNewIds(state, node, 50, 50)
 
       // Add to the same parent as original
       const parent = node.getParent()
@@ -176,13 +175,13 @@ export const duplicateFreehandSelected = () => {
     console.log('Created', duplicatedNodes.length, 'duplicates')
 
     // Update selection to newly created duplicates
-    clearFreehandSelection()
-    duplicatedNodes.forEach(node => freehandAddSelection(node))
+    clearFreehandSelection(state)
+    duplicatedNodes.forEach(node => freehandAddSelection(state, node))
 
     // Update UI and data structures
-    updateFreehandDraggableStates()
-    updateBakedStrokeData(getGlobalCanvasState(), globalStore().appStateRef)
-    const freehandShapeLayer = getGlobalCanvasState().layers.freehandShape
+    updateFreehandDraggableStates(state)
+    updateBakedStrokeData(state, globalStore().appStateRef)
+    const freehandShapeLayer = state.layers.freehandShape
     freehandShapeLayer?.batchDraw()
 
     console.log('Duplication complete')
@@ -212,8 +211,8 @@ import { type HierarchyEntry, collectHierarchyFromRoot } from '@/metadata'
 // Legacy pivot lock removed (unified transformer manages pivot without mutating node offsets)
 
 // Return the top-most group (direct child of layer) for any descendant click
-const freehandTopGroup = (node: Konva.Node): Konva.Group | null => {
-  const freehandShapeLayer = getGlobalCanvasState().layers.freehandShape
+const freehandTopGroup = (state: CanvasRuntimeState, node: Konva.Node): Konva.Group | null => {
+  const freehandShapeLayer = state.layers.freehandShape
   if (!freehandShapeLayer) return null
   let cur = node
   let candidate: Konva.Group | null = null
@@ -227,8 +226,7 @@ const freehandTopGroup = (node: Konva.Node): Konva.Group | null => {
 // hasAncestorConflict now imported from utils/canvasUtils
 
 // Helper function to get all strokes that are selected (including those in groups)
-const getSelectedStrokes = (): FreehandStroke[] => {
-  const state = getGlobalCanvasState()
+const getSelectedStrokes = (state: CanvasRuntimeState): FreehandStroke[] => {
   const selectedStrokes: FreehandStroke[] = []
   const processedStrokeIds = new Set<string>()
 
@@ -267,30 +265,27 @@ const getSelectedStrokes = (): FreehandStroke[] => {
 }
 
 // Selection functions - now using unified selection store
-export const freehandAddSelection = (node: Konva.Node) => {
+export const freehandAddSelection = (state: CanvasRuntimeState, node: Konva.Node) => {
   console.log('Adding to selection:', node.id(), node.constructor.name)
-  const state = getGlobalCanvasState()
   const item = getCanvasItem(node) // Still uses legacy fallback
   if (item) {
     selectionStore.add(state, item, true) // additive = true
   }
 }
 
-const freehandToggleSelection = (node: Konva.Node) => {
-  const state = getGlobalCanvasState()
+const freehandToggleSelection = (state: CanvasRuntimeState, node: Konva.Node) => {
   const item = getCanvasItem(node) // Still uses legacy fallback
   if (item) {
     selectionStore.toggle(state, item, true) // additive = true
   }
 }
 
-export const clearFreehandSelection = () => {
-  selectionStore.clear(getGlobalCanvasState())
+export const clearFreehandSelection = (state: CanvasRuntimeState) => {
+  selectionStore.clear(state)
 }
 
 // Update timeline state based on current selection
-export const updateTimelineState = () => {
-  const state = getGlobalCanvasState()
+export const updateTimelineState = (state: CanvasRuntimeState) => {
   const oldDuration = state.freehand.timelineDuration.value
   let newDuration = 0
 
@@ -300,7 +295,7 @@ export const updateTimelineState = () => {
     state.freehand.timelineDuration.value = 0 // Timeline component will calculate total duration
   } else {
     // Selection exists - calculate selected strokes and trimmed duration
-    const selectedStrokes = getSelectedStrokes().filter(stroke => stroke.isFreehand)
+    const selectedStrokes = getSelectedStrokes(state).filter(stroke => stroke.isFreehand)
 
     // Update selected strokes set for timeline
     const strokeIds = new Set(selectedStrokes.map(s => s.id))
@@ -403,7 +398,7 @@ export const maxInterStrokeDelay = 300
 
 // Get current canvas state for undo/redo (freehand only)
 const getCurrentFreehandState = (
-  state: CanvasRuntimeState = getGlobalCanvasState()
+  state: CanvasRuntimeState
 ) => {
   return selectionStore.withSelectionHighlightSuppressed(state, () => {
     const freehandShapeLayer = state.layers.freehandShape
@@ -430,7 +425,7 @@ const getCurrentFreehandState = (
 }
 
 export const getCurrentFreehandStateString = (
-  state: CanvasRuntimeState = getGlobalCanvasState()
+  state: CanvasRuntimeState
 ): string => {
   const snapshot = getCurrentFreehandState(state)
   return JSON.stringify(snapshot)
@@ -471,16 +466,14 @@ export const restoreFreehandState = (
 
 
 // Transform tracking for drag operations
-export const startFreehandDragTracking = () => {
-  const state = getGlobalCanvasState()
-  state.freehand.freehandDragStartState = getCurrentFreehandStateString()
+export const startFreehandDragTracking = (state: CanvasRuntimeState) => {
+  state.freehand.freehandDragStartState = getCurrentFreehandStateString(state)
 }
 
-export const finishFreehandDragTracking = (nodeName: string) => {
-  const state = getGlobalCanvasState()
+export const finishFreehandDragTracking = (state: CanvasRuntimeState, nodeName: string) => {
   if (!state.freehand.freehandDragStartState) return
 
-  const endState = getCurrentFreehandStateString()
+  const endState = getCurrentFreehandStateString(state)
   if (state.freehand.freehandDragStartState !== endState) {
     // Use the global command system instead of the redundant freehand-specific one
     pushCommandWithStates(
@@ -488,9 +481,9 @@ export const finishFreehandDragTracking = (nodeName: string) => {
       state.freehand.freehandDragStartState,
       endState
     )
-    
+
     console.log(`Transform command added to global history`)
-    updateBakedStrokeData(getGlobalCanvasState(), globalStore().appStateRef) // Update baked data after transformation
+    updateBakedStrokeData(state, globalStore().appStateRef) // Update baked data after transformation
   }
 
   state.freehand.freehandDragStartState = null
@@ -532,8 +525,8 @@ export const serializeFreehandState = (
 }
 
 // Download/Upload functionality
-export const downloadFreehandDrawing = () => {
-  const stateString = getCurrentFreehandStateString()
+export const downloadFreehandDrawing = (state: CanvasRuntimeState) => {
+  const stateString = getCurrentFreehandStateString(state)
   if (!stateString) {
     console.warn('No drawing data to download')
     return
@@ -550,7 +543,7 @@ export const downloadFreehandDrawing = () => {
   URL.revokeObjectURL(url)
 }
 
-export const uploadFreehandDrawing = () => {
+export const uploadFreehandDrawing = (canvasState: CanvasRuntimeState) => {
   const input = document.createElement('input')
   input.type = 'file'
   input.accept = '.json'
@@ -564,9 +557,8 @@ export const uploadFreehandDrawing = () => {
         const content = e.target?.result as string
         // Validate it's valid JSON
         JSON.parse(content)
-        
+
         // Set the state string and deserialize
-        const canvasState = getGlobalCanvasState()
         const appState = globalStore().appStateRef
         appState.freehandStateString = content
         deserializeFreehandState(canvasState, appState, content)
@@ -612,8 +604,8 @@ export const deserializeFreehandState = (
         freehandShapeLayer.add(node)
         console.log('Added node to layer:', node.id(), node.isVisible())
 
-        attachHandlersRecursively(node)
-        registerCanvasItemsRecursively(node)
+        attachHandlersRecursively(canvasState, node)
+        registerCanvasItemsRecursively(canvasState, node)
       })
     }
 
@@ -662,11 +654,11 @@ export const deserializeFreehandState = (
 }
 
 // Function to update draggable state based on mode and group membership
-export const updateFreehandDraggableStates = () => {
+export const updateFreehandDraggableStates = (state: CanvasRuntimeState) => {
   // In the unified system, node-level dragging is disabled in Select tool because we implement
   // selection dragging at the stage level and use the Transformer for transforms.
   const isSelectTool = activeTool.value === 'select'
-  const freehandShapeLayer = getGlobalCanvasState().layers.freehandShape
+  const freehandShapeLayer = state.layers.freehandShape
 
   freehandStrokes().forEach((stroke) => {
     if (stroke.shape) stroke.shape.draggable(false)
@@ -727,8 +719,8 @@ export const getStrokePath = (points: number[], normalize: boolean = false): str
 // getPointsBounds now imported from utils/canvasUtils
 
 // Helper function to create a new stroke shape
-export const createStrokeShape = (points: number[], id: string): Konva.Path => {
-  const freehandShapeLayer = getGlobalCanvasState().layers.freehandShape
+export const createStrokeShape = (state: CanvasRuntimeState, points: number[], id: string): Konva.Path => {
+  const freehandShapeLayer = state.layers.freehandShape
   // Get bounds to position the shape
   const bounds = getPointsBounds(points)
 
@@ -753,23 +745,22 @@ export const createStrokeShape = (points: number[], id: string): Konva.Path => {
 
   // Add drag tracking handlers
   path.on('dragstart', () => {
-    startFreehandDragTracking()
+    startFreehandDragTracking(state)
   })
 
   path.on('dragend', () => {
-    finishFreehandDragTracking('Stroke')
+    finishFreehandDragTracking(state, 'Stroke')
     freehandShapeLayer?.batchDraw()
   })
 
   // Register as CanvasItem
-  createStrokeItem(getGlobalCanvasState(), path)
+  createStrokeItem(state, path)
 
   return path
 }
 
 // Handle timeline updates and stroke animation - restored full logic
-export const handleTimeUpdate = (time: number) => {
-  const state = getGlobalCanvasState()
+export const handleTimeUpdate = (state: CanvasRuntimeState, time: number) => {
   const freehandShapeLayer = state.layers.freehandShape
   state.freehand.currentPlaybackTime.value = time
 
@@ -779,7 +770,7 @@ export const handleTimeUpdate = (time: number) => {
 
   if (isSelection) {
     // Get selected strokes including those in groups, but only freehand ones
-    const selectedStrokes = getSelectedStrokes()
+    const selectedStrokes = getSelectedStrokes(state)
     strokesToAnimate = selectedStrokes.filter(stroke => stroke.isFreehand)
   } else {
     // All freehand strokes
@@ -1118,6 +1109,7 @@ export const updateBakedStrokeData = (
 
 // Undoable metadata mutator for nodes with command history
 export const setNodeMetadata = (
+  state: CanvasRuntimeState,
   node: Konva.Node,
   meta: Record<string, any> | undefined
 ) => {
@@ -1127,15 +1119,15 @@ export const setNodeMetadata = (
     } else {
       node.setAttr('metadata', meta)
     }
-    updateBakedStrokeData(getGlobalCanvasState(), globalStore().appStateRef)                 // keep render-data in sync
+    updateBakedStrokeData(state, globalStore().appStateRef)                 // keep render-data in sync
     refreshAVs?.()                          // refresh ancillary visualizations
   })
 }
 
 // Hierarchy utilities are now accessed directly from the metadata module
 
-export const collectHierarchy = (): HierarchyEntry[] => {
-  const freehandShapeLayer = getGlobalCanvasState().layers.freehandShape
+export const collectHierarchy = (state: CanvasRuntimeState): HierarchyEntry[] => {
+  const freehandShapeLayer = state.layers.freehandShape
   if (!freehandShapeLayer) return []
   return collectHierarchyFromRoot(freehandShapeLayer.getChildren())
 }

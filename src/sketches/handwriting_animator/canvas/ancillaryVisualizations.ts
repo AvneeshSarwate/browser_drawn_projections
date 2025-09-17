@@ -57,7 +57,7 @@ export const refreshAnciliaryVizWithState = (state: CanvasRuntimeState) => {
   if (!state.stage) return
   initAVLayerInState(state)
 
-  const roots = collectHierarchy().filter(h => h.depth === 0).map(h => h.node)
+  const roots = collectHierarchy(state).filter(h => h.depth === 0).map(h => h.node)
   const needed = new Map<string, {ctx: AVContext, def: AncillaryVisDefinition}>()
 
   roots.forEach(node => {
@@ -136,7 +136,8 @@ export const refreshAnciliaryViz = () => {
   if (!stage) return
   initAVLayer()
 
-  const roots = collectHierarchy().filter(h => h.depth === 0).map(h => h.node)
+  const state = getGlobalCanvasState()
+  const roots = collectHierarchy(state).filter(h => h.depth === 0).map(h => h.node)
   const needed = new Map<string, {ctx: AVContext, def: AncillaryVisDefinition}>()
 
   roots.forEach(node => {
@@ -189,7 +190,8 @@ export const setNodeMetadataWithAV = (
   node: Konva.Node,
   meta: Record<string, any> | undefined
 ) => {
-  origSetNodeMetadata(node, meta)
+  const state = getGlobalCanvasState()
+  origSetNodeMetadata(state, node, meta)
   refreshAnciliaryViz()
 }
 
