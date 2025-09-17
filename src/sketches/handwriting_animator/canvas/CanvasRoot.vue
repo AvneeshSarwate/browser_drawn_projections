@@ -49,7 +49,7 @@ const clearDrawFuncs = () => {
 const captureCanvasState = () => {
   const freehandState = getCurrentFreehandStateString()
   const polygonState = getCurrentPolygonStateString()
-  
+
   return JSON.stringify({
     freehand: freehandState,
     polygon: polygonState
@@ -58,7 +58,7 @@ const captureCanvasState = () => {
 
 const restoreCanvasState = (stateString: string) => {
   if (!stateString) return
-  
+
   try {
     const state = JSON.parse(stateString)
     if (state.freehand) {
@@ -72,10 +72,17 @@ const restoreCanvasState = (stateString: string) => {
   }
 }
 
+// Reactive properties for undo/redo button states
+const canUndoReactive = ref(false)
+const canRedoReactive = ref(false)
+
 const onCanvasStateChange = () => {
   updateBakedStrokeData()
   updateBakedPolygonData()
   refreshAnciliaryViz()
+  // Update reactive button states after any command stack change
+  canUndoReactive.value = commandStack.canUndo()
+  canRedoReactive.value = commandStack.canRedo()
 }
 
 // Create unified command stack instance
@@ -84,12 +91,14 @@ const commandStack = new CommandStack(captureCanvasState, restoreCanvasState, on
 // Store in canvas state
 canvasState.command.stack = commandStack
 
+// Initialize button states
+canUndoReactive.value = commandStack.canUndo()
+canRedoReactive.value = commandStack.canRedo()
+
 // Expose command stack methods for use in templates and other functions
 const executeCommand = (name: string, action: () => void) => commandStack.executeCommand(name, action)
 const undo = () => commandStack.undo()
 const redo = () => commandStack.redo()
-const canUndo = () => commandStack.canUndo()
-const canRedo = () => commandStack.canRedo()
 
 // Set up command callbacks in state
 canvasState.command.executeCommand = executeCommand
@@ -265,10 +274,10 @@ onMounted(async () => {
     // Create layers using state-based initialization
     initFreehandLayers(canvasState, stageInstance)
     initPolygonLayers(canvasState, stageInstance)
-    
+
     // Initialize unified transformer
     initializeTransformer(canvasState.layers.freehandSelection!)
-    
+
     // Initialize select tool
     initializeSelectTool(canvasState.layers.freehandSelection!)
 
@@ -279,17 +288,17 @@ onMounted(async () => {
     // Keep highlight visuals on top (non-listening, so it won't block interaction)
     metadataHighlightLayer.moveToTop()
 
-    
-    
+
+
     // Initialize ancillary visualizations layer
     initAVLayer()
     setRefreshAVs(refreshAnciliaryViz)
-    
+
     // Set up executeCommand callbacks for tools
     setGlobalExecuteCommand(executeCommand)
     setGlobalPushCommand((name, beforeState, afterState) => commandStack.pushCommand(name, beforeState, afterState))
 
-    
+
     // Selection rectangle is created by core/selectTool.initializeSelectTool
 
     // Apply initial tool mode AFTER layers exist (important for transformer interactivity post-HMR)
@@ -526,13 +535,15 @@ onUnmounted(() => {
         <option value="polygon">⬟ Polygon</option>
       </select>
       <span class="separator">|</span>
-      
+
       <!-- Unified Undo/Redo (works for both tools) -->
       <div class="button-group vertical">
-        <button @click="undo" :disabled="!canUndo() || canvasState.freehand.isAnimating.value" title="Undo (Ctrl/Cmd+Z)">
+        <button @click="undo" :disabled="!canUndoReactive || canvasState.freehand.isAnimating.value"
+          title="Undo (Ctrl/Cmd+Z)">
           ↶ Undo
         </button>
-        <button @click="redo" :disabled="!canRedo() || canvasState.freehand.isAnimating.value" title="Redo (Ctrl/Cmd+Shift+Z)">
+        <button @click="redo" :disabled="!canRedoReactive || canvasState.freehand.isAnimating.value"
+          title="Redo (Ctrl/Cmd+Shift+Z)">
           ↷ Redo
         </button>
       </div>
@@ -544,16 +555,19 @@ onUnmounted(() => {
           <button @click="groupSelection" :disabled="!canGroupSelection() || canvasState.freehand.isAnimating.value">
             Group
           </button>
-          <button @click="ungroupSelection" :disabled="!canUngroupSelection() || canvasState.freehand.isAnimating.value">
+          <button @click="ungroupSelection"
+            :disabled="!canUngroupSelection() || canvasState.freehand.isAnimating.value">
             Ungroup
           </button>
         </div>
         <span class="separator">|</span>
         <div class="button-group vertical">
-          <button @click="duplicateSelection" :disabled="selectionStore.count() === 0 || canvasState.freehand.isAnimating.value">
+          <button @click="duplicateSelection"
+            :disabled="selectionStore.count() === 0 || canvasState.freehand.isAnimating.value">
             📄 Duplicate
           </button>
-          <button @click="deleteSelection" :disabled="selectionStore.count() === 0 || canvasState.freehand.isAnimating.value">
+          <button @click="deleteSelection"
+            :disabled="selectionStore.count() === 0 || canvasState.freehand.isAnimating.value">
             🗑️ Delete
           </button>
         </div>
@@ -562,51 +576,58 @@ onUnmounted(() => {
 
       <!-- Freehand Tool Toolbar -->
       <template v-if="activeTool === 'freehand'">
-        <button @click="canvasState.freehand.showGrid.value = !canvasState.freehand.showGrid.value" :class="{ active: canvasState.freehand.showGrid.value }" :disabled="canvasState.freehand.isAnimating.value">
+        <button @click="canvasState.freehand.showGrid.value = !canvasState.freehand.showGrid.value"
+          :class="{ active: canvasState.freehand.showGrid.value }" :disabled="canvasState.freehand.isAnimating.value">
           {{ canvasState.freehand.showGrid.value ? '⊞ Grid On' : '⊡ Grid Off' }}
         </button>
         <div class="button-group vertical">
-          <button @click="duplicateSelection" :disabled="selectionStore.count() === 0 || canvasState.freehand.isAnimating.value">
+          <button @click="duplicateSelection"
+            :disabled="selectionStore.count() === 0 || canvasState.freehand.isAnimating.value">
             📄 Duplicate
           </button>
-          <button @click="deleteSelection" :disabled="selectionStore.count() === 0 || canvasState.freehand.isAnimating.value">
+          <button @click="deleteSelection"
+            :disabled="selectionStore.count() === 0 || canvasState.freehand.isAnimating.value">
             🗑️ Delete
           </button>
         </div>
         <span class="separator">|</span>
-        <button @click="canvasState.freehand.useRealTiming.value = !canvasState.freehand.useRealTiming.value" :class="{ active: canvasState.freehand.useRealTiming.value }">
+        <button @click="canvasState.freehand.useRealTiming.value = !canvasState.freehand.useRealTiming.value"
+          :class="{ active: canvasState.freehand.useRealTiming.value }">
           {{ canvasState.freehand.useRealTiming.value ? '⏱️ Real Time' : '⏱️ Max 0.3s' }}
         </button>
         <span class="separator">|</span>
         <button @click="showMetadataEditor = !showMetadataEditor" :class="{ active: showMetadataEditor }"
-        :disabled="canvasState.freehand.isAnimating.value">
-        📝 Metadata
+          :disabled="canvasState.freehand.isAnimating.value">
+          📝 Metadata
         </button>
-          <span class="separator">|</span>
-         <div class="button-group vertical">
-           <button @click="downloadFreehandDrawing" :disabled="canvasState.freehand.isAnimating.value">
-             💾 Download
-           </button>
-           <button @click="uploadFreehandDrawing" :disabled="canvasState.freehand.isAnimating.value">
-             📁 Upload
-           </button>
-         </div>
-       </template>
+        <span class="separator">|</span>
+        <div class="button-group vertical">
+          <button @click="downloadFreehandDrawing" :disabled="canvasState.freehand.isAnimating.value">
+            💾 Download
+          </button>
+          <button @click="uploadFreehandDrawing" :disabled="canvasState.freehand.isAnimating.value">
+            📁 Upload
+          </button>
+        </div>
+      </template>
 
       <!-- Polygon Tool Toolbar -->
       <template v-if="activeTool === 'polygon'">
-        <button @click="polygonMode = 'draw'" :class="{ active: polygonMode === 'draw' }" :disabled="canvasState.freehand.isAnimating.value">
+        <button @click="polygonMode = 'draw'" :class="{ active: polygonMode === 'draw' }"
+          :disabled="canvasState.freehand.isAnimating.value">
           ✏️ New Shape
         </button>
-        <button @click="polygonMode = 'edit'" :class="{ active: polygonMode === 'edit' }" :disabled="canvasState.freehand.isAnimating.value">
+        <button @click="polygonMode = 'edit'" :class="{ active: polygonMode === 'edit' }"
+          :disabled="canvasState.freehand.isAnimating.value">
           ✏️ Edit Shape
         </button>
-        <button @click="canvasState.freehand.showGrid.value = !canvasState.freehand.showGrid.value" :class="{ active: canvasState.freehand.showGrid.value }" :disabled="canvasState.freehand.isAnimating.value">
+        <button @click="canvasState.freehand.showGrid.value = !canvasState.freehand.showGrid.value"
+          :class="{ active: canvasState.freehand.showGrid.value }" :disabled="canvasState.freehand.isAnimating.value">
           {{ canvasState.freehand.showGrid.value ? '⊞ Grid On' : '⊡ Grid Off' }}
         </button>
         <span class="separator">|</span>
         <button @click="clearCurrentPolygon" :disabled="!isDrawingPolygon || canvasState.freehand.isAnimating.value">
-        🗑️ Cancel Shape
+          🗑️ Cancel Shape
         </button>
         <button @click="deleteSelection" :disabled="selectionStore.isEmpty() || canvasState.freehand.isAnimating.value">
           🗑️ Delete
@@ -633,10 +654,10 @@ onUnmounted(() => {
         <HierarchicalMetadataEditor :on-apply-metadata="handleApplyMetadata" />
       </div>
 
-      <Timeline :strokes="freehandStrokes()" :selectedStrokes="canvasState.freehand.selectedStrokesForTimeline.value" :useRealTiming="canvasState.freehand.useRealTiming.value"
-        :maxInterStrokeDelay="maxInterStrokeDelay"
-        :overrideDuration="canvasState.freehand.timelineDuration.value > 0 ? canvasState.freehand.timelineDuration.value : undefined" :lockWhileAnimating="setAnimatingState"
-        @timeUpdate="handleTimeUpdate" />
+      <Timeline :strokes="freehandStrokes()" :selectedStrokes="canvasState.freehand.selectedStrokesForTimeline.value"
+        :useRealTiming="canvasState.freehand.useRealTiming.value" :maxInterStrokeDelay="maxInterStrokeDelay"
+        :overrideDuration="canvasState.freehand.timelineDuration.value > 0 ? canvasState.freehand.timelineDuration.value : undefined"
+        :lockWhileAnimating="setAnimatingState" @timeUpdate="handleTimeUpdate" />
       <div v-if="canvasState.freehand.isAnimating.value" class="animation-lock-warning">
         ⚠️ Timeline has modified elements - press Stop to unlock
       </div>
