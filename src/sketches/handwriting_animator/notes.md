@@ -7,6 +7,28 @@
 - slider replay not robust when nothing selected
 
 
+
+
+## refactor steps
+
+clearPolygonSelection (also for freehand?) move to selection tool
+
+state snapshot and serialization functions should be moved into central state file to prevent module cyclic dependencies
+- or - separate modules for snapshotting/serialize vs behavior for each tool - then central state obj can expose a global snapshot function that that tool-level behavior modules can import without cyclic dependency  
+- restoreFreehandState, deserializeFreehandState, serializeFreehandState, 
+- file save/load should be consolidated between all shape types
+
+standardize and figure out where to put selection related shape funcs 
+- getSelectedStrokes, freehandAddSelection, freehandToggleSelection, clearFreehandSelection 
+
+more standardized approach for freehand.updateTimelineState
+
+
+
+
+
+
+
 ## basic plan of dynamic page layout 
 - get an alphabet annotated with top/bottom lines 
 - write script that takes ascii and generates the launch-start and scale for each character (using top/bottom line alignment)
