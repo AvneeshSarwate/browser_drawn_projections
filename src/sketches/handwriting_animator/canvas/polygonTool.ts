@@ -113,11 +113,7 @@ export const updateBakedPolygonData = () => {
   appState.polygonRenderData = generateBakedPolygonData()
 }
 
-// Polygon drawing state - keep original refs, sync with state in CanvasRoot.vue
-export const isDrawingPolygon = ref(false)
-export const currentPolygonPoints = ref<number[]>([])
-export const polygonMode = ref<'draw' | 'edit'>('draw')
-export const polygonProximityThreshold = 10
+// Polygon drawing state now managed via global canvas state
 
 // Polygon Undo/Redo Functions
 // Get current polygon state for undo/redo
@@ -306,7 +302,7 @@ export const deserializePolygonState = () => {
     polygonControlsLayer?.destroyChildren()
     
     // Only create control points if polygon tool is active AND we're in edit mode
-    if (activeTool.value === 'polygon' && polygonMode.value === 'edit') {
+    if (activeTool.value === 'polygon' && getGlobalCanvasState().polygon.mode.value === 'edit') {
       updatePolygonControlPoints()
     }
     
@@ -321,32 +317,33 @@ export const deserializePolygonState = () => {
 
 // Polygon tool functions
 export const handlePolygonClick = (pos: { x: number, y: number }) => {
-  const polygonShapesLayer = getGlobalCanvasState().layers.polygonShapes
+  const state = getGlobalCanvasState()
+  const polygonShapesLayer = state.layers.polygonShapes
   if (!polygonShapesLayer) return
   
-  if (polygonMode.value === 'draw') {
+  if (state.polygon.mode.value === 'draw') {
     // New shape mode - point-by-point drawing
-    if (!isDrawingPolygon.value) {
+    if (!state.polygon.isDrawing.value) {
       // Start new polygon
-      isDrawingPolygon.value = true
-      currentPolygonPoints.value = [pos.x, pos.y]
+      state.polygon.isDrawing.value = true
+      state.polygon.currentPoints.value = [pos.x, pos.y]
     } else {
       // Check if close to first point (close polygon)
-      const firstX = currentPolygonPoints.value[0]
-      const firstY = currentPolygonPoints.value[1]
+      const firstX = state.polygon.currentPoints.value[0]
+      const firstY = state.polygon.currentPoints.value[1]
       const distance = Math.sqrt((pos.x - firstX) ** 2 + (pos.y - firstY) ** 2)
       
-      if (distance < polygonProximityThreshold && currentPolygonPoints.value.length >= 6) {
+      if (distance < state.polygon.proximityThreshold && state.polygon.currentPoints.value.length >= 6) {
         // Close the polygon
         finishPolygon()
       } else {
         // Add new point
-        currentPolygonPoints.value.push(pos.x, pos.y)
+        state.polygon.currentPoints.value.push(pos.x, pos.y)
         updatePolygonPreview()
       }
     }
     updatePolygonPreview()
-  } else if (polygonMode.value === 'edit') {
+  } else if (state.polygon.mode.value === 'edit') {
     // Edit shape mode - add points to existing polygons only if not clicking on a control point
     const polygonArray = Array.from(polygonShapes().values()).map(p => {
       const line = p.konvaShape
@@ -366,7 +363,7 @@ export const handlePolygonClick = (pos: { x: number, y: number }) => {
     if (polygonArray.length > 0) {
       const result = findClosestPolygonLineAtPoint(polygonArray, pos)
       
-      if (result.polygonIndex >= 0 && result.distance < polygonProximityThreshold * 2) {
+      if (result.polygonIndex >= 0 && result.distance < state.polygon.proximityThreshold * 2) {
         // Add point to the middle of the closest line segment
         const polygonId = Array.from(polygonShapes().keys())[result.polygonIndex]
         const polygon = polygonShapes().get(polygonId)
@@ -402,7 +399,8 @@ export const handlePolygonClick = (pos: { x: number, y: number }) => {
 }
 
 export const handlePolygonMouseMove = () => {
-  if (!isDrawingPolygon.value || polygonMode.value !== 'draw') return
+  const state = getGlobalCanvasState()
+  if (!state.polygon.isDrawing.value || state.polygon.mode.value !== 'draw') return
   updatePolygonPreview()
 }
 
@@ -489,17 +487,18 @@ export const handlePolygonEditMouseMove = () => {
 }
 
 export const updatePolygonPreview = () => {
-  const polygonPreviewLayer = getGlobalCanvasState().layers.polygonPreview
+  const state = getGlobalCanvasState()
+  const polygonPreviewLayer = state.layers.polygonPreview
   if (!polygonPreviewLayer || !stage) return
   
   polygonPreviewLayer.destroyChildren()
   
-  if (currentPolygonPoints.value.length < 4) {
+  if (state.polygon.currentPoints.value.length < 4) {
     // If we only have one point, just show that point as a circle
-    if (currentPolygonPoints.value.length === 2) {
+    if (state.polygon.currentPoints.value.length === 2) {
       const pointCircle = new Konva.Circle({
-        x: currentPolygonPoints.value[0],
-        y: currentPolygonPoints.value[1],
+        x: state.polygon.currentPoints.value[0],
+        y: state.polygon.currentPoints.value[1],
         radius: 4,
         fill: '#0066ff',
         stroke: '#004499',
@@ -516,10 +515,10 @@ export const updatePolygonPreview = () => {
   if (!mousePos) return
   
   // Draw all current points as circles
-  for (let i = 0; i < currentPolygonPoints.value.length; i += 2) {
+  for (let i = 0; i < state.polygon.currentPoints.value.length; i += 2) {
     const pointCircle = new Konva.Circle({
-      x: currentPolygonPoints.value[i],
-      y: currentPolygonPoints.value[i + 1],
+      x: state.polygon.currentPoints.value[i],
+      y: state.polygon.currentPoints.value[i + 1],
       radius: 4,
       fill: '#0066ff',
       stroke: '#004499',
@@ -530,7 +529,7 @@ export const updatePolygonPreview = () => {
   }
   
   // Create preview line from current points to mouse position
-  const previewPoints = [...currentPolygonPoints.value, mousePos.x, mousePos.y]
+  const previewPoints = [...state.polygon.currentPoints.value, mousePos.x, mousePos.y]
   
   const previewLine = new Konva.Line({
     points: previewPoints,
@@ -545,16 +544,16 @@ export const updatePolygonPreview = () => {
   polygonPreviewLayer.add(previewLine)
   
   // Show first point indicator for closing
-  if (currentPolygonPoints.value.length >= 6) {
-    const firstX = currentPolygonPoints.value[0]
-    const firstY = currentPolygonPoints.value[1]
+  if (state.polygon.currentPoints.value.length >= 6) {
+    const firstX = state.polygon.currentPoints.value[0]
+    const firstY = state.polygon.currentPoints.value[1]
     const distance = Math.sqrt((mousePos.x - firstX) ** 2 + (mousePos.y - firstY) ** 2)
     
     const firstPointIndicator = new Konva.Circle({
       x: firstX,
       y: firstY,
-      radius: polygonProximityThreshold,
-      stroke: distance < polygonProximityThreshold ? '#00ff00' : '#ff0000',
+      radius: state.polygon.proximityThreshold,
+      stroke: distance < state.polygon.proximityThreshold ? '#00ff00' : '#ff0000',
       strokeWidth: 2,
       fill: 'transparent',
       listening: false
@@ -567,15 +566,16 @@ export const updatePolygonPreview = () => {
 }
 
 export const finishPolygon = () => {
-  const polygonShapesLayer = getGlobalCanvasState().layers.polygonShapes
-  const polygonPreviewLayer = getGlobalCanvasState().layers.polygonPreview
-  if (currentPolygonPoints.value.length < 6) return // Need at least 3 points
+  const state = getGlobalCanvasState()
+  const polygonShapesLayer = state.layers.polygonShapes
+  const polygonPreviewLayer = state.layers.polygonPreview
+  if (state.polygon.currentPoints.value.length < 6) return // Need at least 3 points
   
   executeCommand('Create Polygon', () => {
     const polygonId = `polygon-${Date.now()}`
     const polygon: PolygonShape = {
       id: polygonId,
-      points: [...currentPolygonPoints.value],
+      points: [...state.polygon.currentPoints.value],
       closed: true,
       creationTime: Date.now()
     }
@@ -598,11 +598,11 @@ export const finishPolygon = () => {
     polygonShapesLayer?.add(polygonLine)
     
     // Register as CanvasItem
-    createPolygonItem(getGlobalCanvasState(), polygonLine)
+    createPolygonItem(state, polygonLine)
     
     // Reset drawing state to allow drawing new shapes
-    isDrawingPolygon.value = false
-    currentPolygonPoints.value = []
+    state.polygon.isDrawing.value = false
+    state.polygon.currentPoints.value = []
     polygonPreviewLayer?.destroyChildren()
     
     // Update control points if in edit mode
@@ -619,9 +619,10 @@ export const finishPolygon = () => {
 
 // Clear current polygon being drawn
 export const clearCurrentPolygon = () => {
-  const polygonPreviewLayer = getGlobalCanvasState().layers.polygonPreview
-  isDrawingPolygon.value = false
-  currentPolygonPoints.value = []
+  const state = getGlobalCanvasState()
+  const polygonPreviewLayer = state.layers.polygonPreview
+  state.polygon.isDrawing.value = false
+  state.polygon.currentPoints.value = []
   polygonPreviewLayer?.destroyChildren()
   polygonPreviewLayer?.batchDraw()
 }
@@ -656,7 +657,7 @@ export const updatePolygonControlPoints = () => {
   // Clear existing control points
   polygonControlsLayer.destroyChildren()
   
-  if (polygonMode.value === 'edit') {
+  if (getGlobalCanvasState().polygon.mode.value === 'edit') {
     // Show control points for all polygons
     polygonShapes().forEach((polygon) => {
       // Clear existing control points array
@@ -743,36 +744,41 @@ export const updatePolygonControlPoints = () => {
 }
 
 // Watch for polygon mode changes to update control points and reset state
-watch(polygonMode, (newMode) => {
-  const polygonControlsLayer = getGlobalCanvasState().layers.polygonControls
-  const polygonPreviewLayer = getGlobalCanvasState().layers.polygonPreview
-  // If polygon tool is not active, don't create/show control points
-  if (activeTool.value !== 'polygon') {
-    polygonControlsLayer?.destroyChildren()
-    polygonControlsLayer?.batchDraw()
-    return
-  }
-
-  // Clear selection when switching modes
-  clearPolygonSelection()
+// Note: This watch will be moved to CanvasRoot.vue as part of the migration
+export const setupPolygonModeWatcher = () => {
+  const state = getGlobalCanvasState()
   
-  if (newMode === 'draw') {
-    // When switching to draw mode, clear any current drawing state
-    isDrawingPolygon.value = false
-    currentPolygonPoints.value = []
-    polygonPreviewLayer?.destroyChildren()
-    polygonPreviewLayer?.batchDraw()
+  return watch(() => state.polygon.mode.value, (newMode) => {
+    const polygonControlsLayer = state.layers.polygonControls
+    const polygonPreviewLayer = state.layers.polygonPreview
+    // If polygon tool is not active, don't create/show control points
+    if (activeTool.value !== 'polygon') {
+      polygonControlsLayer?.destroyChildren()
+      polygonControlsLayer?.batchDraw()
+      return
+    }
+
+    // Clear selection when switching modes
+    clearPolygonSelection()
     
-    // Disable dragging in polygon tool mode; drawing only
-    polygonShapes().forEach(polygon => { polygon.konvaShape?.draggable(false) })
-  } else if (newMode === 'edit') {
-    // When switching to edit mode, clear any drawing preview
-    polygonPreviewLayer?.destroyChildren()
-    polygonPreviewLayer?.batchDraw()
-    
-    // Disable dragging during vertex editing
-    polygonShapes().forEach(polygon => { polygon.konvaShape?.draggable(false) })
-  }
-  updatePolygonControlPoints()
-  clearPolygonSelection()
-})
+    if (newMode === 'draw') {
+      // When switching to draw mode, clear any current drawing state
+      state.polygon.isDrawing.value = false
+      state.polygon.currentPoints.value = []
+      polygonPreviewLayer?.destroyChildren()
+      polygonPreviewLayer?.batchDraw()
+      
+      // Disable dragging in polygon tool mode; drawing only
+      polygonShapes().forEach(polygon => { polygon.konvaShape?.draggable(false) })
+    } else if (newMode === 'edit') {
+      // When switching to edit mode, clear any drawing preview
+      polygonPreviewLayer?.destroyChildren()
+      polygonPreviewLayer?.batchDraw()
+      
+      // Disable dragging during vertex editing
+      polygonShapes().forEach(polygon => { polygon.konvaShape?.draggable(false) })
+    }
+    updatePolygonControlPoints()
+    clearPolygonSelection()
+  })
+}

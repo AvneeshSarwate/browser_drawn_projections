@@ -1,8 +1,8 @@
 import Konva from 'konva'
-import { watch, computed } from 'vue'
+import { watch } from 'vue'
 import * as selectionStore from './selectionStore'
 import { pushCommandWithStates } from './commands'
-import { polygonMode } from './polygonTool'
+import { getGlobalCanvasState } from './canvasState'
 import { activeTool } from '../appState'
 import type { CanvasRuntimeState } from './canvasState'
 
@@ -72,7 +72,7 @@ function updateTransformerWithState(state: CanvasRuntimeState, selectedNodes: Ko
   // Filter out nodes that shouldn't be transformed
   const filteredNodes = selectedNodes.filter(node => {
     // Skip polygons ONLY while actively in polygon edit mode
-    if (node instanceof Konva.Line && polygonMode.value === 'edit' && activeTool.value === 'polygon') {
+    if (node instanceof Konva.Line && getGlobalCanvasState().polygon.mode.value === 'edit' && activeTool.value === 'polygon') {
       return false
     }
     return true
@@ -89,7 +89,7 @@ function updateTransformer(selectedNodes: Konva.Node[]) {
   // Filter out nodes that shouldn't be transformed
   const filteredNodes = selectedNodes.filter(node => {
     // Skip polygons ONLY while actively in polygon edit mode
-    if (node instanceof Konva.Line && polygonMode.value === 'edit' && activeTool.value === 'polygon') {
+    if (node instanceof Konva.Line && getGlobalCanvasState().polygon.mode.value === 'edit' && activeTool.value === 'polygon') {
       return false
     }
     return true

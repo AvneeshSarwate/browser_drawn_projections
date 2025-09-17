@@ -18,7 +18,7 @@ import { getPointsBounds } from './canvasUtils';
 import { CommandStack } from './commandStack';
 import { setGlobalExecuteCommand, setGlobalPushCommand } from './commands';
 import { ensureHighlightLayer } from '@/metadata';
-import { clearPolygonSelection, updatePolygonControlPoints, deserializePolygonState, polygonMode, handlePolygonClick, isDrawingPolygon, handlePolygonMouseMove, handlePolygonEditMouseMove, currentPolygonPoints, finishPolygon, clearCurrentPolygon, serializePolygonState, getCurrentPolygonStateString, restorePolygonState, updateBakedPolygonData, initPolygonLayers } from './polygonTool';
+import { clearPolygonSelection, updatePolygonControlPoints, deserializePolygonState, handlePolygonClick, handlePolygonMouseMove, handlePolygonEditMouseMove, finishPolygon, clearCurrentPolygon, serializePolygonState, getCurrentPolygonStateString, restorePolygonState, updateBakedPolygonData, initPolygonLayers, setupPolygonModeWatcher } from './polygonTool';
 import { initAVLayer, refreshAnciliaryViz } from './ancillaryVisualizations';
 import { initializeTransformer } from './transformerManager';
 import { initializeSelectTool, handleSelectPointerDown, handleSelectPointerMove, handleSelectPointerUp, groupSelection, ungroupSelection, canGroupSelection, canUngroupSelection, duplicateSelection, deleteSelection } from './selectTool';
@@ -182,7 +182,7 @@ const applyToolMode = (tool: 'select' | 'freehand' | 'polygon') => {
 
   // Manage polygon control points visibility lifecycle across tools
   if (tool === 'polygon') {
-    if (polygonMode.value === 'edit') {
+    if (canvasState.polygon.mode.value === 'edit') {
       updatePolygonControlPoints()
     } else {
       canvasState.layers.polygonControls?.destroyChildren()
@@ -307,7 +307,7 @@ onMounted(async () => {
     // Unified transformer is initialized by core/transformerManager
 
     // Initialize polygon control points only if polygon tool is active and editing
-    if (activeTool.value === 'polygon' && polygonMode.value === 'edit') {
+    if (activeTool.value === 'polygon' && canvasState.polygon.mode.value === 'edit') {
       updatePolygonControlPoints()
     }
 
@@ -374,9 +374,9 @@ onMounted(async () => {
           freehandDrawingLayer?.batchDraw()
         }
       } else if (activeTool.value === 'polygon') {
-        if (polygonMode.value === 'draw' && isDrawingPolygon.value) {
+        if (canvasState.polygon.mode.value === 'draw' && canvasState.polygon.isDrawing.value) {
           handlePolygonMouseMove()
-        } else if (polygonMode.value === 'edit') {
+        } else if (canvasState.polygon.mode.value === 'edit') {
           handlePolygonEditMouseMove()
         }
         // Note: selection drag is handled by select tool when appropriate
@@ -487,11 +487,14 @@ onMounted(async () => {
 
     singleKeydownEvent('p', (ev) => { appState.paused = !appState.paused })
 
+    // Set up polygon mode watcher
+    setupPolygonModeWatcher()
+
     // Escape key handling for polygon tool
     singleKeydownEvent('Escape', (ev) => {
-      if (activeTool.value === 'polygon' && isDrawingPolygon.value) {
+      if (activeTool.value === 'polygon' && canvasState.polygon.isDrawing.value) {
         // Auto-close the current polygon if it has at least 3 points
-        if (currentPolygonPoints.value.length >= 6) {
+        if (canvasState.polygon.currentPoints.value.length >= 6) {
           finishPolygon()
         } else {
           // Just cancel if not enough points
@@ -613,11 +616,11 @@ onUnmounted(() => {
 
       <!-- Polygon Tool Toolbar -->
       <template v-if="activeTool === 'polygon'">
-        <button @click="polygonMode = 'draw'" :class="{ active: polygonMode === 'draw' }"
+        <button @click="canvasState.polygon.mode.value = 'draw'" :class="{ active: canvasState.polygon.mode.value === 'draw' }"
           :disabled="canvasState.freehand.isAnimating.value">
           ✏️ New Shape
         </button>
-        <button @click="polygonMode = 'edit'" :class="{ active: polygonMode === 'edit' }"
+        <button @click="canvasState.polygon.mode.value = 'edit'" :class="{ active: canvasState.polygon.mode.value === 'edit' }"
           :disabled="canvasState.freehand.isAnimating.value">
           ✏️ Edit Shape
         </button>
@@ -626,7 +629,7 @@ onUnmounted(() => {
           {{ canvasState.freehand.showGrid.value ? '⊞ Grid On' : '⊡ Grid Off' }}
         </button>
         <span class="separator">|</span>
-        <button @click="clearCurrentPolygon" :disabled="!isDrawingPolygon || canvasState.freehand.isAnimating.value">
+        <button @click="clearCurrentPolygon" :disabled="!canvasState.polygon.isDrawing.value || canvasState.freehand.isAnimating.value">
           🗑️ Cancel Shape
         </button>
         <button @click="deleteSelection" :disabled="selectionStore.isEmpty() || canvasState.freehand.isAnimating.value">
@@ -637,7 +640,7 @@ onUnmounted(() => {
           :disabled="canvasState.freehand.isAnimating.value">
           📝 Metadata
         </button>
-        <span v-if="isDrawingPolygon" class="info">Drawing: {{ currentPolygonPoints.length / 2 }} points</span>
+        <span v-if="canvasState.polygon.isDrawing.value" class="info">Drawing: {{ canvasState.polygon.currentPoints.value.length / 2 }} points</span>
       </template>
       <span class="separator">|</span>
       <span class="info">{{ selectionStore.count() }} selected</span>
