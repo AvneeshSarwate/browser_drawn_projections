@@ -17,7 +17,7 @@ import { freehandStrokes, getGlobalCanvasState } from './canvasState';
 import { getPointsBounds } from './canvasUtils';
 import { CommandStack } from './commandStack';
 import { setGlobalExecuteCommand, setGlobalPushCommand } from './commands';
-import { ensureHighlightLayer } from '@/metadata';
+import { ensureHighlightLayer } from './metadata';
 import { clearPolygonSelection as clearPolygonSelectionImpl, updatePolygonControlPoints as updatePolygonControlPointsImpl, deserializePolygonState, handlePolygonClick as handlePolygonClickImpl, handlePolygonMouseMove as handlePolygonMouseMoveImpl, handlePolygonEditMouseMove as handlePolygonEditMouseMoveImpl, finishPolygon as finishPolygonImpl, clearCurrentPolygon as clearCurrentPolygonImpl, serializePolygonState, getCurrentPolygonStateString, restorePolygonState, updateBakedPolygonData, initPolygonLayers, setupPolygonModeWatcher as setupPolygonModeWatcherImpl } from './polygonTool';
 import { initAVLayer, refreshAnciliaryViz } from './ancillaryVisualizations';
 import { initializeTransformer } from './transformerManager';

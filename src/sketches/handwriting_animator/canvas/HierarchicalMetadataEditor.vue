@@ -2,7 +2,7 @@
 import { watch, computed, shallowRef, onUnmounted } from 'vue'
 import Konva from 'konva'
 import MetadataEditor from './MetadataEditor.vue'
-import { metadataToolkit } from '@/metadata'
+import { metadataToolkit } from './metadata'
 import * as selectionStore from './selectionStore'
 import { getCanvasItem } from './CanvasItem'
 import { getGlobalCanvasState } from './canvasState'

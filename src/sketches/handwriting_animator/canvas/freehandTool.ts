@@ -202,7 +202,7 @@ export const initFreehandLayers = (state: CanvasRuntimeState, stage: Konva.Stage
 
 
 // Import metadata utilities from generic module
-import { type HierarchyEntry, collectHierarchyFromRoot } from '@/metadata'
+import { type HierarchyEntry, collectHierarchyFromRoot } from './metadata'
 
 
 // Transform controls - for freehand
@@ -329,7 +329,7 @@ export const updateTimelineState = (state: CanvasRuntimeState) => {
   if (newDuration > 0 && state.freehand.currentPlaybackTime.value > newDuration) {
     state.freehand.currentPlaybackTime.value = 0
     // Trigger time update to reset visual state
-    handleTimeUpdate(0)
+    handleTimeUpdate(state, 0)
   }
 }
 
@@ -638,7 +638,7 @@ export const deserializeFreehandState = (
     }
 
     refreshStrokeConnections()
-    updateFreehandDraggableStates()
+    updateFreehandDraggableStates(canvasState)
 
     freehandShapeLayer.batchDraw()
 
