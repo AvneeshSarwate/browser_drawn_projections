@@ -639,8 +639,9 @@ export const clearCurrentPolygon = () => {
 
 // Delete selected polygon
 export const deleteSelectedPolygon = () => {
-  const polygonShapesLayer = getGlobalCanvasState().layers.polygonShapes
-  const selectedNodes = selectionStore.selectedKonvaNodes.value
+  const state = getGlobalCanvasState()
+  const polygonShapesLayer = state.layers.polygonShapes
+  const selectedNodes = state.selection.selectedKonvaNodes.value
   if (selectedNodes.length === 0) return
   
   executeCommand('Delete Selected Polygon', () => {

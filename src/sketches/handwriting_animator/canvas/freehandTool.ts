@@ -139,7 +139,8 @@ export const deepCloneWithNewIds = (
 
 // Main duplicate function
 export const duplicateFreehandSelected = () => {
-  const selectedNodes = selectionStore.selectedKonvaNodes.value
+  const state = getGlobalCanvasState()
+  const selectedNodes = state.selection.selectedKonvaNodes.value
   if (selectedNodes.length === 0) {
     console.log('No items selected for duplication')
     return
@@ -227,10 +228,11 @@ const freehandTopGroup = (node: Konva.Node): Konva.Group | null => {
 
 // Helper function to get all strokes that are selected (including those in groups)
 const getSelectedStrokes = (): FreehandStroke[] => {
+  const state = getGlobalCanvasState()
   const selectedStrokes: FreehandStroke[] = []
   const processedStrokeIds = new Set<string>()
 
-  selectionStore.selectedKonvaNodes.value.forEach(node => {
+  state.selection.selectedKonvaNodes.value.forEach(node => {
     if (node instanceof Konva.Group) {
       // If it's a group, find all strokes in that group
       const findStrokesInGroup = (group: Konva.Group) => {

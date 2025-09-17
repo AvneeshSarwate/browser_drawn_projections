@@ -1,4 +1,4 @@
-import { shallowReactive, computed } from 'vue'
+
 import type { CanvasItem, ItemType } from './CanvasItem'
 import { executeCommandWithState } from './commands'
 import { getGlobalCanvasState } from './canvasState'
@@ -186,51 +186,23 @@ function setMetadataForSelectedInState(state: CanvasRuntimeState, meta: Record<s
   })
 }
 
-// LEGACY API - Keep the global reactive state for components that still depend on it
-export const selected = shallowReactive<Set<CanvasItem>>(new Set())
 
-// For feeding the transformer - expose the state-based version for now
-export const selectedKonvaNodes = computed(() => {
-  try {
-    const state = getGlobalCanvasState()
-    return state.selection.selectedKonvaNodes.value
-  } catch {
-    // Fallback to legacy reactive if state not initialized yet
-    return [...selected].map(item => item.konvaNode)
-  }
-})
 
-// Legacy functions that forward to current state and sync with reactive
+// Public API functions - now fully use global state
 export function add(item: CanvasItem, additive = false) {
-  const state = getGlobalCanvasState()
-  addToState(state, item, additive)
-  // Also update the legacy reactive for components that still use it
-  if (!additive) selected.clear()
-  selected.add(item)
+  addToState(getGlobalCanvasState(), item, additive)
 }
 
 export function remove(item: CanvasItem) {
-  const state = getGlobalCanvasState()
-  removeFromState(state, item)
-  selected.delete(item)
+  removeFromState(getGlobalCanvasState(), item)
 }
 
 export function toggle(item: CanvasItem, additive = false) {
-  const state = getGlobalCanvasState()
-  toggleInState(state, item, additive)
-  // Sync with legacy reactive
-  if (selected.has(item)) {
-    selected.delete(item)
-  } else {
-    if (!additive) selected.clear()
-    selected.add(item)
-  }
+  toggleInState(getGlobalCanvasState(), item, additive)
 }
 
 export function clear() {
-  const state = getGlobalCanvasState()
-  clearState(state)
-  selected.clear()
+  clearState(getGlobalCanvasState())
 }
 
 export function has(item: CanvasItem): boolean {

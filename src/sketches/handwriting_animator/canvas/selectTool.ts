@@ -257,7 +257,7 @@ function startSelectionDrag(stage: Konva.Stage) {
   })
 
   // Store absolute start positions so we can move across different parents
-  const nodes = selectionStore.selectedKonvaNodes.value
+  const nodes = state.selection.selectedKonvaNodes.value
   nodes.forEach(node => {
     const abs = node.getAbsolutePosition()
     state.selection.selectionDragState.startNodePositions.set(node, { x: abs.x, y: abs.y })
@@ -305,7 +305,8 @@ function finishSelectionDrag() {
 // ---------------- Grouping / Ungrouping (freehand-only groups) ----------------
 
 function getSelectedNodes(): Konva.Node[] {
-  return selectionStore.selectedKonvaNodes.value
+  const state = getGlobalCanvasState()
+  return state.selection.selectedKonvaNodes.value
 }
 
 function nodeLayer(node: Konva.Node): Konva.Layer | null {
@@ -418,14 +419,16 @@ export function ungroupSelection() {
 // ---------------- Duplicate / Delete (unified) ----------------
 
 function getTopLevelSelectedNodes(): Konva.Node[] {
-  const nodes = selectionStore.selectedKonvaNodes.value
+  const state = getGlobalCanvasState()
+  const nodes = state.selection.selectedKonvaNodes.value
   // keep only nodes that are not descendants of any other selected node
   return nodes.filter((node) => !nodes.some((other) => other !== node && other.isAncestorOf(node)))
 }
 
 export function duplicateSelection() {
-  const freehandShapeLayer = getGlobalCanvasState().layers.freehandShape
-  const selectedNodes = selectionStore.selectedKonvaNodes.value
+  const state = getGlobalCanvasState()
+  const freehandShapeLayer = state.layers.freehandShape
+  const selectedNodes = state.selection.selectedKonvaNodes.value
   if (selectedNodes.length === 0) return
 
   executeCommand('Duplicate', () => {
@@ -481,8 +484,9 @@ export function duplicateSelection() {
 }
 
 export function deleteSelection() {
-  const freehandShapeLayer = getGlobalCanvasState().layers.freehandShape
-  const selectedNodes = selectionStore.selectedKonvaNodes.value
+  const state = getGlobalCanvasState()
+  const freehandShapeLayer = state.layers.freehandShape
+  const selectedNodes = state.selection.selectedKonvaNodes.value
   if (selectedNodes.length === 0) return
 
   executeCommand('Delete Selected', () => {

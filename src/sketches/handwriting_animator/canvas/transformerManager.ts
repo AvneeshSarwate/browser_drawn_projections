@@ -1,6 +1,6 @@
 import Konva from 'konva'
 import { watch } from 'vue'
-import * as selectionStore from './selectionStore'
+
 import { pushCommandWithStates } from './commands'
 import { getGlobalCanvasState } from './canvasState'
 import { activeTool } from '../appState'
@@ -62,7 +62,8 @@ export function initializeTransformer(layer: Konva.Layer) {
   layer.add(transformer)
   
   // Watch selection changes and update transformer
-  watch(selectionStore.selectedKonvaNodes, (selectedNodes) => {
+  const globalState = getGlobalCanvasState()
+  watch(globalState.selection.selectedKonvaNodes, (selectedNodes) => {
     updateTransformer(selectedNodes)
   }, { immediate: true })
 }

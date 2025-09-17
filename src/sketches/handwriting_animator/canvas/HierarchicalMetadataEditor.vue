@@ -5,6 +5,7 @@ import MetadataEditor from './MetadataEditor.vue'
 import { metadataToolkit } from '@/metadata'
 import * as selectionStore from './selectionStore'
 import { getCanvasItem } from './CanvasItem'
+import { getGlobalCanvasState } from './canvasState'
 
 // Extract toolkit functions for convenience
 const { collectHierarchyFromRoot, updateMetadataHighlight, updateHoverHighlight } = metadataToolkit
@@ -28,7 +29,8 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 // Helpers to read from unified selection store
-const selectedNodes = selectionStore.selectedKonvaNodes
+const state = getGlobalCanvasState()
+const selectedNodes = state.selection.selectedKonvaNodes
 const singleNode = computed(() => selectionStore.getActiveSingleNode())
 const multiSelected = computed(() => selectionStore.count() > 1)
 const groupSelected = computed(() => selectionStore.count() === 1 && selectedNodes.value[0] instanceof Konva.Group)
