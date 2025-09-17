@@ -406,26 +406,28 @@ const setIsUndoRedoOperation = (isUndoRedo: boolean) => isUndoRedoOperation = is
 const getCurrentFreehandState = (
   state: CanvasRuntimeState = getGlobalCanvasState()
 ) => {
-  const freehandShapeLayer = state.layers.freehandShape
-  const stageRef = state.stage
-  if (!stageRef || !freehandShapeLayer) return null
+  return selectionStore.withSelectionHighlightSuppressed(state, () => {
+    const freehandShapeLayer = state.layers.freehandShape
+    const stageRef = state.stage
+    if (!stageRef || !freehandShapeLayer) return null
 
-  try {
-    const layerData = freehandShapeLayer.toObject()
-    const strokesData = Array.from(state.freehand.strokes.entries())
-    const strokeGroupsData = Array.from(state.freehand.strokeGroups.entries())
+    try {
+      const layerData = freehandShapeLayer.toObject()
+      const strokesData = Array.from(state.freehand.strokes.entries())
+      const strokeGroupsData = Array.from(state.freehand.strokeGroups.entries())
 
-    const canvasState = {
-      layer: layerData,
-      strokes: strokesData,
-      strokeGroups: strokeGroupsData,
+      const canvasState = {
+        layer: layerData,
+        strokes: strokesData,
+        strokeGroups: strokeGroupsData,
+      }
+
+      return canvasState
+    } catch (error) {
+      console.warn('Failed to get current state:', error)
+      return null
     }
-
-    return canvasState
-  } catch (error) {
-    console.warn('Failed to get current state:', error)
-    return null
-  }
+  })
 }
 
 export const getCurrentFreehandStateString = (

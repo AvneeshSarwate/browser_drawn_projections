@@ -131,6 +131,29 @@ function redrawAffectedLayers(state: CanvasRuntimeState) {
   layersToRedraw.forEach(layer => layer.batchDraw())
 }
 
+// Temporarily remove highlights while running a callback, then reapply so highlight state stays
+// derived from the current selection. Avoids persisting highlight styling into saved snapshots.
+export const withSelectionHighlightSuppressed = <T>(
+  state: CanvasRuntimeState,
+  fn: () => T
+): T => {
+  const hadHighlights = state.selection.originalStyles.size > 0
+  if (hadHighlights) {
+    restoreHighlights(state)
+  }
+
+  try {
+    return fn()
+  } finally {
+    if (state.selection.items.size > 0) {
+      applyHighlight(state)
+    } else if (hadHighlights) {
+      // Ensure layers redraw after removing highlight with no selection to reapply
+      redrawAffectedLayers(state)
+    }
+  }
+}
+
 // Trigger updates for dependent systems
 function updateGPUAndVisualization(state: CanvasRuntimeState) {
   // Use the callbacks stored in state instead of dynamic imports

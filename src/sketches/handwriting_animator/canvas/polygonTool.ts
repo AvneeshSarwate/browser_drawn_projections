@@ -125,26 +125,28 @@ export const updateBakedPolygonData = (
 export const getCurrentPolygonState = (
   state: CanvasRuntimeState = getGlobalCanvasState()
 ) => {
-  const polygonShapesLayer = state.layers.polygonShapes
-  const stageRef = state.stage
-  if (!stageRef || !polygonShapesLayer) return null
+  return selectionStore.withSelectionHighlightSuppressed(state, () => {
+    const polygonShapesLayer = state.layers.polygonShapes
+    const stageRef = state.stage
+    if (!stageRef || !polygonShapesLayer) return null
 
-  try {
-    const layerData = polygonShapesLayer.toObject()
-    const polygonsData = Array.from(state.polygon.shapes.entries())
-    const polygonGroupsData = Array.from(state.polygon.groups.entries())
+    try {
+      const layerData = polygonShapesLayer.toObject()
+      const polygonsData = Array.from(state.polygon.shapes.entries())
+      const polygonGroupsData = Array.from(state.polygon.groups.entries())
 
-    const polygonState = {
-      layer: layerData,
-      polygons: polygonsData,
-      polygonGroups: polygonGroupsData,
+      const polygonState = {
+        layer: layerData,
+        polygons: polygonsData,
+        polygonGroups: polygonGroupsData,
+      }
+
+      return polygonState
+    } catch (error) {
+      console.warn('Failed to get current polygon state:', error)
+      return null
     }
-
-    return polygonState
-  } catch (error) {
-    console.warn('Failed to get current polygon state:', error)
-    return null
-  }
+  })
 }
 
 export const getCurrentPolygonStateString = (

@@ -47,7 +47,7 @@ standardize and figure out where to put selection related shape funcs
 
 more standardized approach for freehand.updateTimelineState
 
-
+withSelectionHighlightSuppressed - see if there's a better way to handle this
 
 
 
