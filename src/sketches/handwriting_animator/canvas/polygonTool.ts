@@ -67,8 +67,10 @@ export const clearPolygonSelection = () => {
 }
 
 // Function to generate baked polygon data for external rendering (p5, three.js, etc.)
-export const generateBakedPolygonData = (): PolygonRenderData => {
-  const polygonShapesLayer = getGlobalCanvasState().layers.polygonShapes
+export const generateBakedPolygonData = (
+  canvasState: CanvasRuntimeState
+): PolygonRenderData => {
+  const polygonShapesLayer = canvasState.layers.polygonShapes
   if (!polygonShapesLayer) return []
 
   const bakedPolygons: FlattenedPolygon[] = []
@@ -109,29 +111,35 @@ export const generateBakedPolygonData = (): PolygonRenderData => {
 }
 
 // Function to update baked polygon data in app state
-export const updateBakedPolygonData = () => {
-  appState.polygonRenderData = generateBakedPolygonData()
+export const updateBakedPolygonData = (
+  canvasState: CanvasRuntimeState,
+  templateAppState: TemplateAppState
+) => {
+  templateAppState.polygonRenderData = generateBakedPolygonData(canvasState)
 }
 
 // Polygon drawing state now managed via global canvas state
 
 // Polygon Undo/Redo Functions
 // Get current polygon state for undo/redo
-export const getCurrentPolygonState = () => {
-  const polygonShapesLayer = getGlobalCanvasState().layers.polygonShapes
-  if (!stage || !polygonShapesLayer) return null
+export const getCurrentPolygonState = (
+  state: CanvasRuntimeState = getGlobalCanvasState()
+) => {
+  const polygonShapesLayer = state.layers.polygonShapes
+  const stageRef = state.stage
+  if (!stageRef || !polygonShapesLayer) return null
 
   try {
     const layerData = polygonShapesLayer.toObject()
-    const polygonsData = Array.from(polygonShapes().entries())
-    const polygonGroupsData = Array.from(polygonGroups().entries())
-    
+    const polygonsData = Array.from(state.polygon.shapes.entries())
+    const polygonGroupsData = Array.from(state.polygon.groups.entries())
+
     const polygonState = {
       layer: layerData,
       polygons: polygonsData,
       polygonGroups: polygonGroupsData,
     }
-    
+
     return polygonState
   } catch (error) {
     console.warn('Failed to get current polygon state:', error)
@@ -139,24 +147,27 @@ export const getCurrentPolygonState = () => {
   }
 }
 
-export const getCurrentPolygonStateString = (): string => {
-  const state = getCurrentPolygonState()
-  return JSON.stringify(state)
+export const getCurrentPolygonStateString = (
+  state: CanvasRuntimeState = getGlobalCanvasState()
+): string => {
+  const polygonState = getCurrentPolygonState(state)
+  return JSON.stringify(polygonState)
 }
 
 // Restore polygon state from string
-export const restorePolygonState = (stateString: string) => {
+export const restorePolygonState = (
+  canvasState: CanvasRuntimeState,
+  templateAppState: TemplateAppState,
+  stateString: string
+) => {
   if (!stateString) return
   try {
-    // Temporarily store the state string
-    const originalState = appState.polygonStateString
-    appState.polygonStateString = stateString
-    
-    // Use existing deserialization logic
-    deserializePolygonState()
-    
-    // Restore original state string for hotreload
-    appState.polygonStateString = originalState
+    const originalState = templateAppState.polygonStateString
+    templateAppState.polygonStateString = stateString
+
+    deserializePolygonState(canvasState, templateAppState, stateString)
+
+    templateAppState.polygonStateString = originalState
   } catch (error) {
     console.warn('Failed to restore polygon state:', error)
   }
@@ -185,27 +196,30 @@ export const finishPolygonDragTracking = (nodeName: string) => {
   if (state.polygon.dragStartState !== endCombined) {
     // Push into unified command stack with combined state
     pushCommandWithStates(`Transform ${nodeName}`, state.polygon.dragStartState, endCombined)
-    updateBakedPolygonData() // Update baked data after polygon transformation
+    updateBakedPolygonData(getGlobalCanvasState(), appState) // Update baked data after polygon transformation
   }
   
   state.polygon.dragStartState = null
 }
 
 // Polygon state serialization functions
-export const serializePolygonState = () => {
-  const polygonShapesLayer = getGlobalCanvasState().layers.polygonShapes
-  if (!stage || !polygonShapesLayer) return
-  
+export const serializePolygonState = (
+  canvasState: CanvasRuntimeState,
+  templateAppState: TemplateAppState
+) => {
+  const polygonShapesLayer = canvasState.layers.polygonShapes
+  const stageRef = canvasState.stage
+  if (!stageRef || !polygonShapesLayer) return
+
   try {
-    // Serialize only the essential polygon state
-    const polygonState = getCurrentPolygonState()!
-    
-    
-    appState.polygonStateString = JSON.stringify(polygonState)
-    console.log('Serialized polygon state:', { 
-      layerChildren: polygonState.layer?.children?.length || 0, 
+    const polygonState = getCurrentPolygonState(canvasState)
+    if (!polygonState) return
+
+    templateAppState.polygonStateString = JSON.stringify(polygonState)
+    console.log('Serialized polygon state:', {
+      layerChildren: polygonState.layer?.children?.length || 0,
       polygons: polygonState.polygons.length,
-      polygonGroups: polygonState.polygonGroups.length 
+      polygonGroups: polygonState.polygonGroups.length
     })
   } catch (error) {
     console.warn('Failed to serialize polygon state:', error)
@@ -223,56 +237,53 @@ export const attachPolygonHandlers = (node: Konva.Line) => {
   // Add drag tracking handlers for undo/redo
   // If we ever re-enable node drags (e.g., special mode), these handlers keep undo/redo correct
   node.on('dragstart', () => startPolygonDragTracking())
-  node.on('dragend', () => { finishPolygonDragTracking('Polygon Drag'); serializePolygonState() })
+  node.on('dragend', () => { finishPolygonDragTracking('Polygon Drag'); serializePolygonState(getGlobalCanvasState(), appState) })
 }
 
-export const deserializePolygonState = () => {
-  const polygonShapesLayer = getGlobalCanvasState().layers.polygonShapes
-  const polygonControlsLayer = getGlobalCanvasState().layers.polygonControls
-  if (!appState.polygonStateString || !stage || !polygonShapesLayer) return
-  
+export const deserializePolygonState = (
+  canvasState: CanvasRuntimeState,
+  templateAppState: TemplateAppState,
+  stateString: string
+) => {
+  const polygonShapesLayer = canvasState.layers.polygonShapes
+  const polygonControlsLayer = canvasState.layers.polygonControls
+  const stageRef = canvasState.stage
+  if (!stateString || !stageRef || !polygonShapesLayer) return
+
   try {
-    const polygonState = JSON.parse(appState.polygonStateString)
-    console.log('Deserializing polygon state:', { 
-      layerChildren: polygonState.layer?.children?.length || 0, 
+    const polygonState = JSON.parse(stateString)
+    console.log('Deserializing polygon state:', {
+      layerChildren: polygonState.layer?.children?.length || 0,
       polygons: polygonState.polygons?.length || 0,
-      polygonGroups: polygonState.polygonGroups?.length || 0 
+      polygonGroups: polygonState.polygonGroups?.length || 0
     })
-    
-    // Clear existing polygon content
+
     polygonShapesLayer.destroyChildren()
-    polygonShapes().clear()
-    polygonGroups().clear()
-    selectionStore.clear() // Clear selection using unified store
-    
-    // Restore polygon layer content using Konva.Node.create
+    canvasState.polygon.shapes.clear()
+    canvasState.polygon.groups.clear()
+    selectionStore.clear()
+
     const layerData = polygonState.layer
     if (layerData && layerData.children) {
       console.log('Restoring', layerData.children.length, 'polygon shapes')
       layerData.children.forEach((childData: any, index: number) => {
         console.log('Creating polygon node', index, 'of type', childData.className)
-        //todo - add zod and improve typing
         const node = Konva.Node.create(JSON.stringify(childData))
-        polygonShapesLayer!.add(node)
+        polygonShapesLayer.add(node)
         console.log('Added polygon node to layer:', node.id(), node.isVisible())
-        
+
         if (node instanceof Konva.Line) {
-          // Attach handlers to this polygon node
           attachPolygonHandlers(node)
-          // Register as CanvasItem for unified selection
-          createPolygonItem(getGlobalCanvasState(), node)
+          createPolygonItem(canvasState, node)
         } else if (node instanceof Konva.Group) {
-          // Register groups for selection escalation
-          createGroupItem(getGlobalCanvasState(), node)
+          createGroupItem(canvasState, node)
         }
       })
     }
-    
-    // Restore polygon data
+
     if (polygonState.polygons) {
       polygonState.polygons.forEach(([id, polygonData]: [string, any]) => {
-        // Use stage.findOne to search for the polygon shape
-        const shape = stage!.findOne(`#${id}`) as Konva.Line
+        const shape = stageRef.findOne(`#${id}`) as Konva.Line
         console.log('Restoring polygon:', id, 'found shape:', !!shape)
         const polygon: PolygonShape = {
           id: polygonData.id,
@@ -280,35 +291,32 @@ export const deserializePolygonState = () => {
           closed: polygonData.closed,
           creationTime: polygonData.creationTime,
           konvaShape: shape,
-          controlPoints: [], // Will be recreated by updatePolygonControlPoints
+          controlPoints: [],
         }
-        polygonShapes().set(id, polygon)
+        canvasState.polygon.shapes.set(id, polygon)
       })
     }
-    
-    // Restore polygon groups
+
     if (polygonState.polygonGroups) {
       polygonState.polygonGroups.forEach(([id, groupData]: [string, any]) => {
         const group: PolygonGroup = {
           id: groupData.id,
           polygonIds: groupData.polygonIds,
-          group: stage!.findOne(`#${id}`) as Konva.Group,
+          group: stageRef.findOne(`#${id}`) as Konva.Group,
         }
-        polygonGroups().set(id, group)
+        canvasState.polygon.groups.set(id, group)
       })
     }
-    
-    // Clear any existing control points first
+
     polygonControlsLayer?.destroyChildren()
-    
-    // Only create control points if polygon tool is active AND we're in edit mode
-    if (activeTool.value === 'polygon' && getGlobalCanvasState().polygon.mode.value === 'edit') {
+
+    if (activeTool.value === 'polygon' && canvasState.polygon.mode.value === 'edit') {
       updatePolygonControlPoints()
     }
-    
+
     polygonShapesLayer.batchDraw()
-    updateBakedPolygonData() // Update baked data after deserialization
-    
+    updateBakedPolygonData(canvasState, templateAppState)
+
     console.log('Polygon state restored from hotreload')
   } catch (error) {
     console.warn('Failed to deserialize polygon state:', error)
@@ -388,9 +396,9 @@ export const handlePolygonClick = (pos: { x: number, y: number }) => {
             // Update the Konva shape and control points
             polygon.konvaShape!.points(polygon.points)
             updatePolygonControlPoints() // Refresh control points
-            serializePolygonState() // Serialize for hotreload
+            serializePolygonState(getGlobalCanvasState(), appState) // Serialize for hotreload
             polygonShapesLayer?.batchDraw()
-            updateBakedPolygonData() // ensure baked data reflects edit
+            updateBakedPolygonData(getGlobalCanvasState(), appState) // ensure baked data reflects edit
           })
         }
       }
@@ -609,11 +617,11 @@ export const finishPolygon = () => {
     updatePolygonControlPoints()
     
     // Serialize polygon state for hotreload
-    serializePolygonState()
+    serializePolygonState(getGlobalCanvasState(), appState)
     
     polygonShapesLayer?.batchDraw()
     polygonPreviewLayer?.batchDraw()
-    updateBakedPolygonData() // Update baked data after creating polygon
+    updateBakedPolygonData(getGlobalCanvasState(), appState) // Update baked data after creating polygon
   })
 }
 
@@ -644,7 +652,7 @@ export const deleteSelectedPolygon = () => {
     })
     clearPolygonSelection()
     polygonShapesLayer?.batchDraw()
-    updateBakedPolygonData() // Update baked data after polygon deletion
+    updateBakedPolygonData(getGlobalCanvasState(), appState) // Update baked data after polygon deletion
   })
 }
 
@@ -731,7 +739,7 @@ export const updatePolygonControlPoints = () => {
         // Add drag end handler to track final state and serialize
         controlPoint.on('dragend', () => {
           finishPolygonDragTracking('Polygon Control Point')
-          serializePolygonState()
+          serializePolygonState(getGlobalCanvasState(), appState)
         })
         
         polygon.controlPoints.push(controlPoint)

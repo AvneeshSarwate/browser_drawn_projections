@@ -5,12 +5,16 @@ import { getCanvasItem, createGroupItem, createPolygonItem, removeCanvasItem } f
 import { getGlobalCanvasState, polygonShapes, freehandStrokes, freehandStrokeGroups } from './canvasState'
 
 import { executeCommand } from './commands'
+import { globalStore } from '../appState'
 import { getCurrentFreehandStateString, deepCloneWithNewIds, updateBakedStrokeData, updateTimelineState, refreshStrokeConnections } from './freehandTool'
 import { getCurrentPolygonStateString, attachPolygonHandlers, serializePolygonState, updateBakedPolygonData } from './polygonTool'
 import { hasAncestorConflict } from './canvasUtils'
 import { uid } from './canvasUtils'
 import { pushCommandWithStates } from './commands'
 
+
+
+const store = globalStore()
 
 
 export function initializeSelectTool(layer: Konva.Layer) {
@@ -372,7 +376,7 @@ export function groupSelection() {
     selectionStore.add(item)
 
     superGroup.getLayer()?.batchDraw()
-    updateBakedStrokeData()
+    updateBakedStrokeData(getGlobalCanvasState(), store.appStateRef)
   })
 }
 
@@ -407,7 +411,7 @@ export function ungroupSelection() {
     try { refreshStrokeConnections() } catch {
       console.error('refreshStrokeConnections failed')
     }
-    updateBakedStrokeData()
+    updateBakedStrokeData(getGlobalCanvasState(), store.appStateRef)
   })
 }
 
@@ -470,9 +474,9 @@ export function duplicateSelection() {
     // Refresh visuals/state
     freehandShapeLayer?.batchDraw()
     getGlobalCanvasState().layers.polygonShapes?.batchDraw()
-    updateBakedStrokeData()
-    updateBakedPolygonData()
-    serializePolygonState()
+    updateBakedStrokeData(getGlobalCanvasState(), store.appStateRef)
+    updateBakedPolygonData(getGlobalCanvasState(), store.appStateRef)
+    serializePolygonState(getGlobalCanvasState(), store.appStateRef)
   })
 }
 
@@ -531,9 +535,9 @@ export function deleteSelection() {
     // Redraw/refresh
     freehandShapeLayer?.batchDraw()
     getGlobalCanvasState().layers.polygonShapes?.batchDraw()
-    updateBakedStrokeData()
-    updateBakedPolygonData()
-    serializePolygonState()
+    updateBakedStrokeData(getGlobalCanvasState(), store.appStateRef)
+    updateBakedPolygonData(getGlobalCanvasState(), store.appStateRef)
+    serializePolygonState(getGlobalCanvasState(), store.appStateRef)
 
     // Ancillary viz cleanup (best-effort)
     import('./ancillaryVisualizations').then(({ refreshAnciliaryViz }) => refreshAnciliaryViz()).catch(() => {})

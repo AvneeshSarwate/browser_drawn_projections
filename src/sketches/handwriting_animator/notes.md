@@ -1,10 +1,27 @@
 
 
 ## feature todos and bug notes
-- dragging working on whole group not robust for nested groups
-- transformations on single strokes don't propogate to stroke launcher
-- select highlighting still not robust
-- slider replay not robust when nothing selected
+- [X] transformations on single strokes don't propogate to stroke launcher
+- [X] dragging working on whole group not robust for nested groups
+- [ ] select highlighting still not robust
+- [X] slider replay not robust when nothing selected
+- [ ] slider replay not robust for groups,nested groups
+
+
+
+
+the files in src/sketches/handwriting_animator/canvas define a canvas drawing component built using vue and konva.js. I want to refactor this into a proper standalone component. 
+
+However, it looks like there are several issues with the architecture that would make this difficult due to messy shared state and lack of modularity
+
+one case of this - state snapshot and serialization functions are not modular enough and have coupling dependencies on the global app state. for example deserializePolygonState should be passed the global app state instance and the polygonState string as an argument, that way, while it has side effects in terms of changing the state of it's arguments, it is fully modularized in that it only affects its arguments and can be used on any instance. 
+
+analyze the following functions 
+- in freehandTool.ts - restoreFreehandState, deserializeFreehandState, serializeFreehandState, updateBakedStrokeData
+- in polygonTool.ts - restorePolygonState, deserializePolygonState, serializePolygonState, updateBakedPolygonData
+
+update these functions so that they only operate on their arguments, and update their call sites accordingly 
+
 
 
 
@@ -13,13 +30,20 @@
 
 clearPolygonSelection (also for freehand?) move to selection tool
 
-state snapshot and serialization functions should be moved into central state file to prevent module cyclic dependencies
-- or - separate modules for snapshotting/serialize vs behavior for each tool - then central state obj can expose a global snapshot function that that tool-level behavior modules can import without cyclic dependency  
-- restoreFreehandState, deserializeFreehandState, serializeFreehandState, 
-- file save/load should be consolidated between all shape types
+state snapshot and serialization functions are not modular enough and have coupling dependencies on the global app state. for example deserializePolygonState should be passed the global app state instance and the polygonState string as an argument, that way, while it has side effects in terms of changing the state of it's arguments, it is fully modularized in that it only affects its arguments and can be used on any instance. 
+
+analyze the following functions 
+- in freehandTool.ts - restoreFreehandState, deserializeFreehandState, serializeFreehandState, updateBakedStrokeData
+- in polygonTool.ts - restorePolygonState, deserializePolygonState, serializePolygonState, updateBakedPolygonData
+
+general refactor - CanvasRoot instantiates a canvas state, all UI handlers pass that state instance into their callbacks, and it is threaded through all functions
+
+
+
 
 standardize and figure out where to put selection related shape funcs 
 - getSelectedStrokes, freehandAddSelection, freehandToggleSelection, clearFreehandSelection 
+- same for polygon
 
 more standardized approach for freehand.updateTimelineState
 

@@ -180,7 +180,7 @@ export const duplicateFreehandSelected = () => {
 
     // Update UI and data structures
     updateFreehandDraggableStates()
-    updateBakedStrokeData()
+    updateBakedStrokeData(getGlobalCanvasState(), globalStore().appStateRef)
     const freehandShapeLayer = getGlobalCanvasState().layers.freehandShape
     freehandShapeLayer?.batchDraw()
 
@@ -403,14 +403,17 @@ const setIsUndoRedoOperation = (isUndoRedo: boolean) => isUndoRedoOperation = is
 
 
 // Get current canvas state for undo/redo (freehand only)
-const getCurrentFreehandState = () => {
-  const freehandShapeLayer = getGlobalCanvasState().layers.freehandShape
-  if (!stage || !freehandShapeLayer) return null
+const getCurrentFreehandState = (
+  state: CanvasRuntimeState = getGlobalCanvasState()
+) => {
+  const freehandShapeLayer = state.layers.freehandShape
+  const stageRef = state.stage
+  if (!stageRef || !freehandShapeLayer) return null
 
   try {
     const layerData = freehandShapeLayer.toObject()
-    const strokesData = Array.from(freehandStrokes().entries())
-    const strokeGroupsData = Array.from(freehandStrokeGroups().entries())
+    const strokesData = Array.from(state.freehand.strokes.entries())
+    const strokeGroupsData = Array.from(state.freehand.strokeGroups.entries())
 
     const canvasState = {
       layer: layerData,
@@ -425,37 +428,41 @@ const getCurrentFreehandState = () => {
   }
 }
 
-export const getCurrentFreehandStateString = (): string => {
-  const state = getCurrentFreehandState()
-  return JSON.stringify(state)
+export const getCurrentFreehandStateString = (
+  state: CanvasRuntimeState = getGlobalCanvasState()
+): string => {
+  const snapshot = getCurrentFreehandState(state)
+  return JSON.stringify(snapshot)
 }
 
 // Restore state from string (freehand only)
-export const restoreFreehandState = (stateString: string) => {
+interface RestoreFreehandStateOptions {
+  handleTimeUpdate?: (time: number) => void
+}
+
+export const restoreFreehandState = (
+  canvasState: CanvasRuntimeState,
+  appState: TemplateAppState,
+  stateString: string,
+  options: RestoreFreehandStateOptions = {}
+) => {
   if (!stateString) return
 
   isUndoRedoOperation = true
   try {
-    // Reset animation state to prevent interference
-    const state = getGlobalCanvasState()
-    const wasAnimating = state.freehand.currentPlaybackTime.value > 0
-    state.freehand.currentPlaybackTime.value = 0
-    state.freehand.isAnimating.value = false
+    const wasAnimating = canvasState.freehand.currentPlaybackTime.value > 0
+    canvasState.freehand.currentPlaybackTime.value = 0
+    canvasState.freehand.isAnimating.value = false
 
-    // Temporarily store the state string
-    const appState = globalStore().appStateRef
     const originalState = appState.freehandStateString
     appState.freehandStateString = stateString
 
-    // Use existing deserialization logic
-    deserializeFreehandState()
+    deserializeFreehandState(canvasState, appState, stateString)
 
-    // Restore original state string for hotreload
     appState.freehandStateString = originalState
 
-    // If animation was running, reset it to ensure proper state
     if (wasAnimating) {
-      handleTimeUpdate(0)
+      options.handleTimeUpdate?.(0)
     }
   } catch (error) {
     console.warn('Failed to restore state:', error)
@@ -485,7 +492,7 @@ export const finishFreehandDragTracking = (nodeName: string) => {
     )
     
     console.log(`Transform command added to global history`)
-    updateBakedStrokeData() // Update baked data after transformation
+    updateBakedStrokeData(getGlobalCanvasState(), globalStore().appStateRef) // Update baked data after transformation
   }
 
   state.freehand.freehandDragStartState = null
@@ -503,18 +510,23 @@ export const refreshStrokeConnections = () => {
 }
 
 // Serialization functions for hotreloading
-export const serializeFreehandState = () => {
-  const freehandShapeLayer = getGlobalCanvasState().layers.freehandShape
-  if (!stage || !freehandShapeLayer) return
+export const serializeFreehandState = (
+  canvasState: CanvasRuntimeState,
+  appState: TemplateAppState
+) => {
+  const freehandShapeLayer = canvasState.layers.freehandShape
+  const stageRef = canvasState.stage
+  if (!stageRef || !freehandShapeLayer) return
 
   try {
-    const canvasState = getCurrentFreehandState()
-    const appState = globalStore().appStateRef
-    appState.freehandStateString = JSON.stringify(canvasState)
+    const snapshot = getCurrentFreehandState(canvasState)
+    if (!snapshot) return
+
+    appState.freehandStateString = JSON.stringify(snapshot)
     console.log('Serialized canvas state:', {
-      layerChildren: canvasState!.layer?.children?.length || 0,
-      strokes: canvasState!.strokes.length,
-      strokeGroups: canvasState!.strokeGroups.length
+      layerChildren: snapshot.layer?.children?.length || 0,
+      strokes: snapshot.strokes.length,
+      strokeGroups: snapshot.strokeGroups.length
     })
   } catch (error) {
     console.warn('Failed to serialize Konva state:', error)
@@ -556,9 +568,10 @@ export const uploadFreehandDrawing = () => {
         JSON.parse(content)
         
         // Set the state string and deserialize
+        const canvasState = getGlobalCanvasState()
         const appState = globalStore().appStateRef
         appState.freehandStateString = content
-        deserializeFreehandState()
+        deserializeFreehandState(canvasState, appState, content)
         
         console.log('Successfully loaded drawing from file:', file.name)
       } catch (error) {
@@ -571,48 +584,44 @@ export const uploadFreehandDrawing = () => {
   input.click()
 }
 
-export const deserializeFreehandState = () => {
-  const freehandShapeLayer = getGlobalCanvasState().layers.freehandShape
-  const appState = globalStore().appStateRef
-  if (!appState.freehandStateString || !stage || !freehandShapeLayer) return
+export const deserializeFreehandState = (
+  canvasState: CanvasRuntimeState,
+  appState: TemplateAppState,
+  stateString: string
+) => {
+  const freehandShapeLayer = canvasState.layers.freehandShape
+  const stageRef = canvasState.stage
+  if (!stateString || !stageRef || !freehandShapeLayer) return
 
   try {
-    const canvasState = JSON.parse(appState.freehandStateString)
+    const parsedState = JSON.parse(stateString)
     console.log('Deserializing canvas state:', {
-      layerChildren: canvasState.layer?.children?.length || 0,
-      strokes: canvasState.strokes?.length || 0,
-      strokeGroups: canvasState.strokeGroups?.length || 0
+      layerChildren: parsedState.layer?.children?.length || 0,
+      strokes: parsedState.strokes?.length || 0,
+      strokeGroups: parsedState.strokeGroups?.length || 0
     })
 
-    // Clear existing content
     freehandShapeLayer.destroyChildren()
-    clearStrokesInState(getGlobalCanvasState())
-    selectionStore.clear() // Clear selection using unified store
+    clearStrokesInState(canvasState)
+    selectionStore.clear()
 
-    // Use the extracted handler attachment logic
-
-    // Restore layer content using Konva.Node.create
-    const layerData = canvasState.layer
+    const layerData = parsedState.layer
     if (layerData && layerData.children) {
       console.log('Restoring', layerData.children.length, 'children')
       layerData.children.forEach((childData: any, index: number) => {
         console.log('Creating node', index, 'of type', childData.className)
         const node = Konva.Node.create(JSON.stringify(childData))
-        freehandShapeLayer!.add(node)
+        freehandShapeLayer.add(node)
         console.log('Added node to layer:', node.id(), node.isVisible())
 
-        // Recursively attach handlers to this node and all its children
         attachHandlersRecursively(node)
-        // Register this node and children in the CanvasItem registry
         registerCanvasItemsRecursively(node)
       })
     }
 
-    // Restore stroke data
-    if (canvasState.strokes) {
-      canvasState.strokes.forEach(([id, strokeData]: [string, any]) => {
-        // Use stage.findOne to search recursively through all groups
-        const shape = stage!.findOne(`#${id}`) as Konva.Path
+    if (parsedState.strokes) {
+      parsedState.strokes.forEach(([id, strokeData]: [string, any]) => {
+        const shape = stageRef.findOne(`#${id}`) as Konva.Path
         console.log('Restoring stroke:', id, 'found shape:', !!shape)
         const stroke: FreehandStroke = {
           id: strokeData.id,
@@ -623,34 +632,31 @@ export const deserializeFreehandState = () => {
           isFreehand: strokeData.isFreehand,
           shape: shape,
         }
-        setStrokeInState(getGlobalCanvasState(), id, stroke)
+        setStrokeInState(canvasState, id, stroke)
       })
     }
 
-    // Restore stroke groups
-    if (canvasState.strokeGroups) {
-      canvasState.strokeGroups.forEach(([id, groupData]: [string, any]) => {
+    if (parsedState.strokeGroups) {
+      parsedState.strokeGroups.forEach(([id, groupData]: [string, any]) => {
         const group: FreehandStrokeGroup = {
           id: groupData.id,
           strokeIds: groupData.strokeIds,
-          group: stage!.findOne(`#${id}`) as Konva.Group,
+          group: stageRef.findOne(`#${id}`) as Konva.Group,
         }
-        setStrokeGroupInState(getGlobalCanvasState(), id, group)
+        setStrokeGroupInState(canvasState, id, group)
       })
     }
 
-    // Update UI states
-    refreshStrokeConnections() // Ensure all connections are properly established
+    refreshStrokeConnections()
     updateFreehandDraggableStates()
 
     freehandShapeLayer.batchDraw()
 
     console.log('Konva canvas state restored from hotreload')
 
-    // Force a redraw to make sure everything is visible
     setTimeout(() => {
-      freehandShapeLayer!.batchDraw()
-      updateBakedStrokeData() // Update baked data after deserialization
+      freehandShapeLayer.batchDraw()
+      updateBakedStrokeData(canvasState, appState)
     }, 30)
   } catch (error) {
     console.warn('Failed to deserialize Konva state:', error)
@@ -971,8 +977,10 @@ export const handleTimeUpdate = (time: number) => {
 
 
 // Function to generate baked stroke data for external rendering (p5, three.js, etc.)
-const generateBakedStrokeData = (): { data: FreehandRenderData, groupMap: Record<string, number[]> } => {
-  const freehandShapeLayer = getGlobalCanvasState().layers.freehandShape
+const generateBakedStrokeData = (
+  canvasState: CanvasRuntimeState
+): { data: FreehandRenderData, groupMap: Record<string, number[]> } => {
+  const freehandShapeLayer = canvasState.layers.freehandShape
   if (!freehandShapeLayer) return { data: [], groupMap: {} }
 
   // Helper function to transform points using world transform
@@ -1009,7 +1017,7 @@ const generateBakedStrokeData = (): { data: FreehandRenderData, groupMap: Record
   const processNode = (node: Konva.Node): FlattenedStroke | FlattenedStrokeGroup | null => {
     if (node instanceof Konva.Path) {
       // Find the corresponding stroke data
-      const stroke = Array.from(freehandStrokes().values()).find(s => s.shape === node)
+      const stroke = Array.from(canvasState.freehand.strokes.values()).find(s => s.shape === node)
       if (!stroke) return null
 
       const transformedPoints = transformPoints(stroke.points, node)
@@ -1100,9 +1108,11 @@ const generateBakedStrokeData = (): { data: FreehandRenderData, groupMap: Record
 }
 
 // Function to update baked data in app state
-export const updateBakedStrokeData = () => {
-  const result = generateBakedStrokeData()
-  const appState = globalStore().appStateRef
+export const updateBakedStrokeData = (
+  canvasState: CanvasRuntimeState,
+  appState: TemplateAppState
+) => {
+  const result = generateBakedStrokeData(canvasState)
   appState.freehandRenderData = result.data
   appState.freehandGroupMap = result.groupMap
   appState.freehandDataUpdateCallback?.()
@@ -1119,7 +1129,7 @@ export const setNodeMetadata = (
     } else {
       node.setAttr('metadata', meta)
     }
-    updateBakedStrokeData()                 // keep render-data in sync
+    updateBakedStrokeData(getGlobalCanvasState(), globalStore().appStateRef)                 // keep render-data in sync
     refreshAVs?.()                          // refresh ancillary visualizations
   })
 }

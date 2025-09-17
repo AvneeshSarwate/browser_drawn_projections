@@ -34,8 +34,8 @@ const canvasState: CanvasRuntimeState = createCanvasRuntimeState()
 setGlobalCanvasState(canvasState)
 
 // Set up callbacks for data updates
-canvasState.callbacks.freehandDataUpdate = updateBakedStrokeData
-canvasState.callbacks.polygonDataUpdate = updateBakedPolygonData
+canvasState.callbacks.freehandDataUpdate = () => updateBakedStrokeData(canvasState, appState)
+canvasState.callbacks.polygonDataUpdate = () => updateBakedPolygonData(canvasState, appState)
 canvasState.callbacks.refreshAncillaryViz = refreshAnciliaryViz
 
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
@@ -47,8 +47,8 @@ const clearDrawFuncs = () => {
 
 // ==================== Unified Command Stack ====================
 const captureCanvasState = () => {
-  const freehandState = getCurrentFreehandStateString()
-  const polygonState = getCurrentPolygonStateString()
+  const freehandState = getCurrentFreehandStateString(canvasState)
+  const polygonState = getCurrentPolygonStateString(canvasState)
 
   return JSON.stringify({
     freehand: freehandState,
@@ -62,10 +62,10 @@ const restoreCanvasState = (stateString: string) => {
   try {
     const state = JSON.parse(stateString)
     if (state.freehand) {
-      restoreFreehandState(state.freehand)
+      restoreFreehandState(canvasState, appState, state.freehand, { handleTimeUpdate })
     }
     if (state.polygon) {
-      restorePolygonState(state.polygon)
+      restorePolygonState(canvasState, appState, state.polygon)
     }
   } catch (error) {
     console.warn('Failed to restore canvas state:', error)
@@ -77,8 +77,8 @@ const canUndoReactive = ref(false)
 const canRedoReactive = ref(false)
 
 const onCanvasStateChange = () => {
-  updateBakedStrokeData()
-  updateBakedPolygonData()
+  updateBakedStrokeData(canvasState, appState)
+  updateBakedPolygonData(canvasState, appState)
   refreshAnciliaryViz()
   // Update reactive button states after any command stack change
   canUndoReactive.value = commandStack.canUndo()
@@ -228,14 +228,14 @@ const handleApplyMetadata = (node: Konva.Node, metadata: any) => {
     } else {
       // Fallback for non-registered nodes (should be rare)
       node.setAttr('metadata', metadata === undefined || Object.keys(metadata).length === 0 ? undefined : metadata)
-      updateBakedStrokeData()
-      updateBakedPolygonData()
+      updateBakedStrokeData(canvasState, appState)
+      updateBakedPolygonData(canvasState, appState)
     }
   } catch (e) {
     // Safe fallback if metadata routing fails for any reason
     node.setAttr('metadata', metadata === undefined || Object.keys(metadata).length === 0 ? undefined : metadata)
-    updateBakedStrokeData()
-    updateBakedPolygonData()
+    updateBakedStrokeData(canvasState, appState)
+    updateBakedPolygonData(canvasState, appState)
   }
 }
 
@@ -315,8 +315,8 @@ onMounted(async () => {
     updateCursor!()
 
     // Try to restore canvas state from hotreload (after all setup is complete)
-    deserializeFreehandState()
-    deserializePolygonState()
+    deserializeFreehandState(canvasState, appState, appState.freehandStateString)
+    deserializePolygonState(canvasState, appState, appState.polygonStateString)
 
     // Re-apply tool mode after deserialization to ensure control points/transformer states are correct
     applyToolMode(activeTool.value)
@@ -426,7 +426,7 @@ onMounted(async () => {
             updateFreehandDraggableStates() // Update draggable state for new stroke
             updateTimelineState() // Update timeline state when new stroke is added
             freehandShapeLayer?.batchDraw()
-            updateBakedStrokeData() // Update baked data after new stroke
+            updateBakedStrokeData(canvasState, appState) // Update baked data after new stroke
           })
         }
 
@@ -515,8 +515,8 @@ onUnmounted(() => {
   console.log("disposing livecoded resources")
 
   // Save state before unmounting (for hot reload)
-  serializeFreehandState()
-  serializePolygonState()
+  serializeFreehandState(canvasState, appState)
+  serializePolygonState(canvasState, appState)
 
   shaderGraphEndNode?.disposeAll()
   clearListeners()
