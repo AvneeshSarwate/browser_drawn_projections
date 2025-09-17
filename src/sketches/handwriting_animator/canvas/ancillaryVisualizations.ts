@@ -1,7 +1,8 @@
 import Konva from 'konva'
 import { ref, watch } from 'vue'
 import { stage } from '../appState'
-import { collectHierarchy, setNodeMetadata } from './freehandTool'
+import { collectHierarchy } from './metadata/hierarchy'
+import { setNodeMetadata } from './freehandTool'
 import { getGlobalCanvasState, type CanvasRuntimeState } from './canvasState'
 
 // ----- public reactive API -----
@@ -57,7 +58,7 @@ export const refreshAnciliaryVizWithState = (state: CanvasRuntimeState) => {
   if (!state.stage) return
   initAVLayerInState(state)
 
-  const roots = collectHierarchy(state).filter(h => h.depth === 0).map(h => h.node)
+  const roots = collectHierarchy(state.layers.freehandShape).filter(h => h.depth === 0).map(h => h.node)
   const needed = new Map<string, {ctx: AVContext, def: AncillaryVisDefinition}>()
 
   roots.forEach(node => {
@@ -137,7 +138,7 @@ export const refreshAnciliaryViz = () => {
   initAVLayer()
 
   const state = getGlobalCanvasState()
-  const roots = collectHierarchy(state).filter(h => h.depth === 0).map(h => h.node)
+  const roots = collectHierarchy(state.layers.freehandShape).filter(h => h.depth === 0).map(h => h.node)
   const needed = new Map<string, {ctx: AVContext, def: AncillaryVisDefinition}>()
 
   roots.forEach(node => {

@@ -23,7 +23,9 @@ analyze the following functions
 
 update these functions so that they only operate on their arguments, and update their call sites accordingly 
 
+
 remove tool-specific selection functions in freehandTool.ts and polygonTool.ts
+update/remove tool specific metadata setting calls
 
 
 
