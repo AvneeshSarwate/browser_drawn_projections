@@ -493,46 +493,6 @@ export const getCurrentFreehandStateString = (): string => {
   return JSON.stringify(state)
 }
 
-// Execute a command with undo/redo support
-export const executeFreehandCommand = (commandName: string, action: () => void) => {
-  if (isUndoRedoOperation) {
-    // If we're in an undo/redo, just execute the action without tracking
-    action()
-    return
-  }
-
-  const beforeState = getCurrentFreehandStateString()
-  if (!beforeState) return
-
-  // Execute the action
-  action()
-
-  const afterState = getCurrentFreehandStateString()
-  if (!afterState || beforeState === afterState) return
-
-  // Add command to history
-  const command: FreehandCommand = {
-    name: commandName,
-    beforeState,
-    afterState
-  }
-
-  // Remove any commands after current index (when doing new action after undo)
-  freehandCommandHistory.value = freehandCommandHistory.value.slice(0, freehandHistoryIndex.value + 1)
-
-  // Add new command
-  freehandCommandHistory.value.push(command)
-  freehandHistoryIndex.value = freehandCommandHistory.value.length - 1
-
-  // Limit history size
-  if (freehandCommandHistory.value.length > maxHistorySize) {
-    freehandCommandHistory.value.shift()
-    freehandHistoryIndex.value = freehandCommandHistory.value.length - 1
-  }
-
-  console.log(`Command "${commandName}" added to history. Index: ${freehandHistoryIndex.value}`)
-}
-
 // Restore state from string (freehand only)
 export const restoreFreehandState = (stateString: string) => {
   if (!stateString) return
@@ -569,22 +529,21 @@ export const restoreFreehandState = (stateString: string) => {
 
 
 // Transform tracking for drag operations
-let freehandDragStartState: string | null = null
-const setFreehandDragStartState = (state: string | null) => freehandDragStartState = state
-
 export const startFreehandDragTracking = () => {
-  freehandDragStartState = getCurrentFreehandStateString()
+  const state = getGlobalCanvasState()
+  state.freehand.freehandDragStartState = getCurrentFreehandStateString()
 }
 
 export const finishFreehandDragTracking = (nodeName: string) => {
-  if (!freehandDragStartState) return
+  const state = getGlobalCanvasState()
+  if (!state.freehand.freehandDragStartState) return
 
   const endState = getCurrentFreehandStateString()
-  if (freehandDragStartState !== endState) {
+  if (state.freehand.freehandDragStartState !== endState) {
     // Manually add to history without using executeCommand to avoid double state capture
     const command: FreehandCommand = {
       name: `Transform ${nodeName}`,
-      beforeState: freehandDragStartState,
+      beforeState: state.freehand.freehandDragStartState,
       afterState: endState
     }
 
@@ -601,7 +560,7 @@ export const finishFreehandDragTracking = (nodeName: string) => {
     updateBakedStrokeData() // Update baked data after transformation
   }
 
-  freehandDragStartState = null
+  state.freehand.freehandDragStartState = null
 }
 
 // Function to refresh stroke-shape connections

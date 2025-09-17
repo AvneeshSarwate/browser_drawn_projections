@@ -80,6 +80,7 @@ export interface CanvasRuntimeState {
     useRealTiming: Ref<boolean>
     maxInterStrokeDelay: number
     isAnimating: Ref<boolean>
+    freehandDragStartState: string | null
   }
   polygon: {
     shapes: Map<string, PolygonShapeRuntime>
@@ -157,7 +158,8 @@ export const createCanvasRuntimeState = (): CanvasRuntimeState => {
       freehandDrawMode: ref(true),
       useRealTiming: ref(false),
       maxInterStrokeDelay: 300,
-      isAnimating: ref(false)
+      isAnimating: ref(false),
+      freehandDragStartState: null
     },
     polygon: {
       shapes: new Map(),
