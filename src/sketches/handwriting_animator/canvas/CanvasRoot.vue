@@ -4,7 +4,7 @@ import { type TemplateAppState, appStateName, resolution, drawFlattenedStrokeGro
 import { createCanvasRuntimeState, type CanvasRuntimeState, setGlobalCanvasState } from './canvasState';
 import * as selectionStore from './selectionStore';
 import { getCanvasItem } from './CanvasItem';
-import { inject, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, inject, onMounted, onUnmounted, ref, watch } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
@@ -21,7 +21,18 @@ import { ensureHighlightLayer } from '@/metadata';
 import { clearPolygonSelection, updatePolygonControlPoints, deserializePolygonState, handlePolygonClick, handlePolygonMouseMove, handlePolygonEditMouseMove, finishPolygon, clearCurrentPolygon, serializePolygonState, getCurrentPolygonStateString, restorePolygonState, updateBakedPolygonData, initPolygonLayers, setupPolygonModeWatcher } from './polygonTool';
 import { initAVLayer, refreshAnciliaryViz } from './ancillaryVisualizations';
 import { initializeTransformer } from './transformerManager';
-import { initializeSelectTool, handleSelectPointerDown, handleSelectPointerMove, handleSelectPointerUp, groupSelection, ungroupSelection, canGroupSelection, canUngroupSelection, duplicateSelection, deleteSelection } from './selectTool';
+import {
+  initializeSelectTool as initializeSelectToolImpl,
+  handleSelectPointerDown as handleSelectPointerDownImpl,
+  handleSelectPointerMove as handleSelectPointerMoveImpl,
+  handleSelectPointerUp as handleSelectPointerUpImpl,
+  groupSelection as groupSelectionImpl,
+  ungroupSelection as ungroupSelectionImpl,
+  canGroupSelection as canGroupSelectionImpl,
+  canUngroupSelection as canUngroupSelectionImpl,
+  duplicateSelection as duplicateSelectionImpl,
+  deleteSelection as deleteSelectionImpl
+} from './selectTool';
 import { sinN } from '@/channels/channels';
 
 // ==================== common stuff ====================
@@ -32,6 +43,18 @@ const canvasState: CanvasRuntimeState = createCanvasRuntimeState()
 
 // Set the global canvas state for all modules to access
 setGlobalCanvasState(canvasState)
+
+// Stateful wrappers for select tool helpers
+const initializeSelectToolStateful = (layer: Konva.Layer) => initializeSelectToolImpl(canvasState, layer)
+const handleSelectPointerDownStateful = (stage: Konva.Stage, e: Konva.KonvaEventObject<MouseEvent>) => handleSelectPointerDownImpl(canvasState, stage, e)
+const handleSelectPointerMoveStateful = (stage: Konva.Stage, e: Konva.KonvaEventObject<MouseEvent>) => handleSelectPointerMoveImpl(canvasState, stage, e)
+const handleSelectPointerUpStateful = (stage: Konva.Stage, e: Konva.KonvaEventObject<MouseEvent>) => handleSelectPointerUpImpl(canvasState, stage, e)
+const groupSelectionStateful = () => groupSelectionImpl(canvasState)
+const ungroupSelectionStateful = () => ungroupSelectionImpl(canvasState)
+const duplicateSelectionStateful = () => duplicateSelectionImpl(canvasState)
+const deleteSelectionStateful = () => deleteSelectionImpl(canvasState)
+const canGroupSelectionStateful = computed<boolean>(() => canGroupSelectionImpl(canvasState))
+const canUngroupSelectionStateful = computed<boolean>(() => canUngroupSelectionImpl(canvasState))
 
 // Set up callbacks for data updates
 canvasState.callbacks.freehandDataUpdate = () => updateBakedStrokeData(canvasState, appState)
@@ -279,7 +302,7 @@ onMounted(async () => {
     initializeTransformer(canvasState.layers.freehandSelection!)
 
     // Initialize select tool
-    initializeSelectTool(canvasState.layers.freehandSelection!)
+    initializeSelectToolStateful(canvasState.layers.freehandSelection!)
 
     // Add metadata highlight layer on top
     const metadataHighlightLayer = ensureHighlightLayer(stage!)
@@ -329,7 +352,7 @@ onMounted(async () => {
 
       if (activeTool.value === 'select') {
         // Universal select tool handles all selection for both freehand and polygon
-        handleSelectPointerDown(stage!, e)
+        handleSelectPointerDownStateful(stage!, e)
       } else if (activeTool.value === 'freehand') {
         // Freehand tool always draws in this mode; selection via Select tool
         canvasState.freehand.isDrawing = true
@@ -353,7 +376,7 @@ onMounted(async () => {
       const freehandDrawingLayer = getGlobalCanvasState().layers.freehandDrawing
       if (activeTool.value === 'select') {
         // Handle drag selection for select tool
-        handleSelectPointerMove(stage!, e)
+        handleSelectPointerMoveStateful(stage!, e)
       } else if (activeTool.value === 'freehand') {
         if (canvasState.freehand.isDrawing) {
           // Handle drawing
@@ -434,7 +457,7 @@ onMounted(async () => {
         canvasState.freehand.currentTimestamps = []
       } else {
         // Delegate to select tool for all other cases
-        handleSelectPointerUp(stage!, e)
+        handleSelectPointerUpStateful(stage!, e)
       }
     })
 
@@ -555,21 +578,21 @@ onUnmounted(() => {
       <!-- Select Tool Toolbar -->
       <template v-if="activeTool === 'select'">
         <div class="button-group vertical">
-          <button @click="groupSelection" :disabled="!canGroupSelection() || canvasState.freehand.isAnimating.value">
+          <button @click="groupSelectionStateful" :disabled="!canGroupSelectionStateful || canvasState.freehand.isAnimating.value">
             Group
           </button>
-          <button @click="ungroupSelection"
-            :disabled="!canUngroupSelection() || canvasState.freehand.isAnimating.value">
+          <button @click="ungroupSelectionStateful"
+            :disabled="!canUngroupSelectionStateful || canvasState.freehand.isAnimating.value">
             Ungroup
           </button>
         </div>
         <span class="separator">|</span>
         <div class="button-group vertical">
-          <button @click="duplicateSelection"
+          <button @click="duplicateSelectionStateful"
             :disabled="selectionStore.count(canvasState) === 0 || canvasState.freehand.isAnimating.value">
             📄 Duplicate
           </button>
-          <button @click="deleteSelection"
+          <button @click="deleteSelectionStateful"
             :disabled="selectionStore.count(canvasState) === 0 || canvasState.freehand.isAnimating.value">
             🗑️ Delete
           </button>
@@ -584,11 +607,11 @@ onUnmounted(() => {
           {{ canvasState.freehand.showGrid.value ? '⊞ Grid On' : '⊡ Grid Off' }}
         </button>
         <div class="button-group vertical">
-          <button @click="duplicateSelection"
+          <button @click="duplicateSelectionStateful"
             :disabled="selectionStore.count(canvasState) === 0 || canvasState.freehand.isAnimating.value">
             📄 Duplicate
           </button>
-          <button @click="deleteSelection"
+          <button @click="deleteSelectionStateful"
             :disabled="selectionStore.count(canvasState) === 0 || canvasState.freehand.isAnimating.value">
             🗑️ Delete
           </button>
@@ -632,7 +655,7 @@ onUnmounted(() => {
         <button @click="clearCurrentPolygon" :disabled="!canvasState.polygon.isDrawing.value || canvasState.freehand.isAnimating.value">
           🗑️ Cancel Shape
         </button>
-        <button @click="deleteSelection" :disabled="selectionStore.isEmpty(canvasState) || canvasState.freehand.isAnimating.value">
+        <button @click="deleteSelectionStateful" :disabled="selectionStore.isEmpty(canvasState) || canvasState.freehand.isAnimating.value">
           🗑️ Delete
         </button>
         <span class="separator">|</span>

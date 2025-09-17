@@ -397,10 +397,6 @@ export const deleteStrokeFromState = (state: CanvasRuntimeState, id: string) => 
 export const gridSize = 20
 export const maxInterStrokeDelay = 300
 
-// Track if we're currently in an undo/redo operation to prevent adding to history
-let isUndoRedoOperation = false
-const setIsUndoRedoOperation = (isUndoRedo: boolean) => isUndoRedoOperation = isUndoRedo
-
 // Track if animation is currently playing for UI locking - defined with other UI refs above
 
 
@@ -453,7 +449,6 @@ export const restoreFreehandState = (
 ) => {
   if (!stateString) return
 
-  isUndoRedoOperation = true
   try {
     const wasAnimating = canvasState.freehand.currentPlaybackTime.value > 0
     canvasState.freehand.currentPlaybackTime.value = 0
@@ -471,8 +466,6 @@ export const restoreFreehandState = (
     }
   } catch (error) {
     console.warn('Failed to restore state:', error)
-  } finally {
-    isUndoRedoOperation = false
   }
 }
 

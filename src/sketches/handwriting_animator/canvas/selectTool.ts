@@ -2,7 +2,7 @@ import Konva from 'konva'
 
 import * as selectionStore from './selectionStore'
 import { getCanvasItem, createGroupItem, createPolygonItem, removeCanvasItem } from './CanvasItem'
-import { getGlobalCanvasState, polygonShapes, freehandStrokes, freehandStrokeGroups } from './canvasState'
+import { polygonShapes, freehandStrokes, freehandStrokeGroups, type CanvasRuntimeState } from './canvasState'
 
 import { executeCommand } from './commands'
 import { globalStore } from '../appState'
@@ -17,8 +17,7 @@ import { pushCommandWithStates } from './commands'
 const store = globalStore()
 
 
-export function initializeSelectTool(layer: Konva.Layer) {
-  const state = getGlobalCanvasState()
+export function initializeSelectTool(state: CanvasRuntimeState, layer: Konva.Layer) {
   state.layers.selectionOverlay = layer
   
   state.selection.selectionRect = new Konva.Rect({
@@ -32,8 +31,7 @@ export function initializeSelectTool(layer: Konva.Layer) {
   layer.add(state.selection.selectionRect)
 }
 
-export function handleSelectPointerDown(stage: Konva.Stage, e: Konva.KonvaEventObject<MouseEvent>) {
-  const state = getGlobalCanvasState()
+export function handleSelectPointerDown(state: CanvasRuntimeState, stage: Konva.Stage, e: Konva.KonvaEventObject<MouseEvent>) {
   const pos = stage.getPointerPosition()
   if (!pos) return
 
@@ -76,7 +74,7 @@ export function handleSelectPointerDown(stage: Konva.Stage, e: Konva.KonvaEventO
       // Start selection drag if the clicked item is (now) part of the selection
       const nowSelected = selectionStore.has(state, item)
       if (nowSelected) {
-        startSelectionDrag(stage)
+        startSelectionDrag(state, stage)
       }
       return
     }
@@ -91,15 +89,14 @@ export function handleSelectPointerDown(stage: Konva.Stage, e: Konva.KonvaEventO
       currentPos: { x: pos.x, y: pos.y },
       isShiftHeld: e.evt.shiftKey
     }
-    resetSelectionRect(pos.x, pos.y)
+    resetSelectionRect(state, pos.x, pos.y)
   }
 }
 
-export function handleSelectPointerMove(stage: Konva.Stage, e: Konva.KonvaEventObject<MouseEvent>) {
-  const state = getGlobalCanvasState()
+export function handleSelectPointerMove(state: CanvasRuntimeState, stage: Konva.Stage, e: Konva.KonvaEventObject<MouseEvent>) {
   // Selection drag has priority
   if (state.selection.selectionDragState.isDragging) {
-    updateSelectionDrag(stage)
+    updateSelectionDrag(state, stage)
     return
   }
   if (!state.selection.dragSelectionState.value.isSelecting) return
@@ -108,25 +105,23 @@ export function handleSelectPointerMove(stage: Konva.Stage, e: Konva.KonvaEventO
   if (!pos) return
 
   state.selection.dragSelectionState.value.currentPos = { x: pos.x, y: pos.y }
-  updateSelectionRect()
+  updateSelectionRect(state)
 }
 
-export function handleSelectPointerUp(stage: Konva.Stage, e: Konva.KonvaEventObject<MouseEvent>) {
-  const state = getGlobalCanvasState()
+export function handleSelectPointerUp(state: CanvasRuntimeState, stage: Konva.Stage, e: Konva.KonvaEventObject<MouseEvent>) {
   // Finish selection drag if active
   if (state.selection.selectionDragState.isDragging) {
-    finishSelectionDrag()
+    finishSelectionDrag(state)
     return
   }
 
   if (!state.selection.dragSelectionState.value.isSelecting) return
 
-  completeSelectionRect(state.selection.dragSelectionState.value.isShiftHeld)
+  completeSelectionRect(state, state.selection.dragSelectionState.value.isShiftHeld)
   state.selection.dragSelectionState.value.isSelecting = false
 }
 
-function resetSelectionRect(x: number, y: number) {
-  const state = getGlobalCanvasState()
+function resetSelectionRect(state: CanvasRuntimeState, x: number, y: number) {
   if (!state.selection.selectionRect) return
   state.selection.selectionRect.setAttrs({
     x: x,
@@ -137,8 +132,7 @@ function resetSelectionRect(x: number, y: number) {
   })
 }
 
-function updateSelectionRect() {
-  const state = getGlobalCanvasState()
+function updateSelectionRect(state: CanvasRuntimeState) {
   if (!state.selection.selectionRect || !state.selection.dragSelectionState.value.isSelecting) return
   
   const { startPos, currentPos } = state.selection.dragSelectionState.value
@@ -157,8 +151,7 @@ function updateSelectionRect() {
   state.layers.selectionOverlay?.batchDraw()
 }
 
-function completeSelectionRect(isShiftHeld: boolean = false) {
-  const state = getGlobalCanvasState()
+function completeSelectionRect(state: CanvasRuntimeState, isShiftHeld: boolean = false) {
   if (!state.selection.selectionRect) return
   
   // Check if this was actually a drag based on pointer movement, not rectangle size
@@ -194,9 +187,9 @@ function completeSelectionRect(isShiftHeld: boolean = false) {
   const layersToCheck: Konva.Layer[] = []
   const stage = state.layers.selectionOverlay?.getStage()
   if (stage) {
-    const freehandShapeLayer = getGlobalCanvasState().layers.freehandShape
+    const freehandShapeLayer = state.layers.freehandShape
     if (freehandShapeLayer) layersToCheck.push(freehandShapeLayer)
-    const polygonShapesLayer = getGlobalCanvasState().layers.polygonShapes
+    const polygonShapesLayer = state.layers.polygonShapes
   if (polygonShapesLayer) layersToCheck.push(polygonShapesLayer)
     // Fallback: if neither available, scan for layers with selectable content
     if (layersToCheck.length === 0) {
@@ -242,8 +235,7 @@ function completeSelectionRect(isShiftHeld: boolean = false) {
 
 // ---------------- Selection Drag Implementation ----------------
 
-function startSelectionDrag(stage: Konva.Stage) {
-  const state = getGlobalCanvasState()
+function startSelectionDrag(state: CanvasRuntimeState, stage: Konva.Stage) {
   const pos = stage.getPointerPosition()
   if (!pos) return
   state.selection.selectionDragState.isDragging = true
@@ -252,8 +244,8 @@ function startSelectionDrag(stage: Konva.Stage) {
 
   // Capture before-state for undo/redo
   state.selection.selectionDragState.beforeState = JSON.stringify({
-    freehand: getCurrentFreehandStateString(),
-    polygon: getCurrentPolygonStateString()
+    freehand: getCurrentFreehandStateString(state),
+    polygon: getCurrentPolygonStateString(state)
   })
 
   // Store absolute start positions so we can move across different parents
@@ -264,8 +256,7 @@ function startSelectionDrag(stage: Konva.Stage) {
   })
 }
 
-function updateSelectionDrag(stage: Konva.Stage) {
-  const state = getGlobalCanvasState()
+function updateSelectionDrag(state: CanvasRuntimeState, stage: Konva.Stage) {
   const pos = stage.getPointerPosition()
   if (!pos) return
   const dx = pos.x - state.selection.selectionDragState.startPos.x
@@ -285,12 +276,11 @@ function updateSelectionDrag(stage: Konva.Stage) {
   layers.forEach(l => l.batchDraw())
 }
 
-function finishSelectionDrag() {
-  const state = getGlobalCanvasState()
+function finishSelectionDrag(state: CanvasRuntimeState) {
   // Capture after-state and push a unified command if changed
   const afterState = JSON.stringify({
-    freehand: getCurrentFreehandStateString(),
-    polygon: getCurrentPolygonStateString()
+    freehand: getCurrentFreehandStateString(state),
+    polygon: getCurrentPolygonStateString(state)
   })
 
   if (state.selection.selectionDragState.beforeState !== afterState) {
@@ -304,8 +294,7 @@ function finishSelectionDrag() {
 
 // ---------------- Grouping / Ungrouping (freehand-only groups) ----------------
 
-function getSelectedNodes(): Konva.Node[] {
-  const state = getGlobalCanvasState()
+function getSelectedNodes(state: CanvasRuntimeState): Konva.Node[] {
   return state.selection.selectedKonvaNodes.value
 }
 
@@ -334,8 +323,8 @@ function reparentPreserveAbsolute(node: Konva.Node, newParent: Konva.Container) 
   })
 }
 
-export function canGroupSelection(): boolean {
-  const nodes = getSelectedNodes()
+export function canGroupSelection(state: CanvasRuntimeState): boolean {
+  const nodes = getSelectedNodes(state)
   if (nodes.length < 1) return false
   // Polygons cannot participate
   if (nodes.some(n => n instanceof Konva.Line)) return false
@@ -350,9 +339,8 @@ export function canGroupSelection(): boolean {
   return true
 }
 
-export function groupSelection() {
-  if (!canGroupSelection()) return
-  const state = getGlobalCanvasState()
+export function groupSelection(state: CanvasRuntimeState) {
+  if (!canGroupSelection(state)) return
   const nodes = state.selection.selectedKonvaNodes.value.filter(n => (n instanceof Konva.Path) || (n instanceof Konva.Group))
   if (nodes.length < 1) return
 
@@ -382,17 +370,16 @@ export function groupSelection() {
   })
 }
 
-export function canUngroupSelection(): boolean {
-  const nodes = getSelectedNodes()
+export function canUngroupSelection(state: CanvasRuntimeState): boolean {
+  const nodes = getSelectedNodes(state)
   if (nodes.length !== 1) return false
   // Polygons cannot participate
   if (nodes[0] instanceof Konva.Line) return false
   return nodes[0] instanceof Konva.Group
 }
 
-export function ungroupSelection() {
-  if (!canUngroupSelection()) return
-  const state = getGlobalCanvasState()
+export function ungroupSelection(state: CanvasRuntimeState) {
+  if (!canUngroupSelection(state)) return
   const grp = state.selection.selectedKonvaNodes.value[0] as Konva.Group
   const parent = grp.getParent()
   if (!parent) return
@@ -420,22 +407,20 @@ export function ungroupSelection() {
 
 // ---------------- Duplicate / Delete (unified) ----------------
 
-function getTopLevelSelectedNodes(): Konva.Node[] {
-  const state = getGlobalCanvasState()
+function getTopLevelSelectedNodes(state: CanvasRuntimeState): Konva.Node[] {
   const nodes = state.selection.selectedKonvaNodes.value
   // keep only nodes that are not descendants of any other selected node
   return nodes.filter((node) => !nodes.some((other) => other !== node && other.isAncestorOf(node)))
 }
 
-export function duplicateSelection() {
-  const state = getGlobalCanvasState()
+export function duplicateSelection(state: CanvasRuntimeState) {
   const freehandShapeLayer = state.layers.freehandShape
   const selectedNodes = state.selection.selectedKonvaNodes.value
   if (selectedNodes.length === 0) return
 
   executeCommand('Duplicate', () => {
     selectionStore.withSelectionHighlightSuppressed(state, () => {
-      const topLevelNodes = getTopLevelSelectedNodes()
+      const topLevelNodes = getTopLevelSelectedNodes(state)
       const duplicates: Konva.Node[] = []
 
       topLevelNodes.forEach((node) => {
@@ -487,14 +472,13 @@ export function duplicateSelection() {
   })
 }
 
-export function deleteSelection() {
-  const state = getGlobalCanvasState()
+export function deleteSelection(state: CanvasRuntimeState) {
   const freehandShapeLayer = state.layers.freehandShape
   const selectedNodes = state.selection.selectedKonvaNodes.value
   if (selectedNodes.length === 0) return
 
   executeCommand('Delete Selected', () => {
-    const topLevelNodes = getTopLevelSelectedNodes()
+    const topLevelNodes = getTopLevelSelectedNodes(state)
 
     topLevelNodes.forEach((node) => {
       // Collect descendants we need to clean from registries before destroy

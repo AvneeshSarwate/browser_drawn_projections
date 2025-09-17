@@ -1,7 +1,8 @@
 
 
 ## feature todos and bug notes
-- [X] transformations on single strokes don't propogate to stroke launcher
+- [ ] transformations on single strokes don't propogate to stroke launcher if stroke is part of a group
+   - in general, how strokes in groups are handled is a bit funky
 - [X] dragging working on whole group not robust for nested groups
 - [ ] select highlighting still not robust
 - [X] slider replay not robust when nothing selected
