@@ -4,7 +4,7 @@ import { createCanvasRuntimeState, setGlobalCanvasState, type CanvasRuntimeState
 import * as selectionStore from './selectionStore';
 import { getCanvasItem } from './CanvasItem';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
-import { clearListeners, singleKeydownEvent } from '@/io/keyboardAndMouse';
+import { clearListeners, singleKeydownEvent } from './keyboard';
 import Konva from 'konva';
 import Timeline from './Timeline.vue';
 import HierarchicalMetadataEditor from './HierarchicalMetadataEditor.vue';
