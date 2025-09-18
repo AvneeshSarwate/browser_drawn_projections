@@ -1,4 +1,4 @@
-import { computed, ref, shallowReactive, type ComputedRef, type Ref, type ShallowReactive } from 'vue'
+import { computed, ref, shallowReactive, type ComputedRef, type Ref, type ShallowReactive, type WatchStopHandle } from 'vue'
 import Konva from 'konva'
 import type { CanvasItem } from './CanvasItem'
 import { CommandStack } from './commandStack'
@@ -33,6 +33,11 @@ export interface PolygonGroupRuntime {
   id: string
   polygonIds: string[]
   group?: Konva.Group
+}
+
+export interface AncillaryVisualizationInstance {
+  key: string
+  nodes: Konva.Node | Konva.Node[]
 }
 
 export interface CanvasRuntimeState {
@@ -121,6 +126,13 @@ export interface CanvasRuntimeState {
     metadataText: Ref<string>
     showEditor: Ref<boolean>
   }
+  ancillary: {
+    activeVisualizations: Ref<Set<string>>
+    nodeVisualizations: Map<string, AncillaryVisualizationInstance>
+    listenersAttached: boolean
+    rafToken: number | null
+    activeWatchStop?: WatchStopHandle
+  }
 }
 
 export const createCanvasRuntimeState = (): CanvasRuntimeState => {
@@ -193,6 +205,13 @@ export const createCanvasRuntimeState = (): CanvasRuntimeState => {
       activeNode: ref(null),
       metadataText: ref(''),
       showEditor: ref(false)
+    },
+    ancillary: {
+      activeVisualizations: ref(new Set<string>()),
+      nodeVisualizations: new Map<string, AncillaryVisualizationInstance>(),
+      listenersAttached: false,
+      rafToken: null,
+      activeWatchStop: undefined
     }
   }
 }

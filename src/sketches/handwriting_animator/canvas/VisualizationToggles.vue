@@ -1,24 +1,34 @@
 <script setup lang="ts">
-import { activeAVs, getRegisteredAVs } from './ancillaryVisualizations'
 import { computed } from 'vue'
+import type { CanvasRuntimeState } from './canvasState'
+import { getRegisteredAVs } from './ancillaryVisualizations'
 
 // Import the typography guides to ensure they're registered
 import './typographyGuides'
 
-const defs = computed(() => getRegisteredAVs())
+interface Props {
+  canvasState: CanvasRuntimeState
+}
 
-const isActive = (key: string) => computed({
-  get: () => activeAVs.value.has(key),
-  set: (v: boolean) => {
-    const newSet = new Set(activeAVs.value)
-    if (v) {
-      newSet.add(key)
-    } else {
-      newSet.delete(key)
-    }
-    activeAVs.value = newSet
+const props = defineProps<Props>()
+
+const defs = computed(() => getRegisteredAVs())
+const activeSet = computed(() => props.canvasState.ancillary.activeVisualizations.value)
+
+const setActive = (key: string, enabled: boolean) => {
+  const next = new Set(activeSet.value)
+  if (enabled) {
+    next.add(key)
+  } else {
+    next.delete(key)
   }
-})
+  props.canvasState.ancillary.activeVisualizations.value = next
+}
+
+const handleToggle = (key: string, event: Event) => {
+  const checked = (event.target as HTMLInputElement).checked
+  setActive(key, checked)
+}
 </script>
 
 <template>
@@ -28,8 +38,8 @@ const isActive = (key: string) => computed({
       <label v-for="def in defs" :key="def.key" class="toggle-item">
         <input 
           type="checkbox" 
-          :checked="isActive(def.key).value"
-          @change="isActive(def.key).value = ($event.target as HTMLInputElement).checked"
+          :checked="activeSet.has(def.key)"
+          @change="handleToggle(def.key, $event)"
         >
         <span>{{ def.displayName }}</span>
       </label>

@@ -703,7 +703,7 @@ onUnmounted(() => {
 
       <!-- Smart Metadata Editor -->
       <div class="metadata-suite" v-if="showMetadataEditor">
-        <VisualizationToggles />
+        <VisualizationToggles :canvas-state="canvasState" />
         <HierarchicalMetadataEditor
           :selected-nodes="selectedKonvaNodes"
           :single-node="singleSelectedNode"
