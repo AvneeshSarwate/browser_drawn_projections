@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable prefer-const */
-import { findClosestPolygonLineAtPoint } from "@/creativeAlgs/shapeHelpers"
 import Konva from "konva"
 import { type ShallowReactive, shallowReactive, ref, watch } from "vue"
+import { findClosestPolygonLineAtPoint } from "./polygonGeometry"
 import type { PolygonRenderData, FlattenedPolygon } from "./canvasState"
 import { executeCommand, pushCommandWithStates } from "./commands"
 import { getCurrentFreehandStateString } from './freehandTool'
