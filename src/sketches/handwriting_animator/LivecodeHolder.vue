@@ -4,7 +4,7 @@ import CanvasRoot from '@/canvas/CanvasRoot.vue'
 import StrokeLaunchControls from './StrokeLaunchControls.vue'
 import { appStateName, type TemplateAppState, drawFlattenedStrokeGroup, resolution } from './appState'
 import { updateGPUStrokes } from './strokeLauncher'
-import type { CanvasRuntimeState } from '@/canvas/canvasState'
+import type { CanvasStateSnapshot } from '@/canvas/canvasState'
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX'
 import { clearListeners, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse'
 import type p5 from 'p5'
@@ -12,7 +12,7 @@ import { sinN } from '@/channels/channels'
 
 const appState = inject<TemplateAppState>(appStateName)!!
 
-const syncCanvasState = (state: CanvasRuntimeState) => {
+const syncCanvasState = (state: CanvasStateSnapshot) => {
   appState.freehandStateString = state.freehand.serializedState
   appState.freehandRenderData = state.freehand.bakedRenderData
   appState.freehandGroupMap = state.freehand.bakedGroupMap

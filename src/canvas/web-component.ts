@@ -11,4 +11,4 @@ if (!customElements.get(tagName)) {
 
 export { CanvasElement }
 export default CanvasElement
-export type { CanvasRuntimeState } from './canvasState'
+export type { CanvasStateSnapshot } from './canvasState'

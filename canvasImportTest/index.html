@@ -128,6 +128,13 @@
         freehandRenderData = Array.isArray(state?.freehand?.bakedRenderData)
           ? state.freehand.bakedRenderData
           : []
+
+        if (polygonRenderData.length || freehandRenderData.length) {
+          console.debug('Received canvas state', {
+            freehand: freehandRenderData,
+            polygon: polygonRenderData,
+          })
+        }
         if (previewInstance) {
           previewInstance.redraw()
         }
@@ -193,8 +200,14 @@
         }
       }
 
-      element.syncState = updateState
-      element.addEventListener('state-update', (event) => updateState(event.detail))
+      customElements.whenDefined('handwriting-canvas').then(() => {
+        element.syncState = updateState
+        element.addEventListener('state-update', (event) => {
+          const detail = event.detail
+          const payload = Array.isArray(detail) ? detail[0] : detail
+          updateState(payload)
+        })
+      })
 
       previewInstance = new p5(sketch)
     })()

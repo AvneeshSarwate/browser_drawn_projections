@@ -1,9 +1,9 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
-import { createCanvasRuntimeState, type CanvasRuntimeState } from './canvasState';
+import { createCanvasRuntimeState, type CanvasRuntimeState, type CanvasStateSnapshot, type FreehandRenderData, type PolygonRenderData } from './canvasState';
 import * as selectionStore from './selectionStore';
 import { getCanvasItem } from './CanvasItem';
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref, toRaw, watch } from 'vue';
 import { singleKeydownEvent } from './keyboard';
 import Konva from 'konva';
 import Timeline from './Timeline.vue';
@@ -32,7 +32,7 @@ import {
 
 // ==================== common stuff ====================
 const props = withDefaults(defineProps<{
-  syncState?: (state: CanvasRuntimeState) => void
+  syncState?: (state: CanvasStateSnapshot) => void
   initialFreehandState?: string
   initialPolygonState?: string
   width?: number | string
@@ -45,7 +45,7 @@ const props = withDefaults(defineProps<{
 })
 
 const emit = defineEmits<{
-  (event: 'state-update', state: CanvasRuntimeState): void
+  (event: 'state-update', state: CanvasStateSnapshot): void
 }>()
 
 const resolution = computed(() => {
@@ -68,11 +68,56 @@ let disposeEscapeListener: (() => void) | undefined
 const activeTool = canvasState.activeTool
 const metadataEditorVisible = canvasState.metadata.showEditor
 
-const emitStateUpdate = (state: CanvasRuntimeState) => {
-  if (props.syncState) {
-    props.syncState(state)
+//vue specific - comma needed in <T,> to disambigate generics from html parsing
+const cloneValue = <T,>(value: T): T => {
+  if (value === undefined || value === null) {
+    return value
   }
-  emit('state-update', state)
+  if (typeof structuredClone === 'function') {
+    return structuredClone(value)
+  }
+  return JSON.parse(JSON.stringify(value))
+}
+
+const snapshotFreehandRenderData = (data: FreehandRenderData | undefined) => {
+  if (!data) return [] as FreehandRenderData
+  return (cloneValue(toRaw(data)) ?? []) as FreehandRenderData
+}
+
+const snapshotPolygonRenderData = (data: PolygonRenderData | undefined) => {
+  if (!data) return [] as PolygonRenderData
+  return (cloneValue(toRaw(data)) ?? []) as PolygonRenderData
+}
+
+const snapshotGroupMap = (map: Record<string, number[]> | undefined) => {
+  if (!map) return {} as Record<string, number[]>
+  return (cloneValue(toRaw(map)) ?? {}) as Record<string, number[]>
+}
+
+const createSnapshot = (state: CanvasRuntimeState): CanvasStateSnapshot => {
+  const freehandRenderData = snapshotFreehandRenderData(state.freehand.bakedRenderData)
+  const freehandGroupMap = snapshotGroupMap(state.freehand.bakedGroupMap)
+  const polygonRenderData = snapshotPolygonRenderData(state.polygon.bakedRenderData)
+
+  return {
+    freehand: {
+      serializedState: state.freehand.serializedState ?? '',
+      bakedRenderData: freehandRenderData ?? [],
+      bakedGroupMap: freehandGroupMap ?? {},
+    },
+    polygon: {
+      serializedState: state.polygon.serializedState ?? '',
+      bakedRenderData: polygonRenderData ?? [],
+    },
+  }
+}
+
+const emitStateUpdate = (state: CanvasRuntimeState) => {
+  const snapshot = createSnapshot(state)
+  if (props.syncState) {
+    props.syncState(snapshot)
+  }
+  emit('state-update', snapshot)
 }
 
 canvasState.callbacks.syncAppState = emitStateUpdate

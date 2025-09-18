@@ -22,6 +22,18 @@ export type FlattenedPolygon = {
 
 export type PolygonRenderData = FlattenedPolygon[]
 
+export type CanvasStateSnapshot = {
+  freehand: {
+    serializedState: string
+    bakedRenderData: FreehandRenderData
+    bakedGroupMap: Record<string, number[]>
+  }
+  polygon: {
+    serializedState: string
+    bakedRenderData: PolygonRenderData
+  }
+}
+
 export interface FreehandStrokeRuntime {
   id: string
   points: number[]
