@@ -770,7 +770,8 @@ onUnmounted(() => {
 
       <!-- Freehand Tool Toolbar -->
       <template v-if="activeTool === 'freehand'">
-        <button @click="canvasState.freehand.useRealTiming.value = !canvasState.freehand.useRealTiming.value"
+        <button v-if="props.showTimeline"
+          @click="canvasState.freehand.useRealTiming.value = !canvasState.freehand.useRealTiming.value"
           :class="{ active: canvasState.freehand.useRealTiming.value }">
           {{ canvasState.freehand.useRealTiming.value ? '⏱️ Real Time' : '⏱️ Max 0.3s' }}
         </button>
