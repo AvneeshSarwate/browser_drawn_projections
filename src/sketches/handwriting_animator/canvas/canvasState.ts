@@ -126,7 +126,7 @@ export interface CanvasRuntimeState {
     items: ShallowReactive<Set<CanvasItem>>
     originalStyles: Map<string, { node: Konva.Node, stroke: string, strokeWidth: number }>
     selectedKonvaNodes: ComputedRef<Konva.Node[]>
-    
+
     // NEW - generic marquee / drag helpers
     dragSelectionState: Ref<{
       isSelecting: boolean
@@ -141,6 +141,7 @@ export interface CanvasRuntimeState {
       startNodePositions: Map<Konva.Node, {x: number, y: number}>
       beforeState: string
     }
+    transformStartState: string
   }
   command: {
     stack?: CommandStack
@@ -237,7 +238,8 @@ export const createCanvasRuntimeState = (): CanvasRuntimeState => {
         startPos: { x: 0, y: 0 },
         startNodePositions: new Map(),
         beforeState: ''
-      }
+      },
+      transformStartState: ''
     },
     command: {},
     metadata: {

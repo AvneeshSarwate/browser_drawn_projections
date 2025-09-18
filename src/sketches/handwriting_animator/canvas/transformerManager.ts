@@ -71,13 +71,13 @@ function startTransformTrackingWithState(state: CanvasRuntimeState) {
         polygon: getCurrentPolygonStateString(state)
       })
       // Store in state rather than module global
-      state.metadata.metadataText.value = startState // Temporarily using metadata field to store drag state
+      state.selection.transformStartState = startState
     })
   })
 }
 
 function finishTransformTrackingWithState(state: CanvasRuntimeState, operationName: string) {
-  const dragStartState = state.metadata.metadataText.value
+  const dragStartState = state.selection.transformStartState
   if (!dragStartState) return
   
   // Import dynamically to avoid circular dependencies
@@ -92,7 +92,7 @@ function finishTransformTrackingWithState(state: CanvasRuntimeState, operationNa
         pushCommandWithStates(state, operationName, dragStartState!, endState)
       }
 
-      state.metadata.metadataText.value = '' // Clear the temp state
+      state.selection.transformStartState = ''
     })
   })
 }
