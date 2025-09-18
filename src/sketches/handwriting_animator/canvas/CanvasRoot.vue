@@ -17,7 +17,7 @@ import { freehandStrokes } from './canvasState';
 import { getPointsBounds } from './canvasUtils';
 import { CommandStack } from './commandStack';
 import { setGlobalExecuteCommand, setGlobalPushCommand } from './commands';
-import { ensureHighlightLayer } from './metadata';
+import { ensureHighlightLayer, metadataToolkit } from './metadata';
 import { clearPolygonSelection as clearPolygonSelectionImpl, updatePolygonControlPoints as updatePolygonControlPointsImpl, deserializePolygonState, handlePolygonClick as handlePolygonClickImpl, handlePolygonMouseMove as handlePolygonMouseMoveImpl, handlePolygonEditMouseMove as handlePolygonEditMouseMoveImpl, finishPolygon as finishPolygonImpl, clearCurrentPolygon as clearCurrentPolygonImpl, serializePolygonState, getCurrentPolygonStateString, restorePolygonState, updateBakedPolygonData, initPolygonLayers, setupPolygonModeWatcher as setupPolygonModeWatcherImpl } from './polygonTool';
 import { initAVLayer, refreshAnciliaryViz } from './ancillaryVisualizations';
 import { initializeTransformer } from './transformerManager';
@@ -74,6 +74,14 @@ const handlePolygonEditMouseMove = () => handlePolygonEditMouseMoveImpl(canvasSt
 const finishPolygon = () => finishPolygonImpl(canvasState)
 const clearCurrentPolygon = () => clearCurrentPolygonImpl(canvasState)
 const setupPolygonModeWatcher = () => setupPolygonModeWatcherImpl(canvasState)
+
+const selectedKonvaNodes = canvasState.selection.selectedKonvaNodes
+const singleSelectedNode = computed(() => selectionStore.getActiveSingleNode(canvasState))
+const multiSelected = computed(() => selectionStore.count(canvasState) > 1)
+const groupSelected = computed(() => {
+  const nodes = selectedKonvaNodes.value
+  return nodes.length === 1 && nodes[0] instanceof Konva.Group
+})
 
 // Set up callbacks for data updates
 canvasState.callbacks.freehandDataUpdate = () => updateBakedStrokeData(canvasState, appState)
@@ -696,7 +704,16 @@ onUnmounted(() => {
       <!-- Smart Metadata Editor -->
       <div class="metadata-suite" v-if="showMetadataEditor">
         <VisualizationToggles />
-        <HierarchicalMetadataEditor :on-apply-metadata="handleApplyMetadata" />
+        <HierarchicalMetadataEditor
+          :selected-nodes="selectedKonvaNodes"
+          :single-node="singleSelectedNode"
+          :multi-selected="multiSelected"
+          :group-selected="groupSelected"
+          :collect-hierarchy-from-root="metadataToolkit.collectHierarchyFromRoot"
+          :update-metadata-highlight="metadataToolkit.updateMetadataHighlight"
+          :update-hover-highlight="metadataToolkit.updateHoverHighlight"
+          :on-apply-metadata="handleApplyMetadata"
+        />
       </div>
 
       <Timeline :strokes="freehandStrokes(canvasState)" :selectedStrokes="canvasState.freehand.selectedStrokesForTimeline.value"

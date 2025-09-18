@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
-import type Konva from 'konva'
 
 interface Props {
-  activeNode: Konva.Node | null
+  metadata: Record<string, any> | null | undefined
   visible: boolean
+  canEdit: boolean
 }
 
 const props = defineProps<Props>()
@@ -21,17 +21,20 @@ const hasUnsavedChanges = computed(() => {
   return metadataText.value !== originalMetadataText.value
 })
 
-watch(() => props.activeNode, (node) => {
-  if (node) {
-    const metadata = node.getAttr('metadata') ?? {}
-    const jsonText = JSON.stringify(metadata, null, 2)
-    metadataText.value = jsonText
-    originalMetadataText.value = jsonText
-  } else {
-    metadataText.value = ''
-    originalMetadataText.value = ''
-  }
-}, { immediate: true })
+watch(
+  () => [props.metadata, props.canEdit],
+  ([metadata, canEdit]) => {
+    if (canEdit) {
+      const jsonText = JSON.stringify(metadata ?? {}, null, 2)
+      metadataText.value = jsonText
+      originalMetadataText.value = jsonText
+    } else {
+      metadataText.value = ''
+      originalMetadataText.value = ''
+    }
+  },
+  { immediate: true, deep: true }
+)
 
 const applyMetadata = () => {
   try {
@@ -57,7 +60,7 @@ const cancelEdit = () => {
       </div>
     </div>
     
-    <div v-if="activeNode">
+    <div v-if="canEdit">
       <p class="help">Edit the metadata as JSON:</p>
       <textarea 
         v-model="metadataText"

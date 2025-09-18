@@ -2,46 +2,25 @@
 import { watch, computed, shallowRef, onUnmounted } from 'vue'
 import Konva from 'konva'
 import MetadataEditor from './MetadataEditor.vue'
-import { metadataToolkit } from './metadata'
-import * as selectionStore from './selectionStore'
-import { getCanvasItem } from './CanvasItem'
-import { getGlobalCanvasState, type CanvasRuntimeState } from './canvasState'
+import type { HierarchyEntry } from './metadata/hierarchy'
 
-// Extract toolkit functions for convenience
-const { collectHierarchyFromRoot, updateMetadataHighlight, updateHoverHighlight } = metadataToolkit
-
-const canvasState = getGlobalCanvasState()
-
-const applyMetadataThroughSelection = (
-  state: CanvasRuntimeState,
-  node: Konva.Node,
-  metadata: any
-) => {
-  const item = getCanvasItem(state, node)
-  if (item) {
-    selectionStore.setMetadata(state, item, metadata)
-  } else {
-    // Fallback for non-registered nodes
-    metadataToolkit.setNodeMetadata(node, metadata)
-  }
-}
-
-// Props interface
 interface Props {
-  onApplyMetadata?: (node: Konva.Node, metadata: any) => void
+  selectedNodes: Konva.Node[]
+  singleNode: Konva.Node | null
+  multiSelected: boolean
+  groupSelected: boolean
+  collectHierarchyFromRoot: (nodes: Konva.Node[]) => HierarchyEntry[]
+  updateMetadataHighlight: (node?: Konva.Node) => void
+  updateHoverHighlight: (node?: Konva.Node) => void
+  onApplyMetadata: (node: Konva.Node, metadata: any) => void
 }
 
-// Default: route through unified selection tool (with undo/redo + updates)
-const props = withDefaults(defineProps<Props>(), {
-  onApplyMetadata: (node: Konva.Node, metadata: any) => applyMetadataThroughSelection(canvasState, node, metadata)
-})
+const props = defineProps<Props>()
 
-// Helpers to read from unified selection store
-const state = canvasState
-const selectedNodes = state.selection.selectedKonvaNodes
-const singleNode = computed(() => selectionStore.getActiveSingleNode(state))
-const multiSelected = computed(() => selectionStore.count(state) > 1)
-const groupSelected = computed(() => selectionStore.count(state) === 1 && selectedNodes.value[0] instanceof Konva.Group)
+const selectedNodes = computed(() => props.selectedNodes)
+const singleNode = computed(() => props.singleNode)
+const multiSelected = computed(() => props.multiSelected)
+const groupSelected = computed(() => props.groupSelected)
 const mode = computed(() =>
   multiSelected.value || groupSelected.value ? 'hierarchical' : (singleNode.value ? 'simple' : 'none')
 )
@@ -50,34 +29,48 @@ const mode = computed(() =>
 const entries = computed(() => {
   if (multiSelected.value) {
     // Show only the selected nodes for multi-selection
-    return collectHierarchyFromRoot(selectedNodes.value as Konva.Node[])
+    return props.collectHierarchyFromRoot(selectedNodes.value as Konva.Node[])
   } else if (groupSelected.value) {
     // Show hierarchy rooted at selected group
-    return collectHierarchyFromRoot([selectedNodes.value[0]])
+    const firstNode = selectedNodes.value[0]
+    return firstNode ? props.collectHierarchyFromRoot([firstNode]) : []
   }
   return []
 })
 
 const activeNode = shallowRef<Konva.Node | null>(null)
 
+const singleNodeMetadata = computed(() => {
+  const node = singleNode.value
+  return node ? (node.getAttr('metadata') ?? {}) : null
+})
+
+const activeNodeMetadata = computed(() => {
+  const node = activeNode.value
+  return node ? (node.getAttr('metadata') ?? {}) : null
+})
+
 // Initialize activeNode based on current selection when component mounts or mode changes
-watch([mode, groupSelected], ([newMode, isGroupSelected]) => {
+watch([mode, groupSelected, selectedNodes], ([newMode, isGroupSelected]) => {
   if (newMode === 'hierarchical' && isGroupSelected) {
     // If hierarchical mode with a single group selected, set it as active
-    activeNode.value = selectedNodes.value[0]
-    updateMetadataHighlight(selectedNodes.value[0] as Konva.Node)
+    const firstNode = selectedNodes.value[0]
+    if (firstNode) {
+      activeNode.value = firstNode
+      props.updateMetadataHighlight(firstNode as Konva.Node)
+    }
   } else if (newMode === 'simple' && singleNode.value) {
     // If simple mode, set the single node as active
     activeNode.value = singleNode.value
-    updateMetadataHighlight(singleNode.value as Konva.Node)
+    props.updateMetadataHighlight(singleNode.value as Konva.Node)
   } else if (newMode === 'hierarchical' && multiSelected.value) {
     // Multi-selection: don't auto-select any node, force user to pick
     activeNode.value = null
-    updateMetadataHighlight(undefined)
+    props.updateMetadataHighlight(undefined)
   } else if (newMode === 'none') {
     // Clear active node when nothing selected
     activeNode.value = null
-    updateMetadataHighlight(undefined)
+    props.updateMetadataHighlight(undefined)
   }
 }, { immediate: true })
 
@@ -85,27 +78,27 @@ watch([mode, groupSelected], ([newMode, isGroupSelected]) => {
 watch(singleNode, (node) => {
   if (mode.value === 'simple') {
     activeNode.value = node
-    updateMetadataHighlight(node as Konva.Node | undefined)
+    props.updateMetadataHighlight(node as Konva.Node | undefined)
   }
 })
 
 // Watch for activeNode changes to update highlight
 watch(activeNode, (node) => {
-  updateMetadataHighlight(node as Konva.Node | undefined)
+  props.updateMetadataHighlight(node as Konva.Node | undefined)
 })
 
 // Watch for mode changes to clear highlight when editor is not active
 watch(mode, (newMode) => {
   if (newMode === 'none') {
     activeNode.value = null
-    updateMetadataHighlight(undefined)
+    props.updateMetadataHighlight(undefined)
   }
 })
 
 // Clear highlight when component is unmounted
 onUnmounted(() => {
-  updateMetadataHighlight(undefined)
-  updateHoverHighlight(undefined)
+  props.updateMetadataHighlight(undefined)
+  props.updateHoverHighlight(undefined)
 })
 
 const selectNode = (node: any) => {
@@ -147,11 +140,11 @@ const hasMetadata = (node: any) => {
 }
 
 const handleMouseEnter = (node: any) => {
-  updateHoverHighlight(node as Konva.Node)
+  props.updateHoverHighlight(node as Konva.Node)
 }
 
 const handleMouseLeave = () => {
-  updateHoverHighlight(undefined)
+  props.updateHoverHighlight(undefined)
 }
 </script>
 
@@ -160,8 +153,9 @@ const handleMouseLeave = () => {
     <!-- Simple mode for single selections -->
     <template v-if="mode === 'simple'">
       <MetadataEditor
-        :active-node="singleNode!"
+        :metadata="singleNodeMetadata"
         :visible="true"
+        :can-edit="!!singleNode"
         @apply="applyMetadataSingle"
       />
     </template>
@@ -199,8 +193,9 @@ const handleMouseLeave = () => {
         <!-- JSON editor for selected tree node -->
         <MetadataEditor
           v-if="activeNode"
-          :active-node="activeNode"
+          :metadata="activeNodeMetadata"
           :visible="true"
+          :can-edit="true"
           @apply="applyMetadata"
         />
         
