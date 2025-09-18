@@ -710,7 +710,7 @@ onUnmounted(() => {
       </select>
       <span class="separator">|</span>
 
-      <!-- Unified Undo/Redo (works for both tools) -->
+      <!-- Shared controls at the front of every toolbar -->
       <div class="button-group vertical">
         <button @click="undo" :disabled="!canUndoReactive || canvasState.freehand.isAnimating.value"
           title="Undo (Ctrl/Cmd+Z)">
@@ -722,6 +722,21 @@ onUnmounted(() => {
         </button>
       </div>
       <span class="separator">|</span>
+      <button @click="canvasState.grid.visible.value = !canvasState.grid.visible.value"
+        :class="{ active: canvasState.grid.visible.value }" :disabled="canvasState.freehand.isAnimating.value">
+        {{ canvasState.grid.visible.value ? '⊞ Grid On' : '⊡ Grid Off' }}
+      </button>
+      <span class="separator">|</span>
+      <div class="button-group vertical">
+        <button @click="downloadCanvasState" :disabled="canvasState.freehand.isAnimating.value">
+          💾 Download
+        </button>
+        <button @click="uploadCanvasState" :disabled="canvasState.freehand.isAnimating.value">
+          📁 Upload
+        </button>
+      </div>
+      <span class="separator">|</span>
+      <span class="flex-break" aria-hidden="true"></span>
 
       <!-- Select Tool Toolbar -->
       <template v-if="activeTool === 'select'">
@@ -750,21 +765,6 @@ onUnmounted(() => {
           :disabled="canvasState.freehand.isAnimating.value">
           📝 Metadata
         </button>
-        <span class="separator">|</span>
-        <button @click="canvasState.grid.visible.value = !canvasState.grid.visible.value"
-          :class="{ active: canvasState.grid.visible.value }" :disabled="canvasState.freehand.isAnimating.value">
-          {{ canvasState.grid.visible.value ? '⊞ Grid On' : '⊡ Grid Off' }}
-        </button>
-        <span class="separator">|</span>
-        <span class="flex-break" aria-hidden="true"></span>
-        <div class="button-group vertical">
-          <button @click="downloadCanvasState" :disabled="canvasState.freehand.isAnimating.value">
-            💾 Download
-          </button>
-          <button @click="uploadCanvasState" :disabled="canvasState.freehand.isAnimating.value">
-            📁 Upload
-          </button>
-        </div>
         <span class="separator">|</span>
       </template>
 
@@ -798,9 +798,6 @@ onUnmounted(() => {
             🗑️ Cancel Shape
           </button>
         </div>
-        <button @click="deleteSelectionStateful" :disabled="selectionStore.isEmpty(canvasState) || canvasState.freehand.isAnimating.value">
-          🗑️ Delete
-        </button>
         <span class="separator">|</span>
         <span v-if="canvasState.polygon.isDrawing.value" class="info">Drawing: {{ canvasState.polygon.currentPoints.value.length / 2 }} points</span>
       </template>
