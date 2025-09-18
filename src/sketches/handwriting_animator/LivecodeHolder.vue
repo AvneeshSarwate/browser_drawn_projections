@@ -96,6 +96,8 @@ onUnmounted(() => {
     :initial-polygon-state="appState.polygonStateString"
     :width="resolution.width"
     :height="resolution.height"
+    :show-timeline="true"
+    :show-visualizations="true"
   />
   <StrokeLaunchControls />
 </template>

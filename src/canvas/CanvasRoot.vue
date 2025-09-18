@@ -37,13 +37,15 @@ const props = withDefaults(defineProps<{
   initialPolygonState?: string
   width?: number | string
   height?: number | string
-  hideTimeline?: boolean
+  showTimeline?: boolean
+  showVisualizations?: boolean
 }>(), {
   initialFreehandState: '',
   initialPolygonState: '',
   width: 1000,
   height: 500,
-  hideTimeline: false,
+  showTimeline: false,
+  showVisualizations: false,
 })
 
 const emit = defineEmits<{
@@ -692,6 +694,11 @@ onUnmounted(() => {
           </button>
         </div>
         <span class="separator">|</span>
+        <button @click="metadataEditorVisible = !metadataEditorVisible" :class="{ active: metadataEditorVisible }"
+          :disabled="canvasState.freehand.isAnimating.value">
+          📝 Metadata
+        </button>
+        <span class="separator">|</span>
       </template>
 
       <!-- Freehand Tool Toolbar -->
@@ -716,11 +723,7 @@ onUnmounted(() => {
           {{ canvasState.freehand.useRealTiming.value ? '⏱️ Real Time' : '⏱️ Max 0.3s' }}
         </button>
         <span class="separator">|</span>
-        <button @click="metadataEditorVisible = !metadataEditorVisible" :class="{ active: metadataEditorVisible }"
-          :disabled="canvasState.freehand.isAnimating.value">
-          📝 Metadata
-        </button>
-        <span class="separator">|</span>
+        
         <div class="button-group vertical">
           <button @click="downloadFreehandDrawing" :disabled="canvasState.freehand.isAnimating.value">
             💾 Download
@@ -753,10 +756,6 @@ onUnmounted(() => {
           🗑️ Delete
         </button>
         <span class="separator">|</span>
-        <button @click="metadataEditorVisible = !metadataEditorVisible" :class="{ active: metadataEditorVisible }"
-          :disabled="canvasState.freehand.isAnimating.value">
-          📝 Metadata
-        </button>
         <span v-if="canvasState.polygon.isDrawing.value" class="info">Drawing: {{ canvasState.polygon.currentPoints.value.length / 2 }} points</span>
       </template>
       <span class="separator">|</span>
@@ -770,7 +769,7 @@ onUnmounted(() => {
 
       <!-- Smart Metadata Editor -->
       <div class="metadata-suite" v-if="metadataEditorVisible">
-        <VisualizationToggles :canvas-state="canvasState" />
+        <VisualizationToggles v-if="props.showVisualizations" :canvas-state="canvasState" />
         <HierarchicalMetadataEditor
           :selected-nodes="selectedKonvaNodes"
           :single-node="singleSelectedNode"
@@ -783,7 +782,7 @@ onUnmounted(() => {
         />
       </div>
 
-      <template v-if="!props.hideTimeline">
+      <template v-if="props.showTimeline">
         <Timeline :strokes="freehandStrokes(canvasState)" :selectedStrokes="canvasState.freehand.selectedStrokesForTimeline.value"
           :useRealTiming="canvasState.freehand.useRealTiming.value" :maxInterStrokeDelay="maxInterStrokeDelay"
           :overrideDuration="canvasState.freehand.timelineDuration.value > 0 ? canvasState.freehand.timelineDuration.value : undefined"

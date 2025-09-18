@@ -23,9 +23,10 @@ new features
 remove tool-specific selection functions in freehandTool.ts and polygonTool.ts
 update/remove tool specific metadata setting calls
 
+unify state save/load to just be the whole canvas
+
 tool level cursor stuff unused? remove or fix
 
-add ability to delete 
 
 
 
