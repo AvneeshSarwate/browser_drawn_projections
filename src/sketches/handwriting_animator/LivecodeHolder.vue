@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { inject, onMounted, onUnmounted } from 'vue'
-import CanvasRoot from './canvas/CanvasRoot.vue'
+import CanvasRoot from '@/canvas/CanvasRoot.vue'
 import StrokeLaunchControls from './StrokeLaunchControls.vue'
 import { appStateName, type TemplateAppState, drawFlattenedStrokeGroup, resolution } from './appState'
 import { updateGPUStrokes } from './strokeLauncher'
-import type { CanvasRuntimeState } from './canvas/canvasState'
+import type { CanvasRuntimeState } from '@/canvas/canvasState'
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX'
 import { clearListeners, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse'
 import type p5 from 'p5'

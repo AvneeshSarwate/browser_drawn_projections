@@ -3,7 +3,7 @@ import { availableStrokes, animationParams, gpuStrokesReady, launchByName, resol
 import { DrawingScene } from './gpuStrokes/drawingScene'
 import { StrokeInterpolator } from './gpuStrokes/strokeInterpolator'
 import { DRAWING_CONSTANTS } from './gpuStrokes/constants'
-import type { FlattenedStroke, FlattenedStrokeGroup } from './canvas/canvasState'
+import type { FlattenedStroke, FlattenedStrokeGroup } from '@/canvas/canvasState'
 import type { StrokePoint } from './gpuStrokes/strokeTypes'
 import type { AnchorKind } from './gpuStrokes/coordinateUtils'
 import type { LoopHandle } from '@/channels/base_time_context'
