@@ -19,14 +19,11 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted } from 'vue'
-import type { TimeContext, CancelablePromisePoxy } from '@/channels/channels'
-import { launch, BrowserTimeContext } from '@/channels/channels'
-import { dateNow } from '@/channels/base_time_context'
+import { startAnimationLoop, type AnimationLoopHandle } from './animationLoop'
 
 interface Props {
   strokes: Map<string, any>
   selectedStrokes: Set<string>
-  timeContext?: TimeContext
   useRealTiming: boolean
   maxInterStrokeDelay: number
   overrideDuration?: number
@@ -42,7 +39,7 @@ const emit = defineEmits<{
 const currentTime = ref(0)
 const duration = ref(0)
 const isPlaying = ref(false)
-let animationLoop: CancelablePromisePoxy<any> | undefined
+let animationLoop: AnimationLoopHandle | undefined
 let startTime = 0
 
 // Calculate total duration based on strokes
@@ -138,41 +135,44 @@ const formatTime = (ms: number): string => {
   return `${seconds}.${milliseconds.toString().padStart(2, '0')}s`
 }
 
-const play = async () => {
+const play = () => {
   if (isPlaying.value || duration.value === 0) return
-  
+
   isPlaying.value = true
   props.lockWhileAnimating?.(true) // Lock UI during animation
   startTime = performance.now() - currentTime.value
-  
-  // Use launch for animation loop
-  animationLoop = launch(async (ctx) => {
-    while (isPlaying.value && currentTime.value < duration.value) {
-      currentTime.value = performance.now() - startTime
-      
-      if (currentTime.value >= duration.value) {
-        currentTime.value = 0
-        isPlaying.value = false
-        props.lockWhileAnimating?.(false) // Unlock UI when animation completes
-        animationLoop?.cancel()
-        emit('timeUpdate', 0)
-        break
-      }
-      
-      emit('timeUpdate', currentTime.value)
-      await ctx.waitFrame()
+
+  animationLoop = startAnimationLoop(() => {
+    if (!isPlaying.value) {
+      animationLoop = undefined
+      return false
     }
+
+    currentTime.value = performance.now() - startTime
+
+    if (currentTime.value >= duration.value) {
+      currentTime.value = 0
+      isPlaying.value = false
+      props.lockWhileAnimating?.(false) // Unlock UI when animation completes
+      emit('timeUpdate', 0)
+      animationLoop = undefined
+      return false
+    }
+
+    emit('timeUpdate', currentTime.value)
+    return true
   })
 }
 
 const pause = () => {
   isPlaying.value = false
-  
+
   // Only unlock if timeline is at start position (safe state)
   const isAtStart = currentTime.value === 0
   props.lockWhileAnimating?.(!isAtStart)
-  
+
   animationLoop?.cancel()
+  animationLoop = undefined
 }
 
 const stop = () => {
@@ -181,6 +181,7 @@ const stop = () => {
   props.lockWhileAnimating?.(false) // Unlock UI when stopped
   currentTime.value = 0
   animationLoop?.cancel()
+  animationLoop = undefined
   emit('timeUpdate', 0)
 }
 
@@ -250,7 +251,8 @@ const seek = (event: MouseEvent) => {
 
 onUnmounted(() => {
   animationLoop?.cancel()
-  
+  animationLoop = undefined
+
   // Clean up any ongoing drag state
   if (isDragging.value) {
     isDragging.value = false
