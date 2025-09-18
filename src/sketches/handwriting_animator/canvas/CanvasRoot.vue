@@ -13,7 +13,7 @@ import Timeline from './Timeline.vue';
 import HierarchicalMetadataEditor from './HierarchicalMetadataEditor.vue';
 import VisualizationToggles from './VisualizationToggles.vue';
 import { clearFreehandSelection as clearFreehandSelectionImpl, createStrokeShape as createStrokeShapeImpl, deserializeFreehandState, getStrokePath, gridSize, serializeFreehandState, updateBakedStrokeData, updateFreehandDraggableStates as updateFreehandDraggableStatesImpl, updateTimelineState as updateTimelineStateImpl, type FreehandStroke, handleTimeUpdate as handleTimeUpdateImpl, maxInterStrokeDelay, setUpdateCursor, updateCursor, downloadFreehandDrawing as downloadFreehandDrawingImpl, uploadFreehandDrawing as uploadFreehandDrawingImpl, setRefreshAVs, getCurrentFreehandStateString, restoreFreehandState, initFreehandLayers } from './freehandTool';
-import { freehandStrokes, getGlobalCanvasState } from './canvasState';
+import { freehandStrokes } from './canvasState';
 import { getPointsBounds } from './canvasUtils';
 import { CommandStack } from './commandStack';
 import { setGlobalExecuteCommand, setGlobalPushCommand } from './commands';
@@ -78,7 +78,7 @@ const setupPolygonModeWatcher = () => setupPolygonModeWatcherImpl(canvasState)
 // Set up callbacks for data updates
 canvasState.callbacks.freehandDataUpdate = () => updateBakedStrokeData(canvasState, appState)
 canvasState.callbacks.polygonDataUpdate = () => updateBakedPolygonData(canvasState, appState)
-canvasState.callbacks.refreshAncillaryViz = refreshAnciliaryViz
+canvasState.callbacks.refreshAncillaryViz = () => refreshAnciliaryViz(canvasState)
 
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
 
@@ -121,7 +121,7 @@ const canRedoReactive = ref(false)
 const onCanvasStateChange = () => {
   updateBakedStrokeData(canvasState, appState)
   updateBakedPolygonData(canvasState, appState)
-  refreshAnciliaryViz()
+  refreshAnciliaryViz(canvasState)
   // Update reactive button states after any command stack change
   canUndoReactive.value = commandStack.canUndo()
   canRedoReactive.value = commandStack.canRedo()
@@ -174,26 +174,26 @@ const konvaContainer = ref<HTMLDivElement>()
 
 
 // Helper to consistently apply layer listening per tool
-const applyToolMode = (tool: 'select' | 'freehand' | 'polygon') => {
-  const freehandShapeLayer = getGlobalCanvasState().layers.freehandShape
-  const freehandDrawingLayer = getGlobalCanvasState().layers.freehandDrawing
-  const freehandSelectionLayer = getGlobalCanvasState().layers.freehandSelection
+const applyToolMode = (state: CanvasRuntimeState, tool: 'select' | 'freehand' | 'polygon') => {
+  const freehandShapeLayer = state.layers.freehandShape
+  const freehandDrawingLayer = state.layers.freehandDrawing
+  const freehandSelectionLayer = state.layers.freehandSelection
   // Clear selections when switching tools
-  selectionStore.clear(canvasState)
+  selectionStore.clear(state)
 
   if (tool === 'select') {
     // Enable interaction with shape layers for selection
     freehandShapeLayer?.listening(true)
-    canvasState.layers.polygonShapes?.listening(true)
+    state.layers.polygonShapes?.listening(true)
 
     // Disable drawing-specific layers
     freehandDrawingLayer?.listening(false)
-    canvasState.layers.polygonPreview?.listening(false)
-    canvasState.layers.polygonControls?.listening(false)
+    state.layers.polygonPreview?.listening(false)
+    state.layers.polygonControls?.listening(false)
 
     // Keep selection layers active (transformer lives here)
     freehandSelectionLayer?.listening(true)
-    canvasState.layers.polygonSelection?.listening(true)
+    state.layers.polygonSelection?.listening(true)
 
     // Ensure transformer/selection overlay sits above shapes
     freehandSelectionLayer?.moveToTop()
@@ -205,16 +205,16 @@ const applyToolMode = (tool: 'select' | 'freehand' | 'polygon') => {
     freehandSelectionLayer?.listening(true)
 
     // Disable polygon interactive layers
-    canvasState.layers.polygonShapes?.listening(false)
-    canvasState.layers.polygonPreview?.listening(false)
-    canvasState.layers.polygonControls?.listening(false)
-    canvasState.layers.polygonSelection?.listening(false)
+    state.layers.polygonShapes?.listening(false)
+    state.layers.polygonPreview?.listening(false)
+    state.layers.polygonControls?.listening(false)
+    state.layers.polygonSelection?.listening(false)
   } else if (tool === 'polygon') {
     // Polygon mode
-    canvasState.layers.polygonShapes?.listening(true)
-    canvasState.layers.polygonPreview?.listening(true)
-    canvasState.layers.polygonControls?.listening(true)
-    canvasState.layers.polygonSelection?.listening(true)
+    state.layers.polygonShapes?.listening(true)
+    state.layers.polygonPreview?.listening(true)
+    state.layers.polygonControls?.listening(true)
+    state.layers.polygonSelection?.listening(true)
 
     // Disable freehand interactive layers
     freehandShapeLayer?.listening(false)
@@ -224,16 +224,16 @@ const applyToolMode = (tool: 'select' | 'freehand' | 'polygon') => {
 
   // Manage polygon control points visibility lifecycle across tools
   if (tool === 'polygon') {
-    if (canvasState.polygon.mode.value === 'edit') {
+    if (state.polygon.mode.value === 'edit') {
       updatePolygonControlPoints()
     } else {
-      canvasState.layers.polygonControls?.destroyChildren()
-      canvasState.layers.polygonControls?.batchDraw()
+      state.layers.polygonControls?.destroyChildren()
+      state.layers.polygonControls?.batchDraw()
     }
   } else {
     // Leaving polygon tool – remove control points
-    canvasState.layers.polygonControls?.destroyChildren()
-    canvasState.layers.polygonControls?.batchDraw()
+    state.layers.polygonControls?.destroyChildren()
+    state.layers.polygonControls?.batchDraw()
   }
 
   // Update node draggability to avoid conflicting with selection-drag logic
@@ -241,7 +241,7 @@ const applyToolMode = (tool: 'select' | 'freehand' | 'polygon') => {
     freehandShapeLayer?.getChildren().forEach((node: Konva.Node) => {
       if (node instanceof Konva.Path || node instanceof Konva.Group) node.draggable(draggable)
     })
-    canvasState.layers.polygonShapes?.getChildren().forEach(node => {
+    state.layers.polygonShapes?.getChildren().forEach(node => {
       if (node instanceof Konva.Line || node instanceof Konva.Group) node.draggable(draggable)
     })
   }
@@ -254,7 +254,7 @@ const applyToolMode = (tool: 'select' | 'freehand' | 'polygon') => {
 
 // Watch for tool changes - new three-tool system
 watch(activeTool, (newTool) => {
-  applyToolMode(newTool)
+  applyToolMode(canvasState, newTool)
 })
 
 
@@ -263,7 +263,7 @@ watch(activeTool, (newTool) => {
 // Callback for HierarchicalMetadataEditor to apply metadata via unified selection tool
 const handleApplyMetadata = (node: Konva.Node, metadata: any) => {
   try {
-    const item = getCanvasItem(node)
+    const item = getCanvasItem(canvasState, node)
     if (item) {
       // Route through unified selection store (handles undo/redo + updates)
       selectionStore.setMetadata(canvasState, item, metadata)
@@ -318,7 +318,7 @@ onMounted(async () => {
     initPolygonLayers(canvasState, stageInstance)
 
     // Initialize unified transformer
-    initializeTransformer(canvasState.layers.freehandSelection!)
+    initializeTransformer(canvasState, canvasState.layers.freehandSelection!)
 
     // Initialize select tool
     initializeSelectToolStateful(canvasState.layers.freehandSelection!)
@@ -333,8 +333,8 @@ onMounted(async () => {
 
 
     // Initialize ancillary visualizations layer
-    initAVLayer()
-    setRefreshAVs(refreshAnciliaryViz)
+    initAVLayer(canvasState)
+    setRefreshAVs(() => refreshAnciliaryViz(canvasState))
 
     // Set up executeCommand callbacks for tools
     setGlobalExecuteCommand(executeCommand)
@@ -344,7 +344,7 @@ onMounted(async () => {
     // Selection rectangle is created by core/selectTool.initializeSelectTool
 
     // Apply initial tool mode AFTER layers exist (important for transformer interactivity post-HMR)
-    applyToolMode(activeTool.value)
+    applyToolMode(canvasState, activeTool.value)
 
     // Unified transformer is initialized by core/transformerManager
 
@@ -361,7 +361,7 @@ onMounted(async () => {
     deserializePolygonState(canvasState, appState, appState.polygonStateString)
 
     // Re-apply tool mode after deserialization to ensure control points/transformer states are correct
-    applyToolMode(activeTool.value)
+    applyToolMode(canvasState, activeTool.value)
 
 
     // Mouse/touch event handlers - new three-tool system
@@ -392,7 +392,7 @@ onMounted(async () => {
     })
 
     stage!.on('mousemove touchmove', (e) => {
-      const freehandDrawingLayer = getGlobalCanvasState().layers.freehandDrawing
+      const freehandDrawingLayer = canvasState.layers.freehandDrawing
       if (activeTool.value === 'select') {
         // Handle drag selection for select tool
         handleSelectPointerMoveStateful(stage!, e)
@@ -426,14 +426,14 @@ onMounted(async () => {
     })
 
     stage!.on('mouseup touchend', (e) => {
-      const freehandDrawingLayer = getGlobalCanvasState().layers.freehandDrawing
+      const freehandDrawingLayer = canvasState.layers.freehandDrawing
       if (activeTool.value === 'freehand' && canvasState.freehand.isDrawing) {
         canvasState.freehand.isDrawing = false
         freehandDrawingLayer?.destroyChildren()
 
         if (canvasState.freehand.currentPoints.length > 2) {
           executeCommand('Draw Stroke', () => {
-            const freehandShapeLayer = getGlobalCanvasState().layers.freehandShape
+            const freehandShapeLayer = canvasState.layers.freehandShape
             // Create new stroke
             const creationTime = Date.now()
             const strokeId = `stroke-${creationTime}`
@@ -463,7 +463,7 @@ onMounted(async () => {
             stroke.shape = shape
 
             // Add to data structures
-            freehandStrokes().set(strokeId, stroke)
+            freehandStrokes(canvasState).set(strokeId, stroke)
             freehandShapeLayer?.add(shape)
             updateFreehandDraggableStates() // Update draggable state for new stroke
             updateTimelineState() // Update timeline state when new stroke is added
@@ -699,7 +699,7 @@ onUnmounted(() => {
         <HierarchicalMetadataEditor :on-apply-metadata="handleApplyMetadata" />
       </div>
 
-      <Timeline :strokes="freehandStrokes()" :selectedStrokes="canvasState.freehand.selectedStrokesForTimeline.value"
+      <Timeline :strokes="freehandStrokes(canvasState)" :selectedStrokes="canvasState.freehand.selectedStrokesForTimeline.value"
         :useRealTiming="canvasState.freehand.useRealTiming.value" :maxInterStrokeDelay="maxInterStrokeDelay"
         :overrideDuration="canvasState.freehand.timelineDuration.value > 0 ? canvasState.freehand.timelineDuration.value : undefined"
         :lockWhileAnimating="setAnimatingState" @timeUpdate="handleTimeUpdate" />

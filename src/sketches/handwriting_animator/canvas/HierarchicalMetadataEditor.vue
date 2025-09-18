@@ -5,10 +5,26 @@ import MetadataEditor from './MetadataEditor.vue'
 import { metadataToolkit } from './metadata'
 import * as selectionStore from './selectionStore'
 import { getCanvasItem } from './CanvasItem'
-import { getGlobalCanvasState } from './canvasState'
+import { getGlobalCanvasState, type CanvasRuntimeState } from './canvasState'
 
 // Extract toolkit functions for convenience
 const { collectHierarchyFromRoot, updateMetadataHighlight, updateHoverHighlight } = metadataToolkit
+
+const canvasState = getGlobalCanvasState()
+
+const applyMetadataThroughSelection = (
+  state: CanvasRuntimeState,
+  node: Konva.Node,
+  metadata: any
+) => {
+  const item = getCanvasItem(state, node)
+  if (item) {
+    selectionStore.setMetadata(state, item, metadata)
+  } else {
+    // Fallback for non-registered nodes
+    metadataToolkit.setNodeMetadata(node, metadata)
+  }
+}
 
 // Props interface
 interface Props {
@@ -17,19 +33,11 @@ interface Props {
 
 // Default: route through unified selection tool (with undo/redo + updates)
 const props = withDefaults(defineProps<Props>(), {
-  onApplyMetadata: (node: Konva.Node, metadata: any) => {
-    const item = getCanvasItem(node)
-    if (item) {
-      selectionStore.setMetadata(getGlobalCanvasState(), item, metadata)
-    } else {
-      // Fallback for non-registered nodes
-      metadataToolkit.setNodeMetadata(node, metadata)
-    }
-  }
+  onApplyMetadata: (node: Konva.Node, metadata: any) => applyMetadataThroughSelection(canvasState, node, metadata)
 })
 
 // Helpers to read from unified selection store
-const state = getGlobalCanvasState()
+const state = canvasState
 const selectedNodes = state.selection.selectedKonvaNodes
 const singleNode = computed(() => selectionStore.getActiveSingleNode(state))
 const multiSelected = computed(() => selectionStore.count(state) > 1)

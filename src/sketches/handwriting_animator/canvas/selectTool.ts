@@ -60,7 +60,7 @@ export function handleSelectPointerDown(state: CanvasRuntimeState, stage: Konva.
       parent = node.getParent()
     }
 
-    const item = getCanvasItem(node)
+    const item = getCanvasItem(state, node)
     if (item) {
       // Update selection depending on modifier and whether the clicked item is already selected
       const wasSelected = selectionStore.has(state, item)
@@ -211,7 +211,7 @@ function completeSelectionRect(state: CanvasRuntimeState, isShiftHeld: boolean =
             nodeBox.x + nodeBox.width < rectBox.x ||
             rectBox.y + rectBox.height < nodeBox.y ||
             nodeBox.y + nodeBox.height < rectBox.y)) {
-        const item = getCanvasItem(node)
+        const item = getCanvasItem(state, node)
         if (item) {
           intersectingItems.push(item)
         }
@@ -285,7 +285,7 @@ function finishSelectionDrag(state: CanvasRuntimeState) {
 
   if (state.selection.selectionDragState.beforeState !== afterState) {
     // Push command with captured states so undo/redo works
-    pushCommandWithStates('Move Selection', state.selection.selectionDragState.beforeState, afterState)
+    pushCommandWithStates(state, 'Move Selection', state.selection.selectionDragState.beforeState, afterState)
   }
 
   state.selection.selectionDragState.isDragging = false
@@ -344,7 +344,7 @@ export function groupSelection(state: CanvasRuntimeState) {
   const nodes = state.selection.selectedKonvaNodes.value.filter(n => (n instanceof Konva.Path) || (n instanceof Konva.Group))
   if (nodes.length < 1) return
 
-  executeCommand('Group Selection', () => {
+  executeCommand(state, 'Group Selection', () => {
     // Use top-level nodes only (no descendant/ancestor pairs)
     const topLevel = nodes.filter(node => !nodes.some(other => other !== node && other.isAncestorOf(node)))
     // Determine common parent or fallback to layer of first node
@@ -384,7 +384,7 @@ export function ungroupSelection(state: CanvasRuntimeState) {
   const parent = grp.getParent()
   if (!parent) return
 
-  executeCommand('Ungroup Selection', () => {
+  executeCommand(state, 'Ungroup Selection', () => {
     const children = [...grp.getChildren()]
     children.forEach(child => {
       reparentPreserveAbsolute(child, parent)
@@ -393,12 +393,12 @@ export function ungroupSelection(state: CanvasRuntimeState) {
 
     const id = grp.id()
     grp.destroy()
-    removeCanvasItem(id)
+    removeCanvasItem(state, id)
 
     selectionStore.clear(state)
     parent.getLayer()?.batchDraw()
     // Rebuild stroke connections after ungroup to keep data in sync
-    try { refreshStrokeConnections() } catch {
+    try { refreshStrokeConnections(state) } catch {
       console.error('refreshStrokeConnections failed')
     }
     updateBakedStrokeData(state, store.appStateRef)
@@ -418,7 +418,7 @@ export function duplicateSelection(state: CanvasRuntimeState) {
   const selectedNodes = state.selection.selectedKonvaNodes.value
   if (selectedNodes.length === 0) return
 
-  executeCommand('Duplicate', () => {
+  executeCommand(state, 'Duplicate', () => {
     selectionStore.withSelectionHighlightSuppressed(state, () => {
       const topLevelNodes = getTopLevelSelectedNodes(state)
       const duplicates: Konva.Node[] = []
@@ -443,7 +443,7 @@ export function duplicateSelection(state: CanvasRuntimeState) {
           // register data structures and handlers
           createPolygonItem(state, clone)
           attachPolygonHandlers(state, clone)
-          polygonShapes().set(newId, {
+          polygonShapes(state).set(newId, {
             id: newId,
             points: [...clone.points()],
             closed: !!clone.closed(),
@@ -458,7 +458,7 @@ export function duplicateSelection(state: CanvasRuntimeState) {
       // Update selection to new duplicates
       selectionStore.clear(state)
       duplicates.forEach((node) => {
-        const item = getCanvasItem(node)
+        const item = getCanvasItem(state, node)
         if (item) selectionStore.add(state, item, true)
       })
 
@@ -477,7 +477,7 @@ export function deleteSelection(state: CanvasRuntimeState) {
   const selectedNodes = state.selection.selectedKonvaNodes.value
   if (selectedNodes.length === 0) return
 
-  executeCommand('Delete Selected', () => {
+  executeCommand(state, 'Delete Selected', () => {
     const topLevelNodes = getTopLevelSelectedNodes(state)
 
     topLevelNodes.forEach((node) => {
@@ -496,26 +496,26 @@ export function deleteSelection(state: CanvasRuntimeState) {
         // Freehand stroke record cleanup
         if (n instanceof Konva.Path) {
           // delete stroke entry matching this node id or shape
-          freehandStrokes().delete(n.id())
+          freehandStrokes(state).delete(n.id())
           // fallback: by shape reference
-          Array.from(freehandStrokes().entries()).forEach(([id, s]) => {
-            if (s.shape === n) freehandStrokes().delete(id)
+          Array.from(freehandStrokes(state).entries()).forEach(([id, s]) => {
+            if (s.shape === n) freehandStrokes(state).delete(id)
           })
           // remove from any group stroke lists
-          Array.from(freehandStrokeGroups().values()).forEach((g) => {
+          Array.from(freehandStrokeGroups(state).values()).forEach((g) => {
             g.strokeIds = g.strokeIds.filter((sid) => sid !== n.id())
           })
         }
         // Freehand group record cleanup
         if (n instanceof Konva.Group) {
-          freehandStrokeGroups().delete(n.id())
+          freehandStrokeGroups(state).delete(n.id())
         }
         // Polygon record cleanup
         if (n instanceof Konva.Line) {
-          polygonShapes().delete(n.id())
+          polygonShapes(state).delete(n.id())
         }
         // Remove from CanvasItem registry
-        removeCanvasItem(n.id())
+        removeCanvasItem(state, n.id())
       })
 
       // Destroy the node subtree
@@ -532,6 +532,6 @@ export function deleteSelection(state: CanvasRuntimeState) {
     serializePolygonState(state, store.appStateRef)
 
     // Ancillary viz cleanup (best-effort)
-    import('./ancillaryVisualizations').then(({ refreshAnciliaryViz }) => refreshAnciliaryViz()).catch(() => {})
+    import('./ancillaryVisualizations').then(({ refreshAnciliaryViz }) => refreshAnciliaryViz(state)).catch(() => {})
   })
 }

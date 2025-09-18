@@ -2,70 +2,43 @@ import Konva from 'konva'
 import { watch } from 'vue'
 
 import { pushCommandWithStates } from './commands'
-import { getGlobalCanvasState } from './canvasState'
 import { activeTool } from '../appState'
 import type { CanvasRuntimeState } from './canvasState'
 
 let transformer: Konva.Transformer | undefined = undefined
 let transformerLayer: Konva.Layer | undefined = undefined
-
-
-// State tracking for undo/redo
-let dragStartState: string | null = null
-
-// State-based transformer initialization
-export function initializeTransformerWithState(state: CanvasRuntimeState, layer: Konva.Layer) {
-  const transformer = new Konva.Transformer({ 
-    rotateEnabled: true, 
+const createTransformer = (state: CanvasRuntimeState, layer: Konva.Layer) => {
+  transformerLayer = layer
+  transformer = new Konva.Transformer({
+    rotateEnabled: true,
     keepRatio: false,
-    padding: 6 
+    padding: 6
   })
-  
-  // Add transform tracking
+
   transformer.on('transformstart', () => {
     startTransformTrackingWithState(state)
   })
-  
+
   transformer.on('transformend', () => {
     finishTransformTrackingWithState(state, 'Transform')
   })
-  
+
   layer.add(transformer)
-  
-  // Watch selection changes and update transformer
+
   watch(state.selection.selectedKonvaNodes, (selectedNodes) => {
-    updateTransformerWithState(state, selectedNodes, transformer, layer)
+    if (!transformer || !transformerLayer) return
+    updateTransformerWithState(state, selectedNodes, transformer, transformerLayer)
   }, { immediate: true })
-  
+
   return transformer
 }
 
-// Legacy function
-export function initializeTransformer(layer: Konva.Layer) {
-  transformerLayer = layer
-  
-  transformer = new Konva.Transformer({ 
-    rotateEnabled: true, 
-    keepRatio: false,
-    padding: 6 
-  })
-  
-  // Add transform tracking
-  transformer.on('transformstart', () => {
-    startTransformTracking()
-  })
-  
-  transformer.on('transformend', () => {
-    finishTransformTracking('Transform')
-  })
-  
-  layer.add(transformer)
-  
-  // Watch selection changes and update transformer
-  const globalState = getGlobalCanvasState()
-  watch(globalState.selection.selectedKonvaNodes, (selectedNodes) => {
-    updateTransformer(selectedNodes)
-  }, { immediate: true })
+export function initializeTransformerWithState(state: CanvasRuntimeState, layer: Konva.Layer) {
+  return createTransformer(state, layer)
+}
+
+export function initializeTransformer(state: CanvasRuntimeState, layer: Konva.Layer) {
+  createTransformer(state, layer)
 }
 
 // State-based transformer update
@@ -73,31 +46,14 @@ function updateTransformerWithState(state: CanvasRuntimeState, selectedNodes: Ko
   // Filter out nodes that shouldn't be transformed
   const filteredNodes = selectedNodes.filter(node => {
     // Skip polygons ONLY while actively in polygon edit mode
-    if (node instanceof Konva.Line && getGlobalCanvasState().polygon.mode.value === 'edit' && activeTool.value === 'polygon') {
+    if (node instanceof Konva.Line && state.polygon.mode.value === 'edit' && activeTool.value === 'polygon') {
       return false
     }
     return true
   })
-  
+
   transformer.nodes(filteredNodes)
   layer.batchDraw()
-}
-
-// Legacy function
-function updateTransformer(selectedNodes: Konva.Node[]) {
-  if (!transformer || !transformerLayer) return
-  
-  // Filter out nodes that shouldn't be transformed
-  const filteredNodes = selectedNodes.filter(node => {
-    // Skip polygons ONLY while actively in polygon edit mode
-    if (node instanceof Konva.Line && getGlobalCanvasState().polygon.mode.value === 'edit' && activeTool.value === 'polygon') {
-      return false
-    }
-    return true
-  })
-  
-  transformer.nodes(filteredNodes)
-  transformerLayer.batchDraw()
 }
 
 // Note: We do not change node.offset or position here.
@@ -131,7 +87,7 @@ function finishTransformTrackingWithState(state: CanvasRuntimeState, operationNa
       })
 
       if (dragStartState !== endState) {
-        pushCommandWithStates(operationName, dragStartState!, endState)
+        pushCommandWithStates(state, operationName, dragStartState!, endState)
       }
 
       state.metadata.metadataText.value = '' // Clear the temp state
@@ -139,40 +95,6 @@ function finishTransformTrackingWithState(state: CanvasRuntimeState, operationNa
   })
 }
 
-// Legacy state capture for undo/redo
-function startTransformTracking() {
-  // Import dynamically to avoid circular dependencies
-  import('./freehandTool').then(({ getCurrentFreehandStateString }) => {
-    import('./polygonTool').then(({ getCurrentPolygonStateString }) => {
-      const state = getGlobalCanvasState()
-      dragStartState = JSON.stringify({
-        freehand: getCurrentFreehandStateString(state),
-        polygon: getCurrentPolygonStateString(state)
-      })
-    })
-  })
-}
-
-function finishTransformTracking(operationName: string) {
-  if (!dragStartState) return
-  
-  // Import dynamically to avoid circular dependencies
-  import('./freehandTool').then(({ getCurrentFreehandStateString }) => {
-    import('./polygonTool').then(({ getCurrentPolygonStateString }) => {
-      const state = getGlobalCanvasState()
-      const endState = JSON.stringify({
-        freehand: getCurrentFreehandStateString(state),
-        polygon: getCurrentPolygonStateString(state)
-      })
-
-      if (dragStartState !== endState) {
-        pushCommandWithStates(operationName, dragStartState!, endState)
-      }
-
-      dragStartState = null
-    })
-  })
-}
 
 export function getTransformer(): Konva.Transformer | undefined {
   return transformer

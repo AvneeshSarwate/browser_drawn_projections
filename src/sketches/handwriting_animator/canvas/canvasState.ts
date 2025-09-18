@@ -212,9 +212,9 @@ export const getGlobalCanvasState = (): CanvasRuntimeState => {
 }
 
 // Convenience getters for cleaner access
-export const freehandStrokes = () => getGlobalCanvasState().freehand.strokes
-export const freehandStrokeGroups = () => getGlobalCanvasState().freehand.strokeGroups
-export const freehandLayers = () => getGlobalCanvasState().layers
-export const polygonShapes = () => getGlobalCanvasState().polygon.shapes
-export const polygonGroups = () => getGlobalCanvasState().polygon.groups
-export const canvasItems = () => getGlobalCanvasState().canvasItems
+export const freehandStrokes = (state: CanvasRuntimeState) => state.freehand.strokes
+export const freehandStrokeGroups = (state: CanvasRuntimeState) => state.freehand.strokeGroups
+export const freehandLayers = (state: CanvasRuntimeState) => state.layers
+export const polygonShapes = (state: CanvasRuntimeState) => state.polygon.shapes
+export const polygonGroups = (state: CanvasRuntimeState) => state.polygon.groups
+export const canvasItems = (state: CanvasRuntimeState) => state.canvasItems
