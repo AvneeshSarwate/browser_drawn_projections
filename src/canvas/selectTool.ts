@@ -196,25 +196,17 @@ function completeSelectionRect(state: CanvasRuntimeState, isShiftHeld: boolean =
     return node instanceof Konva.Path || node instanceof Konva.Line || node instanceof Konva.Group
   }
 
-  // Check only canonical shape layers to avoid accidental matches in helper/preview layers
-  const layersToCheck: Konva.Layer[] = []
+  // Check only canonical shape containers first; fallback to stage layers if not ready yet
+  const containersToCheck: Konva.Container[] = []
   const stage = state.groups.selectionOverlay?.getStage()
   if (stage) {
-    const freehandShapeGroup = state.groups.freehandShape
-    if (freehandShapeGroup) {
-      const layer = freehandShapeGroup.getLayer()
-      if (layer) layersToCheck.push(layer)
-    }
-    const polygonShapesGroup = state.groups.polygonShapes
-    if (polygonShapesGroup) {
-      const layer = polygonShapesGroup.getLayer()
-      if (layer) layersToCheck.push(layer)
-    }
-    // Fallback: if neither available, scan for layers with selectable content
-    if (layersToCheck.length === 0) {
+    if (state.groups.freehandShape) containersToCheck.push(state.groups.freehandShape)
+    if (state.groups.polygonShapes) containersToCheck.push(state.groups.polygonShapes)
+
+    if (containersToCheck.length === 0) {
       stage.getLayers().forEach(layer => {
         const hasSelectableItems = layer.getChildren().some(child => isSelectableNode(child))
-        if (hasSelectableItems) layersToCheck.push(layer)
+        if (hasSelectableItems) containersToCheck.push(layer)
       })
     }
   }
@@ -251,9 +243,9 @@ function completeSelectionRect(state: CanvasRuntimeState, isShiftHeld: boolean =
     }
   }
 
-  // Check all selectable nodes in the found layers
-  layersToCheck.forEach(layer => {
-    layer.getChildren().forEach(node => {
+  // Check all selectable nodes in the chosen containers
+  containersToCheck.forEach(container => {
+    container.getChildren().forEach(node => {
       collectIntersectingItems(node)
     })
   })
