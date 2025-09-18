@@ -27,6 +27,7 @@ unify state save/load to just be the whole canvas
 
 tool level cursor stuff unused? remove or fix
 
+some weird unnecessary wrapping of functions in CanvasRoot - can be very simplified
 
 
 

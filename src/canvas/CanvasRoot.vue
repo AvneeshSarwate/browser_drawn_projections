@@ -9,7 +9,7 @@ import Konva from 'konva';
 import Timeline from './Timeline.vue';
 import HierarchicalMetadataEditor from './HierarchicalMetadataEditor.vue';
 import VisualizationToggles from './VisualizationToggles.vue';
-import { clearFreehandSelection as clearFreehandSelectionImpl, createStrokeShape as createStrokeShapeImpl, deserializeFreehandState, getStrokePath, gridSize, serializeFreehandState, updateBakedFreehandData, updateFreehandDraggableStates as updateFreehandDraggableStatesImpl, updateTimelineState as updateTimelineStateImpl, type FreehandStroke, handleTimeUpdate as handleTimeUpdateImpl, maxInterStrokeDelay, initFreehandLayers } from './freehandTool';
+import { clearFreehandSelection as clearFreehandSelectionImpl, createStrokeShape as createStrokeShapeImpl, deserializeFreehandState, getStrokePath, serializeFreehandState, updateBakedFreehandData, updateFreehandDraggableStates as updateFreehandDraggableStatesImpl, updateTimelineState as updateTimelineStateImpl, type FreehandStroke, handleTimeUpdate as handleTimeUpdateImpl, maxInterStrokeDelay, initFreehandLayers } from './freehandTool';
 import { freehandStrokes } from './canvasState';
 import { getPointsBounds } from './canvasUtils';
 import { CommandStack } from './commandStack';
@@ -30,6 +30,8 @@ import {
   deleteSelection as deleteSelectionImpl
 } from './selectTool';
 import { downloadCanvasState as downloadCanvasStateImpl, uploadCanvasState as uploadCanvasStateImpl, serializeCanvasState as serializeCanvasStateImpl, deserializeCanvasState as deserializeCanvasStateImpl } from './canvasPersistence';
+
+const DEFAULT_GRID_SIZE = 20
 
 // ==================== common stuff ====================
 const props = withDefaults(defineProps<{
@@ -238,6 +240,52 @@ const setAnimatingState = (animating: boolean) => {
   }
 }
 
+const updateCanvasGrid = () => {
+  const stageRef = canvasState.stage
+  const gridLayer = canvasState.layers.grid
+  if (!stageRef || !gridLayer) return
+
+  const showGrid = !!canvasState.grid.visible.value
+  gridLayer.visible(showGrid)
+
+  gridLayer.destroyChildren()
+  if (!showGrid) {
+    gridLayer.batchDraw()
+    return
+  }
+
+  const rawSpacing = canvasState.grid.size
+  const spacing = Number.isFinite(rawSpacing) && rawSpacing > 0 ? rawSpacing : DEFAULT_GRID_SIZE
+  const majorStride = 5
+  const width = stageRef.width()
+  const height = stageRef.height()
+  const maxCols = Math.ceil(width / spacing)
+  const maxRows = Math.ceil(height / spacing)
+
+  const addLine = (points: number[], isMajor: boolean) => {
+    gridLayer.add(new Konva.Line({
+      points,
+      stroke: isMajor ? 'rgba(0, 0, 0, 0.2)' : 'rgba(0, 0, 0, 0.08)',
+      strokeWidth: isMajor ? 1 : 0.5,
+      listening: false
+    }))
+  }
+
+  for (let col = 0; col <= maxCols; col++) {
+    const x = Math.min(col * spacing, width)
+    const isMajor = col % majorStride === 0
+    addLine([x, 0, x, height], isMajor)
+  }
+
+  for (let row = 0; row <= maxRows; row++) {
+    const y = Math.min(row * spacing, height)
+    const isMajor = row % majorStride === 0
+    addLine([0, y, width, y], isMajor)
+  }
+
+  gridLayer.batchDraw()
+}
+
 // Add this ref near the other refs
 const konvaContainer = ref<HTMLDivElement>()
 
@@ -382,6 +430,7 @@ onMounted(async () => {
     // Create layers using state-based initialization
     initFreehandLayers(canvasState, stageInstance)
     initPolygonLayers(canvasState, stageInstance)
+    updateCanvasGrid()
 
     const freehandSelectionLayer = canvasState.layers.freehandSelection
     if (!freehandSelectionLayer) {
@@ -446,6 +495,22 @@ onMounted(async () => {
     })
 
     watch(
+      () => canvasState.grid.visible.value,
+      () => {
+        updateCanvasGrid()
+      },
+      { immediate: true }
+    )
+
+    watch(
+      () => canvasState.layers.grid,
+      () => {
+        updateCanvasGrid()
+      },
+      { immediate: true }
+    )
+
+    watch(
       () => [props.width, props.height] as const,
       ([width, height]) => {
         const numericWidth = Number(width)
@@ -465,6 +530,8 @@ onMounted(async () => {
           canvasState.konvaContainer.style.width = `${nextWidth}px`
           canvasState.konvaContainer.style.height = `${nextHeight}px`
         }
+
+        updateCanvasGrid()
       },
       { immediate: true }
     )
@@ -684,9 +751,9 @@ onUnmounted(() => {
           📝 Metadata
         </button>
         <span class="separator">|</span>
-        <button @click="canvasState.freehand.showGrid.value = !canvasState.freehand.showGrid.value"
-          :class="{ active: canvasState.freehand.showGrid.value }" :disabled="canvasState.freehand.isAnimating.value">
-          {{ canvasState.freehand.showGrid.value ? '⊞ Grid On' : '⊡ Grid Off' }}
+        <button @click="canvasState.grid.visible.value = !canvasState.grid.visible.value"
+          :class="{ active: canvasState.grid.visible.value }" :disabled="canvasState.freehand.isAnimating.value">
+          {{ canvasState.grid.visible.value ? '⊞ Grid On' : '⊡ Grid Off' }}
         </button>
         <span class="separator">|</span>
         <span class="flex-break" aria-hidden="true"></span>

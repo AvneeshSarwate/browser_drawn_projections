@@ -358,7 +358,6 @@ export const deleteStrokeFromState = (state: CanvasRuntimeState, id: string) => 
 }
 
 // UI state refs - now accessed through global state
-export const gridSize = 20
 export const maxInterStrokeDelay = 300
 
 // Track if animation is currently playing for UI locking - defined with other UI refs above

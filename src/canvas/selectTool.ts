@@ -16,6 +16,18 @@ import { pushCommandWithStates } from './commands'
 
 export function initializeSelectTool(state: CanvasRuntimeState, layer: Konva.Layer) {
   state.layers.selectionOverlay = layer
+
+  const stage = state.stage ?? layer.getStage()
+  if (!state.layers.grid && stage) {
+    const gridLayer = new Konva.Layer({
+      listening: false,
+      hitGraphEnabled: false,
+      name: 'grid-layer'
+    })
+    stage.add(gridLayer)
+    gridLayer.moveToBottom()
+    state.layers.grid = gridLayer
+  }
   
   state.selection.selectionRect = new Konva.Rect({
     stroke: '#4A90E2',

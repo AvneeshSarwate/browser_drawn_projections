@@ -79,6 +79,7 @@ export interface CanvasRuntimeState {
   konvaContainer?: HTMLDivElement
   activeTool: Ref<'select' | 'freehand' | 'polygon'>
   layers: {
+    grid?: Konva.Layer
     freehandShape?: Konva.Layer
     freehandDrawing?: Konva.Layer
     freehandSelection?: Konva.Layer
@@ -91,6 +92,10 @@ export interface CanvasRuntimeState {
     selectionOverlay?: Konva.Layer
     transformer?: Konva.Transformer
     transformerLayer?: Konva.Layer
+  }
+  grid: {
+    visible: Ref<boolean>
+    size: number
   }
   canvasItems: Map<string, CanvasItem>
   callbacks: {
@@ -113,8 +118,6 @@ export interface CanvasRuntimeState {
     currentPoints: number[]
     currentTimestamps: number[]
     drawingStartTime: number
-    showGrid: Ref<boolean>
-    gridSize: number
     selectedStrokesForTimeline: Ref<Set<string>>
     timelineDuration: Ref<number>
     currentPlaybackTime: Ref<number>
@@ -193,9 +196,14 @@ export const createCanvasRuntimeState = (): CanvasRuntimeState => {
     konvaContainer: undefined,
     activeTool: ref('select'),
     layers: {
+      grid: undefined,
       selectionOverlay: undefined,
       transformer: undefined,
       transformerLayer: undefined
+    },
+    grid: {
+      visible: ref(false),
+      size: 20
     },
     canvasItems: new Map(),
     callbacks: {},
@@ -214,8 +222,6 @@ export const createCanvasRuntimeState = (): CanvasRuntimeState => {
       currentPoints: [],
       currentTimestamps: [],
       drawingStartTime: 0,
-      showGrid: ref(false),
-      gridSize: 20,
       selectedStrokesForTimeline: ref(new Set()),
       timelineDuration: ref(0),
       currentPlaybackTime: ref(0),
