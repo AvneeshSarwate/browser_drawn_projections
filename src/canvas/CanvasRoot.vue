@@ -684,6 +684,12 @@ onUnmounted(() => {
           📝 Metadata
         </button>
         <span class="separator">|</span>
+        <button @click="canvasState.freehand.showGrid.value = !canvasState.freehand.showGrid.value"
+          :class="{ active: canvasState.freehand.showGrid.value }" :disabled="canvasState.freehand.isAnimating.value">
+          {{ canvasState.freehand.showGrid.value ? '⊞ Grid On' : '⊡ Grid Off' }}
+        </button>
+        <span class="separator">|</span>
+        <span class="flex-break" aria-hidden="true"></span>
         <div class="button-group vertical">
           <button @click="downloadCanvasState" :disabled="canvasState.freehand.isAnimating.value">
             💾 Download
@@ -697,21 +703,6 @@ onUnmounted(() => {
 
       <!-- Freehand Tool Toolbar -->
       <template v-if="activeTool === 'freehand'">
-        <button @click="canvasState.freehand.showGrid.value = !canvasState.freehand.showGrid.value"
-          :class="{ active: canvasState.freehand.showGrid.value }" :disabled="canvasState.freehand.isAnimating.value">
-          {{ canvasState.freehand.showGrid.value ? '⊞ Grid On' : '⊡ Grid Off' }}
-        </button>
-        <div class="button-group vertical">
-          <button @click="duplicateSelectionStateful"
-            :disabled="selectionStore.count(canvasState) === 0 || canvasState.freehand.isAnimating.value">
-            📄 Duplicate
-          </button>
-          <button @click="deleteSelectionStateful"
-            :disabled="selectionStore.count(canvasState) === 0 || canvasState.freehand.isAnimating.value">
-            🗑️ Delete
-          </button>
-        </div>
-        <span class="separator">|</span>
         <button @click="canvasState.freehand.useRealTiming.value = !canvasState.freehand.useRealTiming.value"
           :class="{ active: canvasState.freehand.useRealTiming.value }">
           {{ canvasState.freehand.useRealTiming.value ? '⏱️ Real Time' : '⏱️ Max 0.3s' }}
@@ -720,22 +711,25 @@ onUnmounted(() => {
 
       <!-- Polygon Tool Toolbar -->
       <template v-if="activeTool === 'polygon'">
-        <button @click="canvasState.polygon.mode.value = 'draw'" :class="{ active: canvasState.polygon.mode.value === 'draw' }"
-          :disabled="canvasState.freehand.isAnimating.value">
-          ✏️ New Shape
-        </button>
-        <button @click="canvasState.polygon.mode.value = 'edit'" :class="{ active: canvasState.polygon.mode.value === 'edit' }"
-          :disabled="canvasState.freehand.isAnimating.value">
-          ✏️ Edit Shape
-        </button>
-        <button @click="canvasState.freehand.showGrid.value = !canvasState.freehand.showGrid.value"
-          :class="{ active: canvasState.freehand.showGrid.value }" :disabled="canvasState.freehand.isAnimating.value">
-          {{ canvasState.freehand.showGrid.value ? '⊞ Grid On' : '⊡ Grid Off' }}
-        </button>
+        <div class="button-group vertical">
+          <button @click="canvasState.polygon.mode.value = 'draw'" :class="{ active: canvasState.polygon.mode.value === 'draw' }"
+            :disabled="canvasState.freehand.isAnimating.value">
+            ✏️ New Shape
+          </button>
+          <button @click="canvasState.polygon.mode.value = 'edit'" :class="{ active: canvasState.polygon.mode.value === 'edit' }"
+            :disabled="canvasState.freehand.isAnimating.value">
+            ✏️ Edit Shape
+          </button>
+        </div>
         <span class="separator">|</span>
-        <button @click="clearCurrentPolygon" :disabled="!canvasState.polygon.isDrawing.value || canvasState.freehand.isAnimating.value">
-          🗑️ Cancel Shape
-        </button>
+        <div class="button-group vertical">
+          <button @click="finishPolygon" :disabled="!canvasState.polygon.isDrawing.value || canvasState.freehand.isAnimating.value">
+            ✅ End Shape (esc)
+          </button>
+          <button @click="clearCurrentPolygon" :disabled="!canvasState.polygon.isDrawing.value || canvasState.freehand.isAnimating.value">
+            🗑️ Cancel Shape
+          </button>
+        </div>
         <button @click="deleteSelectionStateful" :disabled="selectionStore.isEmpty(canvasState) || canvasState.freehand.isAnimating.value">
           🗑️ Delete
         </button>
@@ -794,6 +788,7 @@ onUnmounted(() => {
   border-radius: 8px;
   padding: 10px 15px;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
@@ -864,6 +859,18 @@ onUnmounted(() => {
 
 .separator {
   color: #ccc;
+}
+
+.flex-break {
+  display: none;
+  flex-basis: 100%;
+  height: 0;
+}
+
+@media (max-width: 1100px) {
+  .control-panel .flex-break {
+    display: block;
+  }
 }
 
 .info {
