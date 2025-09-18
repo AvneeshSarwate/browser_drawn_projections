@@ -122,12 +122,8 @@
 
       const updateState = (state) => {
         if (!state) return
-        polygonRenderData = Array.isArray(state?.polygon?.bakedRenderData)
-          ? state.polygon.bakedRenderData
-          : []
-        freehandRenderData = Array.isArray(state?.freehand?.bakedRenderData)
-          ? state.freehand.bakedRenderData
-          : []
+        polygonRenderData = state.polygon.bakedRenderData
+        freehandRenderData = state.freehand.bakedRenderData
 
         if (polygonRenderData.length || freehandRenderData.length) {
           console.debug('Received canvas state', {
@@ -202,11 +198,6 @@
 
       customElements.whenDefined('handwriting-canvas').then(() => {
         element.syncState = updateState
-        element.addEventListener('state-update', (event) => {
-          const detail = event.detail
-          const payload = Array.isArray(detail) ? detail[0] : detail
-          updateState(payload)
-        })
       })
 
       previewInstance = new p5(sketch)

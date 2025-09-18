@@ -114,9 +114,7 @@ const createSnapshot = (state: CanvasRuntimeState): CanvasStateSnapshot => {
 
 const emitStateUpdate = (state: CanvasRuntimeState) => {
   const snapshot = createSnapshot(state)
-  if (props.syncState) {
-    props.syncState(snapshot)
-  }
+  props.syncState?.(snapshot)
   emit('state-update', snapshot)
 }
 
@@ -367,7 +365,6 @@ const handleApplyMetadata = (node: Konva.Node, metadata: any) => {
 
 onMounted(async () => {
   try {
-
     // Remove the manual container creation and use the ref instead
     if (!konvaContainer.value) {
       console.error('Konva container ref not found')
@@ -485,6 +482,8 @@ onMounted(async () => {
 
     // Re-apply tool mode after deserialization to ensure control points/transformer states are correct
     applyToolMode(canvasState, activeTool.value)
+
+    emitStateUpdate(canvasState)
 
 
     // Mouse/touch event handlers - new three-tool system
