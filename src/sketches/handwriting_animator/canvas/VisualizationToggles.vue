@@ -22,6 +22,7 @@ const setActive = (key: string, enabled: boolean) => {
   } else {
     next.delete(key)
   }
+  // eslint-disable-next-line vue/no-mutating-props
   props.canvasState.ancillary.activeVisualizations.value = next
 }
 

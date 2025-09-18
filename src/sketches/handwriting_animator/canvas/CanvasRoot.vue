@@ -1,7 +1,7 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
 import { type TemplateAppState, appStateName, resolution, drawFlattenedStrokeGroup, stage, setStage, showMetadataEditor, activeTool } from '../appState';
-import { createCanvasRuntimeState, type CanvasRuntimeState, setGlobalCanvasState } from './canvasState';
+import { createCanvasRuntimeState, type CanvasRuntimeState } from './canvasState';
 import * as selectionStore from './selectionStore';
 import { getCanvasItem } from './CanvasItem';
 import { computed, inject, onMounted, onUnmounted, ref, watch } from 'vue';
@@ -40,9 +40,6 @@ const appState = inject<TemplateAppState>(appStateName)!!
 
 // Create and initialize canvas runtime state
 const canvasState: CanvasRuntimeState = createCanvasRuntimeState()
-
-// Set the global canvas state for all modules to access
-setGlobalCanvasState(canvasState)
 
 // Stateful wrappers for select tool helpers
 const initializeSelectToolStateful = (layer: Konva.Layer) => initializeSelectToolImpl(canvasState, layer)

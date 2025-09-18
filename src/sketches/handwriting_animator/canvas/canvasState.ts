@@ -216,20 +216,6 @@ export const createCanvasRuntimeState = (): CanvasRuntimeState => {
   }
 }
 
-// Global state reference for modules to use directly
-export let currentCanvasState: CanvasRuntimeState | null = null
-
-export const setGlobalCanvasState = (state: CanvasRuntimeState) => {
-  currentCanvasState = state
-}
-
-export const getGlobalCanvasState = (): CanvasRuntimeState => {
-  if (!currentCanvasState) {
-    throw new Error('Canvas state not initialized - call setGlobalCanvasState first')
-  }
-  return currentCanvasState
-}
-
 // Convenience getters for cleaner access
 export const freehandStrokes = (state: CanvasRuntimeState) => state.freehand.strokes
 export const freehandStrokeGroups = (state: CanvasRuntimeState) => state.freehand.strokeGroups
