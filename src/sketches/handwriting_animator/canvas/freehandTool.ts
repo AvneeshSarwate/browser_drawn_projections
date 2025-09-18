@@ -3,7 +3,7 @@
 import Konva from "konva"
 import getStroke from "perfect-freehand"
 import { type ShallowReactive, shallowReactive, ref, computed, watch } from "vue"
-import type { FreehandRenderData, FlattenedStroke, FlattenedStrokeGroup } from "../appState"
+import type { FreehandRenderData, FlattenedStroke, FlattenedStrokeGroup } from "./canvasState"
 import { executeCommand, pushCommandWithStates } from "../canvas/commands"
 
 

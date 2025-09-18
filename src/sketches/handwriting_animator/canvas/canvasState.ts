@@ -2,7 +2,25 @@ import { computed, ref, shallowReactive, type ComputedRef, type Ref, type Shallo
 import Konva from 'konva'
 import type { CanvasItem } from './CanvasItem'
 import { CommandStack } from './commandStack'
-import type { FreehandRenderData, PolygonRenderData } from '../appState'
+
+export type FlattenedStroke = {
+  points: { x: number, y: number, ts: number }[]
+  metadata?: any
+}
+
+export type FlattenedStrokeGroup = {
+  children: (FlattenedStroke | FlattenedStrokeGroup)[]
+  metadata?: any
+}
+
+export type FreehandRenderData = FlattenedStrokeGroup[]
+
+export type FlattenedPolygon = {
+  points: { x: number, y: number }[]
+  metadata?: any
+}
+
+export type PolygonRenderData = FlattenedPolygon[]
 
 export interface FreehandStrokeRuntime {
   id: string

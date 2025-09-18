@@ -7,26 +7,7 @@ import { Ramp } from '@/channels/channels'
 import { defineStore, acceptHMRUpdate } from 'pinia'
 import { ref, shallowReactive, shallowRef, type ShallowReactive } from 'vue'
 import Konva from 'konva'
-
-
-export type FlattenedStroke = {
-  points: { x: number, y: number, ts: number }[]
-  metadata?: any
-}
-
-export type FlattenedStrokeGroup = {
-  children: (FlattenedStroke | FlattenedStrokeGroup)[]
-  metadata?: any
-}
-
-export type FreehandRenderData = FlattenedStrokeGroup[]
-
-export type FlattenedPolygon = {
-  points: { x: number, y: number }[]
-  metadata?: any
-}
-
-export type PolygonRenderData = FlattenedPolygon[]
+import type { FlattenedStroke, FlattenedStrokeGroup, FreehandRenderData, PolygonRenderData } from './canvas/canvasState'
 
 export type TemplateAppState = {
   p5Instance: p5 | undefined

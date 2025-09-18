@@ -2,7 +2,6 @@ import Konva from 'konva'
 import { watch } from 'vue'
 
 import { pushCommandWithStates } from './commands'
-import { activeTool } from '../appState'
 import type { CanvasRuntimeState } from './canvasState'
 
 let transformer: Konva.Transformer | undefined = undefined
@@ -46,7 +45,7 @@ function updateTransformerWithState(state: CanvasRuntimeState, selectedNodes: Ko
   // Filter out nodes that shouldn't be transformed
   const filteredNodes = selectedNodes.filter(node => {
     // Skip polygons ONLY while actively in polygon edit mode
-    if (node instanceof Konva.Line && state.polygon.mode.value === 'edit' && activeTool.value === 'polygon') {
+    if (node instanceof Konva.Line && state.polygon.mode.value === 'edit' && state.activeTool.value === 'polygon') {
       return false
     }
     return true

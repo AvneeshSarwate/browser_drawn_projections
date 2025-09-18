@@ -4,7 +4,7 @@ import { TimeContext, CancelablePromiseProxy, launch } from "@/channels/base_tim
 import { findClosestPolygonLineAtPoint } from "@/creativeAlgs/shapeHelpers"
 import Konva from "konva"
 import { type ShallowReactive, shallowReactive, ref, watch } from "vue"
-import type { PolygonRenderData, FlattenedPolygon } from "../appState"
+import type { PolygonRenderData, FlattenedPolygon } from "./canvasState"
 import { executeCommand, pushCommandWithStates } from "./commands"
 import { getCurrentFreehandStateString } from './freehandTool'
 import { uid } from './canvasUtils'

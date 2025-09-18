@@ -1,10 +1,9 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
-import { type TemplateAppState, appStateName, resolution, stage, setStage, showMetadataEditor, activeTool } from '../appState';
 import { createCanvasRuntimeState, setGlobalCanvasState, type CanvasRuntimeState } from './canvasState';
 import * as selectionStore from './selectionStore';
 import { getCanvasItem } from './CanvasItem';
-import { computed, inject, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { clearListeners, singleKeydownEvent } from '@/io/keyboardAndMouse';
 import Konva from 'konva';
 import Timeline from './Timeline.vue';
@@ -31,17 +30,25 @@ import {
   duplicateSelection as duplicateSelectionImpl,
   deleteSelection as deleteSelectionImpl
 } from './selectTool';
-const appState = inject<TemplateAppState>(appStateName)!!
- 
-
+type CanvasResolution = { width: number; height: number }
 
 // ==================== common stuff ====================
-const props = defineProps<{ syncState: (state: CanvasRuntimeState) => void }>()
+const props = defineProps<{
+  syncState: (state: CanvasRuntimeState) => void
+  initialFreehandState: string
+  initialPolygonState: string
+  resolution: CanvasResolution
+}>()
+
+const resolution = computed(() => props.resolution)
 
 
 // Create and initialize canvas runtime state
 const canvasState: CanvasRuntimeState = createCanvasRuntimeState()
 setGlobalCanvasState(canvasState)
+
+const activeTool = canvasState.activeTool
+const metadataEditorVisible = canvasState.metadata.showEditor
 
 watch(
   () => props.syncState,
@@ -159,21 +166,17 @@ canvasState.command.pushCommand = (name: string, beforeState: string, afterState
 
 // Grouping logic moved to core/selectTool
 
-// Tool switching - now imported from appState
-
 // Callback for Timeline to set animation state  
 const setAnimatingState = (animating: boolean) => {
   canvasState.freehand.isAnimating.value = animating
 
-  // Block/unblock all stage interactions when animation state changes
-  if (stage) {
-    if (animating) {
-      // Disable all stage interactions
-      stage.listening(false)
-    } else {
-      // Re-enable stage interactions  
-      stage.listening(true)
-    }
+  const stageRef = canvasState.stage
+  if (!stageRef) return
+
+  if (animating) {
+    stageRef.listening(false)
+  } else {
+    stageRef.listening(true)
   }
 }
 
@@ -187,6 +190,7 @@ const applyToolMode = (state: CanvasRuntimeState, tool: 'select' | 'freehand' | 
   const freehandShapeLayer = state.layers.freehandShape
   const freehandDrawingLayer = state.layers.freehandDrawing
   const freehandSelectionLayer = state.layers.freehandSelection
+  const stageRef = state.stage
   // Clear selections when switching tools
   selectionStore.clear(state)
 
@@ -206,7 +210,7 @@ const applyToolMode = (state: CanvasRuntimeState, tool: 'select' | 'freehand' | 
 
     // Ensure transformer/selection overlay sits above shapes
     freehandSelectionLayer?.moveToTop()
-    if (stage) ensureHighlightLayer(stage).moveToTop()
+    if (stageRef) ensureHighlightLayer(stageRef).moveToTop()
   } else if (tool === 'freehand') {
     // Freehand drawing mode
     freehandShapeLayer?.listening(true)
@@ -258,16 +262,13 @@ const applyToolMode = (state: CanvasRuntimeState, tool: 'select' | 'freehand' | 
   setAllDraggable(false)
 
   // Redraw
-  stage?.batchDraw()
+  stageRef?.batchDraw()
 }
 
 // Watch for tool changes - new three-tool system
 watch(activeTool, (newTool) => {
-  canvasState.activeTool.value = newTool
   applyToolMode(canvasState, newTool)
-})
-
-canvasState.activeTool.value = activeTool.value
+}, { immediate: true })
 
 
 // Old metadata watchers removed – unified editor reads directly from selectionStore
@@ -305,16 +306,15 @@ onMounted(async () => {
     // Initialize Konva using the ref
     const stageInstance = new Konva.Stage({
       container: konvaContainer.value,
-      width: resolution.width,
-      height: resolution.height,
+      width: props.resolution.width,
+      height: props.resolution.height,
     })
-    setStage(stageInstance)
     canvasState.stage = stageInstance
     canvasState.konvaContainer = konvaContainer.value
 
     // Update cursor based on active tool
     const updateCursorFn = () => {
-      if (stageInstance && konvaContainer.value) {
+      if (konvaContainer.value) {
         konvaContainer.value.style.cursor = activeTool.value === 'freehand' ? 'crosshair' : 'default'
       }
     }
@@ -333,7 +333,7 @@ onMounted(async () => {
     initializeSelectToolStateful(canvasState.layers.freehandSelection!)
 
     // Add metadata highlight layer on top
-    const metadataHighlightLayer = ensureHighlightLayer(stage!)
+    const metadataHighlightLayer = ensureHighlightLayer(stageInstance)
     // Keep transformer layer above all interactive shape layers to prevent pointer blocking
     canvasState.layers.freehandSelection!.moveToTop()
     // Keep highlight visuals on top (non-listening, so it won't block interaction)
@@ -364,22 +364,39 @@ onMounted(async () => {
     // Initialize cursor
     updateCursor!()
 
-    // Try to restore canvas state from hotreload (after all setup is complete)
-    deserializeFreehandState(canvasState, appState.freehandStateString)
-    deserializePolygonState(canvasState, appState.polygonStateString)
+    const applyFreehandState = (stateString: string) => {
+      if (!stateString || stateString === canvasState.freehand.serializedState) return
+      deserializeFreehandState(canvasState, stateString)
+    }
+
+    const applyPolygonState = (stateString: string) => {
+      if (!stateString || stateString === canvasState.polygon.serializedState) return
+      deserializePolygonState(canvasState, stateString)
+    }
+
+    applyFreehandState(props.initialFreehandState)
+    applyPolygonState(props.initialPolygonState)
+
+    watch(() => props.initialFreehandState, (stateString) => {
+      applyFreehandState(stateString)
+    })
+
+    watch(() => props.initialPolygonState, (stateString) => {
+      applyPolygonState(stateString)
+    })
 
     // Re-apply tool mode after deserialization to ensure control points/transformer states are correct
     applyToolMode(canvasState, activeTool.value)
 
 
     // Mouse/touch event handlers - new three-tool system
-    stage!.on('mousedown touchstart', (e) => {
-      const pos = stage!.getPointerPosition()
+    stageInstance.on('mousedown touchstart', (e) => {
+      const pos = stageInstance.getPointerPosition()
       if (!pos) return
 
       if (activeTool.value === 'select') {
         // Universal select tool handles all selection for both freehand and polygon
-        handleSelectPointerDownStateful(stage!, e)
+        handleSelectPointerDownStateful(stageInstance, e)
       } else if (activeTool.value === 'freehand') {
         // Freehand tool always draws in this mode; selection via Select tool
         canvasState.freehand.isDrawing = true
@@ -399,15 +416,15 @@ onMounted(async () => {
       }
     })
 
-    stage!.on('mousemove touchmove', (e) => {
+    stageInstance.on('mousemove touchmove', (e) => {
       const freehandDrawingLayer = canvasState.layers.freehandDrawing
       if (activeTool.value === 'select') {
         // Handle drag selection for select tool
-        handleSelectPointerMoveStateful(stage!, e)
+        handleSelectPointerMoveStateful(stageInstance, e)
       } else if (activeTool.value === 'freehand') {
         if (canvasState.freehand.isDrawing) {
           // Handle drawing
-          const pos = stage!.getPointerPosition()
+          const pos = stageInstance.getPointerPosition()
           if (!pos) return
 
           canvasState.freehand.currentPoints.push(pos.x, pos.y)
@@ -433,7 +450,7 @@ onMounted(async () => {
       }
     })
 
-    stage!.on('mouseup touchend', (e) => {
+    stageInstance.on('mouseup touchend', (e) => {
       const freehandDrawingLayer = canvasState.layers.freehandDrawing
       if (activeTool.value === 'freehand' && canvasState.freehand.isDrawing) {
         canvasState.freehand.isDrawing = false
@@ -484,7 +501,7 @@ onMounted(async () => {
         canvasState.freehand.currentTimestamps = []
       } else {
         // Delegate to select tool for all other cases
-        handleSelectPointerUpStateful(stage!, e)
+        handleSelectPointerUpStateful(stageInstance, e)
       }
     })
 
@@ -522,7 +539,7 @@ onUnmounted(() => {
   clearListeners()
 
   // Clean up Konva
-  stage?.destroy()
+  canvasState.stage?.destroy()
 })
 
 </script>
@@ -598,7 +615,7 @@ onUnmounted(() => {
           {{ canvasState.freehand.useRealTiming.value ? '⏱️ Real Time' : '⏱️ Max 0.3s' }}
         </button>
         <span class="separator">|</span>
-        <button @click="showMetadataEditor = !showMetadataEditor" :class="{ active: showMetadataEditor }"
+        <button @click="metadataEditorVisible = !metadataEditorVisible" :class="{ active: metadataEditorVisible }"
           :disabled="canvasState.freehand.isAnimating.value">
           📝 Metadata
         </button>
@@ -635,7 +652,7 @@ onUnmounted(() => {
           🗑️ Delete
         </button>
         <span class="separator">|</span>
-        <button @click="showMetadataEditor = !showMetadataEditor" :class="{ active: showMetadataEditor }"
+        <button @click="metadataEditorVisible = !metadataEditorVisible" :class="{ active: metadataEditorVisible }"
           :disabled="canvasState.freehand.isAnimating.value">
           📝 Metadata
         </button>
@@ -651,7 +668,7 @@ onUnmounted(() => {
       }"></div>
 
       <!-- Smart Metadata Editor -->
-      <div class="metadata-suite" v-if="showMetadataEditor">
+      <div class="metadata-suite" v-if="metadataEditorVisible">
         <VisualizationToggles :canvas-state="canvasState" />
         <HierarchicalMetadataEditor
           :selected-nodes="selectedKonvaNodes"

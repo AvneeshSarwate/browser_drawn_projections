@@ -2,7 +2,7 @@
 import { inject, onMounted, onUnmounted } from 'vue'
 import CanvasRoot from './canvas/CanvasRoot.vue'
 import StrokeLaunchControls from './StrokeLaunchControls.vue'
-import { appStateName, type TemplateAppState, drawFlattenedStrokeGroup } from './appState'
+import { appStateName, type TemplateAppState, drawFlattenedStrokeGroup, resolution } from './appState'
 import { updateGPUStrokes } from './strokeLauncher'
 import type { CanvasRuntimeState } from './canvas/canvasState'
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX'
@@ -90,6 +90,11 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <CanvasRoot :sync-state="syncCanvasState" />
+  <CanvasRoot
+    :sync-state="syncCanvasState"
+    :initial-freehand-state="appState.freehandStateString"
+    :initial-polygon-state="appState.polygonStateString"
+    :resolution="resolution"
+  />
   <StrokeLaunchControls />
 </template>
