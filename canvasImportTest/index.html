@@ -3,60 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <title>Handwriting Canvas Web Component Test</title>
-  <style>
-    body {
-      font-family: system-ui, sans-serif;
-      margin: 0;
-      padding: 24px;
-      background: #f6f7fb;
-      color: #20242a;
-    }
-
-    h1 {
-      margin-top: 0;
-      font-size: 1.5rem;
-    }
-
-    .layout {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 24px;
-      align-items: flex-start;
-    }
-
-    handwriting-canvas,
-    #p5-preview {
-      border: 1px solid #ccd2e0;
-      border-radius: 12px;
-      background: #ffffff;
-      box-shadow: 0 12px 32px rgba(17, 18, 38, 0.1);
-      padding: 16px;
-    }
-
-    handwriting-canvas {
-      flex: 1 1 480px;
-      min-width: 360px;
-      display: block;
-    }
-
-    #p5-preview {
-      flex: 1 1 360px;
-      min-width: 320px;
-    }
-
-    #p5-container canvas {
-      max-width: 100%;
-      border-radius: 8px;
-      display: block;
-      margin: 0 auto;
-    }
-
-    .instructions {
-      margin-bottom: 16px;
-      max-width: 880px;
-      line-height: 1.5;
-    }
-  </style>
+  <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
   <h1>Handwriting Canvas Component Demo</h1>
@@ -69,10 +16,11 @@
   <div class="layout">
     <handwriting-canvas
       id="handwritingCanvas"
-      width="800"
+      width="450"
       height="450"
       initial-freehand-state=""
       initial-polygon-state=""
+      hide-timeline
     ></handwriting-canvas>
 
     <div id="p5-preview">
@@ -82,166 +30,7 @@
   </div>
 
   <script src="./handwriting-canvas.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/p5@1.7.0/lib/p5.min.js"></script>
-  <script>
-    const polygonRenderData = []
-    const freehandRenderData = []
-    const polygonMotion = new Map()
-    const strokeMotion = new Map()
-
-    const element = document.getElementById('handwritingCanvas')
-
-    element.syncState = (state) => {
-      polygonRenderData.splice(0, polygonRenderData.length, ...state.polygon.bakedRenderData)
-      freehandRenderData.splice(0, freehandRenderData.length, ...state.freehand.bakedRenderData)
-      updateMotionMaps()
-    }
-
-    function setup() {
-      const container = document.getElementById('p5-container')
-      createCanvas(800, 450).parent(container)
-      frameRate(60)
-      noFill()
-    }
-
-    function draw() {
-      clear()
-      background(250)
-
-      const time = millis() / 1000
-
-      noStroke()
-      for (let i = 0; i < polygonRenderData.length; i++) {
-        const polygon = polygonRenderData[i]
-        const key = polygon?.id ?? `polygon-${i}`
-        const motion = getMotion(polygonMotion, key)
-        const { dx, dy } = computeOffset(motion, time)
-        const color = polygon?.metadata?.color || colourForIndex(i)
-        fill(color.r ?? 255, color.g ?? 255, color.b ?? 255, color.a ?? 255)
-        beginShape()
-        for (const point of polygon.points ?? []) {
-          vertex(point.x + dx, point.y + dy)
-        }
-        endShape(CLOSE)
-      }
-
-      stroke(30)
-      strokeWeight(2)
-      noFill()
-      freehandRenderData.forEach((group, index) => {
-        drawStrokeGroup(group, `group-${index}`, time)
-      })
-    }
-
-    function drawStrokeGroup(item, key, time) {
-      if (!item) return
-      if (Array.isArray(item.children)) {
-        item.children.forEach((child, idx) => {
-          drawStrokeGroup(child, `${key}.${idx}`, time)
-        })
-        return
-      }
-      if (!item.points || item.points.length === 0) return
-
-      const motion = getMotion(strokeMotion, key)
-      const { dx, dy } = computeOffset(motion, time, 1.3)
-
-      beginShape()
-      for (const point of item.points) {
-        vertex(point.x + dx, point.y + dy)
-      }
-      endShape()
-    }
-
-    function updateMotionMaps() {
-      const polygonKeys = new Set()
-      polygonRenderData.forEach((polygon, index) => {
-        const key = polygon?.id ?? `polygon-${index}`
-        polygonKeys.add(key)
-        getMotion(polygonMotion, key)
-      })
-      pruneUnused(polygonMotion, polygonKeys)
-
-      const strokeKeys = new Set()
-      const collectKeys = (item, key) => {
-        if (Array.isArray(item.children)) {
-          item.children.forEach((child, idx) => collectKeys(child, `${key}.${idx}`))
-          return
-        }
-        strokeKeys.add(key)
-        getMotion(strokeMotion, key)
-      }
-      freehandRenderData.forEach((group, index) => collectKeys(group, `group-${index}`))
-      pruneUnused(strokeMotion, strokeKeys)
-    }
-
-    function getMotion(map, key) {
-      let motion = map.get(key)
-      if (!motion) {
-        const seed = hashString(key)
-        const radius = 6 + (seed % 1000) / 1000 * 12
-        const speed = 0.6 + ((seed >> 3) % 1000) / 1000 * 1.4
-        const phase = ((seed >> 7) % 1000) / 1000 * TWO_PI
-        motion = { radius, speed, phase }
-        map.set(key, motion)
-      }
-      return motion
-    }
-
-    function computeOffset(motion, time, skew = 1) {
-      const angle = motion.phase + motion.speed * time
-      return {
-        dx: Math.cos(angle) * motion.radius,
-        dy: Math.sin(angle * skew) * motion.radius,
-      }
-    }
-
-    function pruneUnused(map, keys) {
-      for (const key of map.keys()) {
-        if (!keys.has(key)) {
-          map.delete(key)
-        }
-      }
-    }
-
-    function hslToRgb(h, s, l) {
-      if (s === 0) {
-        const val = Math.round(l * 255)
-        return [val, val, val]
-      }
-      const hue2rgb = (p, q, t) => {
-        if (t < 0) t += 1
-        if (t > 1) t -= 1
-        if (t < 1 / 6) return p + (q - p) * 6 * t
-        if (t < 1 / 2) return q
-        if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6
-        return p
-      }
-      const q = l < 0.5 ? l * (1 + s) : l + s - l * s
-      const p = 2 * l - q
-      return [
-        Math.round(hue2rgb(p, q, h + 1 / 3) * 255),
-        Math.round(hue2rgb(p, q, h) * 255),
-        Math.round(hue2rgb(p, q, h - 1 / 3) * 255),
-      ]
-    }
-
-    function colourForIndex(index) {
-      const hue = (index * 47) % 360
-      const saturation = 65
-      const lightness = 55
-      const [r, g, b] = hslToRgb(hue / 360, saturation / 100, lightness / 100)
-      return { r, g, b, a: 220 }
-    }
-
-    function hashString(text) {
-      let hash = 0
-      for (let i = 0; i < text.length; i++) {
-        hash = (hash << 5) - hash + text.charCodeAt(i)
-        hash |= 0
-      }
-      return Math.abs(hash)
-    }
-  </script>
+  <script src="https://cdn.jsdelivr.net/npm/p5@1.11.10/lib/p5.js"></script>
+  <script src="./sketch.js"></script>
 </body>
 </html>

@@ -1,0 +1,68 @@
+body {
+  font-family: system-ui, sans-serif;
+  margin: 0;
+  padding: 24px;
+  background: #f6f7fb;
+  color: #20242a;
+}
+
+h1 {
+  margin-top: 0;
+  font-size: 1.5rem;
+}
+
+.layout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+handwriting-canvas,
+#p5-preview {
+  border: 1px solid #ccd2e0;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 12px 32px rgba(17, 18, 38, 0.1);
+  padding: 16px;
+}
+
+handwriting-canvas {
+  flex: 1 1 480px;
+  display: block;
+}
+
+#p5-preview {
+  flex: 1 1 360px;
+}
+
+#p5-container canvas {
+  max-width: 100%;
+  border-radius: 8px;
+  display: block;
+  margin: 0 auto;
+}
+
+.instructions {
+  margin-bottom: 16px;
+  max-width: 880px;
+  line-height: 1.5;
+}
+
+@media (max-width: 900px) {
+  body {
+    padding: 16px;
+  }
+
+  .layout {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  handwriting-canvas,
+  #p5-preview {
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+  }
+}

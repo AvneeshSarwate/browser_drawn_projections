@@ -37,11 +37,13 @@ const props = withDefaults(defineProps<{
   initialPolygonState?: string
   width?: number | string
   height?: number | string
+  hideTimeline?: boolean
 }>(), {
   initialFreehandState: '',
   initialPolygonState: '',
   width: 1000,
   height: 500,
+  hideTimeline: false,
 })
 
 const emit = defineEmits<{
@@ -781,13 +783,15 @@ onUnmounted(() => {
         />
       </div>
 
-      <Timeline :strokes="freehandStrokes(canvasState)" :selectedStrokes="canvasState.freehand.selectedStrokesForTimeline.value"
-        :useRealTiming="canvasState.freehand.useRealTiming.value" :maxInterStrokeDelay="maxInterStrokeDelay"
-        :overrideDuration="canvasState.freehand.timelineDuration.value > 0 ? canvasState.freehand.timelineDuration.value : undefined"
-        :lockWhileAnimating="setAnimatingState" @timeUpdate="handleTimeUpdate" />
-      <div v-if="canvasState.freehand.isAnimating.value" class="animation-lock-warning">
-        ⚠️ Timeline has modified elements - press Stop to unlock
-      </div>
+      <template v-if="!props.hideTimeline">
+        <Timeline :strokes="freehandStrokes(canvasState)" :selectedStrokes="canvasState.freehand.selectedStrokesForTimeline.value"
+          :useRealTiming="canvasState.freehand.useRealTiming.value" :maxInterStrokeDelay="maxInterStrokeDelay"
+          :overrideDuration="canvasState.freehand.timelineDuration.value > 0 ? canvasState.freehand.timelineDuration.value : undefined"
+          :lockWhileAnimating="setAnimatingState" @timeUpdate="handleTimeUpdate" />
+        <div v-if="canvasState.freehand.isAnimating.value" class="animation-lock-warning">
+          ⚠️ Timeline has modified elements - press Stop to unlock
+        </div>
+      </template>
     </div>
   </div>
 </template>
