@@ -189,7 +189,7 @@ const konvaContainer = ref<HTMLDivElement>()
 const applyToolMode = (state: CanvasRuntimeState, tool: 'select' | 'freehand' | 'polygon') => {
   const freehandShapeLayer = state.layers.freehandShape
   const freehandDrawingLayer = state.layers.freehandDrawing
-  const freehandSelectionLayer = state.layers.freehandSelection
+  const selectionLayer = state.layers.transformerLayer ?? state.layers.freehandSelection
   const stageRef = state.stage
   // Clear selections when switching tools
   selectionStore.clear(state)
@@ -205,17 +205,17 @@ const applyToolMode = (state: CanvasRuntimeState, tool: 'select' | 'freehand' | 
     state.layers.polygonControls?.listening(false)
 
     // Keep selection layers active (transformer lives here)
-    freehandSelectionLayer?.listening(true)
+    selectionLayer?.listening(true)
     state.layers.polygonSelection?.listening(true)
 
     // Ensure transformer/selection overlay sits above shapes
-    freehandSelectionLayer?.moveToTop()
+    selectionLayer?.moveToTop()
     if (stageRef) ensureHighlightLayer(stageRef).moveToTop()
   } else if (tool === 'freehand') {
     // Freehand drawing mode
     freehandShapeLayer?.listening(true)
     freehandDrawingLayer?.listening(true)
-    freehandSelectionLayer?.listening(true)
+    selectionLayer?.listening(true)
 
     // Disable polygon interactive layers
     state.layers.polygonShapes?.listening(false)
@@ -232,7 +232,7 @@ const applyToolMode = (state: CanvasRuntimeState, tool: 'select' | 'freehand' | 
     // Disable freehand interactive layers
     freehandShapeLayer?.listening(false)
     freehandDrawingLayer?.listening(false)
-    freehandSelectionLayer?.listening(false)
+    selectionLayer?.listening(false)
   }
 
   // Manage polygon control points visibility lifecycle across tools
@@ -326,16 +326,23 @@ onMounted(async () => {
     initFreehandLayers(canvasState, stageInstance)
     initPolygonLayers(canvasState, stageInstance)
 
+    const freehandSelectionLayer = canvasState.layers.freehandSelection
+    if (!freehandSelectionLayer) {
+      console.error('Freehand selection layer not initialized')
+      return
+    }
+
     // Initialize unified transformer
-    initializeTransformer(canvasState, canvasState.layers.freehandSelection!)
+    initializeTransformer(canvasState, freehandSelectionLayer)
 
     // Initialize select tool
-    initializeSelectToolStateful(canvasState.layers.freehandSelection!)
+    const selectionLayerForTool = canvasState.layers.transformerLayer ?? freehandSelectionLayer
+    initializeSelectToolStateful(selectionLayerForTool)
 
     // Add metadata highlight layer on top
     const metadataHighlightLayer = ensureHighlightLayer(stageInstance)
     // Keep transformer layer above all interactive shape layers to prevent pointer blocking
-    canvasState.layers.freehandSelection!.moveToTop()
+    canvasState.layers.transformerLayer?.moveToTop()
     // Keep highlight visuals on top (non-listening, so it won't block interaction)
     metadataHighlightLayer.moveToTop()
 

@@ -4,15 +4,15 @@ import { watch } from 'vue'
 import { pushCommandWithStates } from './commands'
 import type { CanvasRuntimeState } from './canvasState'
 
-let transformer: Konva.Transformer | undefined = undefined
-let transformerLayer: Konva.Layer | undefined = undefined
 const createTransformer = (state: CanvasRuntimeState, layer: Konva.Layer) => {
-  transformerLayer = layer
-  transformer = new Konva.Transformer({
+  state.layers.transformerLayer = layer
+  const transformer = new Konva.Transformer({
     rotateEnabled: true,
     keepRatio: false,
     padding: 6
   })
+
+  state.layers.transformer = transformer
 
   transformer.on('transformstart', () => {
     startTransformTrackingWithState(state)
@@ -25,8 +25,7 @@ const createTransformer = (state: CanvasRuntimeState, layer: Konva.Layer) => {
   layer.add(transformer)
 
   watch(state.selection.selectedKonvaNodes, (selectedNodes) => {
-    if (!transformer || !transformerLayer) return
-    updateTransformerWithState(state, selectedNodes, transformer, transformerLayer)
+    updateTransformerWithState(state, selectedNodes)
   }, { immediate: true })
 
   return transformer
@@ -41,7 +40,11 @@ export function initializeTransformer(state: CanvasRuntimeState, layer: Konva.La
 }
 
 // State-based transformer update
-function updateTransformerWithState(state: CanvasRuntimeState, selectedNodes: Konva.Node[], transformer: Konva.Transformer, layer: Konva.Layer) {
+function updateTransformerWithState(state: CanvasRuntimeState, selectedNodes: Konva.Node[]) {
+  const transformer = state.layers.transformer
+  const layer = state.layers.transformerLayer
+  if (!transformer || !layer) return
+
   // Filter out nodes that shouldn't be transformed
   const filteredNodes = selectedNodes.filter(node => {
     // Skip polygons ONLY while actively in polygon edit mode
@@ -92,9 +95,4 @@ function finishTransformTrackingWithState(state: CanvasRuntimeState, operationNa
       state.metadata.metadataText.value = '' // Clear the temp state
     })
   })
-}
-
-
-export function getTransformer(): Konva.Transformer | undefined {
-  return transformer
 }
