@@ -29,17 +29,34 @@ import {
   duplicateSelection as duplicateSelectionImpl,
   deleteSelection as deleteSelectionImpl
 } from './selectTool';
-type CanvasResolution = { width: number; height: number }
 
 // ==================== common stuff ====================
-const props = defineProps<{
-  syncState: (state: CanvasRuntimeState) => void
-  initialFreehandState: string
-  initialPolygonState: string
-  resolution: CanvasResolution
+const props = withDefaults(defineProps<{
+  syncState?: (state: CanvasRuntimeState) => void
+  initialFreehandState?: string
+  initialPolygonState?: string
+  width?: number | string
+  height?: number | string
+}>(), {
+  initialFreehandState: '',
+  initialPolygonState: '',
+  width: 1000,
+  height: 500,
+})
+
+const emit = defineEmits<{
+  (event: 'state-update', state: CanvasRuntimeState): void
 }>()
 
-const resolution = computed(() => props.resolution)
+const resolution = computed(() => {
+  const width = Number(props.width)
+  const height = Number(props.height)
+
+  return {
+    width: Number.isFinite(width) ? width : 1000,
+    height: Number.isFinite(height) ? height : 500,
+  }
+})
 
 
 // Create and initialize canvas runtime state
@@ -51,11 +68,19 @@ let disposeEscapeListener: (() => void) | undefined
 const activeTool = canvasState.activeTool
 const metadataEditorVisible = canvasState.metadata.showEditor
 
+const emitStateUpdate = (state: CanvasRuntimeState) => {
+  if (props.syncState) {
+    props.syncState(state)
+  }
+  emit('state-update', state)
+}
+
+canvasState.callbacks.syncAppState = emitStateUpdate
+
 watch(
   () => props.syncState,
-  (fn) => {
-    canvasState.callbacks.syncAppState = fn
-    canvasState.callbacks.syncAppState?.(canvasState)
+  () => {
+    emitStateUpdate(canvasState)
   },
   { immediate: true }
 )
@@ -305,10 +330,11 @@ onMounted(async () => {
     }
 
     // Initialize Konva using the ref
+    const initialResolution = resolution.value
     const stageInstance = new Konva.Stage({
       container: konvaContainer.value,
-      width: props.resolution.width,
-      height: props.resolution.height,
+      width: initialResolution.width,
+      height: initialResolution.height,
     })
     canvasState.stage = stageInstance
     canvasState.konvaContainer = konvaContainer.value
@@ -387,6 +413,30 @@ onMounted(async () => {
     watch(() => props.initialPolygonState, (stateString) => {
       applyPolygonState(stateString)
     })
+
+    watch(
+      () => [props.width, props.height] as const,
+      ([width, height]) => {
+        const numericWidth = Number(width)
+        const numericHeight = Number(height)
+
+        const nextWidth = Number.isFinite(numericWidth) ? numericWidth : resolution.value.width
+        const nextHeight = Number.isFinite(numericHeight) ? numericHeight : resolution.value.height
+
+        const stage = canvasState.stage
+        if (stage) {
+          stage.width(nextWidth)
+          stage.height(nextHeight)
+          stage.batchDraw()
+        }
+
+        if (canvasState.konvaContainer) {
+          canvasState.konvaContainer.style.width = `${nextWidth}px`
+          canvasState.konvaContainer.style.height = `${nextHeight}px`
+        }
+      },
+      { immediate: true }
+    )
 
     // Re-apply tool mode after deserialization to ensure control points/transformer states are correct
     applyToolMode(canvasState, activeTool.value)

@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Handwriting Canvas Web Component Test</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      margin: 0;
+      padding: 24px;
+      background: #f6f7fb;
+      color: #20242a;
+    }
+
+    h1 {
+      margin-top: 0;
+      font-size: 1.5rem;
+    }
+
+    .layout {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 24px;
+      align-items: flex-start;
+    }
+
+    handwriting-canvas,
+    #p5-preview {
+      border: 1px solid #ccd2e0;
+      border-radius: 12px;
+      background: #ffffff;
+      box-shadow: 0 12px 32px rgba(17, 18, 38, 0.1);
+      padding: 16px;
+    }
+
+    handwriting-canvas {
+      flex: 1 1 480px;
+      min-width: 360px;
+      display: block;
+    }
+
+    #p5-preview {
+      flex: 1 1 360px;
+      min-width: 320px;
+    }
+
+    #p5-container canvas {
+      max-width: 100%;
+      border-radius: 8px;
+      display: block;
+      margin: 0 auto;
+    }
+
+    .instructions {
+      margin-bottom: 16px;
+      max-width: 880px;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <h1>Handwriting Canvas Component Demo</h1>
+  <p class="instructions">
+    This page demonstrates how to use the <code>&lt;handwriting-canvas&gt;</code> custom element alongside a
+    simple inline p5.js sketch. Draw inside the canvas component and the p5 preview will mirror the baked
+    stroke and polygon data supplied by the component's state updates.
+  </p>
+
+  <div class="layout">
+    <handwriting-canvas
+      id="handwritingCanvas"
+      width="800"
+      height="450"
+      initial-freehand-state=""
+      initial-polygon-state=""
+    ></handwriting-canvas>
+
+    <div id="p5-preview">
+      <h2 style="margin-top:0;font-size:1.1rem;">p5.js Preview</h2>
+      <div id="p5-container"></div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/p5@1.7.0/lib/p5.min.js"></script>
+  <script src="./handwriting-canvas.js"></script>
+  <script>
+    (function () {
+      const element = document.getElementById('handwritingCanvas')
+      let polygonRenderData = []
+      let freehandRenderData = []
+      let previewInstance
+
+      const hslToRgb = (h, s, l) => {
+        if (s === 0) {
+          const val = Math.round(l * 255)
+          return [val, val, val]
+        }
+        const hue2rgb = (p, q, t) => {
+          if (t < 0) t += 1
+          if (t > 1) t -= 1
+          if (t < 1 / 6) return p + (q - p) * 6 * t
+          if (t < 1 / 2) return q
+          if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6
+          return p
+        }
+        const q = l < 0.5 ? l * (1 + s) : l + s - l * s
+        const p = 2 * l - q
+        return [
+          Math.round(hue2rgb(p, q, h + 1 / 3) * 255),
+          Math.round(hue2rgb(p, q, h) * 255),
+          Math.round(hue2rgb(p, q, h - 1 / 3) * 255),
+        ]
+      }
+
+      const colourForIndex = (index) => {
+        const hue = (index * 47) % 360
+        const saturation = 65
+        const lightness = 55
+        const [r, g, b] = hslToRgb(hue / 360, saturation / 100, lightness / 100)
+        return { r, g, b, a: 220 }
+      }
+
+      const updateState = (state) => {
+        if (!state) return
+        polygonRenderData = Array.isArray(state?.polygon?.bakedRenderData)
+          ? state.polygon.bakedRenderData
+          : []
+        freehandRenderData = Array.isArray(state?.freehand?.bakedRenderData)
+          ? state.freehand.bakedRenderData
+          : []
+        if (previewInstance) {
+          previewInstance.redraw()
+        }
+      }
+
+      const sketch = (p) => {
+        p.setup = () => {
+          const container = document.getElementById('p5-container')
+          p.createCanvas(800, 450).parent(container)
+          p.noLoop()
+          p.noFill()
+        }
+
+        const drawStrokeGroup = (item) => {
+          if (!item) return
+          if (Array.isArray(item.children)) {
+            item.children.forEach(drawStrokeGroup)
+            return
+          }
+          if (!('points' in item) || !Array.isArray(item.points) || item.points.length === 0) {
+            return
+          }
+          p.beginShape()
+          item.points.forEach((point) => {
+            p.vertex(point.x, point.y)
+          })
+          p.endShape()
+        }
+
+        p.draw = () => {
+          p.clear()
+          p.background(250)
+
+          if (polygonRenderData.length > 0) {
+            p.push()
+            polygonRenderData.forEach((polygon, index) => {
+              const colour = polygon?.metadata?.color
+              if (colour && typeof colour === 'object') {
+                const { r = 255, g = 255, b = 255, a = 255 } = colour
+                p.fill(r, g, b, a)
+              } else {
+                const fallback = colourForIndex(index)
+                p.fill(fallback.r, fallback.g, fallback.b, fallback.a)
+              }
+              p.noStroke()
+              p.beginShape()
+              polygon.points?.forEach((point) => {
+                p.vertex(point.x, point.y)
+              })
+              p.endShape(p.CLOSE)
+            })
+            p.pop()
+          }
+
+          if (freehandRenderData.length > 0) {
+            p.push()
+            p.stroke(30)
+            p.strokeWeight(2)
+            p.noFill()
+            freehandRenderData.forEach(drawStrokeGroup)
+            p.pop()
+          }
+        }
+      }
+
+      element.syncState = updateState
+      element.addEventListener('state-update', (event) => updateState(event.detail))
+
+      previewInstance = new p5(sketch)
+    })()
+  </script>
+</body>
+</html>

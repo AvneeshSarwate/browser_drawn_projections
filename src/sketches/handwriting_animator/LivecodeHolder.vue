@@ -94,7 +94,8 @@ onUnmounted(() => {
     :sync-state="syncCanvasState"
     :initial-freehand-state="appState.freehandStateString"
     :initial-polygon-state="appState.polygonStateString"
-    :resolution="resolution"
+    :width="resolution.width"
+    :height="resolution.height"
   />
   <StrokeLaunchControls />
 </template>

@@ -6,6 +6,7 @@
     "dev": "vite",
     "devHost": "vite --host",
     "build": "run-p type-check build-only",
+    "buildCanvas": "vite build --config vite.canvas.config.ts",
     "preview": "vite preview",
     "build-only": "vite build",
     "type-check": "vue-tsc --noEmit -p tsconfig.app.json --composite false",
