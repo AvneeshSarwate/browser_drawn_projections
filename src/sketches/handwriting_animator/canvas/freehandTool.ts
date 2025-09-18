@@ -1077,6 +1077,4 @@ export const collectHierarchy = (state: CanvasRuntimeState): HierarchyEntry[] =>
   return collectHierarchyFromRoot(freehandShapeLayer.getChildren())
 }
 
-// Cursor update function (will be defined in onMounted)
-export let updateCursor: (() => void) | undefined
-export const setUpdateCursor = (uc: (() => void)) => updateCursor = uc
+// Cursor update function is managed via canvasState.callbacks.updateCursor

@@ -9,7 +9,7 @@ import Konva from 'konva';
 import Timeline from './Timeline.vue';
 import HierarchicalMetadataEditor from './HierarchicalMetadataEditor.vue';
 import VisualizationToggles from './VisualizationToggles.vue';
-import { clearFreehandSelection as clearFreehandSelectionImpl, createStrokeShape as createStrokeShapeImpl, deserializeFreehandState, getStrokePath, gridSize, serializeFreehandState, updateBakedFreehandData, updateFreehandDraggableStates as updateFreehandDraggableStatesImpl, updateTimelineState as updateTimelineStateImpl, type FreehandStroke, handleTimeUpdate as handleTimeUpdateImpl, maxInterStrokeDelay, setUpdateCursor, updateCursor, downloadFreehandDrawing as downloadFreehandDrawingImpl, uploadFreehandDrawing as uploadFreehandDrawingImpl, getCurrentFreehandStateString, restoreFreehandState, initFreehandLayers } from './freehandTool';
+import { clearFreehandSelection as clearFreehandSelectionImpl, createStrokeShape as createStrokeShapeImpl, deserializeFreehandState, getStrokePath, gridSize, serializeFreehandState, updateBakedFreehandData, updateFreehandDraggableStates as updateFreehandDraggableStatesImpl, updateTimelineState as updateTimelineStateImpl, type FreehandStroke, handleTimeUpdate as handleTimeUpdateImpl, maxInterStrokeDelay, downloadFreehandDrawing as downloadFreehandDrawingImpl, uploadFreehandDrawing as uploadFreehandDrawingImpl, getCurrentFreehandStateString, restoreFreehandState, initFreehandLayers } from './freehandTool';
 import { freehandStrokes } from './canvasState';
 import { getPointsBounds } from './canvasUtils';
 import { CommandStack } from './commandStack';
@@ -318,9 +318,8 @@ onMounted(async () => {
         konvaContainer.value.style.cursor = activeTool.value === 'freehand' ? 'crosshair' : 'default'
       }
     }
-    setUpdateCursor(updateCursorFn)
     canvasState.callbacks.updateCursor = updateCursorFn
-    updateCursor!()
+    canvasState.callbacks.updateCursor?.()
 
     // Create layers using state-based initialization
     initFreehandLayers(canvasState, stageInstance)
@@ -362,7 +361,7 @@ onMounted(async () => {
     }
 
     // Initialize cursor
-    updateCursor!()
+    canvasState.callbacks.updateCursor?.()
 
     const applyFreehandState = (stateString: string) => {
       if (!stateString || stateString === canvasState.freehand.serializedState) return
