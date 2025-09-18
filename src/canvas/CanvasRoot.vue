@@ -9,12 +9,12 @@ import Konva from 'konva';
 import Timeline from './Timeline.vue';
 import HierarchicalMetadataEditor from './HierarchicalMetadataEditor.vue';
 import VisualizationToggles from './VisualizationToggles.vue';
-import { clearFreehandSelection as clearFreehandSelectionImpl, createStrokeShape as createStrokeShapeImpl, deserializeFreehandState, getStrokePath, gridSize, serializeFreehandState, updateBakedFreehandData, updateFreehandDraggableStates as updateFreehandDraggableStatesImpl, updateTimelineState as updateTimelineStateImpl, type FreehandStroke, handleTimeUpdate as handleTimeUpdateImpl, maxInterStrokeDelay, downloadFreehandDrawing as downloadFreehandDrawingImpl, uploadFreehandDrawing as uploadFreehandDrawingImpl, getCurrentFreehandStateString, restoreFreehandState, initFreehandLayers } from './freehandTool';
+import { clearFreehandSelection as clearFreehandSelectionImpl, createStrokeShape as createStrokeShapeImpl, deserializeFreehandState, getStrokePath, gridSize, serializeFreehandState, updateBakedFreehandData, updateFreehandDraggableStates as updateFreehandDraggableStatesImpl, updateTimelineState as updateTimelineStateImpl, type FreehandStroke, handleTimeUpdate as handleTimeUpdateImpl, maxInterStrokeDelay, initFreehandLayers } from './freehandTool';
 import { freehandStrokes } from './canvasState';
 import { getPointsBounds } from './canvasUtils';
 import { CommandStack } from './commandStack';
 import { ensureHighlightLayer, createMetadataToolkit } from './metadata';
-import { clearPolygonSelection as clearPolygonSelectionImpl, updatePolygonControlPoints as updatePolygonControlPointsImpl, deserializePolygonState, handlePolygonClick as handlePolygonClickImpl, handlePolygonMouseMove as handlePolygonMouseMoveImpl, handlePolygonEditMouseMove as handlePolygonEditMouseMoveImpl, finishPolygon as finishPolygonImpl, clearCurrentPolygon as clearCurrentPolygonImpl, serializePolygonState, getCurrentPolygonStateString, restorePolygonState, updateBakedPolygonData, initPolygonLayers, setupPolygonModeWatcher as setupPolygonModeWatcherImpl } from './polygonTool';
+import { clearPolygonSelection as clearPolygonSelectionImpl, updatePolygonControlPoints as updatePolygonControlPointsImpl, deserializePolygonState, handlePolygonClick as handlePolygonClickImpl, handlePolygonMouseMove as handlePolygonMouseMoveImpl, handlePolygonEditMouseMove as handlePolygonEditMouseMoveImpl, finishPolygon as finishPolygonImpl, clearCurrentPolygon as clearCurrentPolygonImpl, serializePolygonState, updateBakedPolygonData, initPolygonLayers, setupPolygonModeWatcher as setupPolygonModeWatcherImpl } from './polygonTool';
 import { initAVLayer, refreshAnciliaryViz } from './ancillaryVisualizations';
 import { initializeTransformer } from './transformerManager';
 import {
@@ -29,6 +29,7 @@ import {
   duplicateSelection as duplicateSelectionImpl,
   deleteSelection as deleteSelectionImpl
 } from './selectTool';
+import { downloadCanvasState as downloadCanvasStateImpl, uploadCanvasState as uploadCanvasStateImpl, serializeCanvasState as serializeCanvasStateImpl, deserializeCanvasState as deserializeCanvasStateImpl } from './canvasPersistence';
 
 // ==================== common stuff ====================
 const props = withDefaults(defineProps<{
@@ -150,8 +151,8 @@ const createStrokeShape = (points: number[], id: string) => createStrokeShapeImp
 const updateFreehandDraggableStates = () => updateFreehandDraggableStatesImpl(canvasState)
 const updateTimelineState = () => updateTimelineStateImpl(canvasState)
 const handleTimeUpdate = (time: number) => handleTimeUpdateImpl(canvasState, time)
-const downloadFreehandDrawing = () => downloadFreehandDrawingImpl(canvasState)
-const uploadFreehandDrawing = () => uploadFreehandDrawingImpl(canvasState)
+const downloadCanvasState = () => downloadCanvasStateImpl(canvasState)
+const uploadCanvasState = () => uploadCanvasStateImpl(canvasState, { handleTimeUpdate })
 
 // Stateful wrappers for polygon helpers
 const clearPolygonSelection = () => clearPolygonSelectionImpl(canvasState)
@@ -177,29 +178,13 @@ canvasState.callbacks.refreshAncillaryViz = () => refreshAnciliaryViz(canvasStat
 
 
 // ==================== Unified Command Stack ====================
-const captureCanvasState = () => {
-  const freehandState = getCurrentFreehandStateString(canvasState)
-  const polygonState = getCurrentPolygonStateString(canvasState)
-
-  return JSON.stringify({
-    freehand: freehandState,
-    polygon: polygonState
-  })
-}
+const captureCanvasState = () => serializeCanvasStateImpl(canvasState)
 
 const restoreCanvasState = (stateString: string) => {
   if (!stateString) return
-
-  try {
-    const state = JSON.parse(stateString)
-    if (state.freehand) {
-      restoreFreehandState(canvasState, state.freehand, { handleTimeUpdate })
-    }
-    if (state.polygon) {
-      restorePolygonState(canvasState, state.polygon)
-    }
-  } catch (error) {
-    console.warn('Failed to restore canvas state:', error)
+  const restored = deserializeCanvasStateImpl(canvasState, stateString, { handleTimeUpdate })
+  if (!restored) {
+    console.warn('Failed to restore canvas state: invalid payload')
   }
 }
 
@@ -699,6 +684,15 @@ onUnmounted(() => {
           📝 Metadata
         </button>
         <span class="separator">|</span>
+        <div class="button-group vertical">
+          <button @click="downloadCanvasState" :disabled="canvasState.freehand.isAnimating.value">
+            💾 Download
+          </button>
+          <button @click="uploadCanvasState" :disabled="canvasState.freehand.isAnimating.value">
+            📁 Upload
+          </button>
+        </div>
+        <span class="separator">|</span>
       </template>
 
       <!-- Freehand Tool Toolbar -->
@@ -722,16 +716,6 @@ onUnmounted(() => {
           :class="{ active: canvasState.freehand.useRealTiming.value }">
           {{ canvasState.freehand.useRealTiming.value ? '⏱️ Real Time' : '⏱️ Max 0.3s' }}
         </button>
-        <span class="separator">|</span>
-        
-        <div class="button-group vertical">
-          <button @click="downloadFreehandDrawing" :disabled="canvasState.freehand.isAnimating.value">
-            💾 Download
-          </button>
-          <button @click="uploadFreehandDrawing" :disabled="canvasState.freehand.isAnimating.value">
-            📁 Upload
-          </button>
-        </div>
       </template>
 
       <!-- Polygon Tool Toolbar -->
