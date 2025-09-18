@@ -1,24 +1,24 @@
 <script setup lang="ts">
-import { inject, onMounted, onUnmounted } from 'vue'
+import { inject } from 'vue'
 import CanvasRoot from './canvas/CanvasRoot.vue'
 import StrokeLaunchControls from './StrokeLaunchControls.vue'
 import { appStateName, type TemplateAppState } from './appState'
 import { updateGPUStrokes } from './strokeLauncher'
+import type { CanvasRuntimeState } from './canvas/canvasState'
 
 const appState = inject<TemplateAppState>(appStateName)!!
 
-onMounted(() => {
-  appState.freehandDataUpdateCallback = updateGPUStrokes
-})
-
-onUnmounted(() => {
-  if (appState.freehandDataUpdateCallback === updateGPUStrokes) {
-    appState.freehandDataUpdateCallback = undefined
-  }
-})
+const syncCanvasState = (state: CanvasRuntimeState) => {
+  appState.freehandStateString = state.freehand.serializedState
+  appState.freehandRenderData = state.freehand.bakedRenderData
+  appState.freehandGroupMap = state.freehand.bakedGroupMap
+  appState.polygonStateString = state.polygon.serializedState
+  appState.polygonRenderData = state.polygon.bakedRenderData
+  updateGPUStrokes()
+}
 </script>
 
 <template>
-  <CanvasRoot />
+  <CanvasRoot :sync-state="syncCanvasState" />
   <StrokeLaunchControls />
 </template>

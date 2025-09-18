@@ -156,8 +156,7 @@ export const withSelectionHighlightSuppressed = <T>(
 // Trigger updates for dependent systems
 function updateGPUAndVisualization(state: CanvasRuntimeState) {
   // Use the callbacks stored in state instead of dynamic imports
-  state.callbacks.freehandDataUpdate?.()
-  state.callbacks.polygonDataUpdate?.()
+  state.callbacks.syncAppState?.(state)
   state.callbacks.refreshAncillaryViz?.()
 }
 

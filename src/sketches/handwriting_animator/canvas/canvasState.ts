@@ -2,6 +2,7 @@ import { computed, ref, shallowReactive, type ComputedRef, type Ref, type Shallo
 import Konva from 'konva'
 import type { CanvasItem } from './CanvasItem'
 import { CommandStack } from './commandStack'
+import type { FreehandRenderData, PolygonRenderData } from '../appState'
 
 export interface FreehandStrokeRuntime {
   id: string
@@ -43,6 +44,7 @@ export interface AncillaryVisualizationInstance {
 export interface CanvasRuntimeState {
   stage?: Konva.Stage
   konvaContainer?: HTMLDivElement
+  activeTool: Ref<'select' | 'freehand' | 'polygon'>
   layers: {
     freehandShape?: Konva.Layer
     freehandDrawing?: Konva.Layer
@@ -58,8 +60,7 @@ export interface CanvasRuntimeState {
   canvasItems: Map<string, CanvasItem>
   callbacks: {
     refreshAncillaryViz?: () => void
-    freehandDataUpdate?: () => void
-    polygonDataUpdate?: () => void
+    syncAppState?: (state: CanvasRuntimeState) => void
     updateCursor?: () => void
   }
   freehand: {
@@ -86,6 +87,9 @@ export interface CanvasRuntimeState {
     maxInterStrokeDelay: number
     isAnimating: Ref<boolean>
     freehandDragStartState: string | null
+    serializedState: string
+    bakedRenderData: FreehandRenderData
+    bakedGroupMap: Record<string, number[]>
   }
   polygon: {
     shapes: Map<string, PolygonShapeRuntime>
@@ -95,6 +99,8 @@ export interface CanvasRuntimeState {
     mode: Ref<'draw' | 'edit'>
     dragStartState: string | null
     proximityThreshold: number
+    serializedState: string
+    bakedRenderData: PolygonRenderData
   }
   selection: {
     items: ShallowReactive<Set<CanvasItem>>
@@ -143,6 +149,7 @@ export const createCanvasRuntimeState = (): CanvasRuntimeState => {
   return {
     stage: undefined,
     konvaContainer: undefined,
+    activeTool: ref('select'),
     layers: {
       selectionOverlay: undefined
     },
@@ -171,7 +178,10 @@ export const createCanvasRuntimeState = (): CanvasRuntimeState => {
       useRealTiming: ref(false),
       maxInterStrokeDelay: 300,
       isAnimating: ref(false),
-      freehandDragStartState: null
+      freehandDragStartState: null,
+      serializedState: '',
+      bakedRenderData: [],
+      bakedGroupMap: {}
     },
     polygon: {
       shapes: new Map(),
@@ -180,7 +190,9 @@ export const createCanvasRuntimeState = (): CanvasRuntimeState => {
       currentPoints: ref([]),
       mode: ref('draw'),
       dragStartState: null,
-      proximityThreshold: 10
+      proximityThreshold: 10,
+      serializedState: '',
+      bakedRenderData: []
     },
     selection: {
       items: selectionItems,
@@ -214,6 +226,20 @@ export const createCanvasRuntimeState = (): CanvasRuntimeState => {
       activeWatchStop: undefined
     }
   }
+}
+
+// Global state reference for modules to use directly
+export let currentCanvasState: CanvasRuntimeState | null = null
+
+export const setGlobalCanvasState = (state: CanvasRuntimeState) => {
+  currentCanvasState = state
+}
+
+export const getGlobalCanvasState = (): CanvasRuntimeState => {
+  if (!currentCanvasState) {
+    throw new Error('Canvas state not initialized - call setGlobalCanvasState first')
+  }
+  return currentCanvasState
 }
 
 // Convenience getters for cleaner access

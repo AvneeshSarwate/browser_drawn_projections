@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { inject, onMounted, onUnmounted, nextTick } from 'vue'
 import { resolution, availableStrokes, animationParams, gpuStrokesReady, launchByName, selectedGroupName, scriptExecuting, appStateName, type TemplateAppState } from './appState'
-import { babylonContainer, webGPUSupported, availableGroups, handleBabylonCanvasClick, handleBabylonCanvasMove, clearLoopedAnimations, executeScript, launchLayout, scriptEditorRef, initializeGPUStrokes, updateGPUStrokes, initializeScriptEditor, disposeStrokeLauncher } from './strokeLauncher'
+import { babylonContainer, webGPUSupported, availableGroups, handleBabylonCanvasClick, handleBabylonCanvasMove, clearLoopedAnimations, executeScript, launchLayout, scriptEditorRef, initializeGPUStrokes, initializeScriptEditor, disposeStrokeLauncher } from './strokeLauncher'
 
 const appState = inject<TemplateAppState>(appStateName)!!
 
@@ -11,16 +11,12 @@ const getGroupStrokeIndices = (groupName: string): number[] => {
 
 onMounted(async () => {
   await initializeGPUStrokes()
-  appState.freehandDataUpdateCallback = updateGPUStrokes
 
   await nextTick()
   initializeScriptEditor()
 })
 
 onUnmounted(() => {
-  if (appState.freehandDataUpdateCallback === updateGPUStrokes) {
-    appState.freehandDataUpdateCallback = undefined
-  }
   disposeStrokeLauncher()
 })
 

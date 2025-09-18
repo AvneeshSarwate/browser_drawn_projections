@@ -3,8 +3,7 @@
 import Konva from "konva"
 import getStroke from "perfect-freehand"
 import { type ShallowReactive, shallowReactive, ref, computed, watch } from "vue"
-import type { FreehandRenderData, FlattenedStroke, FlattenedStrokeGroup, TemplateAppState } from "../appState"
-import { globalStore, stage, activeTool } from "../appState"
+import type { FreehandRenderData, FlattenedStroke, FlattenedStrokeGroup } from "../appState"
 import { executeCommand, pushCommandWithStates } from "../canvas/commands"
 
 
@@ -176,7 +175,7 @@ export const duplicateFreehandSelected = (state: CanvasRuntimeState) => {
 
     // Update UI and data structures
     updateFreehandDraggableStates(state)
-    updateBakedFreehandData(state, globalStore().appStateRef)
+    updateBakedFreehandData(state)
     const freehandShapeLayer = state.layers.freehandShape
     freehandShapeLayer?.batchDraw()
 
@@ -408,7 +407,6 @@ interface RestoreFreehandStateOptions {
 
 export const restoreFreehandState = (
   canvasState: CanvasRuntimeState,
-  appState: TemplateAppState,
   stateString: string,
   options: RestoreFreehandStateOptions = {}
 ) => {
@@ -419,12 +417,7 @@ export const restoreFreehandState = (
     canvasState.freehand.currentPlaybackTime.value = 0
     canvasState.freehand.isAnimating.value = false
 
-    const originalState = appState.freehandStateString
-    appState.freehandStateString = stateString
-
-    deserializeFreehandState(canvasState, appState, stateString)
-
-    appState.freehandStateString = originalState
+    deserializeFreehandState(canvasState, stateString)
 
     if (wasAnimating) {
       options.handleTimeUpdate?.(0)
@@ -454,7 +447,7 @@ export const finishFreehandDragTracking = (state: CanvasRuntimeState, nodeName: 
     )
 
     console.log(`Transform command added to global history`)
-    updateBakedFreehandData(state, globalStore().appStateRef) // Update baked data after transformation
+    updateBakedFreehandData(state) // Update baked data after transformation
   }
 
   state.freehand.freehandDragStartState = null
@@ -462,8 +455,10 @@ export const finishFreehandDragTracking = (state: CanvasRuntimeState, nodeName: 
 
 // Function to refresh stroke-shape connections
 export const refreshStrokeConnections = (state: CanvasRuntimeState) => {
+  const stageRef = state.stage
+  if (!stageRef) return
   freehandStrokes(state).forEach((stroke, id) => {
-    const currentShape = stage?.findOne(`#${id}`) as Konva.Path
+    const currentShape = stageRef.findOne(`#${id}`) as Konva.Path
     if (currentShape && currentShape !== stroke.shape) {
       console.log('Updating stroke connection for:', id)
       stroke.shape = currentShape
@@ -473,8 +468,7 @@ export const refreshStrokeConnections = (state: CanvasRuntimeState) => {
 
 // Serialization functions for hotreloading
 export const serializeFreehandState = (
-  canvasState: CanvasRuntimeState,
-  appState: TemplateAppState
+  canvasState: CanvasRuntimeState
 ) => {
   const freehandShapeLayer = canvasState.layers.freehandShape
   const stageRef = canvasState.stage
@@ -484,7 +478,8 @@ export const serializeFreehandState = (
     const snapshot = getCurrentFreehandState(canvasState)
     if (!snapshot) return
 
-    appState.freehandStateString = JSON.stringify(snapshot)
+    canvasState.freehand.serializedState = JSON.stringify(snapshot)
+    canvasState.callbacks.syncAppState?.(canvasState)
     console.log('Serialized canvas state:', {
       layerChildren: snapshot.layer?.children?.length || 0,
       strokes: snapshot.strokes.length,
@@ -530,9 +525,7 @@ export const uploadFreehandDrawing = (canvasState: CanvasRuntimeState) => {
         JSON.parse(content)
 
         // Set the state string and deserialize
-        const appState = globalStore().appStateRef
-        appState.freehandStateString = content
-        deserializeFreehandState(canvasState, appState, content)
+        deserializeFreehandState(canvasState, content)
         
         console.log('Successfully loaded drawing from file:', file.name)
       } catch (error) {
@@ -547,7 +540,6 @@ export const uploadFreehandDrawing = (canvasState: CanvasRuntimeState) => {
 
 export const deserializeFreehandState = (
   canvasState: CanvasRuntimeState,
-  appState: TemplateAppState,
   stateString: string
 ) => {
   const freehandShapeLayer = canvasState.layers.freehandShape
@@ -615,9 +607,10 @@ export const deserializeFreehandState = (
 
     console.log('Konva canvas state restored from hotreload')
 
+    canvasState.freehand.serializedState = stateString
     setTimeout(() => {
       freehandShapeLayer.batchDraw()
-      updateBakedFreehandData(canvasState, appState)
+      updateBakedFreehandData(canvasState)
     }, 30)
   } catch (error) {
     console.warn('Failed to deserialize Konva state:', error)
@@ -628,7 +621,6 @@ export const deserializeFreehandState = (
 export const updateFreehandDraggableStates = (state: CanvasRuntimeState) => {
   // In the unified system, node-level dragging is disabled in Select tool because we implement
   // selection dragging at the stage level and use the Transformer for transforms.
-  const isSelectTool = activeTool.value === 'select'
   const freehandShapeLayer = state.layers.freehandShape
 
   freehandStrokes(state).forEach((stroke) => {
@@ -1069,13 +1061,12 @@ const generateBakedStrokeData = (
 
 // Function to update baked data in app state
 export const updateBakedFreehandData = (
-  canvasState: CanvasRuntimeState,
-  appState: TemplateAppState
+  canvasState: CanvasRuntimeState
 ) => {
   const result = generateBakedStrokeData(canvasState)
-  appState.freehandRenderData = result.data
-  appState.freehandGroupMap = result.groupMap
-  appState.freehandDataUpdateCallback?.()
+  canvasState.freehand.bakedRenderData = result.data
+  canvasState.freehand.bakedGroupMap = result.groupMap
+  canvasState.callbacks.syncAppState?.(canvasState)
 }
 
 // Hierarchy utilities are now accessed directly from the metadata module

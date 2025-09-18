@@ -45,7 +45,6 @@ export type TemplateAppState = {
   freehandStateString: string
   freehandRenderData: FreehandRenderData
   freehandGroupMap: Record<string, number[]>
-  freehandDataUpdateCallback: (() => void) | undefined
   polygonStateString: string
   polygonRenderData: PolygonRenderData
 }
@@ -65,7 +64,6 @@ export const appState: TemplateAppState = {
   freehandStateString: '',
   freehandRenderData: [],
   freehandGroupMap: {},
-  freehandDataUpdateCallback: undefined,
   polygonStateString: '',
   polygonRenderData: [],
 } 

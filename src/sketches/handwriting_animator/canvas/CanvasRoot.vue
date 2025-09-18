@@ -1,7 +1,7 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
 import { type TemplateAppState, appStateName, resolution, drawFlattenedStrokeGroup, stage, setStage, showMetadataEditor, activeTool } from '../appState';
-import { createCanvasRuntimeState, type CanvasRuntimeState } from './canvasState';
+import { createCanvasRuntimeState, setGlobalCanvasState, type CanvasRuntimeState } from './canvasState';
 import * as selectionStore from './selectionStore';
 import { getCanvasItem } from './CanvasItem';
 import { computed, inject, onMounted, onUnmounted, ref, watch } from 'vue';
@@ -35,11 +35,30 @@ import {
 } from './selectTool';
 import { sinN } from '@/channels/channels';
 
-// ==================== common stuff ====================
 const appState = inject<TemplateAppState>(appStateName)!!
+let shaderGraphEndNode: ShaderEffect | undefined = undefined
+const clearDrawFuncs = () => {
+  appState.drawFunctions = []
+  appState.drawFuncMap = new Map()
+}
+
+
+// ==================== common stuff ====================
+const props = defineProps<{ syncState: (state: CanvasRuntimeState) => void }>()
+
 
 // Create and initialize canvas runtime state
 const canvasState: CanvasRuntimeState = createCanvasRuntimeState()
+setGlobalCanvasState(canvasState)
+
+watch(
+  () => props.syncState,
+  (fn) => {
+    canvasState.callbacks.syncAppState = fn
+    canvasState.callbacks.syncAppState?.(canvasState)
+  },
+  { immediate: true }
+)
 
 // Stateful wrappers for select tool helpers
 const initializeSelectToolStateful = (layer: Konva.Layer) => initializeSelectToolImpl(canvasState, layer)
@@ -80,17 +99,10 @@ const groupSelected = computed(() => {
   return nodes.length === 1 && nodes[0] instanceof Konva.Group
 })
 
-// Set up callbacks for data updates
-canvasState.callbacks.freehandDataUpdate = () => updateBakedFreehandData(canvasState, appState)
-canvasState.callbacks.polygonDataUpdate = () => updateBakedPolygonData(canvasState, appState)
+
 canvasState.callbacks.refreshAncillaryViz = () => refreshAnciliaryViz(canvasState)
 
-let shaderGraphEndNode: ShaderEffect | undefined = undefined
 
-const clearDrawFuncs = () => {
-  appState.drawFunctions = []
-  appState.drawFuncMap = new Map()
-}
 
 // ==================== Unified Command Stack ====================
 const captureCanvasState = () => {
@@ -109,10 +121,10 @@ const restoreCanvasState = (stateString: string) => {
   try {
     const state = JSON.parse(stateString)
     if (state.freehand) {
-      restoreFreehandState(canvasState, appState, state.freehand, { handleTimeUpdate })
+      restoreFreehandState(canvasState, state.freehand, { handleTimeUpdate })
     }
     if (state.polygon) {
-      restorePolygonState(canvasState, appState, state.polygon)
+      restorePolygonState(canvasState, state.polygon)
     }
   } catch (error) {
     console.warn('Failed to restore canvas state:', error)
@@ -124,8 +136,8 @@ const canUndoReactive = ref(false)
 const canRedoReactive = ref(false)
 
 const onCanvasStateChange = () => {
-  updateBakedFreehandData(canvasState, appState)
-  updateBakedPolygonData(canvasState, appState)
+  updateBakedFreehandData(canvasState)
+  updateBakedPolygonData(canvasState)
   refreshAnciliaryViz(canvasState)
   // Update reactive button states after any command stack change
   canUndoReactive.value = commandStack.canUndo()
@@ -259,8 +271,11 @@ const applyToolMode = (state: CanvasRuntimeState, tool: 'select' | 'freehand' | 
 
 // Watch for tool changes - new three-tool system
 watch(activeTool, (newTool) => {
+  canvasState.activeTool.value = newTool
   applyToolMode(canvasState, newTool)
 })
+
+canvasState.activeTool.value = activeTool.value
 
 
 // Old metadata watchers removed – unified editor reads directly from selectionStore
@@ -275,22 +290,19 @@ const handleApplyMetadata = (node: Konva.Node, metadata: any) => {
     } else {
       // Fallback for non-registered nodes (should be rare)
       node.setAttr('metadata', metadata === undefined || Object.keys(metadata).length === 0 ? undefined : metadata)
-      updateBakedFreehandData(canvasState, appState)
-      updateBakedPolygonData(canvasState, appState)
+      updateBakedFreehandData(canvasState)
+      updateBakedPolygonData(canvasState)
     }
   } catch (e) {
     // Safe fallback if metadata routing fails for any reason
     node.setAttr('metadata', metadata === undefined || Object.keys(metadata).length === 0 ? undefined : metadata)
-    updateBakedFreehandData(canvasState, appState)
-    updateBakedPolygonData(canvasState, appState)
+    updateBakedFreehandData(canvasState)
+    updateBakedPolygonData(canvasState)
   }
 }
 
 onMounted(async () => {
   try {
-    const p5i = appState.p5Instance!!
-    const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
-    const threeCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
 
     // Remove the manual container creation and use the ref instead
     if (!konvaContainer.value) {
@@ -361,8 +373,8 @@ onMounted(async () => {
     updateCursor!()
 
     // Try to restore canvas state from hotreload (after all setup is complete)
-    deserializeFreehandState(canvasState, appState, appState.freehandStateString)
-    deserializePolygonState(canvasState, appState, appState.polygonStateString)
+    deserializeFreehandState(canvasState, appState.freehandStateString)
+    deserializePolygonState(canvasState, appState.polygonStateString)
 
     // Re-apply tool mode after deserialization to ensure control points/transformer states are correct
     applyToolMode(canvasState, activeTool.value)
@@ -472,7 +484,7 @@ onMounted(async () => {
             updateFreehandDraggableStates() // Update draggable state for new stroke
             updateTimelineState() // Update timeline state when new stroke is added
             freehandShapeLayer?.batchDraw()
-            updateBakedFreehandData(canvasState, appState) // Update baked data after new stroke
+            updateBakedFreehandData(canvasState) // Update baked data after new stroke
           })
         }
 
@@ -485,6 +497,10 @@ onMounted(async () => {
     })
 
     // Original p5 setup
+    const p5i = appState.p5Instance!!
+    const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
+    const threeCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
+
     let p5Mouse = { x: 0, y: 0 }
     mousemoveEvent((ev) => {
       p5Mouse = targetToP5Coords(ev, p5i, threeCanvas)
@@ -561,8 +577,8 @@ onUnmounted(() => {
   console.log("disposing livecoded resources")
 
   // Save state before unmounting (for hot reload)
-  serializeFreehandState(canvasState, appState)
-  serializePolygonState(canvasState, appState)
+  serializeFreehandState(canvasState)
+  serializePolygonState(canvasState)
 
   shaderGraphEndNode?.disposeAll()
   clearListeners()

@@ -5,7 +5,6 @@ import { getCanvasItem, createGroupItem, createPolygonItem, removeCanvasItem } f
 import { polygonShapes, freehandStrokes, freehandStrokeGroups, type CanvasRuntimeState } from './canvasState'
 
 import { executeCommand } from './commands'
-import { globalStore } from '../appState'
 import { getCurrentFreehandStateString, deepCloneWithNewIds, updateBakedFreehandData, updateTimelineState, refreshStrokeConnections } from './freehandTool'
 import { getCurrentPolygonStateString, attachPolygonHandlers, serializePolygonState, updateBakedPolygonData } from './polygonTool'
 import { hasAncestorConflict } from './canvasUtils'
@@ -13,8 +12,6 @@ import { uid } from './canvasUtils'
 import { pushCommandWithStates } from './commands'
 
 
-
-const store = globalStore()
 
 
 export function initializeSelectTool(state: CanvasRuntimeState, layer: Konva.Layer) {
@@ -366,7 +363,7 @@ export function groupSelection(state: CanvasRuntimeState) {
     selectionStore.add(state, item)
 
     superGroup.getLayer()?.batchDraw()
-    updateBakedFreehandData(state, store.appStateRef)
+    updateBakedFreehandData(state)
   })
 }
 
@@ -401,7 +398,7 @@ export function ungroupSelection(state: CanvasRuntimeState) {
     try { refreshStrokeConnections(state) } catch {
       console.error('refreshStrokeConnections failed')
     }
-    updateBakedFreehandData(state, store.appStateRef)
+    updateBakedFreehandData(state)
   })
 }
 
@@ -465,9 +462,9 @@ export function duplicateSelection(state: CanvasRuntimeState) {
       // Refresh visuals/state
       freehandShapeLayer?.batchDraw()
       state.layers.polygonShapes?.batchDraw()
-      updateBakedFreehandData(state, store.appStateRef)
-      updateBakedPolygonData(state, store.appStateRef)
-      serializePolygonState(state, store.appStateRef)
+      updateBakedFreehandData(state)
+      updateBakedPolygonData(state)
+      serializePolygonState(state)
     })
   })
 }
@@ -527,9 +524,9 @@ export function deleteSelection(state: CanvasRuntimeState) {
     // Redraw/refresh
     freehandShapeLayer?.batchDraw()
     state.layers.polygonShapes?.batchDraw()
-    updateBakedFreehandData(state, store.appStateRef)
-    updateBakedPolygonData(state, store.appStateRef)
-    serializePolygonState(state, store.appStateRef)
+    updateBakedFreehandData(state)
+    updateBakedPolygonData(state)
+    serializePolygonState(state)
 
     // Ancillary viz cleanup (best-effort)
     import('./ancillaryVisualizations').then(({ refreshAnciliaryViz }) => refreshAnciliaryViz(state)).catch(() => {})
