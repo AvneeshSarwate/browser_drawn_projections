@@ -13,7 +13,7 @@ import { clearFreehandSelection as clearFreehandSelectionImpl, createStrokeShape
 import { freehandStrokes } from './canvasState';
 import { getPointsBounds } from './canvasUtils';
 import { CommandStack } from './commandStack';
-import { ensureHighlightLayer, metadataToolkit } from './metadata';
+import { ensureHighlightLayer, createMetadataToolkit } from './metadata';
 import { clearPolygonSelection as clearPolygonSelectionImpl, updatePolygonControlPoints as updatePolygonControlPointsImpl, deserializePolygonState, handlePolygonClick as handlePolygonClickImpl, handlePolygonMouseMove as handlePolygonMouseMoveImpl, handlePolygonEditMouseMove as handlePolygonEditMouseMoveImpl, finishPolygon as finishPolygonImpl, clearCurrentPolygon as clearCurrentPolygonImpl, serializePolygonState, getCurrentPolygonStateString, restorePolygonState, updateBakedPolygonData, initPolygonLayers, setupPolygonModeWatcher as setupPolygonModeWatcherImpl } from './polygonTool';
 import { initAVLayer, refreshAnciliaryViz } from './ancillaryVisualizations';
 import { initializeTransformer } from './transformerManager';
@@ -45,6 +45,7 @@ const resolution = computed(() => props.resolution)
 // Create and initialize canvas runtime state
 const canvasState: CanvasRuntimeState = createCanvasRuntimeState()
 setGlobalCanvasState(canvasState)
+const metadataToolkit = createMetadataToolkit(canvasState)
 
 const activeTool = canvasState.activeTool
 const metadataEditorVisible = canvasState.metadata.showEditor
@@ -209,7 +210,7 @@ const applyToolMode = (state: CanvasRuntimeState, tool: 'select' | 'freehand' | 
 
     // Ensure transformer/selection overlay sits above shapes
     selectionLayer?.moveToTop()
-    if (stageRef) ensureHighlightLayer(stageRef).moveToTop()
+    if (stageRef) ensureHighlightLayer(canvasState, stageRef).moveToTop()
   } else if (tool === 'freehand') {
     // Freehand drawing mode
     freehandShapeLayer?.listening(true)
@@ -338,7 +339,7 @@ onMounted(async () => {
     initializeSelectToolStateful(selectionLayerForTool)
 
     // Add metadata highlight layer on top
-    const metadataHighlightLayer = ensureHighlightLayer(stageInstance)
+    const metadataHighlightLayer = ensureHighlightLayer(canvasState, stageInstance)
     // Keep transformer layer above all interactive shape layers to prevent pointer blocking
     canvasState.layers.transformerLayer?.moveToTop()
     // Keep highlight visuals on top (non-listening, so it won't block interaction)

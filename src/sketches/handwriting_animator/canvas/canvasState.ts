@@ -151,6 +151,11 @@ export interface CanvasRuntimeState {
     activeNode: Ref<Konva.Node | null>
     metadataText: Ref<string>
     showEditor: Ref<boolean>
+    highlight: {
+      layer?: Konva.Layer
+      metadataRect?: Konva.Rect
+      hoverRect?: Konva.Rect
+    }
   }
   ancillary: {
     activeVisualizations: Ref<Set<string>>
@@ -238,7 +243,8 @@ export const createCanvasRuntimeState = (): CanvasRuntimeState => {
     metadata: {
       activeNode: ref(null),
       metadataText: ref(''),
-      showEditor: ref(false)
+      showEditor: ref(false),
+      highlight: {}
     },
     ancillary: {
       activeVisualizations: ref(new Set<string>()),

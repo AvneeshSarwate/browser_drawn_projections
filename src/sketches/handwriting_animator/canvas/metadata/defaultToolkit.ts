@@ -1,4 +1,5 @@
 import type Konva from 'konva'
+import type { CanvasRuntimeState } from '../canvasState'
 import { collectHierarchyFromRoot, type HierarchyEntry } from './hierarchy'
 import { updateMetadataHighlight, updateHoverHighlight } from './highlight'
 
@@ -15,8 +16,8 @@ export interface MetadataToolkit {
   updateHoverHighlight(node?: Konva.Node): void
 }
 
-// Default implementation that works for every tool
-export const defaultMetadataToolkit: MetadataToolkit = {
+// Factory to create a toolkit instance bound to a specific canvas runtime state
+export const createMetadataToolkit = (state: CanvasRuntimeState): MetadataToolkit => ({
   setNodeMetadata: (node: Konva.Node, meta: any) => {
     // Set the metadata on the node
     if (meta === undefined || Object.keys(meta).length === 0) {
@@ -28,9 +29,6 @@ export const defaultMetadataToolkit: MetadataToolkit = {
   },
 
   collectHierarchyFromRoot,
-  updateMetadataHighlight,
-  updateHoverHighlight
-}
-
-// Export for direct use
-export const metadataToolkit = defaultMetadataToolkit
+  updateMetadataHighlight: (node?: Konva.Node) => updateMetadataHighlight(state, node),
+  updateHoverHighlight: (node?: Konva.Node) => updateHoverHighlight(state, node)
+})
