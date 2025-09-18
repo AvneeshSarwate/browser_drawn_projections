@@ -7,7 +7,12 @@
       <button @click="stop">⏹️</button>
       <span class="time-display">{{ formatTime(currentTime) }} / {{ formatTime(duration) }}</span>
     </div>
-    <div class="timeline-track" @click="seek" @mousedown="startDrag">
+    <div
+      ref="timelineTrackRef"
+      class="timeline-track"
+      @click="seek"
+      @mousedown="startDrag"
+    >
       <div class="timeline-progress" :style="{ width: progressPercentage + '%' }"></div>
       <div class="timeline-playhead" 
         :style="{ left: progressPercentage + '%' }"
@@ -39,8 +44,10 @@ const emit = defineEmits<{
 const currentTime = ref(0)
 const duration = ref(0)
 const isPlaying = ref(false)
+const timelineTrackRef = ref<HTMLElement | null>(null)
 let animationLoop: AnimationLoopHandle | undefined
 let startTime = 0
+let dragRect: DOMRect | null = null
 
 // Calculate total duration based on strokes
 const calculateDuration = () => {
@@ -188,42 +195,48 @@ const stop = () => {
 // Dragging state
 const isDragging = ref(false)
 
+const updatePosition = (event: MouseEvent) => {
+  if (!dragRect) return
+
+  const x = Math.max(0, Math.min(event.clientX - dragRect.left, dragRect.width))
+  const percentage = dragRect.width > 0 ? x / dragRect.width : 0
+  currentTime.value = percentage * duration.value
+  emit('timeUpdate', currentTime.value)
+}
+
+const handleMouseMove = (event: MouseEvent) => {
+  if (!isDragging.value) return
+  updatePosition(event)
+}
+
+const handleMouseUp = () => {
+  if (!isDragging.value) return
+
+  isDragging.value = false
+
+  // Only unlock if timeline is at start position (safe state)
+  const isAtStart = currentTime.value === 0
+  props.lockWhileAnimating?.(!isAtStart)
+
+  dragRect = null
+  window.removeEventListener('mousemove', handleMouseMove)
+  window.removeEventListener('mouseup', handleMouseUp)
+}
+
 const startDrag = (event: MouseEvent) => {
   event.preventDefault()
+
+  const timelineTrack = timelineTrackRef.value
+  if (!timelineTrack) return
+
   isDragging.value = true
   props.lockWhileAnimating?.(true) // Lock UI during scrubbing
-  
-  const timelineTrack = document.querySelector('.timeline-track')
-  if (!timelineTrack) return
-  
-  const rect = timelineTrack.getBoundingClientRect()
-  
-  const updatePosition = (e: MouseEvent) => {
-    const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width))
-    const percentage = x / rect.width
-    currentTime.value = percentage * duration.value
-    emit('timeUpdate', currentTime.value)
-  }
-  
-  const handleMouseMove = (e: MouseEvent) => {
-    if (!isDragging.value) return
-    updatePosition(e)
-  }
-  
-  const handleMouseUp = () => {
-    isDragging.value = false
-    
-    // Only unlock if timeline is at start position (safe state)
-    const isAtStart = currentTime.value === 0
-    props.lockWhileAnimating?.(!isAtStart)
-    
-    document.removeEventListener('mousemove', handleMouseMove)
-    document.removeEventListener('mouseup', handleMouseUp)
-  }
-  
-  document.addEventListener('mousemove', handleMouseMove)
-  document.addEventListener('mouseup', handleMouseUp)
-  
+
+  dragRect = timelineTrack.getBoundingClientRect()
+
+  window.addEventListener('mousemove', handleMouseMove)
+  window.addEventListener('mouseup', handleMouseUp)
+
   // Handle initial click position
   updatePosition(event)
 }
@@ -258,6 +271,10 @@ onUnmounted(() => {
     isDragging.value = false
     props.lockWhileAnimating?.(false)
   }
+
+  dragRect = null
+  window.removeEventListener('mousemove', handleMouseMove)
+  window.removeEventListener('mouseup', handleMouseUp)
 })
 </script>
 
