@@ -7,30 +7,17 @@
 - [ ] select highlighting still not robust
 - [X] slider replay not robust when nothing selected
 - [ ] slider replay not robust for groups,nested groups
+- [ ] grid mode doesn't work
 
 
 
 
 
-
-
-remove appState dependency for selectTool.ts
 
 remove tool-specific selection functions in freehandTool.ts and polygonTool.ts
 update/remove tool specific metadata setting calls
 
-
-the following functions take the vue-level appState as an argument, and at some point, set data on the appState
-- serializePolygonState
-- deserializePolygonState
-- updateBakedPolygonData
-- serializeFreehandState
-- deserializeFreehandState
-- updateBakedFreehandData
-
-instead of directly setting it on the appState, there should be a callback defined on the canvasState object that updates the vue level appState, and these functions should call that callback instead of setting the data directly on the appState. for simplicity, there should just be one monolithic callback that takes the canvasState and updates the appState accordingly, and it can be called across all tools 
-
-Similarly, there is a callback function freehandDataUpdateCallback defined on the vue level appState, which should be moved to live on the canvasState, as different canvas instances might want different behavior. it could also just be removed as a separate entity and it's logic moved into the state setting callback
+tool level cursor stuff unused? remove or fix
 
 
 

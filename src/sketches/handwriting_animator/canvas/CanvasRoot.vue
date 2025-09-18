@@ -13,7 +13,6 @@ import { clearFreehandSelection as clearFreehandSelectionImpl, createStrokeShape
 import { freehandStrokes } from './canvasState';
 import { getPointsBounds } from './canvasUtils';
 import { CommandStack } from './commandStack';
-import { setGlobalExecuteCommand, setGlobalPushCommand } from './commands';
 import { ensureHighlightLayer, metadataToolkit } from './metadata';
 import { clearPolygonSelection as clearPolygonSelectionImpl, updatePolygonControlPoints as updatePolygonControlPointsImpl, deserializePolygonState, handlePolygonClick as handlePolygonClickImpl, handlePolygonMouseMove as handlePolygonMouseMoveImpl, handlePolygonEditMouseMove as handlePolygonEditMouseMoveImpl, finishPolygon as finishPolygonImpl, clearCurrentPolygon as clearCurrentPolygonImpl, serializePolygonState, getCurrentPolygonStateString, restorePolygonState, updateBakedPolygonData, initPolygonLayers, setupPolygonModeWatcher as setupPolygonModeWatcherImpl } from './polygonTool';
 import { initAVLayer, refreshAnciliaryViz } from './ancillaryVisualizations';
@@ -349,10 +348,6 @@ onMounted(async () => {
 
     // Initialize ancillary visualizations layer
     initAVLayer(canvasState)
-
-    // Set up executeCommand callbacks for tools
-    setGlobalExecuteCommand(executeCommand)
-    setGlobalPushCommand((name, beforeState, afterState) => commandStack.pushCommand(name, beforeState, afterState))
 
 
     // Selection rectangle is created by core/selectTool.initializeSelectTool
