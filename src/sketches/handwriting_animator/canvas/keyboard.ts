@@ -1,17 +1,28 @@
-const eventListeners: Array<{ type: 'keydown'; cb: (ev: KeyboardEvent) => void; target: HTMLElement }> = []
+import type { CanvasRuntimeState } from './canvasState'
 
-export function clearListeners() {
-  eventListeners.forEach((ev) => ev.target.removeEventListener(ev.type, ev.cb))
-  eventListeners.length = 0
-}
-
-export function singleKeydownEvent(key: string, listener: (ev: KeyboardEvent) => void, target: HTMLElement = document.body) {
+export function singleKeydownEvent(
+  state: CanvasRuntimeState,
+  key: string,
+  listener: (ev: KeyboardEvent) => void,
+  target: HTMLElement = document.body
+): () => void {
   const cb = (ev: KeyboardEvent) => {
     if (ev.key === key) {
       listener(ev)
     }
   }
 
-  eventListeners.push({ type: 'keydown', cb, target })
   target.addEventListener('keydown', cb)
+
+  const disposer = () => {
+    target.removeEventListener('keydown', cb)
+    const index = state.keyboardDisposables.indexOf(disposer)
+    if (index !== -1) {
+      state.keyboardDisposables.splice(index, 1)
+    }
+  }
+
+  state.keyboardDisposables.push(disposer)
+
+  return disposer
 }

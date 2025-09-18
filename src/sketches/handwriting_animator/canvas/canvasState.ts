@@ -83,6 +83,7 @@ export interface CanvasRuntimeState {
     syncAppState?: (state: CanvasRuntimeState) => void
     updateCursor?: () => void
   }
+  keyboardDisposables: Array<() => void>
   freehand: {
     strokes: Map<string, FreehandStrokeRuntime>
     strokeGroups: Map<string, FreehandStrokeGroupRuntime>
@@ -183,6 +184,7 @@ export const createCanvasRuntimeState = (): CanvasRuntimeState => {
     },
     canvasItems: new Map(),
     callbacks: {},
+    keyboardDisposables: [],
     freehand: {
       strokes: new Map(),
       strokeGroups: new Map(),

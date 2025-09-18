@@ -4,7 +4,7 @@ import { createCanvasRuntimeState, type CanvasRuntimeState } from './canvasState
 import * as selectionStore from './selectionStore';
 import { getCanvasItem } from './CanvasItem';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
-import { clearListeners, singleKeydownEvent } from './keyboard';
+import { singleKeydownEvent } from './keyboard';
 import Konva from 'konva';
 import Timeline from './Timeline.vue';
 import HierarchicalMetadataEditor from './HierarchicalMetadataEditor.vue';
@@ -45,6 +45,8 @@ const resolution = computed(() => props.resolution)
 // Create and initialize canvas runtime state
 const canvasState: CanvasRuntimeState = createCanvasRuntimeState()
 const metadataToolkit = createMetadataToolkit(canvasState)
+
+let disposeEscapeListener: (() => void) | undefined
 
 const activeTool = canvasState.activeTool
 const metadataEditorVisible = canvasState.metadata.showEditor
@@ -510,7 +512,7 @@ onMounted(async () => {
     setupPolygonModeWatcher()
 
     // Escape key handling for polygon tool
-    singleKeydownEvent('Escape', (ev) => {
+    disposeEscapeListener = singleKeydownEvent(canvasState, 'Escape', (ev) => {
       if (activeTool.value === 'polygon' && canvasState.polygon.isDrawing.value) {
         // Auto-close the current polygon if it has at least 3 points
         if (canvasState.polygon.currentPoints.value.length >= 6) {
@@ -537,7 +539,9 @@ onUnmounted(() => {
   serializeFreehandState(canvasState)
   serializePolygonState(canvasState)
 
-  clearListeners()
+  disposeEscapeListener?.()
+  disposeEscapeListener = undefined
+  canvasState.keyboardDisposables.splice(0).forEach((dispose) => dispose())
 
   // Clean up Konva
   canvasState.stage?.destroy()
