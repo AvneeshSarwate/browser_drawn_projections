@@ -10,6 +10,12 @@
 - [ ] grid mode doesn't work
 
 
+new features
+- [ ] delete points in polygon 
+- [ ] grouping for polygons 
+  - (will need to add a "type" param to flattened shape export)
+  - [ ] edit polygon while in group? will it "just work"?
+  - make sure hierarchical metadata "just works" (good for adding new shapes)
 
 
 
@@ -19,6 +25,7 @@ update/remove tool specific metadata setting calls
 
 tool level cursor stuff unused? remove or fix
 
+add ability to delete 
 
 
 
