@@ -1,7 +1,7 @@
 import Konva from "konva"
 import type { FreehandStroke } from "./freehandTool"
 import { uid } from "./canvasUtils"
-import { getGlobalCanvasState, type CanvasRuntimeState } from "./canvasState"
+import type { CanvasRuntimeState } from "./canvasState"
 
 export type ItemType = 'stroke' | 'strokeGroup' | 'polygon'
 
@@ -124,22 +124,22 @@ export const removeCanvasItemFromState = (state: CanvasRuntimeState, id: string)
 }
 
 // TEMPORARY FALLBACK WRAPPERS - REMOVE IN PHASE 7
-export const fromStroke = (shape: Konva.Path, strokeData?: FreehandStroke): CanvasItem => {
-  return createStrokeItem(getGlobalCanvasState(), shape, strokeData)
+export const fromStroke = (state: CanvasRuntimeState, shape: Konva.Path, strokeData?: FreehandStroke): CanvasItem => {
+  return createStrokeItem(state, shape, strokeData)
 }
 
-export const fromGroup = (group: Konva.Group): CanvasItem => {
-  return createGroupItem(getGlobalCanvasState(), group)
+export const fromGroup = (state: CanvasRuntimeState, group: Konva.Group): CanvasItem => {
+  return createGroupItem(state, group)
 }
 
-export const fromPolygon = (line: Konva.Line): CanvasItem => {
-  return createPolygonItem(getGlobalCanvasState(), line)
+export const fromPolygon = (state: CanvasRuntimeState, line: Konva.Line): CanvasItem => {
+  return createPolygonItem(state, line)
 }
 
-export const getCanvasItem = (node: Konva.Node): CanvasItem | undefined => {
-  return getCanvasItemFromState(getGlobalCanvasState(), node)
+export const getCanvasItem = (state: CanvasRuntimeState, node: Konva.Node): CanvasItem | undefined => {
+  return getCanvasItemFromState(state, node)
 }
 
-export const removeCanvasItem = (id: string) => {
-  removeCanvasItemFromState(getGlobalCanvasState(), id)
+export const removeCanvasItem = (state: CanvasRuntimeState, id: string) => {
+  removeCanvasItemFromState(state, id)
 }

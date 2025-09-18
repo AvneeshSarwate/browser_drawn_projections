@@ -3,7 +3,7 @@ import { ref, watch } from 'vue'
 import { stage } from '../appState'
 import { collectHierarchy } from './metadata/hierarchy'
 import { setNodeMetadata } from './freehandTool'
-import { getGlobalCanvasState, type CanvasRuntimeState } from './canvasState'
+import type { CanvasRuntimeState } from './canvasState'
 
 // ----- public reactive API -----
 export const activeAVs = ref<Set<string>>(new Set())
@@ -34,6 +34,7 @@ export const getRegisteredAVs = () => Array.from(REG.values())
 // State-based runtime manager  
 // ------------------------------------------------------------------
 export const initAVLayerInState = (state: CanvasRuntimeState) => {
+  activeState = state
   if (state.layers.ancillaryViz || !state.stage) return
   
   state.layers.ancillaryViz = new Konva.Layer({ listening: false, name: 'ancillary-vis' })
@@ -52,6 +53,7 @@ export const initAVLayerInState = (state: CanvasRuntimeState) => {
 let layer: Konva.Layer | undefined
 const nodeToVis = new Map<string, {def: AncillaryVisDefinition, vis: Konva.Node | Konva.Node[]}>()
 let listenersInstalled = false
+let activeState: CanvasRuntimeState | null = null
 
 // State-based refresh functions
 export const refreshAnciliaryVizWithState = (state: CanvasRuntimeState) => {
@@ -74,7 +76,7 @@ export const refreshAnciliaryVizWithState = (state: CanvasRuntimeState) => {
   })
 
   // For now, delegate to legacy implementation for actual vis management
-  refreshAnciliaryViz()
+  refreshAnciliaryViz(state)
 }
 
 const scheduleAVRefresh = (state: CanvasRuntimeState) => {
@@ -97,47 +99,47 @@ const scheduleAVRefreshLegacy = () => {
   if (rafToken !== null) return // already queued this frame
   rafToken = requestAnimationFrame(() => {
     rafToken = null
-    refreshAnciliaryViz() // existing brute-force rebuild
+    if (activeState) {
+      refreshAnciliaryViz(activeState)
+    }
   })
 }
 
-export const initAVLayer = () => {
+export const initAVLayer = (state: CanvasRuntimeState) => {
+  activeState = state
   if (layer || !stage) return
   layer = new Konva.Layer({ listening: false, name: 'ancillary-vis' })
   stage.add(layer)
-  
-  // Also sync with state
-  try {
-    const state = getGlobalCanvasState()
-    state.layers.ancillaryViz = layer
-  } catch (e) {
-    // State not initialized yet
-  }
-  
+
+  state.layers.ancillaryViz = layer
+
   // Install global listeners once (events bubble from child nodes)
   if (!listenersInstalled) {
     listenersInstalled = true
-    
+
     // Real-time position updates during dragging/transforming
     stage.on('dragmove.av transform.av', scheduleAVRefreshLegacy)
-    
+
     // Final update when interaction ends (ensures perfect positioning)
-    stage.on('dragend.av transformend.av', refreshAnciliaryViz)
-    
+    stage.on('dragend.av transformend.av', () => {
+      if (activeState) {
+        refreshAnciliaryViz(activeState)
+      }
+    })
+
     // Node removal - automatically cleanup orphaned visualizations
     stage.on('destroy.av', scheduleAVRefreshLegacy)
   }
-  
+
   stage.batchDraw()
 }
 
 // call whenever metadata OR active set changes OR node moved/scaled/…
 // we purposely brute-force re-evaluate only top-level nodes for simplicity
-export const refreshAnciliaryViz = () => {
+export const refreshAnciliaryViz = (state: CanvasRuntimeState) => {
+  activeState = state
   if (!stage) return
-  initAVLayer()
-
-  const state = getGlobalCanvasState()
+  initAVLayer(state)
   const roots = collectHierarchy(state.layers.freehandShape).filter(h => h.depth === 0).map(h => h.node)
   const needed = new Map<string, {ctx: AVContext, def: AncillaryVisDefinition}>()
 
@@ -188,13 +190,17 @@ const origSetNodeMetadata = setNodeMetadata
 
 // wrapper that includes AV refresh
 export const setNodeMetadataWithAV = (
+  state: CanvasRuntimeState,
   node: Konva.Node,
   meta: Record<string, any> | undefined
 ) => {
-  const state = getGlobalCanvasState()
   origSetNodeMetadata(state, node, meta)
-  refreshAnciliaryViz()
+  refreshAnciliaryViz(state)
 }
 
 // watch for toggle changes
-watch(activeAVs, refreshAnciliaryViz, { deep: true })
+watch(activeAVs, () => {
+  if (activeState) {
+    refreshAnciliaryViz(activeState)
+  }
+}, { deep: true })

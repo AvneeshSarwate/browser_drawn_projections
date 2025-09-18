@@ -55,7 +55,7 @@ export const togglePolygonSelection = (state: CanvasRuntimeState, polygonId: str
   const polygon = stage?.findOne(`#${polygonId}`) as Konva.Line
   if (!polygon) return
 
-  const item = getCanvasItem(polygon)
+  const item = getCanvasItem(state, polygon)
   if (item) {
     selectionStore.toggle(state, item, false) // not additive for polygons
   }
@@ -195,7 +195,7 @@ export const finishPolygonDragTracking = (state: CanvasRuntimeState, nodeName: s
   })
   if (state.polygon.dragStartState !== endCombined) {
     // Push into unified command stack with combined state
-    pushCommandWithStates(`Transform ${nodeName}`, state.polygon.dragStartState, endCombined)
+    pushCommandWithStates(state, `Transform ${nodeName}`, state.polygon.dragStartState, endCombined)
     updateBakedPolygonData(state, appState) // Update baked data after polygon transformation
   }
 
@@ -355,7 +355,7 @@ export const handlePolygonClick = (state: CanvasRuntimeState, pos: { x: number, 
     updatePolygonPreview(state)
   } else if (state.polygon.mode.value === 'edit') {
     // Edit shape mode - add points to existing polygons only if not clicking on a control point
-    const polygonArray = Array.from(polygonShapes().values()).map(p => {
+    const polygonArray = Array.from(polygonShapes(state).values()).map(p => {
       const line = p.konvaShape
       const t = line ? line.getAbsoluteTransform() : null
       const pts: { x: number, y: number }[] = []
@@ -375,11 +375,11 @@ export const handlePolygonClick = (state: CanvasRuntimeState, pos: { x: number, 
       
       if (result.polygonIndex >= 0 && result.distance < state.polygon.proximityThreshold * 2) {
         // Add point to the middle of the closest line segment
-        const polygonId = Array.from(polygonShapes().keys())[result.polygonIndex]
-        const polygon = polygonShapes().get(polygonId)
+        const polygonId = Array.from(polygonShapes(state).keys())[result.polygonIndex]
+        const polygon = polygonShapes(state).get(polygonId)
         
         if (polygon && polygon.konvaShape) {
-          executeCommand('Add Polygon Point', () => {
+          executeCommand(state, 'Add Polygon Point', () => {
             const points = polygon.points
             const insertIndex = (result.lineIndex + 1) * 2 // Convert to flat array index
             
@@ -416,7 +416,7 @@ export const handlePolygonMouseMove = (state: CanvasRuntimeState) => {
 export const handlePolygonEditMouseMove = (state: CanvasRuntimeState) => {
   const polygonPreviewLayer = state.layers.polygonPreview
   const polygonControlsLayer = state.layers.polygonControls
-  if (!polygonPreviewLayer || !stage || polygonShapes().size === 0) return
+  if (!polygonPreviewLayer || !stage || polygonShapes(state).size === 0) return
   
   const mousePos = stage.getPointerPosition()
   if (!mousePos) return
@@ -431,7 +431,7 @@ export const handlePolygonEditMouseMove = (state: CanvasRuntimeState) => {
   }
   
   // Find the closest polygon edge (in world coordinates)
-  const polygonArray = Array.from(polygonShapes().values()).map(p => {
+  const polygonArray = Array.from(polygonShapes(state).values()).map(p => {
     const line = p.konvaShape
     const t = line ? line.getAbsoluteTransform() : null
     const pts: { x: number, y: number }[] = []
@@ -452,7 +452,7 @@ export const handlePolygonEditMouseMove = (state: CanvasRuntimeState) => {
     polygonPreviewLayer.destroyChildren()
     
     if (result.polygonIndex >= 0 && result.distance < 20) {
-      const polygon = Array.from(polygonShapes().values())[result.polygonIndex]
+      const polygon = Array.from(polygonShapes(state).values())[result.polygonIndex]
       const points = polygon.points
       const line = polygon.konvaShape
       const t = line ? line.getAbsoluteTransform() : null
@@ -578,7 +578,7 @@ export const finishPolygon = (state: CanvasRuntimeState) => {
   const polygonPreviewLayer = state.layers.polygonPreview
   if (state.polygon.currentPoints.value.length < 6) return // Need at least 3 points
   
-  executeCommand('Create Polygon', () => {
+  executeCommand(state, 'Create Polygon', () => {
     const polygonId = `polygon-${Date.now()}`
     const polygon: PolygonShape = {
       id: polygonId,
@@ -601,7 +601,7 @@ export const finishPolygon = (state: CanvasRuntimeState) => {
     attachPolygonHandlers(state, polygonLine)
     
     polygon.konvaShape = polygonLine
-    polygonShapes().set(polygonId, polygon)
+    polygonShapes(state).set(polygonId, polygon)
     polygonShapesLayer?.add(polygonLine)
     
     // Register as CanvasItem
@@ -639,14 +639,14 @@ export const deleteSelectedPolygon = (state: CanvasRuntimeState) => {
   const selectedNodes = state.selection.selectedKonvaNodes.value
   if (selectedNodes.length === 0) return
   
-  executeCommand('Delete Selected Polygon', () => {
+  executeCommand(state, 'Delete Selected Polygon', () => {
     selectedNodes.forEach((node: Konva.Node) => {
       const polygonId = node.id()
       node.destroy()
       // Remove from polygons map
-      polygonShapes().delete(polygonId)
+      polygonShapes(state).delete(polygonId)
       // Remove from registry
-      removeCanvasItem(polygonId)
+      removeCanvasItem(state, polygonId)
     })
     clearPolygonSelection(state)
     polygonShapesLayer?.batchDraw()
@@ -665,7 +665,7 @@ export const updatePolygonControlPoints = (state: CanvasRuntimeState) => {
 
   if (state.polygon.mode.value === 'edit') {
     // Show control points for all polygons
-    polygonShapes().forEach((polygon) => {
+    polygonShapes(state).forEach((polygon) => {
       // Clear existing control points array
       polygon.controlPoints = []
       
@@ -773,14 +773,14 @@ export const setupPolygonModeWatcher = (state: CanvasRuntimeState) => {
       polygonPreviewLayer?.batchDraw()
       
       // Disable dragging in polygon tool mode; drawing only
-      polygonShapes().forEach(polygon => { polygon.konvaShape?.draggable(false) })
+      polygonShapes(state).forEach(polygon => { polygon.konvaShape?.draggable(false) })
     } else if (newMode === 'edit') {
       // When switching to edit mode, clear any drawing preview
       polygonPreviewLayer?.destroyChildren()
       polygonPreviewLayer?.batchDraw()
       
       // Disable dragging during vertex editing
-      polygonShapes().forEach(polygon => { polygon.konvaShape?.draggable(false) })
+      polygonShapes(state).forEach(polygon => { polygon.konvaShape?.draggable(false) })
     }
     updatePolygonControlPoints(state)
     clearPolygonSelection(state)

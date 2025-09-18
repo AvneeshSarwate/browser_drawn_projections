@@ -1,5 +1,4 @@
 import type { CanvasRuntimeState } from "./canvasState"
-import { getGlobalCanvasState as getCurrentCanvasState } from "./canvasState"
 
 // State-based command functions
 export const executeCommandWithState = (state: CanvasRuntimeState, name: string, action: () => void) => {
@@ -40,20 +39,20 @@ export const setGlobalPushCommand = (fn: (name: string, beforeState: string, aft
   globalPushCommand = fn
 }
 
-export const executeCommand = (name: string, action: () => void) => {
+export const executeCommand = (state: CanvasRuntimeState, name: string, action: () => void) => {
   if (globalExecuteCommand) {
     globalExecuteCommand(name, action)
   } else {
     // Fall back to state-based approach
-    executeCommandWithState(getCurrentCanvasState(), name, action)
+    executeCommandWithState(state, name, action)
   }
 }
 
-export const pushCommandWithStates = (name: string, beforeState: string, afterState: string) => {
+export const pushCommandWithStates = (state: CanvasRuntimeState, name: string, beforeState: string, afterState: string) => {
   if (globalPushCommand) {
     globalPushCommand(name, beforeState, afterState)
   } else {
     // Fall back to state-based approach
-    pushCommandWithStatesAndState(getCurrentCanvasState(), name, beforeState, afterState)
+    pushCommandWithStatesAndState(state, name, beforeState, afterState)
   }
 }
