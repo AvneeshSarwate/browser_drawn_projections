@@ -1,6 +1,6 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
-import { createCanvasRuntimeState, setGlobalCanvasState, type CanvasRuntimeState } from './canvasState';
+import { createCanvasRuntimeState, type CanvasRuntimeState } from './canvasState';
 import * as selectionStore from './selectionStore';
 import { getCanvasItem } from './CanvasItem';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
@@ -44,7 +44,6 @@ const resolution = computed(() => props.resolution)
 
 // Create and initialize canvas runtime state
 const canvasState: CanvasRuntimeState = createCanvasRuntimeState()
-setGlobalCanvasState(canvasState)
 const metadataToolkit = createMetadataToolkit(canvasState)
 
 const activeTool = canvasState.activeTool
