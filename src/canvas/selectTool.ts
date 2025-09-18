@@ -61,27 +61,31 @@ export function handleSelectPointerDown(state: CanvasRuntimeState, stage: Konva.
 
   // If clicking on a shape, handle selection
   if (e.target !== stage) {
-    // Escalate to top-most group whose parent is a Layer
-    let node: Konva.Node = e.target
-    let parent = node.getParent()
-    while (parent && !(parent instanceof Konva.Layer)) {
-      node = parent
-      parent = node.getParent()
+    // Walk up the hierarchy and prefer the highest ancestor that is registered
+    let node: Konva.Node | null = e.target
+    let lastItem = getCanvasItem(state, node)
+
+    while (node && !(node instanceof Konva.Stage)) {
+      node = node.getParent() as Konva.Node | null
+      if (!node || node instanceof Konva.Stage) break
+      const candidate = getCanvasItem(state, node)
+      if (candidate) {
+        lastItem = candidate
+      }
     }
 
-    const item = getCanvasItem(state, node)
-    if (item) {
+    if (lastItem) {
       // Update selection depending on modifier and whether the clicked item is already selected
-      const wasSelected = selectionStore.has(state, item)
+      const wasSelected = selectionStore.has(state, lastItem)
       if (e.evt.shiftKey) {
-        selectionStore.toggle(state, item, true)
+        selectionStore.toggle(state, lastItem, true)
       } else if (!wasSelected) {
         selectionStore.clear(state)
-        selectionStore.add(state, item, true)
+        selectionStore.add(state, lastItem, true)
       }
 
       // Start selection drag if the clicked item is (now) part of the selection
-      const nowSelected = selectionStore.has(state, item)
+      const nowSelected = selectionStore.has(state, lastItem)
       if (nowSelected) {
         startSelectionDrag(state, stage)
       }
@@ -215,22 +219,42 @@ function completeSelectionRect(state: CanvasRuntimeState, isShiftHeld: boolean =
     }
   }
   
+  const intersects = (node: Konva.Node): boolean => {
+    const nodeBox = node.getClientRect()
+    return !(
+      rectBox.x + rectBox.width < nodeBox.x ||
+      nodeBox.x + nodeBox.width < rectBox.x ||
+      rectBox.y + rectBox.height < nodeBox.y ||
+      nodeBox.y + nodeBox.height < rectBox.y
+    )
+  }
+
+  const collectIntersectingItems = (node: Konva.Node) => {
+    if (!isSelectableNode(node)) {
+      if (node instanceof Konva.Container) {
+        node.getChildren().forEach(child => collectIntersectingItems(child))
+      }
+      return
+    }
+
+    const item = getCanvasItem(state, node)
+    if (item) {
+      if (intersects(node)) {
+        intersectingItems.push(item)
+      }
+      // Once we select a registered item, do not traverse its descendants
+      return
+    }
+
+    if (node instanceof Konva.Container) {
+      node.getChildren().forEach(child => collectIntersectingItems(child))
+    }
+  }
+
   // Check all selectable nodes in the found layers
   layersToCheck.forEach(layer => {
     layer.getChildren().forEach(node => {
-      if (!isSelectableNode(node)) return
-      const nodeBox = node.getClientRect()
-
-      // Check if rectangles intersect
-      if (!(rectBox.x + rectBox.width < nodeBox.x || 
-            nodeBox.x + nodeBox.width < rectBox.x ||
-            rectBox.y + rectBox.height < nodeBox.y ||
-            nodeBox.y + nodeBox.height < rectBox.y)) {
-        const item = getCanvasItem(state, node)
-        if (item) {
-          intersectingItems.push(item)
-        }
-      }
+      collectIntersectingItems(node)
     })
   })
   
