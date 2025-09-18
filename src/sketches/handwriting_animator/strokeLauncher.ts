@@ -69,19 +69,17 @@ const convertFreehandStrokesToGPUFormat = () => {
 
   const flattenedStrokes: FlattenedStroke[] = []
 
-  const extractStrokes = (strokeGroups: FlattenedStrokeGroup[]) => {
-    strokeGroups.forEach(group => {
-      group.children.forEach(child => {
-        if ('points' in child) {
-          flattenedStrokes.push(child)
-        } else {
-          extractStrokes([child])
-        }
-      })
+  const extractStrokes = (group: FlattenedStrokeGroup) => {
+    group.children.forEach(child => {
+      if (child.type === 'stroke') {
+        flattenedStrokes.push(child)
+      } else {
+        extractStrokes(child)
+      }
     })
   }
 
-  extractStrokes(appState.freehandRenderData)
+  appState.freehandRenderData.forEach(group => extractStrokes(group))
 
   const gpuStrokes: GPUStroke[] = []
 

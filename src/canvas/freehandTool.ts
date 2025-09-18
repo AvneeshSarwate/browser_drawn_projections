@@ -994,6 +994,7 @@ const generateBakedStrokeData = (
       const currentStrokeIndex = strokeIndex++
 
       return {
+        type: 'stroke',
         points: flattenedPoints,
         ...(metadata && { metadata }) // Only include metadata if it exists
       } as FlattenedStroke
@@ -1031,6 +1032,7 @@ const generateBakedStrokeData = (
       }
 
       return {
+        type: 'strokeGroup',
         children,
         ...(metadata && { metadata }) // Only include metadata if it exists
       } as FlattenedStrokeGroup
@@ -1045,9 +1047,9 @@ const generateBakedStrokeData = (
   freehandShapeLayer.getChildren().forEach(child => {
     const processed = processNode(child)
     if (processed) {
-      if ('points' in processed) {
+      if (processed.type === 'stroke') {
         // Single stroke - wrap in a group
-        strokeGroups.push({ children: [processed] })
+        strokeGroups.push({ type: 'strokeGroup', children: [processed] })
       } else {
         // Already a group
         strokeGroups.push(processed)

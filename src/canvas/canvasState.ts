@@ -4,11 +4,13 @@ import type { CanvasItem } from './CanvasItem'
 import { CommandStack } from './commandStack'
 
 export type FlattenedStroke = {
+  type: 'stroke'
   points: { x: number, y: number, ts: number }[]
   metadata?: any
 }
 
 export type FlattenedStrokeGroup = {
+  type: 'strokeGroup'
   children: (FlattenedStroke | FlattenedStrokeGroup)[]
   metadata?: any
 }
@@ -16,6 +18,7 @@ export type FlattenedStrokeGroup = {
 export type FreehandRenderData = FlattenedStrokeGroup[]
 
 export type FlattenedPolygon = {
+  type: 'polygon'
   points: { x: number, y: number }[]
   metadata?: any
 }

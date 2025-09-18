@@ -99,6 +99,7 @@ export const generateBakedPolygonData = (
       const metadata = child.getAttr('metadata')
       
       bakedPolygons.push({
+        type: 'polygon',
         points: transformedPoints,
         ...(metadata && { metadata }) // Only include metadata if it exists
       })

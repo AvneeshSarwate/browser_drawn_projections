@@ -1,16 +1,22 @@
-const polygonRenderData = []
-const freehandRenderData = []
-const polygonMotion = new Map()
-const strokeMotion = new Map()
+const polygons = []
+const strokes = []
 
 const element = document.getElementById('handwritingCanvas')
 const canvasWidth = Number(element.getAttribute('width')) || 800
 const canvasHeight = Number(element.getAttribute('height')) || 450
 
 element.syncState = (state) => {
-  polygonRenderData.splice(0, polygonRenderData.length, ...state.polygon.bakedRenderData)
-  freehandRenderData.splice(0, freehandRenderData.length, ...state.freehand.bakedRenderData)
-  updateMotionMaps()
+  polygons.splice(0, polygons.length, ...state.polygon.bakedRenderData)
+  strokes.splice(0, strokes.length)
+
+  state.freehand.bakedRenderData.forEach((group) => {
+    if (group.type !== 'strokeGroup') return
+    group.children.forEach((child) => {
+      if (child.type === 'stroke') {
+        strokes.push(child)
+      }
+    })
+  })
 }
 
 function setup() {
@@ -23,100 +29,43 @@ function setup() {
 function draw() {
   clear()
   background(250)
-
   const time = millis() / 1000
 
   noStroke()
-  for (let i = 0; i < polygonRenderData.length; i++) {
-    const polygon = polygonRenderData[i]
-    const key = polygon?.id ?? `polygon-${i}`
-    const motion = getMotion(polygonMotion, key)
-    const { dx, dy } = computeOffset(motion, time)
-    const color = polygon?.metadata?.color || colourForIndex(i)
+  polygons.forEach((polygon, index) => {
+    const { dx, dy } = offsetForIndex(index, time)
+    const color = polygon?.metadata?.color || colourForIndex(index)
     fill(color.r ?? 255, color.g ?? 255, color.b ?? 255, color.a ?? 255)
     beginShape()
     for (const point of polygon.points ?? []) {
       vertex(point.x + dx, point.y + dy)
     }
     endShape(CLOSE)
-  }
+  })
 
   stroke(30)
   strokeWeight(2)
   noFill()
-  freehandRenderData.forEach((group, index) => {
-    drawStrokeGroup(group, `group-${index}`, time)
-  })
-}
-
-function drawStrokeGroup(item, key, time) {
-  if (!item) return
-  if (Array.isArray(item.children)) {
-    item.children.forEach((child, idx) => {
-      drawStrokeGroup(child, `${key}.${idx}`, time)
-    })
-    return
-  }
-  if (!item.points || item.points.length === 0) return
-
-  const motion = getMotion(strokeMotion, key)
-  const { dx, dy } = computeOffset(motion, time, 1.3)
-
-  beginShape()
-  for (const point of item.points) {
-    vertex(point.x + dx, point.y + dy)
-  }
-  endShape()
-}
-
-function updateMotionMaps() {
-  const polygonKeys = new Set()
-  polygonRenderData.forEach((polygon, index) => {
-    const key = polygon?.id ?? `polygon-${index}`
-    polygonKeys.add(key)
-    getMotion(polygonMotion, key)
-  })
-  pruneUnused(polygonMotion, polygonKeys)
-
-  const strokeKeys = new Set()
-  const collectKeys = (item, key) => {
-    if (Array.isArray(item.children)) {
-      item.children.forEach((child, idx) => collectKeys(child, `${key}.${idx}`))
-      return
+  strokes.forEach((stroke, index) => {
+    const { dx, dy } = offsetForIndex(index, time, { skew: 1.3, radiusOffset: 8 })
+    beginShape()
+    for (const point of stroke.points ?? []) {
+      vertex(point.x + dx, point.y + dy)
     }
-    strokeKeys.add(key)
-    getMotion(strokeMotion, key)
-  }
-  freehandRenderData.forEach((group, index) => collectKeys(group, `group-${index}`))
-  pruneUnused(strokeMotion, strokeKeys)
+    endShape()
+  })
 }
 
-function getMotion(map, key) {
-  let motion = map.get(key)
-  if (!motion) {
-    const seed = hashString(key)
-    const radius = 6 + (seed % 1000) / 1000 * 12
-    const speed = 0.6 + ((seed >> 3) % 1000) / 1000 * 1.4
-    const phase = ((seed >> 7) % 1000) / 1000 * TWO_PI
-    motion = { radius, speed, phase }
-    map.set(key, motion)
-  }
-  return motion
-}
-
-function computeOffset(motion, time, skew = 1) {
-  const angle = motion.phase + motion.speed * time
+function offsetForIndex(index, time, options = {}) {
+  const seed = (index+1) * 97 + (options.seedOffset ?? 0)
+  const radius = (options.radiusOffset ?? 6) + (seed % 5) * 3
+  const speed = 0.5 + (seed % 7) * 0.3
+  const phase = ((seed % 360) * TWO_PI) / 360
+  const angle = phase + speed * time
+  const skew = options.skew ?? 1
   return {
-    dx: Math.cos(angle) * motion.radius,
-    dy: Math.sin(angle * skew) * motion.radius,
-  }
-}
-
-function pruneUnused(map, keys) {
-  for (const key of map.keys()) {
-    if (!keys.has(key)) {
-      map.delete(key)
-    }
+    dx: Math.cos(angle) * radius,
+    dy: Math.sin(angle * skew) * radius,
   }
 }
 
@@ -148,13 +97,4 @@ function colourForIndex(index) {
   const lightness = 55
   const [r, g, b] = hslToRgb(hue / 360, saturation / 100, lightness / 100)
   return { r, g, b, a: 220 }
-}
-
-function hashString(text) {
-  let hash = 0
-  for (let i = 0; i < text.length; i++) {
-    hash = (hash << 5) - hash + text.charCodeAt(i)
-    hash |= 0
-  }
-  return Math.abs(hash)
 }

@@ -106,26 +106,26 @@ export const drawFlattenedStrokeGroup = (p: p5, data: FreehandRenderData) => {
   p.stroke(255)
   p.strokeWeight(3)
   p.noFill()
-  data.forEach((g, i) => {
-    recursiveDrawStrokeGroups(p, g)
+  data.forEach((group) => {
+    recursiveDrawStrokeGroups(p, group)
   })
   p.pop()
 }
 
 export const recursiveDrawStrokeGroups = (p: p5, item: FlattenedStrokeGroup | FlattenedStroke) => {
-  if('points' in item && item.points.length > 0) {
+  if (item.type === 'stroke') {
+    if (item.points.length === 0) return
     p.beginShape()
-
     item.points.forEach((point) => {
       p.vertex(point.x, point.y)
     })
     p.endShape()
+    return
   }
-  if('children' in item && item.children.length > 0) {
-    item.children.forEach((child) => {
-      recursiveDrawStrokeGroups(p, child)
-    })
-  }
+
+  item.children.forEach((child) => {
+    recursiveDrawStrokeGroups(p, child)
+  })
 }
 
 export let stage: Konva.Stage | undefined = undefined
