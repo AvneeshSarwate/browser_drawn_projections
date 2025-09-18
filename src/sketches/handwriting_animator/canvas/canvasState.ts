@@ -74,6 +74,8 @@ export interface CanvasRuntimeState {
     ancillaryViz?: Konva.Layer
     metadataHighlight?: Konva.Layer
     selectionOverlay?: Konva.Layer
+    transformer?: Konva.Transformer
+    transformerLayer?: Konva.Layer
   }
   canvasItems: Map<string, CanvasItem>
   callbacks: {
@@ -169,7 +171,9 @@ export const createCanvasRuntimeState = (): CanvasRuntimeState => {
     konvaContainer: undefined,
     activeTool: ref('select'),
     layers: {
-      selectionOverlay: undefined
+      selectionOverlay: undefined,
+      transformer: undefined,
+      transformerLayer: undefined
     },
     canvasItems: new Map(),
     callbacks: {},
