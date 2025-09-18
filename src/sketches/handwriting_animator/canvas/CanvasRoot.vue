@@ -1,13 +1,11 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
-import { type TemplateAppState, appStateName, resolution, drawFlattenedStrokeGroup, stage, setStage, showMetadataEditor, activeTool } from '../appState';
+import { type TemplateAppState, appStateName, resolution, stage, setStage, showMetadataEditor, activeTool } from '../appState';
 import { createCanvasRuntimeState, setGlobalCanvasState, type CanvasRuntimeState } from './canvasState';
 import * as selectionStore from './selectionStore';
 import { getCanvasItem } from './CanvasItem';
 import { computed, inject, onMounted, onUnmounted, ref, watch } from 'vue';
-import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
-import { clearListeners, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
-import type p5 from 'p5';
+import { clearListeners, singleKeydownEvent } from '@/io/keyboardAndMouse';
 import Konva from 'konva';
 import Timeline from './Timeline.vue';
 import HierarchicalMetadataEditor from './HierarchicalMetadataEditor.vue';
@@ -33,14 +31,8 @@ import {
   duplicateSelection as duplicateSelectionImpl,
   deleteSelection as deleteSelectionImpl
 } from './selectTool';
-import { sinN } from '@/channels/channels';
-
 const appState = inject<TemplateAppState>(appStateName)!!
-let shaderGraphEndNode: ShaderEffect | undefined = undefined
-const clearDrawFuncs = () => {
-  appState.drawFunctions = []
-  appState.drawFuncMap = new Map()
-}
+ 
 
 
 // ==================== common stuff ====================
@@ -496,59 +488,6 @@ onMounted(async () => {
       }
     })
 
-    // Original p5 setup
-    const p5i = appState.p5Instance!!
-    const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
-    const threeCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
-
-    let p5Mouse = { x: 0, y: 0 }
-    mousemoveEvent((ev) => {
-      p5Mouse = targetToP5Coords(ev, p5i, threeCanvas)
-    }, threeCanvas)
-
-    const rand = (n: number) => sinN(n * 123.23)
-
-    const randColor = (seed: number) => {
-      return {
-        r: rand(seed) * 255,
-        g: rand(seed + 1) * 255,
-        b: rand(seed + 2) * 255,
-        a: 1
-      }
-    }
-
-    appState.drawFunctions.push((p: p5) => {
-      // console.log("drawing circles", appState.circles.list.length)
-
-      if (appState.polygonRenderData.length > 0) {
-        p.push()
-        appState.polygonRenderData.forEach((polygon, idx) => {
-          const polygonMetadataColor = polygon.metadata?.color
-          const color = polygonMetadataColor ?? randColor(idx)
-          p.fill(color.r, color.g, color.b, color.a)
-          p.noStroke()
-          p.beginShape()
-          polygon.points.forEach(point => {
-            p.vertex(point.x, point.y)
-          })
-          p.endShape()
-        })
-        p.pop()
-      }
-
-      if (appState.freehandRenderData.length > 0) {
-        drawFlattenedStrokeGroup(p, appState.freehandRenderData)
-      }
-    })
-
-    const passthru = new Passthru({ src: p5Canvas })
-    const canvasPaint = new CanvasPaint({ src: passthru })
-
-    shaderGraphEndNode = canvasPaint
-    appState.shaderDrawFunc = () => shaderGraphEndNode!!.renderAll(appState.threeRenderer!!)
-
-    singleKeydownEvent('p', (ev) => { appState.paused = !appState.paused })
-
     // Set up polygon mode watcher
     setupPolygonModeWatcher()
 
@@ -580,9 +519,7 @@ onUnmounted(() => {
   serializeFreehandState(canvasState)
   serializePolygonState(canvasState)
 
-  shaderGraphEndNode?.disposeAll()
   clearListeners()
-  clearDrawFuncs()
 
   // Clean up Konva
   stage?.destroy()
