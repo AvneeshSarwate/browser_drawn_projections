@@ -1,7 +1,7 @@
 import type { CanvasRuntimeState } from "./canvasState"
 
-// State-based command functions
-export const executeCommandWithState = (state: CanvasRuntimeState, name: string, action: () => void) => {
+// Command helpers rely exclusively on the callbacks stored in CanvasRuntimeState
+export const executeCommand = (state: CanvasRuntimeState, name: string, action: () => void) => {
   if (!state.command.executeCommand) {
     console.warn('executeCommand called before setup - falling back to direct execution')
     action()
@@ -10,7 +10,12 @@ export const executeCommandWithState = (state: CanvasRuntimeState, name: string,
   state.command.executeCommand(name, action)
 }
 
-export const pushCommandWithStatesAndState = (state: CanvasRuntimeState, name: string, beforeState: string, afterState: string) => {
+export const pushCommandWithStates = (
+  state: CanvasRuntimeState,
+  name: string,
+  beforeState: string,
+  afterState: string
+) => {
   if (!state.command.pushCommand) {
     console.warn('pushCommandWithStates called before setup - ignoring')
     return
@@ -23,36 +28,9 @@ export const setCommandExecutor = (state: CanvasRuntimeState, fn: (name: string,
   state.command.executeCommand = fn
 }
 
-export const setCommandPusher = (state: CanvasRuntimeState, fn: (name: string, beforeState: string, afterState: string) => void) => {
+export const setCommandPusher = (
+  state: CanvasRuntimeState,
+  fn: (name: string, beforeState: string, afterState: string) => void
+) => {
   state.command.pushCommand = fn
-}
-
-// TEMPORARY FALLBACK WRAPPERS - REMOVE IN PHASE 7
-let globalExecuteCommand: ((name: string, action: () => void) => void) | undefined
-let globalPushCommand: ((name: string, beforeState: string, afterState: string) => void) | undefined
-
-export const setGlobalExecuteCommand = (fn: (name: string, action: () => void) => void) => {
-  globalExecuteCommand = fn
-}
-
-export const setGlobalPushCommand = (fn: (name: string, beforeState: string, afterState: string) => void) => {
-  globalPushCommand = fn
-}
-
-export const executeCommand = (state: CanvasRuntimeState, name: string, action: () => void) => {
-  if (globalExecuteCommand) {
-    globalExecuteCommand(name, action)
-  } else {
-    // Fall back to state-based approach
-    executeCommandWithState(state, name, action)
-  }
-}
-
-export const pushCommandWithStates = (state: CanvasRuntimeState, name: string, beforeState: string, afterState: string) => {
-  if (globalPushCommand) {
-    globalPushCommand(name, beforeState, afterState)
-  } else {
-    // Fall back to state-based approach
-    pushCommandWithStatesAndState(state, name, beforeState, afterState)
-  }
 }

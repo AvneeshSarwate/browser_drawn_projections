@@ -1,6 +1,6 @@
 
 import type { CanvasItem, ItemType } from './CanvasItem'
-import { executeCommandWithState } from './commands'
+import { executeCommand } from './commands'
 import type { CanvasRuntimeState } from './canvasState'
 import Konva from 'konva'
 
@@ -166,7 +166,7 @@ function setMetadataForState(
   item: CanvasItem,
   meta: Record<string, any> | undefined
 ) {
-  executeCommandWithState(state, 'Edit Metadata', () => {
+  executeCommand(state, 'Edit Metadata', () => {
     item.setMetadata(meta)
     updateGPUAndVisualization(state)
   })
@@ -176,7 +176,7 @@ function setMetadataForState(
 function setMetadataForSelectedInState(state: CanvasRuntimeState, meta: Record<string, any> | undefined) {
   if (state.selection.items.size === 0) return
   
-  executeCommandWithState(state, 'Edit Multiple Metadata', () => {
+  executeCommand(state, 'Edit Multiple Metadata', () => {
     for (const item of state.selection.items) {
       item.setMetadata(meta)
     }
