@@ -216,7 +216,8 @@ export class DateTimeContext extends TimeContext{
           else reject()
           if (this.isCanceled) return 
           
-          this.rootContext!.mostRecentDescendentTime = targetTime
+          //defensive check so that time never moves "backwards" due to setTimeout jitter between context children
+          this.rootContext!.mostRecentDescendentTime = Math.max(this.rootContext!.mostRecentDescendentTime, targetTime)
 
           const waitDuration = dateNow() - waitStart
           // console.log('wait duration', (waitDuration / 1000).toFixed(3), 'wait time', waitTime.toFixed(3))
