@@ -136,7 +136,7 @@ watch(
 )
 
 // Stateful wrappers for select tool helpers
-const initializeSelectToolStateful = (layer: Konva.Layer) => initializeSelectToolImpl(canvasState, layer)
+const initializeSelectToolStateful = (container: Konva.Group) => initializeSelectToolImpl(canvasState, container)
 const handleSelectPointerDownStateful = (stage: Konva.Stage, e: Konva.KonvaEventObject<MouseEvent>) => handleSelectPointerDownImpl(canvasState, stage, e)
 const handleSelectPointerMoveStateful = (stage: Konva.Stage, e: Konva.KonvaEventObject<MouseEvent>) => handleSelectPointerMoveImpl(canvasState, stage, e)
 const handleSelectPointerUpStateful = (stage: Konva.Stage, e: Konva.KonvaEventObject<MouseEvent>) => handleSelectPointerUpImpl(canvasState, stage, e)
@@ -293,52 +293,56 @@ const konvaContainer = ref<HTMLDivElement>()
 
 // Helper to consistently apply layer listening per tool
 const applyToolMode = (state: CanvasRuntimeState, tool: 'select' | 'freehand' | 'polygon') => {
-  const freehandShapeLayer = state.layers.freehandShape
-  const freehandDrawingLayer = state.layers.freehandDrawing
-  const selectionLayer = state.layers.transformerLayer ?? state.layers.freehandSelection
+  const freehandShapeGroup = state.groups.freehandShape
+  const freehandDrawingGroup = state.groups.freehandDrawing
+  const selectionGroup = state.groups.selectionOverlay
+  const polygonShapesGroup = state.groups.polygonShapes
+  const polygonPreviewGroup = state.groups.polygonPreview
+  const polygonControlsGroup = state.groups.polygonControls
+  const polygonSelectionGroup = state.groups.polygonSelection
   const stageRef = state.stage
   // Clear selections when switching tools
   selectionStore.clear(state)
 
   if (tool === 'select') {
     // Enable interaction with shape layers for selection
-    freehandShapeLayer?.listening(true)
-    state.layers.polygonShapes?.listening(true)
+    freehandShapeGroup?.listening(true)
+    polygonShapesGroup?.listening(true)
 
     // Disable drawing-specific layers
-    freehandDrawingLayer?.listening(false)
-    state.layers.polygonPreview?.listening(false)
-    state.layers.polygonControls?.listening(false)
+    freehandDrawingGroup?.listening(false)
+    polygonPreviewGroup?.listening(false)
+    polygonControlsGroup?.listening(false)
 
     // Keep selection layers active (transformer lives here)
-    selectionLayer?.listening(true)
-    state.layers.polygonSelection?.listening(true)
+    selectionGroup?.listening(true)
+    polygonSelectionGroup?.listening(true)
 
     // Ensure transformer/selection overlay sits above shapes
-    selectionLayer?.moveToTop()
+    state.layers.overlay?.moveToTop()
     if (stageRef) ensureHighlightLayer(canvasState, stageRef).moveToTop()
   } else if (tool === 'freehand') {
     // Freehand drawing mode
-    freehandShapeLayer?.listening(true)
-    freehandDrawingLayer?.listening(true)
-    selectionLayer?.listening(true)
+    freehandShapeGroup?.listening(true)
+    freehandDrawingGroup?.listening(true)
+    selectionGroup?.listening(true)
 
     // Disable polygon interactive layers
-    state.layers.polygonShapes?.listening(false)
-    state.layers.polygonPreview?.listening(false)
-    state.layers.polygonControls?.listening(false)
-    state.layers.polygonSelection?.listening(false)
+    polygonShapesGroup?.listening(false)
+    polygonPreviewGroup?.listening(false)
+    polygonControlsGroup?.listening(false)
+    polygonSelectionGroup?.listening(false)
   } else if (tool === 'polygon') {
     // Polygon mode
-    state.layers.polygonShapes?.listening(true)
-    state.layers.polygonPreview?.listening(true)
-    state.layers.polygonControls?.listening(true)
-    state.layers.polygonSelection?.listening(true)
+    polygonShapesGroup?.listening(true)
+    polygonPreviewGroup?.listening(true)
+    polygonControlsGroup?.listening(true)
+    polygonSelectionGroup?.listening(true)
 
     // Disable freehand interactive layers
-    freehandShapeLayer?.listening(false)
-    freehandDrawingLayer?.listening(false)
-    selectionLayer?.listening(false)
+    freehandShapeGroup?.listening(false)
+    freehandDrawingGroup?.listening(false)
+    selectionGroup?.listening(false)
   }
 
   // Manage polygon control points visibility lifecycle across tools
@@ -346,21 +350,21 @@ const applyToolMode = (state: CanvasRuntimeState, tool: 'select' | 'freehand' | 
     if (state.polygon.mode.value === 'edit') {
       updatePolygonControlPoints()
     } else {
-      state.layers.polygonControls?.destroyChildren()
-      state.layers.polygonControls?.batchDraw()
+      polygonControlsGroup?.destroyChildren()
+      polygonControlsGroup?.getLayer()?.batchDraw()
     }
   } else {
     // Leaving polygon tool – remove control points
-    state.layers.polygonControls?.destroyChildren()
-    state.layers.polygonControls?.batchDraw()
+    polygonControlsGroup?.destroyChildren()
+    polygonControlsGroup?.getLayer()?.batchDraw()
   }
 
   // Update node draggability to avoid conflicting with selection-drag logic
   const setAllDraggable = (draggable: boolean) => {
-    freehandShapeLayer?.getChildren().forEach((node: Konva.Node) => {
+    freehandShapeGroup?.getChildren().forEach((node: Konva.Node) => {
       if (node instanceof Konva.Path || node instanceof Konva.Group) node.draggable(draggable)
     })
-    state.layers.polygonShapes?.getChildren().forEach(node => {
+    polygonShapesGroup?.getChildren().forEach(node => {
       if (node instanceof Konva.Line || node instanceof Konva.Group) node.draggable(draggable)
     })
   }
@@ -427,28 +431,40 @@ onMounted(async () => {
     canvasState.callbacks.updateCursor = updateCursorFn
     canvasState.callbacks.updateCursor?.()
 
-    // Create layers using state-based initialization
+    // Create core layers (grid, drawing, overlay)
+    const gridLayer = new Konva.Layer({
+      listening: false,
+      hitGraphEnabled: false,
+      name: 'grid-layer'
+    })
+    const drawingLayer = new Konva.Layer({ name: 'drawing-layer' })
+    const overlayLayer = new Konva.Layer({ name: 'overlay-layer' })
+
+    stageInstance.add(gridLayer)
+    stageInstance.add(drawingLayer)
+    stageInstance.add(overlayLayer)
+    gridLayer.moveToBottom()
+
+    canvasState.layers.grid = gridLayer
+    canvasState.layers.drawing = drawingLayer
+    canvasState.layers.overlay = overlayLayer
+
+    // Create grouped containers within the layers
     initFreehandLayers(canvasState, stageInstance)
     initPolygonLayers(canvasState, stageInstance)
+
+    // Shared overlay group for selection rectangle and transformer
+    const selectionOverlayGroup = new Konva.Group({ name: 'selection-overlay' })
+    overlayLayer.add(selectionOverlayGroup)
+
+    // Initialize select tool and transformer using shared group
+    initializeSelectToolStateful(selectionOverlayGroup)
+    initializeTransformer(canvasState, selectionOverlayGroup)
+
     updateCanvasGrid()
-
-    const freehandSelectionLayer = canvasState.layers.freehandSelection
-    if (!freehandSelectionLayer) {
-      console.error('Freehand selection layer not initialized')
-      return
-    }
-
-    // Initialize unified transformer
-    initializeTransformer(canvasState, freehandSelectionLayer)
-
-    // Initialize select tool
-    const selectionLayerForTool = canvasState.layers.transformerLayer ?? freehandSelectionLayer
-    initializeSelectToolStateful(selectionLayerForTool)
 
     // Add metadata highlight layer on top
     const metadataHighlightLayer = ensureHighlightLayer(canvasState, stageInstance)
-    // Keep transformer layer above all interactive shape layers to prevent pointer blocking
-    canvasState.layers.transformerLayer?.moveToTop()
     // Keep highlight visuals on top (non-listening, so it won't block interaction)
     metadataHighlightLayer.moveToTop()
 
@@ -562,7 +578,7 @@ onMounted(async () => {
       } else if (activeTool.value === 'polygon') {
         // Polygon tool handles polygon-specific interactions only (no selection)
         const parent = e.target.getParent?.()
-        const isControlPoint = parent === canvasState.layers.polygonControls
+        const isControlPoint = parent === canvasState.groups.polygonControls
         if (!isControlPoint) {
           handlePolygonClick(pos)
         }
@@ -570,7 +586,7 @@ onMounted(async () => {
     })
 
     stageInstance.on('mousemove touchmove', (e) => {
-      const freehandDrawingLayer = canvasState.layers.freehandDrawing
+      const freehandDrawingGroup = canvasState.groups.freehandDrawing
       if (activeTool.value === 'select') {
         // Handle drag selection for select tool
         handleSelectPointerMoveStateful(stageInstance, e)
@@ -584,14 +600,14 @@ onMounted(async () => {
           canvasState.freehand.currentTimestamps.push(performance.now() - canvasState.freehand.drawingStartTime)
 
           // Update preview
-          freehandDrawingLayer?.destroyChildren()
+          freehandDrawingGroup?.destroyChildren()
           const previewPath = new Konva.Path({
             data: getStrokePath(canvasState.freehand.currentPoints),
             fill: '#666',
             strokeWidth: 0,
           })
-          freehandDrawingLayer?.add(previewPath)
-          freehandDrawingLayer?.batchDraw()
+          freehandDrawingGroup?.add(previewPath)
+          freehandDrawingGroup?.getLayer()?.batchDraw()
         }
       } else if (activeTool.value === 'polygon') {
         if (canvasState.polygon.mode.value === 'draw' && canvasState.polygon.isDrawing.value) {
@@ -604,14 +620,14 @@ onMounted(async () => {
     })
 
     stageInstance.on('mouseup touchend', (e) => {
-      const freehandDrawingLayer = canvasState.layers.freehandDrawing
+      const freehandDrawingGroup = canvasState.groups.freehandDrawing
       if (activeTool.value === 'freehand' && canvasState.freehand.isDrawing) {
         canvasState.freehand.isDrawing = false
-        freehandDrawingLayer?.destroyChildren()
+        freehandDrawingGroup?.destroyChildren()
 
         if (canvasState.freehand.currentPoints.length > 2) {
           executeCommand('Draw Stroke', () => {
-            const freehandShapeLayer = canvasState.layers.freehandShape
+            const freehandShapeGroup = canvasState.groups.freehandShape
             // Create new stroke
             const creationTime = Date.now()
             const strokeId = `stroke-${creationTime}`
@@ -642,10 +658,10 @@ onMounted(async () => {
 
             // Add to data structures
             freehandStrokes(canvasState).set(strokeId, stroke)
-            freehandShapeLayer?.add(shape)
+            freehandShapeGroup?.add(shape)
             updateFreehandDraggableStates() // Update draggable state for new stroke
             updateTimelineState() // Update timeline state when new stroke is added
-            freehandShapeLayer?.batchDraw()
+            freehandShapeGroup?.getLayer()?.batchDraw()
             updateBakedFreehandData(canvasState) // Update baked data after new stroke
           })
         }

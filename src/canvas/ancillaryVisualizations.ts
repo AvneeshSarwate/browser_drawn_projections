@@ -27,17 +27,17 @@ const getEntryMap = (state: CanvasRuntimeState): Map<string, AncillaryVisualizat
   return state.ancillary.nodeVisualizations
 }
 
-const ensureLayer = (state: CanvasRuntimeState): Konva.Layer | undefined => {
-  const stage = state.stage
-  if (!stage) return undefined
+const ensureGroup = (state: CanvasRuntimeState): Konva.Group | undefined => {
+  const overlayLayer = state.layers.overlay
+  if (!overlayLayer) return undefined
 
-  if (!state.layers.ancillaryViz) {
-    const layer = new Konva.Layer({ listening: false, name: 'ancillary-vis' })
-    state.layers.ancillaryViz = layer
-    stage.add(layer)
+  if (!state.groups.ancillaryViz) {
+    const group = new Konva.Group({ listening: false, name: 'ancillary-vis' })
+    state.groups.ancillaryViz = group
+    overlayLayer.add(group)
   }
 
-  return state.layers.ancillaryViz
+  return state.groups.ancillaryViz
 }
 
 const scheduleAVRefresh = (state: CanvasRuntimeState) => {
@@ -76,7 +76,7 @@ const ensureActiveSetWatcher = (state: CanvasRuntimeState) => {
 export const initAVLayer = (state: CanvasRuntimeState) => {
   if (!state.stage) return
 
-  ensureLayer(state)
+  ensureGroup(state)
   installStageListeners(state)
   ensureActiveSetWatcher(state)
 
@@ -85,10 +85,10 @@ export const initAVLayer = (state: CanvasRuntimeState) => {
 
 export const refreshAnciliaryViz = (state: CanvasRuntimeState) => {
   const stage = state.stage
-  const layer = ensureLayer(state)
-  if (!stage || !layer) return
+  const group = ensureGroup(state)
+  if (!stage || !group) return
 
-  const hierarchy = collectHierarchy(state.layers.freehandShape)
+  const hierarchy = collectHierarchy(state.groups.freehandShape)
   const roots = hierarchy.filter(entry => entry.depth === 0).map(entry => entry.node)
 
   const needed = new Map<string, { ctx: AVContext, def: AncillaryVisDefinition }>()
@@ -123,13 +123,19 @@ export const refreshAnciliaryViz = (state: CanvasRuntimeState) => {
     const existing = entries.get(mapKey)
     if (!existing) {
       const vis = need.def.create(need.ctx)
-      const nodes = Array.isArray(vis) ? vis : [vis]
-      nodes.forEach(node => layer.add(node as Konva.Shape))
+      const nodes = (Array.isArray(vis) ? vis : [vis]) as Konva.Node[]
+      nodes.forEach(node => {
+        if (node instanceof Konva.Group || node instanceof Konva.Shape) {
+          group.add(node)
+        } else {
+          console.warn('Ancillary visualization produced unsupported node type', node)
+        }
+      })
       entries.set(mapKey, { key: need.def.key, nodes: vis })
     } else {
       need.def.update?.(need.ctx, existing.nodes)
     }
   })
 
-  layer.batchDraw()
+  group.getLayer()?.batchDraw()
 }

@@ -13,16 +13,38 @@ import { polygonShapes } from './canvasState'
 import type { CanvasRuntimeState } from './canvasState'
 
 // State-based layer initialization
-export const initPolygonLayers = (state: CanvasRuntimeState, stage: Konva.Stage) => {
-  state.layers.polygonShapes = new Konva.Layer()
-  state.layers.polygonPreview = new Konva.Layer()
-  state.layers.polygonControls = new Konva.Layer()
-  state.layers.polygonSelection = new Konva.Layer()
-  
-  stage.add(state.layers.polygonShapes)
-  stage.add(state.layers.polygonPreview)
-  stage.add(state.layers.polygonControls)
-  stage.add(state.layers.polygonSelection)
+export const initPolygonLayers = (state: CanvasRuntimeState, _stage: Konva.Stage) => {
+  const drawingLayer = state.layers.drawing
+  const overlayLayer = state.layers.overlay
+
+  if (!drawingLayer || !overlayLayer) {
+    console.warn('Cannot initialize polygon groups without required layers')
+    return
+  }
+
+  if (!state.groups.polygonShapes) {
+    const shapesGroup = new Konva.Group({ name: 'polygon-shapes' })
+    state.groups.polygonShapes = shapesGroup
+    drawingLayer.add(shapesGroup)
+  }
+
+  if (!state.groups.polygonPreview) {
+    const previewGroup = new Konva.Group({ name: 'polygon-preview' })
+    state.groups.polygonPreview = previewGroup
+    overlayLayer.add(previewGroup)
+  }
+
+  if (!state.groups.polygonControls) {
+    const controlsGroup = new Konva.Group({ name: 'polygon-controls' })
+    state.groups.polygonControls = controlsGroup
+    overlayLayer.add(controlsGroup)
+  }
+
+  if (!state.groups.polygonSelection) {
+    const selectionGroup = new Konva.Group({ name: 'polygon-selection' })
+    state.groups.polygonSelection = selectionGroup
+    overlayLayer.add(selectionGroup)
+  }
 }
 
 
@@ -68,8 +90,8 @@ export const clearPolygonSelection = (state: CanvasRuntimeState) => {
 export const generateBakedPolygonData = (
   canvasState: CanvasRuntimeState
 ): PolygonRenderData => {
-  const polygonShapesLayer = canvasState.layers.polygonShapes
-  if (!polygonShapesLayer) return []
+  const polygonShapesGroup = canvasState.groups.polygonShapes
+  if (!polygonShapesGroup) return []
 
   const bakedPolygons: FlattenedPolygon[] = []
 
@@ -87,7 +109,7 @@ export const generateBakedPolygonData = (
   }
 
   // Process all polygon nodes in the layer
-  polygonShapesLayer.getChildren().forEach((child: Konva.Node) => {
+  polygonShapesGroup.getChildren().forEach((child: Konva.Node) => {
     if (child instanceof Konva.Line) {
       // Get the original points from the line
       const originalPoints = child.points()
@@ -125,12 +147,12 @@ export const getCurrentPolygonState = (
   state: CanvasRuntimeState
 ) => {
   return selectionStore.withSelectionHighlightSuppressed(state, () => {
-    const polygonShapesLayer = state.layers.polygonShapes
+    const polygonShapesGroup = state.groups.polygonShapes
     const stageRef = state.stage
-    if (!stageRef || !polygonShapesLayer) return null
+    if (!stageRef || !polygonShapesGroup) return null
 
     try {
-      const layerData = polygonShapesLayer.toObject()
+      const layerData = polygonShapesGroup.toObject()
       const polygonsData = Array.from(state.polygon.shapes.entries())
       const polygonGroupsData = Array.from(state.polygon.groups.entries())
 
@@ -199,9 +221,9 @@ export const finishPolygonDragTracking = (state: CanvasRuntimeState, nodeName: s
 export const serializePolygonState = (
   canvasState: CanvasRuntimeState
 ) => {
-  const polygonShapesLayer = canvasState.layers.polygonShapes
+  const polygonShapesGroup = canvasState.groups.polygonShapes
   const stageRef = canvasState.stage
-  if (!stageRef || !polygonShapesLayer) return
+  if (!stageRef || !polygonShapesGroup) return
 
   try {
     const polygonState = getCurrentPolygonState(canvasState)
@@ -240,10 +262,10 @@ export const deserializePolygonState = (
   canvasState: CanvasRuntimeState,
   stateString: string
 ) => {
-  const polygonShapesLayer = canvasState.layers.polygonShapes
-  const polygonControlsLayer = canvasState.layers.polygonControls
+  const polygonShapesGroup = canvasState.groups.polygonShapes
+  const polygonControlsGroup = canvasState.groups.polygonControls
   const stageRef = canvasState.stage
-  if (!stateString || !stageRef || !polygonShapesLayer) return
+  if (!stateString || !stageRef || !polygonShapesGroup) return
 
   try {
     const polygonState = JSON.parse(stateString)
@@ -253,7 +275,7 @@ export const deserializePolygonState = (
       polygonGroups: polygonState.polygonGroups?.length || 0
     })
 
-    polygonShapesLayer.destroyChildren()
+    polygonShapesGroup.destroyChildren()
     canvasState.polygon.shapes.clear()
     canvasState.polygon.groups.clear()
     selectionStore.clear(canvasState)
@@ -264,7 +286,7 @@ export const deserializePolygonState = (
       layerData.children.forEach((childData: any, index: number) => {
         console.log('Creating polygon node', index, 'of type', childData.className)
         const node = Konva.Node.create(JSON.stringify(childData))
-        polygonShapesLayer.add(node)
+        polygonShapesGroup.add(node)
         console.log('Added polygon node to layer:', node.id(), node.isVisible())
 
         if (node instanceof Konva.Line) {
@@ -303,13 +325,13 @@ export const deserializePolygonState = (
       })
     }
 
-    polygonControlsLayer?.destroyChildren()
+    polygonControlsGroup?.destroyChildren()
 
     if (canvasState.activeTool.value === 'polygon' && canvasState.polygon.mode.value === 'edit') {
       updatePolygonControlPoints(canvasState)
     }
 
-    polygonShapesLayer.batchDraw()
+    polygonShapesGroup.getLayer()?.batchDraw()
     canvasState.polygon.serializedState = stateString
     updateBakedPolygonData(canvasState)
 
@@ -321,8 +343,8 @@ export const deserializePolygonState = (
 
 // Polygon tool functions
 export const handlePolygonClick = (state: CanvasRuntimeState, pos: { x: number, y: number }) => {
-  const polygonShapesLayer = state.layers.polygonShapes
-  if (!polygonShapesLayer) return
+  const polygonShapesGroup = state.groups.polygonShapes
+  if (!polygonShapesGroup) return
 
   if (state.polygon.mode.value === 'draw') {
     // New shape mode - point-by-point drawing
@@ -392,7 +414,7 @@ export const handlePolygonClick = (state: CanvasRuntimeState, pos: { x: number, 
             polygon.konvaShape!.points(polygon.points)
             updatePolygonControlPoints(state) // Refresh control points
             serializePolygonState(state) // Serialize for hotreload
-            polygonShapesLayer?.batchDraw()
+            polygonShapesGroup?.getLayer()?.batchDraw()
             updateBakedPolygonData(state) // ensure baked data reflects edit
           })
         }
@@ -407,20 +429,20 @@ export const handlePolygonMouseMove = (state: CanvasRuntimeState) => {
 }
 
 export const handlePolygonEditMouseMove = (state: CanvasRuntimeState) => {
-  const polygonPreviewLayer = state.layers.polygonPreview
-  const polygonControlsLayer = state.layers.polygonControls
+  const polygonPreviewGroup = state.groups.polygonPreview
+  const polygonControlsGroup = state.groups.polygonControls
   const stageRef = state.stage
-  if (!polygonPreviewLayer || !stageRef || polygonShapes(state).size === 0) return
+  if (!polygonPreviewGroup || !stageRef || polygonShapes(state).size === 0) return
   
   const mousePos = stageRef.getPointerPosition()
   if (!mousePos) return
   
   // Check if mouse is over a control point - if so, don't show edge preview
   const mouseTarget = stageRef.getIntersection(mousePos)
-  if (mouseTarget && mouseTarget.getParent() === polygonControlsLayer) {
+  if (mouseTarget && mouseTarget.getParent() === polygonControlsGroup) {
     // Mouse is over a control point, clear preview
-    polygonPreviewLayer.destroyChildren()
-    polygonPreviewLayer.batchDraw()
+    polygonPreviewGroup.destroyChildren()
+    polygonPreviewGroup.getLayer()?.batchDraw()
     return
   }
   
@@ -443,7 +465,7 @@ export const handlePolygonEditMouseMove = (state: CanvasRuntimeState) => {
   if (polygonArray.length > 0) {
     const result = findClosestPolygonLineAtPoint(polygonArray, mousePos)
     
-    polygonPreviewLayer.destroyChildren()
+    polygonPreviewGroup.destroyChildren()
     
     if (result.polygonIndex >= 0 && result.distance < 20) {
       const polygon = Array.from(polygonShapes(state).values())[result.polygonIndex]
@@ -470,7 +492,7 @@ export const handlePolygonEditMouseMove = (state: CanvasRuntimeState) => {
         strokeWidth: 4,
         opacity: 0.8
       })
-      polygonPreviewLayer.add(edgeLine)
+      polygonPreviewGroup.add(edgeLine)
       
       // Show midpoint where new point would be added
       const midpointCircle = new Konva.Circle({
@@ -482,19 +504,19 @@ export const handlePolygonEditMouseMove = (state: CanvasRuntimeState) => {
         strokeWidth: 2,
         opacity: 0.9
       })
-      polygonPreviewLayer.add(midpointCircle)
+      polygonPreviewGroup.add(midpointCircle)
     }
     
-    polygonPreviewLayer.batchDraw()
+    polygonPreviewGroup.getLayer()?.batchDraw()
   }
 }
 
 export const updatePolygonPreview = (state: CanvasRuntimeState) => {
-  const polygonPreviewLayer = state.layers.polygonPreview
+  const polygonPreviewGroup = state.groups.polygonPreview
   const stageRef = state.stage
-  if (!polygonPreviewLayer || !stageRef) return
+  if (!polygonPreviewGroup || !stageRef) return
   
-  polygonPreviewLayer.destroyChildren()
+  polygonPreviewGroup.destroyChildren()
   
   if (state.polygon.currentPoints.value.length < 4) {
     // If we only have one point, just show that point as a circle
@@ -508,9 +530,9 @@ export const updatePolygonPreview = (state: CanvasRuntimeState) => {
         strokeWidth: 1,
         listening: false
       })
-      polygonPreviewLayer.add(pointCircle)
+      polygonPreviewGroup.add(pointCircle)
     }
-    polygonPreviewLayer.batchDraw()
+    polygonPreviewGroup.getLayer()?.batchDraw()
     return
   }
   
@@ -528,7 +550,7 @@ export const updatePolygonPreview = (state: CanvasRuntimeState) => {
       strokeWidth: 1,
       listening: false
     })
-    polygonPreviewLayer.add(pointCircle)
+    polygonPreviewGroup.add(pointCircle)
   }
   
   // Create preview line from current points to mouse position
@@ -544,7 +566,7 @@ export const updatePolygonPreview = (state: CanvasRuntimeState) => {
     listening: false
   })
   
-  polygonPreviewLayer.add(previewLine)
+  polygonPreviewGroup.add(previewLine)
   
   // Show first point indicator for closing
   if (state.polygon.currentPoints.value.length >= 6) {
@@ -562,15 +584,15 @@ export const updatePolygonPreview = (state: CanvasRuntimeState) => {
       listening: false
     })
     
-    polygonPreviewLayer.add(firstPointIndicator)
+    polygonPreviewGroup.add(firstPointIndicator)
   }
   
-  polygonPreviewLayer.batchDraw()
+  polygonPreviewGroup.getLayer()?.batchDraw()
 }
 
 export const finishPolygon = (state: CanvasRuntimeState) => {
-  const polygonShapesLayer = state.layers.polygonShapes
-  const polygonPreviewLayer = state.layers.polygonPreview
+  const polygonShapesGroup = state.groups.polygonShapes
+  const polygonPreviewGroup = state.groups.polygonPreview
   if (state.polygon.currentPoints.value.length < 6) return // Need at least 3 points
   
   executeCommand(state, 'Create Polygon', () => {
@@ -597,7 +619,7 @@ export const finishPolygon = (state: CanvasRuntimeState) => {
     
     polygon.konvaShape = polygonLine
     polygonShapes(state).set(polygonId, polygon)
-    polygonShapesLayer?.add(polygonLine)
+    polygonShapesGroup?.add(polygonLine)
     
     // Register as CanvasItem
     createPolygonItem(state, polygonLine)
@@ -605,7 +627,7 @@ export const finishPolygon = (state: CanvasRuntimeState) => {
     // Reset drawing state to allow drawing new shapes
     state.polygon.isDrawing.value = false
     state.polygon.currentPoints.value = []
-    polygonPreviewLayer?.destroyChildren()
+    polygonPreviewGroup?.destroyChildren()
     
     // Update control points if in edit mode
     updatePolygonControlPoints(state)
@@ -613,24 +635,24 @@ export const finishPolygon = (state: CanvasRuntimeState) => {
     // Serialize polygon state for hotreload
     serializePolygonState(state)
     
-    polygonShapesLayer?.batchDraw()
-    polygonPreviewLayer?.batchDraw()
+    polygonShapesGroup?.getLayer()?.batchDraw()
+    polygonPreviewGroup?.getLayer()?.batchDraw()
     updateBakedPolygonData(state) // Update baked data after creating polygon
   })
 }
 
 // Clear current polygon being drawn
 export const clearCurrentPolygon = (state: CanvasRuntimeState) => {
-  const polygonPreviewLayer = state.layers.polygonPreview
+  const polygonPreviewGroup = state.groups.polygonPreview
   state.polygon.isDrawing.value = false
   state.polygon.currentPoints.value = []
-  polygonPreviewLayer?.destroyChildren()
-  polygonPreviewLayer?.batchDraw()
+  polygonPreviewGroup?.destroyChildren()
+  polygonPreviewGroup?.getLayer()?.batchDraw()
 }
 
 // Delete selected polygon
 export const deleteSelectedPolygon = (state: CanvasRuntimeState) => {
-  const polygonShapesLayer = state.layers.polygonShapes
+  const polygonShapesGroup = state.groups.polygonShapes
   const selectedNodes = state.selection.selectedKonvaNodes.value
   if (selectedNodes.length === 0) return
   
@@ -644,19 +666,19 @@ export const deleteSelectedPolygon = (state: CanvasRuntimeState) => {
       removeCanvasItem(state, polygonId)
     })
     clearPolygonSelection(state)
-    polygonShapesLayer?.batchDraw()
+    polygonShapesGroup?.getLayer()?.batchDraw()
     updateBakedPolygonData(state) // Update baked data after polygon deletion
   })
 }
 
 // Show/hide control points for polygon editing
 export const updatePolygonControlPoints = (state: CanvasRuntimeState) => {
-  const polygonControlsLayer = state.layers.polygonControls
-  const polygonShapesLayer = state.layers.polygonShapes
-  if (!polygonControlsLayer) return
+  const polygonControlsGroup = state.groups.polygonControls
+  const polygonShapesGroup = state.groups.polygonShapes
+  if (!polygonControlsGroup) return
 
   // Clear existing control points
-  polygonControlsLayer.destroyChildren()
+  polygonControlsGroup.destroyChildren()
 
   if (state.polygon.mode.value === 'edit') {
     // Show control points for all polygons
@@ -694,13 +716,13 @@ export const updatePolygonControlPoints = (state: CanvasRuntimeState) => {
         controlPoint.on('mouseenter', () => {
           controlPoint.fill('#ffaa00')
           controlPoint.radius(8)
-          polygonControlsLayer?.batchDraw()
+          polygonControlsGroup?.getLayer()?.batchDraw()
         })
         
         controlPoint.on('mouseleave', () => {
           controlPoint.fill('#ff6600')
           controlPoint.radius(6)
-          polygonControlsLayer?.batchDraw()
+          polygonControlsGroup?.getLayer()?.batchDraw()
         })
         
         // Add drag start handler to track initial state
@@ -725,7 +747,7 @@ export const updatePolygonControlPoints = (state: CanvasRuntimeState) => {
           // Update the Konva shape
           if (polygon.konvaShape) {
             polygon.konvaShape.points(polygon.points)
-            polygonShapesLayer?.batchDraw()
+            polygonShapesGroup?.getLayer()?.batchDraw()
           }
         })
         
@@ -736,24 +758,24 @@ export const updatePolygonControlPoints = (state: CanvasRuntimeState) => {
         })
         
         polygon.controlPoints.push(controlPoint)
-        polygonControlsLayer!.add(controlPoint)
+        polygonControlsGroup!.add(controlPoint)
       }
     })
   }
   
-  polygonControlsLayer.batchDraw()
+  polygonControlsGroup.getLayer()?.batchDraw()
 }
 
 // Watch for polygon mode changes to update control points and reset state
 // Note: This watch will be moved to CanvasRoot.vue as part of the migration
 export const setupPolygonModeWatcher = (state: CanvasRuntimeState) => {
   return watch(() => state.polygon.mode.value, (newMode) => {
-    const polygonControlsLayer = state.layers.polygonControls
-    const polygonPreviewLayer = state.layers.polygonPreview
+    const polygonControlsGroup = state.groups.polygonControls
+    const polygonPreviewGroup = state.groups.polygonPreview
     // If polygon tool is not active, don't create/show control points
     if (state.activeTool.value !== 'polygon') {
-      polygonControlsLayer?.destroyChildren()
-      polygonControlsLayer?.batchDraw()
+      polygonControlsGroup?.destroyChildren()
+      polygonControlsGroup?.getLayer()?.batchDraw()
       return
     }
 
@@ -764,15 +786,15 @@ export const setupPolygonModeWatcher = (state: CanvasRuntimeState) => {
       // When switching to draw mode, clear any current drawing state
       state.polygon.isDrawing.value = false
       state.polygon.currentPoints.value = []
-      polygonPreviewLayer?.destroyChildren()
-      polygonPreviewLayer?.batchDraw()
+      polygonPreviewGroup?.destroyChildren()
+      polygonPreviewGroup?.getLayer()?.batchDraw()
       
       // Disable dragging in polygon tool mode; drawing only
       polygonShapes(state).forEach(polygon => { polygon.konvaShape?.draggable(false) })
     } else if (newMode === 'edit') {
       // When switching to edit mode, clear any drawing preview
-      polygonPreviewLayer?.destroyChildren()
-      polygonPreviewLayer?.batchDraw()
+      polygonPreviewGroup?.destroyChildren()
+      polygonPreviewGroup?.getLayer()?.batchDraw()
       
       // Disable dragging during vertex editing
       polygonShapes(state).forEach(polygon => { polygon.konvaShape?.draggable(false) })

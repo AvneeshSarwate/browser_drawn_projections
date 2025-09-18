@@ -25,7 +25,7 @@ export const collectHierarchyFromRoot = (rootNodes: Konva.Node[]): HierarchyEntr
 }
 
 // For compatibility with existing freehandTool code
-export const collectHierarchy = (layer?: Konva.Layer): HierarchyEntry[] => {
-  if (!layer) return []
-  return collectHierarchyFromRoot(layer.getChildren())
+export const collectHierarchy = (container?: Konva.Container): HierarchyEntry[] => {
+  if (!container) return []
+  return collectHierarchyFromRoot(container.getChildren())
 }

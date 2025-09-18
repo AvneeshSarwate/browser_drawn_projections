@@ -80,18 +80,20 @@ export interface CanvasRuntimeState {
   activeTool: Ref<'select' | 'freehand' | 'polygon'>
   layers: {
     grid?: Konva.Layer
-    freehandShape?: Konva.Layer
-    freehandDrawing?: Konva.Layer
-    freehandSelection?: Konva.Layer
-    polygonShapes?: Konva.Layer
-    polygonPreview?: Konva.Layer
-    polygonControls?: Konva.Layer
-    polygonSelection?: Konva.Layer
-    ancillaryViz?: Konva.Layer
-    metadataHighlight?: Konva.Layer
-    selectionOverlay?: Konva.Layer
+    drawing?: Konva.Layer
+    overlay?: Konva.Layer
     transformer?: Konva.Transformer
-    transformerLayer?: Konva.Layer
+  }
+  groups: {
+    freehandShape?: Konva.Group
+    freehandDrawing?: Konva.Group
+    polygonShapes?: Konva.Group
+    polygonPreview?: Konva.Group
+    polygonControls?: Konva.Group
+    polygonSelection?: Konva.Group
+    ancillaryViz?: Konva.Group
+    metadataHighlight?: Konva.Group
+    selectionOverlay?: Konva.Group
   }
   grid: {
     visible: Ref<boolean>
@@ -172,7 +174,7 @@ export interface CanvasRuntimeState {
     metadataText: Ref<string>
     showEditor: Ref<boolean>
     highlight: {
-      layer?: Konva.Layer
+      layer?: Konva.Group
       metadataRect?: Konva.Rect
       hoverRect?: Konva.Rect
     }
@@ -189,7 +191,7 @@ export interface CanvasRuntimeState {
 export const createCanvasRuntimeState = (): CanvasRuntimeState => {
   const selectionItems = shallowReactive(new Set<CanvasItem>())
   const originalStyles = new Map<string, { node: Konva.Node, stroke: string, strokeWidth: number }>()
-  const selectedKonvaNodes = computed(() => [...selectionItems].map(item => item.konvaNode))
+  const selectedKonvaNodes = computed(() => Array.from(selectionItems as unknown as Set<CanvasItem>, item => item.konvaNode))
 
   return {
     stage: undefined,
@@ -197,9 +199,20 @@ export const createCanvasRuntimeState = (): CanvasRuntimeState => {
     activeTool: ref('select'),
     layers: {
       grid: undefined,
-      selectionOverlay: undefined,
-      transformer: undefined,
-      transformerLayer: undefined
+      drawing: undefined,
+      overlay: undefined,
+      transformer: undefined
+    },
+    groups: {
+      freehandShape: undefined,
+      freehandDrawing: undefined,
+      polygonShapes: undefined,
+      polygonPreview: undefined,
+      polygonControls: undefined,
+      polygonSelection: undefined,
+      ancillaryViz: undefined,
+      metadataHighlight: undefined,
+      selectionOverlay: undefined
     },
     grid: {
       visible: ref(false),

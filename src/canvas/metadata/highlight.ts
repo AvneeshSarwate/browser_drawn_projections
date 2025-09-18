@@ -6,11 +6,11 @@ const getMetadataRect = (state: CanvasRuntimeState) => state.metadata.highlight.
 const getHoverRect = (state: CanvasRuntimeState) => state.metadata.highlight.hoverRect
 
 // Ensure highlight layer exists and is properly set up
-export const ensureHighlightLayer = (state: CanvasRuntimeState, stage: Konva.Stage): Konva.Layer => {
+export const ensureHighlightLayer = (state: CanvasRuntimeState, stage: Konva.Stage): Konva.Group => {
   const existingLayer = getHighlightLayer(state)
   if (existingLayer) return existingLayer
 
-  const metadataHighlightLayer = new Konva.Layer({ listening: false })
+  const metadataHighlightGroup = new Konva.Group({ listening: false, name: 'metadata-highlight' })
 
   // Red dotted border for active selection
   const metadataHighlightRect = new Konva.Rect({
@@ -30,26 +30,35 @@ export const ensureHighlightLayer = (state: CanvasRuntimeState, stage: Konva.Sta
     visible: false
   })
 
-  metadataHighlightLayer.add(metadataHighlightRect)
-  metadataHighlightLayer.add(hoverHighlightRect)
-  stage.add(metadataHighlightLayer)
+  metadataHighlightGroup.add(metadataHighlightRect)
+  metadataHighlightGroup.add(hoverHighlightRect)
 
-  state.metadata.highlight.layer = metadataHighlightLayer
+  const overlayLayer = state.layers.overlay
+  if (overlayLayer) {
+    overlayLayer.add(metadataHighlightGroup)
+  } else {
+    const fallbackLayer = new Konva.Layer({ listening: false, name: 'metadata-highlight-layer' })
+    fallbackLayer.add(metadataHighlightGroup)
+    stage.add(fallbackLayer)
+    fallbackLayer.moveToTop()
+  }
+
+  state.metadata.highlight.layer = metadataHighlightGroup
   state.metadata.highlight.metadataRect = metadataHighlightRect
   state.metadata.highlight.hoverRect = hoverHighlightRect
-  state.layers.metadataHighlight = metadataHighlightLayer
+  state.groups.metadataHighlight = metadataHighlightGroup
 
-  return metadataHighlightLayer
+  return metadataHighlightGroup
 }
 
 export const updateMetadataHighlight = (state: CanvasRuntimeState, node?: Konva.Node) => {
   const metadataHighlightRect = getMetadataRect(state)
-  const metadataHighlightLayer = getHighlightLayer(state)
-  if (!metadataHighlightRect || !metadataHighlightLayer) return
+  const metadataHighlightGroup = getHighlightLayer(state)
+  if (!metadataHighlightRect || !metadataHighlightGroup) return
 
   if (!node) {
     metadataHighlightRect.visible(false)
-    metadataHighlightLayer.batchDraw()
+    metadataHighlightGroup.getLayer()?.batchDraw()
     return
   }
 
@@ -61,17 +70,17 @@ export const updateMetadataHighlight = (state: CanvasRuntimeState, node?: Konva.
     height: bbox.height,
     visible: true
   })
-  metadataHighlightLayer.batchDraw()
+  metadataHighlightGroup.getLayer()?.batchDraw()
 }
 
 export const updateHoverHighlight = (state: CanvasRuntimeState, node?: Konva.Node) => {
   const hoverHighlightRect = getHoverRect(state)
-  const metadataHighlightLayer = getHighlightLayer(state)
-  if (!hoverHighlightRect || !metadataHighlightLayer) return
+  const metadataHighlightGroup = getHighlightLayer(state)
+  if (!hoverHighlightRect || !metadataHighlightGroup) return
 
   if (!node) {
     hoverHighlightRect.visible(false)
-    metadataHighlightLayer.batchDraw()
+    metadataHighlightGroup.getLayer()?.batchDraw()
     return
   }
 
@@ -83,11 +92,11 @@ export const updateHoverHighlight = (state: CanvasRuntimeState, node?: Konva.Nod
     height: bbox.height,
     visible: true
   })
-  metadataHighlightLayer.batchDraw()
+  metadataHighlightGroup.getLayer()?.batchDraw()
 }
 
 // For backward compatibility with existing freehandTool code
-export const createMetadataHighlight = (state: CanvasRuntimeState, stage: Konva.Stage): Konva.Layer => {
+export const createMetadataHighlight = (state: CanvasRuntimeState, stage: Konva.Stage): Konva.Group => {
   return ensureHighlightLayer(state, stage)
 }
 

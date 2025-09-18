@@ -4,8 +4,7 @@ import { watch } from 'vue'
 import { pushCommandWithStates } from './commands'
 import type { CanvasRuntimeState } from './canvasState'
 
-const createTransformer = (state: CanvasRuntimeState, layer: Konva.Layer) => {
-  state.layers.transformerLayer = layer
+const createTransformer = (state: CanvasRuntimeState, container: Konva.Group) => {
   const transformer = new Konva.Transformer({
     rotateEnabled: true,
     keepRatio: false,
@@ -22,7 +21,7 @@ const createTransformer = (state: CanvasRuntimeState, layer: Konva.Layer) => {
     finishTransformTrackingWithState(state, 'Transform')
   })
 
-  layer.add(transformer)
+  container.add(transformer)
 
   watch(state.selection.selectedKonvaNodes, (selectedNodes) => {
     updateTransformerWithState(state, selectedNodes)
@@ -31,19 +30,18 @@ const createTransformer = (state: CanvasRuntimeState, layer: Konva.Layer) => {
   return transformer
 }
 
-export function initializeTransformerWithState(state: CanvasRuntimeState, layer: Konva.Layer) {
-  return createTransformer(state, layer)
+export function initializeTransformerWithState(state: CanvasRuntimeState, container: Konva.Group) {
+  return createTransformer(state, container)
 }
 
-export function initializeTransformer(state: CanvasRuntimeState, layer: Konva.Layer) {
-  createTransformer(state, layer)
+export function initializeTransformer(state: CanvasRuntimeState, container: Konva.Group) {
+  createTransformer(state, container)
 }
 
 // State-based transformer update
 function updateTransformerWithState(state: CanvasRuntimeState, selectedNodes: Konva.Node[]) {
   const transformer = state.layers.transformer
-  const layer = state.layers.transformerLayer
-  if (!transformer || !layer) return
+  if (!transformer) return
 
   // Filter out nodes that shouldn't be transformed
   const filteredNodes = selectedNodes.filter(node => {
@@ -55,7 +53,7 @@ function updateTransformerWithState(state: CanvasRuntimeState, selectedNodes: Ko
   })
 
   transformer.nodes(filteredNodes)
-  layer.batchDraw()
+  state.layers.overlay?.batchDraw()
 }
 
 // Note: We do not change node.offset or position here.

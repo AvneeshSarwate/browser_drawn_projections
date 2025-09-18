@@ -14,10 +14,10 @@ import { pushCommandWithStates } from './commands'
 
 
 
-export function initializeSelectTool(state: CanvasRuntimeState, layer: Konva.Layer) {
-  state.layers.selectionOverlay = layer
+export function initializeSelectTool(state: CanvasRuntimeState, container: Konva.Group) {
+  state.groups.selectionOverlay = container
 
-  const stage = state.stage ?? layer.getStage()
+  const stage = state.stage ?? container.getStage()
   if (!state.layers.grid && stage) {
     const gridLayer = new Konva.Layer({
       listening: false,
@@ -37,7 +37,7 @@ export function initializeSelectTool(state: CanvasRuntimeState, layer: Konva.Lay
     listening: false,
     visible: false
   })
-  layer.add(state.selection.selectionRect)
+  container.add(state.selection.selectionRect)
 }
 
 export function handleSelectPointerDown(state: CanvasRuntimeState, stage: Konva.Stage, e: Konva.KonvaEventObject<MouseEvent>) {
@@ -157,7 +157,7 @@ function updateSelectionRect(state: CanvasRuntimeState) {
     height,
     visible: width > 5 || height > 5 // Only show if significant drag
   })
-  state.layers.selectionOverlay?.batchDraw()
+  state.groups.selectionOverlay?.getLayer()?.batchDraw()
 }
 
 function completeSelectionRect(state: CanvasRuntimeState, isShiftHeld: boolean = false) {
@@ -176,7 +176,7 @@ function completeSelectionRect(state: CanvasRuntimeState, isShiftHeld: boolean =
     }
     // Hide selection rectangle and return
     state.selection.selectionRect.visible(false)
-    state.layers.selectionOverlay?.batchDraw()
+    state.groups.selectionOverlay?.getLayer()?.batchDraw()
     return
   }
   
@@ -194,12 +194,18 @@ function completeSelectionRect(state: CanvasRuntimeState, isShiftHeld: boolean =
 
   // Check only canonical shape layers to avoid accidental matches in helper/preview layers
   const layersToCheck: Konva.Layer[] = []
-  const stage = state.layers.selectionOverlay?.getStage()
+  const stage = state.groups.selectionOverlay?.getStage()
   if (stage) {
-    const freehandShapeLayer = state.layers.freehandShape
-    if (freehandShapeLayer) layersToCheck.push(freehandShapeLayer)
-    const polygonShapesLayer = state.layers.polygonShapes
-  if (polygonShapesLayer) layersToCheck.push(polygonShapesLayer)
+    const freehandShapeGroup = state.groups.freehandShape
+    if (freehandShapeGroup) {
+      const layer = freehandShapeGroup.getLayer()
+      if (layer) layersToCheck.push(layer)
+    }
+    const polygonShapesGroup = state.groups.polygonShapes
+    if (polygonShapesGroup) {
+      const layer = polygonShapesGroup.getLayer()
+      if (layer) layersToCheck.push(layer)
+    }
     // Fallback: if neither available, scan for layers with selectable content
     if (layersToCheck.length === 0) {
       stage.getLayers().forEach(layer => {
@@ -239,7 +245,7 @@ function completeSelectionRect(state: CanvasRuntimeState, isShiftHeld: boolean =
   
   // Hide and reset selection rectangle to prevent stale data
   state.selection.selectionRect.setAttrs({ x: 0, y: 0, width: 0, height: 0, visible: false })
-  state.layers.selectionOverlay?.batchDraw()
+  state.groups.selectionOverlay?.getLayer()?.batchDraw()
 }
 
 // ---------------- Selection Drag Implementation ----------------
@@ -423,7 +429,7 @@ function getTopLevelSelectedNodes(state: CanvasRuntimeState): Konva.Node[] {
 }
 
 export function duplicateSelection(state: CanvasRuntimeState) {
-  const freehandShapeLayer = state.layers.freehandShape
+  const freehandShapeGroup = state.groups.freehandShape
   const selectedNodes = state.selection.selectedKonvaNodes.value
   if (selectedNodes.length === 0) return
 
@@ -472,8 +478,8 @@ export function duplicateSelection(state: CanvasRuntimeState) {
       })
 
       // Refresh visuals/state
-      freehandShapeLayer?.batchDraw()
-      state.layers.polygonShapes?.batchDraw()
+      freehandShapeGroup?.getLayer()?.batchDraw()
+      state.groups.polygonShapes?.getLayer()?.batchDraw()
       updateBakedFreehandData(state)
       updateBakedPolygonData(state)
       serializePolygonState(state)
@@ -482,7 +488,7 @@ export function duplicateSelection(state: CanvasRuntimeState) {
 }
 
 export function deleteSelection(state: CanvasRuntimeState) {
-  const freehandShapeLayer = state.layers.freehandShape
+  const freehandShapeGroup = state.groups.freehandShape
   const selectedNodes = state.selection.selectedKonvaNodes.value
   if (selectedNodes.length === 0) return
 
@@ -534,8 +540,8 @@ export function deleteSelection(state: CanvasRuntimeState) {
     selectionStore.clear(state)
 
     // Redraw/refresh
-    freehandShapeLayer?.batchDraw()
-    state.layers.polygonShapes?.batchDraw()
+    freehandShapeGroup?.getLayer()?.batchDraw()
+    state.groups.polygonShapes?.getLayer()?.batchDraw()
     updateBakedFreehandData(state)
     updateBakedPolygonData(state)
     serializePolygonState(state)
