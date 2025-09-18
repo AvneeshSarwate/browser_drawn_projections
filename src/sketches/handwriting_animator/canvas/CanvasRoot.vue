@@ -12,7 +12,7 @@ import Konva from 'konva';
 import Timeline from './Timeline.vue';
 import HierarchicalMetadataEditor from './HierarchicalMetadataEditor.vue';
 import VisualizationToggles from './VisualizationToggles.vue';
-import { clearFreehandSelection as clearFreehandSelectionImpl, createStrokeShape as createStrokeShapeImpl, deserializeFreehandState, getStrokePath, gridSize, serializeFreehandState, updateBakedStrokeData, updateFreehandDraggableStates as updateFreehandDraggableStatesImpl, updateTimelineState as updateTimelineStateImpl, type FreehandStroke, handleTimeUpdate as handleTimeUpdateImpl, maxInterStrokeDelay, setUpdateCursor, updateCursor, downloadFreehandDrawing as downloadFreehandDrawingImpl, uploadFreehandDrawing as uploadFreehandDrawingImpl, setRefreshAVs, getCurrentFreehandStateString, restoreFreehandState, initFreehandLayers } from './freehandTool';
+import { clearFreehandSelection as clearFreehandSelectionImpl, createStrokeShape as createStrokeShapeImpl, deserializeFreehandState, getStrokePath, gridSize, serializeFreehandState, updateBakedStrokeData, updateFreehandDraggableStates as updateFreehandDraggableStatesImpl, updateTimelineState as updateTimelineStateImpl, type FreehandStroke, handleTimeUpdate as handleTimeUpdateImpl, maxInterStrokeDelay, setUpdateCursor, updateCursor, downloadFreehandDrawing as downloadFreehandDrawingImpl, uploadFreehandDrawing as uploadFreehandDrawingImpl, getCurrentFreehandStateString, restoreFreehandState, initFreehandLayers } from './freehandTool';
 import { freehandStrokes } from './canvasState';
 import { getPointsBounds } from './canvasUtils';
 import { CommandStack } from './commandStack';
@@ -339,7 +339,6 @@ onMounted(async () => {
 
     // Initialize ancillary visualizations layer
     initAVLayer(canvasState)
-    setRefreshAVs(() => refreshAnciliaryViz(canvasState))
 
     // Set up executeCommand callbacks for tools
     setGlobalExecuteCommand(executeCommand)

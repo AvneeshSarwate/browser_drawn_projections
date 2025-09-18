@@ -11,37 +11,22 @@
 
 
 
-the files in src/sketches/handwriting_animator/canvas define a canvas drawing component built using vue and konva.js. I want to refactor this into a proper standalone component. 
 
-However, it looks like there are several issues with the architecture that would make this difficult due to messy shared state and lack of modularity
 
-one case of this - state snapshot and serialization functions are not modular enough and have coupling dependencies on the global app state. for example deserializePolygonState should be passed the global app state instance and the polygonState string as an argument, that way, while it has side effects in terms of changing the state of it's arguments, it is fully modularized in that it only affects its arguments and can be used on any instance. 
 
-analyze the following functions 
-- in freehandTool.ts - restoreFreehandState, deserializeFreehandState, serializeFreehandState, updateBakedStrokeData
-- in polygonTool.ts - restorePolygonState, deserializePolygonState, serializePolygonState, updateBakedPolygonData
-
-update these functions so that they only operate on their arguments, and update their call sites accordingly 
-
+remove appState dependency for selectTool.ts
 
 remove tool-specific selection functions in freehandTool.ts and polygonTool.ts
 update/remove tool specific metadata setting calls
 
 
 
-## refactor steps
-
-clearPolygonSelection (also for freehand?) move to selection tool
-
-state snapshot and serialization functions are not modular enough and have coupling dependencies on the global app state. for example deserializePolygonState should be passed the global app state instance and the polygonState string as an argument, that way, while it has side effects in terms of changing the state of it's arguments, it is fully modularized in that it only affects its arguments and can be used on any instance. 
-
-analyze the following functions 
-- in freehandTool.ts - restoreFreehandState, deserializeFreehandState, serializeFreehandState, updateBakedStrokeData
-- in polygonTool.ts - restorePolygonState, deserializePolygonState, serializePolygonState, updateBakedPolygonData
-
-general refactor - CanvasRoot instantiates a canvas state, all UI handlers pass that state instance into their callbacks, and it is threaded through all functions
 
 
+
+
+
+## refactor steps cleanup (for later)
 
 
 standardize and figure out where to put selection related shape funcs 

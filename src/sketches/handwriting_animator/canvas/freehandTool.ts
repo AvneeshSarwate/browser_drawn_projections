@@ -7,10 +7,6 @@ import type { FreehandRenderData, FlattenedStroke, FlattenedStrokeGroup, Templat
 import { globalStore, stage, activeTool } from "../appState"
 import { executeCommand, pushCommandWithStates } from "../canvas/commands"
 
-// Import AV refresh function - we'll import lazily to avoid circular deps
-let refreshAVs: (() => void) | undefined
-
-
 
 // Import shared utilities
 import { uid, getPointsBounds, hasAncestorConflict } from './canvasUtils'
@@ -205,25 +201,6 @@ export const initFreehandLayers = (state: CanvasRuntimeState, stage: Konva.Stage
 import { type HierarchyEntry, collectHierarchyFromRoot } from './metadata'
 
 
-// Transform controls - for freehand
-// Legacy freehand-specific transformers removed; unified transformer lives in core/transformerManager
-
-// Legacy pivot lock removed (unified transformer manages pivot without mutating node offsets)
-
-// Return the top-most group (direct child of layer) for any descendant click
-const freehandTopGroup = (state: CanvasRuntimeState, node: Konva.Node): Konva.Group | null => {
-  const freehandShapeLayer = state.layers.freehandShape
-  if (!freehandShapeLayer) return null
-  let cur = node
-  let candidate: Konva.Group | null = null
-  while (cur && cur !== freehandShapeLayer) {
-    if (cur instanceof Konva.Group) candidate = cur
-    cur = cur.getParent()!
-  }
-  return candidate
-}
-
-// hasAncestorConflict now imported from utils/canvasUtils
 
 // Helper function to get all strokes that are selected (including those in groups)
 const getSelectedStrokes = (state: CanvasRuntimeState): FreehandStroke[] => {
@@ -270,13 +247,6 @@ export const freehandAddSelection = (state: CanvasRuntimeState, node: Konva.Node
   const item = getCanvasItem(state, node)
   if (item) {
     selectionStore.add(state, item, true) // additive = true
-  }
-}
-
-const freehandToggleSelection = (state: CanvasRuntimeState, node: Konva.Node) => {
-  const item = getCanvasItem(state, node)
-  if (item) {
-    selectionStore.toggle(state, item, true) // additive = true
   }
 }
 
@@ -1108,23 +1078,6 @@ export const updateBakedStrokeData = (
   appState.freehandDataUpdateCallback?.()
 }
 
-// Undoable metadata mutator for nodes with command history
-export const setNodeMetadata = (
-  state: CanvasRuntimeState,
-  node: Konva.Node,
-  meta: Record<string, any> | undefined
-) => {
-  executeCommand(state, 'Edit Metadata', () => {
-    if (meta === undefined || Object.keys(meta).length === 0) {
-      node.setAttr('metadata', undefined)   // keep export slim
-    } else {
-      node.setAttr('metadata', meta)
-    }
-    updateBakedStrokeData(state, globalStore().appStateRef)                 // keep render-data in sync
-    refreshAVs?.()                          // refresh ancillary visualizations
-  })
-}
-
 // Hierarchy utilities are now accessed directly from the metadata module
 
 export const collectHierarchy = (state: CanvasRuntimeState): HierarchyEntry[] => {
@@ -1136,12 +1089,3 @@ export const collectHierarchy = (state: CanvasRuntimeState): HierarchyEntry[] =>
 // Cursor update function (will be defined in onMounted)
 export let updateCursor: (() => void) | undefined
 export const setUpdateCursor = (uc: (() => void)) => updateCursor = uc
-
-
-// Watch for draw mode changes - simplified based on working example
-// Legacy freehand draw-mode selection watcher removed in favor of explicit tool modes
-
-// Function to set the AV refresh callback (called from LivecodeHolder)
-export const setRefreshAVs = (fn: () => void) => {
-  refreshAVs = fn
-}

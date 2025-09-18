@@ -1,7 +1,6 @@
 import Konva from 'konva'
 import { watch } from 'vue'
 import { collectHierarchy } from './metadata/hierarchy'
-import { setNodeMetadata } from './freehandTool'
 import type { AncillaryVisualizationInstance, CanvasRuntimeState } from './canvasState'
 
 // ----- registry types -----
@@ -133,13 +132,4 @@ export const refreshAnciliaryViz = (state: CanvasRuntimeState) => {
   })
 
   layer.batchDraw()
-}
-
-export const setNodeMetadataWithAV = (
-  state: CanvasRuntimeState,
-  node: Konva.Node,
-  meta: Record<string, any> | undefined
-) => {
-  setNodeMetadata(state, node, meta)
-  refreshAnciliaryViz(state)
 }
