@@ -29,6 +29,7 @@ tool level cursor stuff unused? remove or fix
 
 some weird unnecessary wrapping of functions in CanvasRoot - can be very simplified
 
+clean up variable naming and redundant logic after layers => groups refactor
 
 
 ## refactor steps cleanup (for later)
