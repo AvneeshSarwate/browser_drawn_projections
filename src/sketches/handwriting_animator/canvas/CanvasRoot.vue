@@ -12,7 +12,7 @@ import Konva from 'konva';
 import Timeline from './Timeline.vue';
 import HierarchicalMetadataEditor from './HierarchicalMetadataEditor.vue';
 import VisualizationToggles from './VisualizationToggles.vue';
-import { clearFreehandSelection as clearFreehandSelectionImpl, createStrokeShape as createStrokeShapeImpl, deserializeFreehandState, getStrokePath, gridSize, serializeFreehandState, updateBakedStrokeData, updateFreehandDraggableStates as updateFreehandDraggableStatesImpl, updateTimelineState as updateTimelineStateImpl, type FreehandStroke, handleTimeUpdate as handleTimeUpdateImpl, maxInterStrokeDelay, setUpdateCursor, updateCursor, downloadFreehandDrawing as downloadFreehandDrawingImpl, uploadFreehandDrawing as uploadFreehandDrawingImpl, getCurrentFreehandStateString, restoreFreehandState, initFreehandLayers } from './freehandTool';
+import { clearFreehandSelection as clearFreehandSelectionImpl, createStrokeShape as createStrokeShapeImpl, deserializeFreehandState, getStrokePath, gridSize, serializeFreehandState, updateBakedFreehandData, updateFreehandDraggableStates as updateFreehandDraggableStatesImpl, updateTimelineState as updateTimelineStateImpl, type FreehandStroke, handleTimeUpdate as handleTimeUpdateImpl, maxInterStrokeDelay, setUpdateCursor, updateCursor, downloadFreehandDrawing as downloadFreehandDrawingImpl, uploadFreehandDrawing as uploadFreehandDrawingImpl, getCurrentFreehandStateString, restoreFreehandState, initFreehandLayers } from './freehandTool';
 import { freehandStrokes } from './canvasState';
 import { getPointsBounds } from './canvasUtils';
 import { CommandStack } from './commandStack';
@@ -81,7 +81,7 @@ const groupSelected = computed(() => {
 })
 
 // Set up callbacks for data updates
-canvasState.callbacks.freehandDataUpdate = () => updateBakedStrokeData(canvasState, appState)
+canvasState.callbacks.freehandDataUpdate = () => updateBakedFreehandData(canvasState, appState)
 canvasState.callbacks.polygonDataUpdate = () => updateBakedPolygonData(canvasState, appState)
 canvasState.callbacks.refreshAncillaryViz = () => refreshAnciliaryViz(canvasState)
 
@@ -124,7 +124,7 @@ const canUndoReactive = ref(false)
 const canRedoReactive = ref(false)
 
 const onCanvasStateChange = () => {
-  updateBakedStrokeData(canvasState, appState)
+  updateBakedFreehandData(canvasState, appState)
   updateBakedPolygonData(canvasState, appState)
   refreshAnciliaryViz(canvasState)
   // Update reactive button states after any command stack change
@@ -275,13 +275,13 @@ const handleApplyMetadata = (node: Konva.Node, metadata: any) => {
     } else {
       // Fallback for non-registered nodes (should be rare)
       node.setAttr('metadata', metadata === undefined || Object.keys(metadata).length === 0 ? undefined : metadata)
-      updateBakedStrokeData(canvasState, appState)
+      updateBakedFreehandData(canvasState, appState)
       updateBakedPolygonData(canvasState, appState)
     }
   } catch (e) {
     // Safe fallback if metadata routing fails for any reason
     node.setAttr('metadata', metadata === undefined || Object.keys(metadata).length === 0 ? undefined : metadata)
-    updateBakedStrokeData(canvasState, appState)
+    updateBakedFreehandData(canvasState, appState)
     updateBakedPolygonData(canvasState, appState)
   }
 }
@@ -472,7 +472,7 @@ onMounted(async () => {
             updateFreehandDraggableStates() // Update draggable state for new stroke
             updateTimelineState() // Update timeline state when new stroke is added
             freehandShapeLayer?.batchDraw()
-            updateBakedStrokeData(canvasState, appState) // Update baked data after new stroke
+            updateBakedFreehandData(canvasState, appState) // Update baked data after new stroke
           })
         }
 

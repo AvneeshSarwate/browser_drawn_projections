@@ -6,7 +6,7 @@ import { polygonShapes, freehandStrokes, freehandStrokeGroups, type CanvasRuntim
 
 import { executeCommand } from './commands'
 import { globalStore } from '../appState'
-import { getCurrentFreehandStateString, deepCloneWithNewIds, updateBakedStrokeData, updateTimelineState, refreshStrokeConnections } from './freehandTool'
+import { getCurrentFreehandStateString, deepCloneWithNewIds, updateBakedFreehandData, updateTimelineState, refreshStrokeConnections } from './freehandTool'
 import { getCurrentPolygonStateString, attachPolygonHandlers, serializePolygonState, updateBakedPolygonData } from './polygonTool'
 import { hasAncestorConflict } from './canvasUtils'
 import { uid } from './canvasUtils'
@@ -366,7 +366,7 @@ export function groupSelection(state: CanvasRuntimeState) {
     selectionStore.add(state, item)
 
     superGroup.getLayer()?.batchDraw()
-    updateBakedStrokeData(state, store.appStateRef)
+    updateBakedFreehandData(state, store.appStateRef)
   })
 }
 
@@ -401,7 +401,7 @@ export function ungroupSelection(state: CanvasRuntimeState) {
     try { refreshStrokeConnections(state) } catch {
       console.error('refreshStrokeConnections failed')
     }
-    updateBakedStrokeData(state, store.appStateRef)
+    updateBakedFreehandData(state, store.appStateRef)
   })
 }
 
@@ -465,7 +465,7 @@ export function duplicateSelection(state: CanvasRuntimeState) {
       // Refresh visuals/state
       freehandShapeLayer?.batchDraw()
       state.layers.polygonShapes?.batchDraw()
-      updateBakedStrokeData(state, store.appStateRef)
+      updateBakedFreehandData(state, store.appStateRef)
       updateBakedPolygonData(state, store.appStateRef)
       serializePolygonState(state, store.appStateRef)
     })
@@ -527,7 +527,7 @@ export function deleteSelection(state: CanvasRuntimeState) {
     // Redraw/refresh
     freehandShapeLayer?.batchDraw()
     state.layers.polygonShapes?.batchDraw()
-    updateBakedStrokeData(state, store.appStateRef)
+    updateBakedFreehandData(state, store.appStateRef)
     updateBakedPolygonData(state, store.appStateRef)
     serializePolygonState(state, store.appStateRef)
 

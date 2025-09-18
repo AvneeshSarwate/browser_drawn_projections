@@ -176,7 +176,7 @@ export const duplicateFreehandSelected = (state: CanvasRuntimeState) => {
 
     // Update UI and data structures
     updateFreehandDraggableStates(state)
-    updateBakedStrokeData(state, globalStore().appStateRef)
+    updateBakedFreehandData(state, globalStore().appStateRef)
     const freehandShapeLayer = state.layers.freehandShape
     freehandShapeLayer?.batchDraw()
 
@@ -454,7 +454,7 @@ export const finishFreehandDragTracking = (state: CanvasRuntimeState, nodeName: 
     )
 
     console.log(`Transform command added to global history`)
-    updateBakedStrokeData(state, globalStore().appStateRef) // Update baked data after transformation
+    updateBakedFreehandData(state, globalStore().appStateRef) // Update baked data after transformation
   }
 
   state.freehand.freehandDragStartState = null
@@ -617,7 +617,7 @@ export const deserializeFreehandState = (
 
     setTimeout(() => {
       freehandShapeLayer.batchDraw()
-      updateBakedStrokeData(canvasState, appState)
+      updateBakedFreehandData(canvasState, appState)
     }, 30)
   } catch (error) {
     console.warn('Failed to deserialize Konva state:', error)
@@ -1068,7 +1068,7 @@ const generateBakedStrokeData = (
 }
 
 // Function to update baked data in app state
-export const updateBakedStrokeData = (
+export const updateBakedFreehandData = (
   canvasState: CanvasRuntimeState,
   appState: TemplateAppState
 ) => {
