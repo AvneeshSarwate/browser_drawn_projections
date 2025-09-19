@@ -29,11 +29,11 @@ function setup() {
 function draw() {
   clear()
   background(250)
-  const time = millis() / 1000
+  const elapsedTime = millis() / 1000
 
   noStroke()
   polygons.forEach((polygon, index) => {
-    const { dx, dy } = offsetForIndex(index, time)
+    const { dx, dy } = offsetForIndex(index, elapsedTime)
     const color = polygon?.metadata?.color || colourForIndex(index)
     fill(color.r ?? 255, color.g ?? 255, color.b ?? 255, color.a ?? 255)
     beginShape()
@@ -47,7 +47,7 @@ function draw() {
   strokeWeight(2)
   noFill()
   strokes.forEach((stroke, index) => {
-    const { dx, dy } = offsetForIndex(index, time, { skew: 1.3, radiusOffset: 8 })
+    const { dx, dy } = offsetForIndex(index, elapsedTime, { skew: 1.3, radiusOffset: 8 })
     beginShape()
     for (const point of stroke.points ?? []) {
       vertex(point.x + dx, point.y + dy)
