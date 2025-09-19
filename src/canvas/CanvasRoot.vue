@@ -434,7 +434,6 @@ onMounted(async () => {
     // Create core layers (grid, drawing, overlay)
     const gridLayer = new Konva.Layer({
       listening: false,
-      hitGraphEnabled: false,
       name: 'grid-layer'
     })
     const drawingLayer = new Konva.Layer({ name: 'drawing-layer' })

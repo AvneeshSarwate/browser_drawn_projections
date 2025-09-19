@@ -21,7 +21,6 @@ export function initializeSelectTool(state: CanvasRuntimeState, container: Konva
   if (!state.layers.grid && stage) {
     const gridLayer = new Konva.Layer({
       listening: false,
-      hitGraphEnabled: false,
       name: 'grid-layer'
     })
     stage.add(gridLayer)
