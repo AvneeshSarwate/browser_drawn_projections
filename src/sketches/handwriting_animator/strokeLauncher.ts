@@ -8,7 +8,7 @@ import type { StrokePoint } from './gpuStrokes/strokeTypes'
 import type { AnchorKind } from './gpuStrokes/coordinateUtils'
 import type { LoopHandle } from '@/channels/base_time_context'
 //@ts-ignore
-import Stats from '@/rendering/stats'
+// import Stats from '@/rendering/stats'
 import { EditorView, basicSetup } from 'codemirror'
 import { javascript } from '@codemirror/lang-javascript'
 import { oneDark } from '@codemirror/theme-one-dark'
@@ -40,7 +40,7 @@ export const availableGroups = computed(() => Object.keys(appState.freehandGroup
 let drawingScene: DrawingScene | undefined
 let strokeInterpolator: StrokeInterpolator | undefined
 let scriptEditor: EditorView | undefined
-let stats: Stats | undefined
+// let stats: Stats | undefined
 const timeLoops: CancelablePromisePoxy<any>[] = []
 
 const gridXY = { x: 16, y: 9 }
@@ -168,11 +168,11 @@ export const initializeGPUStrokes = async () => {
     drawingScene = new DrawingScene()
     strokeInterpolator = new StrokeInterpolator()
 
-    stats = new Stats()
-    stats.showPanel(0)
-    babylonContainer.value.parentElement?.appendChild(stats.dom)
+    // stats = new Stats()
+    // stats.showPanel(0)
+    // babylonContainer.value.parentElement?.appendChild(stats.dom)
 
-    await drawingScene.createScene(babylonContainer.value, stats)
+    await drawingScene.createScene(babylonContainer.value, null)
 
     gpuStrokesReady.value = true
 
@@ -498,5 +498,5 @@ export const disposeStrokeLauncher = () => {
     const loop = timeLoops.pop()
     loop?.cancel()
   }
-  stats = undefined
+  // stats = undefined
 }

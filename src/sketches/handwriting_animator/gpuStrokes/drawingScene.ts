@@ -25,7 +25,7 @@ export class DrawingScene {
   private canvasWidth!: number;
   private canvasHeight!: number;
   
-  async createScene(canvas: HTMLCanvasElement, stats: Stats): Promise<void> {
+  async createScene(canvas: HTMLCanvasElement, stats: Stats | null): Promise<void> {
     // Store canvas dimensions for use throughout the system
     this.canvasWidth = canvas.width;
     this.canvasHeight = canvas.height;
@@ -238,7 +238,7 @@ export class DrawingScene {
     console.log("Compute shader initialized successfully");
   }
   
-  private startRenderLoop(stats: Stats): void {
+  private startRenderLoop(stats: Stats | null): void {
     let lastTime = performance.now() * 0.001;
     
     this.scene.registerBeforeRender(() => {
@@ -270,9 +270,9 @@ export class DrawingScene {
     });
     
     this.engine.runRenderLoop(() => {
-      stats.begin();
+      stats?.begin();
       this.scene.render();
-      stats.end();
+      stats?.end();
     });
     
     // Handle resize
