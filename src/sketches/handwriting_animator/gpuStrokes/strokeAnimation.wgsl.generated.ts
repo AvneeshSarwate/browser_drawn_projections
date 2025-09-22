@@ -39,31 +39,66 @@ export const StrokeAnimationLaunchConfigLayout = {
 } as const;
 
 export function packStrokeAnimationLaunchConfig(target: Float32Array, floatOffset: number, value: StrokeAnimationLaunchConfig): void {
-  let offset = floatOffset;
-  offset = floatOffset + 0;
-  target[offset] = value.strokeAIndex as number;
-  offset = floatOffset + 1;
-  target[offset] = value.strokeBIndex as number;
-  offset = floatOffset + 2;
-  target[offset] = value.interpolationT as number;
-  offset = floatOffset + 3;
-  target[offset] = value.totalDuration as number;
-  offset = floatOffset + 4;
-  target[offset] = value.elapsedTime as number;
-  offset = floatOffset + 5;
-  target[offset] = value.startPointX as number;
-  offset = floatOffset + 6;
-  target[offset] = value.startPointY as number;
-  offset = floatOffset + 7;
-  target[offset] = value.scale as number;
-  offset = floatOffset + 8;
-  target[offset] = value.isActive as number;
-  offset = floatOffset + 9;
-  target[offset] = value.phase as number;
-  offset = floatOffset + 10;
-  target[offset] = value.reserved1 as number;
-  offset = floatOffset + 11;
-  target[offset] = value.reserved2 as number;
+  {
+    const base = floatOffset + 0;
+    const raw = value.strokeAIndex;
+    target[base] = raw !== undefined ? Number(raw) : 0;
+  }
+  {
+    const base = floatOffset + 1;
+    const raw = value.strokeBIndex;
+    target[base] = raw !== undefined ? Number(raw) : 0;
+  }
+  {
+    const base = floatOffset + 2;
+    const raw = value.interpolationT;
+    target[base] = raw !== undefined ? Number(raw) : 0;
+  }
+  {
+    const base = floatOffset + 3;
+    const raw = value.totalDuration;
+    target[base] = raw !== undefined ? Number(raw) : 0;
+  }
+  {
+    const base = floatOffset + 4;
+    const raw = value.elapsedTime;
+    target[base] = raw !== undefined ? Number(raw) : 0;
+  }
+  {
+    const base = floatOffset + 5;
+    const raw = value.startPointX;
+    target[base] = raw !== undefined ? Number(raw) : 0;
+  }
+  {
+    const base = floatOffset + 6;
+    const raw = value.startPointY;
+    target[base] = raw !== undefined ? Number(raw) : 0;
+  }
+  {
+    const base = floatOffset + 7;
+    const raw = value.scale;
+    target[base] = raw !== undefined ? Number(raw) : 0;
+  }
+  {
+    const base = floatOffset + 8;
+    const raw = value.isActive;
+    target[base] = raw !== undefined ? Number(raw) : 0;
+  }
+  {
+    const base = floatOffset + 9;
+    const raw = value.phase;
+    target[base] = raw !== undefined ? Number(raw) : 0;
+  }
+  {
+    const base = floatOffset + 10;
+    const raw = value.reserved1;
+    target[base] = raw !== undefined ? Number(raw) : 0;
+  }
+  {
+    const base = floatOffset + 11;
+    const raw = value.reserved2;
+    target[base] = raw !== undefined ? Number(raw) : 0;
+  }
 }
 
 export interface StrokeAnimationGlobalParams {
@@ -93,23 +128,46 @@ export const StrokeAnimationGlobalParamsLayout = {
 } as const;
 
 export function packStrokeAnimationGlobalParams(target: Float32Array, floatOffset: number, value: StrokeAnimationGlobalParams): void {
-  let offset = floatOffset;
-  offset = floatOffset + 0;
-  target[offset] = value.time as number;
-  offset = floatOffset + 1;
-  target[offset] = value.canvasWidth as number;
-  offset = floatOffset + 2;
-  target[offset] = value.canvasHeight as number;
-  offset = floatOffset + 3;
-  target[offset] = value.maxAnimations as number;
-  offset = floatOffset + 4;
-  target[offset] = value.deltaTime as number;
-  offset = floatOffset + 5;
-  target[offset] = value.textureHeight as number;
-  offset = floatOffset + 6;
-  target[offset] = value.padding1 as number;
-  offset = floatOffset + 7;
-  target[offset] = value.padding2 as number;
+  {
+    const base = floatOffset + 0;
+    const raw = value.time;
+    target[base] = raw !== undefined ? Number(raw) : 0;
+  }
+  {
+    const base = floatOffset + 1;
+    const raw = value.canvasWidth;
+    target[base] = raw !== undefined ? Number(raw) : 0;
+  }
+  {
+    const base = floatOffset + 2;
+    const raw = value.canvasHeight;
+    target[base] = raw !== undefined ? Number(raw) : 0;
+  }
+  {
+    const base = floatOffset + 3;
+    const raw = value.maxAnimations;
+    target[base] = raw !== undefined ? Number(raw) : 0;
+  }
+  {
+    const base = floatOffset + 4;
+    const raw = value.deltaTime;
+    target[base] = raw !== undefined ? Number(raw) : 0;
+  }
+  {
+    const base = floatOffset + 5;
+    const raw = value.textureHeight;
+    target[base] = raw !== undefined ? Number(raw) : 0;
+  }
+  {
+    const base = floatOffset + 6;
+    const raw = value.padding1;
+    target[base] = raw !== undefined ? Number(raw) : 0;
+  }
+  {
+    const base = floatOffset + 7;
+    const raw = value.padding2;
+    target[base] = raw !== undefined ? Number(raw) : 0;
+  }
 }
 
 const uniformLayout_globalParams = [
@@ -164,36 +222,77 @@ export function createUniformBuffer_globalParams(engine: BABYLON.WebGPUEngine, i
 
 export function updateUniformBuffer_globalParams(state: GlobalParamsUniformState, updates: Partial<GlobalParamsUniforms>): void {
   let dirty = false;
-  for (const entry of uniformLayout_globalParams) {
-    const key = entry.name as keyof GlobalParamsUniforms;
-    if (updates[key] === undefined) {
-      continue;
-    }
+  if (updates.time !== undefined) {
     dirty = true;
-    const raw = updates[key]! as unknown;
-    if (entry.slot > 1) {
-      let arrayValue: Float32Array;
-      if (raw instanceof Float32Array) {
-        arrayValue = raw;
-      } else if (Array.isArray(raw)) {
-        arrayValue = new Float32Array(raw as number[]);
-      } else if (typeof raw === "number") {
-        arrayValue = new Float32Array(entry.slot);
-        arrayValue[0] = raw;
-      } else {
-        arrayValue = new Float32Array(entry.slot);
-      }
-      state.uniforms[key] = arrayValue as any;
-      state.buffer.updateUniform(entry.name, arrayValue, entry.slot);
-    } else if (typeof raw === "boolean") {
-      const numeric = raw ? 1 : 0;
-      state.uniforms[key] = raw as any;
-      state.buffer.updateUniform(entry.name, [numeric], entry.slot);
-    } else {
-      const numeric = typeof raw === "number" ? raw : 0;
-      state.uniforms[key] = numeric as any;
-      state.buffer.updateUniform(entry.name, [numeric], entry.slot);
-    }
+    const raw = updates.time! as any;
+    const numeric = raw !== undefined ? Number(raw) : 0;
+    state.uniforms.time = numeric;
+    const bufferView = new Float32Array(1);
+    bufferView[0] = numeric;
+    state.buffer.updateUniform('time', bufferView, 1);
+  }
+  if (updates.canvasWidth !== undefined) {
+    dirty = true;
+    const raw = updates.canvasWidth! as any;
+    const numeric = raw !== undefined ? Number(raw) : 0;
+    state.uniforms.canvasWidth = numeric;
+    const bufferView = new Float32Array(1);
+    bufferView[0] = numeric;
+    state.buffer.updateUniform('canvasWidth', bufferView, 1);
+  }
+  if (updates.canvasHeight !== undefined) {
+    dirty = true;
+    const raw = updates.canvasHeight! as any;
+    const numeric = raw !== undefined ? Number(raw) : 0;
+    state.uniforms.canvasHeight = numeric;
+    const bufferView = new Float32Array(1);
+    bufferView[0] = numeric;
+    state.buffer.updateUniform('canvasHeight', bufferView, 1);
+  }
+  if (updates.maxAnimations !== undefined) {
+    dirty = true;
+    const raw = updates.maxAnimations! as any;
+    const numeric = raw !== undefined ? Number(raw) : 0;
+    state.uniforms.maxAnimations = numeric;
+    const bufferView = new Float32Array(1);
+    bufferView[0] = numeric;
+    state.buffer.updateUniform('maxAnimations', bufferView, 1);
+  }
+  if (updates.deltaTime !== undefined) {
+    dirty = true;
+    const raw = updates.deltaTime! as any;
+    const numeric = raw !== undefined ? Number(raw) : 0;
+    state.uniforms.deltaTime = numeric;
+    const bufferView = new Float32Array(1);
+    bufferView[0] = numeric;
+    state.buffer.updateUniform('deltaTime', bufferView, 1);
+  }
+  if (updates.textureHeight !== undefined) {
+    dirty = true;
+    const raw = updates.textureHeight! as any;
+    const numeric = raw !== undefined ? Number(raw) : 0;
+    state.uniforms.textureHeight = numeric;
+    const bufferView = new Float32Array(1);
+    bufferView[0] = numeric;
+    state.buffer.updateUniform('textureHeight', bufferView, 1);
+  }
+  if (updates.padding1 !== undefined) {
+    dirty = true;
+    const raw = updates.padding1! as any;
+    const numeric = raw !== undefined ? Number(raw) : 0;
+    state.uniforms.padding1 = numeric;
+    const bufferView = new Float32Array(1);
+    bufferView[0] = numeric;
+    state.buffer.updateUniform('padding1', bufferView, 1);
+  }
+  if (updates.padding2 !== undefined) {
+    dirty = true;
+    const raw = updates.padding2! as any;
+    const numeric = raw !== undefined ? Number(raw) : 0;
+    state.uniforms.padding2 = numeric;
+    const bufferView = new Float32Array(1);
+    bufferView[0] = numeric;
+    state.buffer.updateUniform('padding2', bufferView, 1);
   }
   if (dirty) {
     state.buffer.update();
