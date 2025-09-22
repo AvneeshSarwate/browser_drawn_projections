@@ -1,14 +1,20 @@
 import * as BABYLON from 'babylonjs';
 import { PriorityQueue } from './priorityQueue';
-import type { LaunchConfig, GPULaunchConfig, AnimationControlMode } from './strokeTypes';
+import type { LaunchConfig, AnimationControlMode } from './strokeTypes';
 import { DRAWING_CONSTANTS } from './constants';
 import type { StrokeTextureManager } from './strokeTextureManager';
+import {
+  createStrokeAnimationLaunchConfigsStorageBuffer,
+  updateStrokeAnimationLaunchConfigsStorageBuffer,
+  writeStrokeAnimationLaunchConfigsStorageValue,
+  type StrokeAnimationLaunchConfig,
+  type StrokeAnimationLaunchConfigsStorageState,
+} from './strokeAnimation.wgsl.generated';
 
 export class DrawLifecycleManager {
   private priorityQueue: PriorityQueue<LaunchConfig>;
   private activeConfigs: Map<string, LaunchConfig>;
-  private gpuConfigBuffer!: BABYLON.StorageBuffer;
-  private gpuConfigData!: Float32Array;
+  private launchConfigStorage!: StrokeAnimationLaunchConfigsStorageState;
   private maxSimultaneousAnimations: number = DRAWING_CONSTANTS.MAX_ANIMATIONS;
   private nextId: number = 0;
   private strokeTextureManager?: StrokeTextureManager;
@@ -21,20 +27,7 @@ export class DrawLifecycleManager {
   }
   
   private createGPUBuffer(engine: BABYLON.WebGPUEngine): void {
-    // Create storage buffer for launch configs
-    const bufferSize = this.maxSimultaneousAnimations * DRAWING_CONSTANTS.LAUNCH_CONFIG_SIZE;
-    
-    this.gpuConfigBuffer = new BABYLON.StorageBuffer(
-      engine,
-      bufferSize,
-      BABYLON.Constants.BUFFER_CREATIONFLAG_STORAGE |
-      BABYLON.Constants.BUFFER_CREATIONFLAG_WRITE
-    );
-    
-    // Create CPU-side buffer for data staging
-    this.gpuConfigData = new Float32Array(this.maxSimultaneousAnimations * 12); // 12 floats per config
-    
-    // Initialize with inactive configs
+    this.launchConfigStorage = createStrokeAnimationLaunchConfigsStorageBuffer(engine, this.maxSimultaneousAnimations);
     this.clearGPUBuffer();
   }
 
@@ -153,24 +146,26 @@ export class DrawLifecycleManager {
   }
   
   private uploadToGPU(): void {
+    const storage = this.launchConfigStorage;
+
     // Clear buffer
-    this.gpuConfigData.fill(0);
-    
+    storage.data.fill(0);
+
     // Pack active configs into GPU buffer format
     let index = 0;
     for (const config of this.activeConfigs.values()) {
       if (index >= this.maxSimultaneousAnimations) break;
       
       const gpuConfig = this.convertToGPUFormat(config);
-      this.packGPUConfig(gpuConfig, index);
+      writeStrokeAnimationLaunchConfigsStorageValue(storage, index, gpuConfig);
       index++;
     }
     
     // Upload to GPU
-    this.gpuConfigBuffer.update(this.gpuConfigData);
+    updateStrokeAnimationLaunchConfigsStorageBuffer(storage);
   }
   
-  private convertToGPUFormat(config: LaunchConfig): GPULaunchConfig {
+  private convertToGPUFormat(config: LaunchConfig): StrokeAnimationLaunchConfig {
     return {
       strokeAIndex: config.strokeAIndex,
       strokeBIndex: config.strokeBIndex,
@@ -188,36 +183,21 @@ export class DrawLifecycleManager {
       reserved2: 0
     };
   }
-  
-  private packGPUConfig(gpuConfig: GPULaunchConfig, index: number): void {
-    const baseIndex = index * 12; // 12 floats per config
-    
-    this.gpuConfigData[baseIndex + 0] = gpuConfig.strokeAIndex;
-    this.gpuConfigData[baseIndex + 1] = gpuConfig.strokeBIndex;
-    this.gpuConfigData[baseIndex + 2] = gpuConfig.interpolationT;
-    this.gpuConfigData[baseIndex + 3] = gpuConfig.totalDuration;
-    
-    this.gpuConfigData[baseIndex + 4] = gpuConfig.elapsedTime;
-    this.gpuConfigData[baseIndex + 5] = gpuConfig.startPointX;
-    this.gpuConfigData[baseIndex + 6] = gpuConfig.startPointY;
-    this.gpuConfigData[baseIndex + 7] = gpuConfig.scale;
-    
-    this.gpuConfigData[baseIndex + 8] = gpuConfig.isActive;
-    this.gpuConfigData[baseIndex + 9] = gpuConfig.phase;
-    this.gpuConfigData[baseIndex + 10] = gpuConfig.reserved1;
-    this.gpuConfigData[baseIndex + 11] = gpuConfig.reserved2;
-  }
-  
+
   private clearGPUBuffer(): void {
-    this.gpuConfigData.fill(0);
-    this.gpuConfigBuffer.update(this.gpuConfigData);
+    const storage = this.launchConfigStorage;
+    if (!storage) {
+      return;
+    }
+    storage.data.fill(0);
+    updateStrokeAnimationLaunchConfigsStorageBuffer(storage);
   }
   
   /**
    * Get GPU buffer for compute shader binding
    */
   getGPUBuffer(): BABYLON.StorageBuffer {
-    return this.gpuConfigBuffer;
+    return this.launchConfigStorage.buffer;
   }
   
   /**
@@ -431,8 +411,8 @@ export class DrawLifecycleManager {
    * Dispose of GPU resources
    */
   dispose(): void {
-    if (this.gpuConfigBuffer) {
-      this.gpuConfigBuffer.dispose();
+    if (this.launchConfigStorage) {
+      this.launchConfigStorage.buffer.dispose();
     }
   }
 }

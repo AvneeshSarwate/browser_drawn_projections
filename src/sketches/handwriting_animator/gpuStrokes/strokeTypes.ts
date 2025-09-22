@@ -1,5 +1,7 @@
 // Type definitions for stroke data
 
+import type { StrokeAnimationLaunchConfig } from './strokeAnimation.wgsl.generated';
+
 export type StrokePoint = {
   x: number;
   y: number;
@@ -43,19 +45,4 @@ export type LaunchConfig = {
 }
 
 // GPU-compatible layout (aligned to 16-byte boundaries)
-export type GPULaunchConfig = {
-  strokeAIndex: number;    // u32 in WGSL
-  strokeBIndex: number;    // u32 in WGSL
-  interpolationT: number;  // f32
-  totalDuration: number;   // f32
-  
-  elapsedTime: number;     // f32
-  startPointX: number;     // f32
-  startPointY: number;     // f32
-  scale: number;           // f32
-  
-  isActive: number;        // f32 (1.0 = active, 0.0 = inactive)
-  phase: number;           // f32
-  reserved1: number;       // f32 padding
-  reserved2: number;       // f32 padding
-}
+export type GPULaunchConfig = StrokeAnimationLaunchConfig;

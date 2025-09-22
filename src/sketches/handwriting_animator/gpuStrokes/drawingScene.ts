@@ -4,21 +4,29 @@ import { StrokeInterpolator } from './strokeInterpolator';
 import { StrokeTextureManager } from './strokeTextureManager';
 import { DrawLifecycleManager } from './drawLifecycleManager';
 import { DRAWING_CONSTANTS } from './constants';
-import strokeAnimationWGSL from './strokeAnimation.wgsl?raw';
 //@ts-ignore
 import Stats from '@/rendering/stats';
 import type { LaunchConfig } from './strokeTypes';
 import { getStrokeAnchor, getGroupAnchor, type AnchorKind } from './coordinateUtils';
+import {
+  createStrokeAnimationGlobalParamsUniformBuffer,
+  updateStrokeAnimationGlobalParamsUniformBuffer,
+  type StrokeAnimationGlobalParamsUniformState,
+  createStrokeAnimationInstanceMatricesStorageBuffer,
+  type StrokeAnimationInstanceMatricesStorageState,
+  createStrokeAnimationShader,
+  type StrokeAnimationShaderState,
+} from './strokeAnimation.wgsl.generated';
 
 export class DrawingScene {
   private engine!: BABYLON.WebGPUEngine;
   private scene!: BABYLON.Scene;
   private strokeTextureManager!: StrokeTextureManager;
   private lifecycleManager!: DrawLifecycleManager;
-  private computeShader!: BABYLON.ComputeShader;
+  private shaderState!: StrokeAnimationShaderState;
   private instancedMesh!: BABYLON.Mesh;
-  private matrixBuffer!: BABYLON.StorageBuffer;
-  private globalParamsBuffer!: BABYLON.UniformBuffer;
+  private instanceMatricesStorage!: StrokeAnimationInstanceMatricesStorageState;
+  private globalParamsState!: StrokeAnimationGlobalParamsUniformState;
   private maxAnimations: number = DRAWING_CONSTANTS.MAX_ANIMATIONS;
   private pointsPerStroke: number = DRAWING_CONSTANTS.POINTS_PER_STROKE;
   private maxInstances: number = this.maxAnimations * this.pointsPerStroke;
@@ -133,47 +141,53 @@ export class DrawingScene {
     this.instancedMesh.forcedInstanceCount = this.maxInstances;
     this.instancedMesh.manualUpdateOfWorldMatrixInstancedBuffer = true;
     
-    // Create matrix buffer for instances
-    this.matrixBuffer = new BABYLON.StorageBuffer(
+    // Create matrix buffer for instances with vertex + storage usage
+    this.instanceMatricesStorage = createStrokeAnimationInstanceMatricesStorageBuffer(
       this.engine,
-      this.maxInstances * DRAWING_CONSTANTS.MATRIX_SIZE,
-      BABYLON.Constants.BUFFER_CREATIONFLAG_VERTEX | 
-      BABYLON.Constants.BUFFER_CREATIONFLAG_STORAGE |
-      BABYLON.Constants.BUFFER_CREATIONFLAG_WRITE
+      this.maxInstances,
+      {
+        usage:
+          BABYLON.Constants.BUFFER_CREATIONFLAG_VERTEX |
+          BABYLON.Constants.BUFFER_CREATIONFLAG_STORAGE |
+          BABYLON.Constants.BUFFER_CREATIONFLAG_WRITE,
+      }
     );
-    
+    this.instanceMatricesStorage.data.fill(0);
+    this.instanceMatricesStorage.buffer.update(this.instanceMatricesStorage.data);
+
     // Set up vertex buffers for world matrix
     this.setupInstancedVertexBuffers();
   }
-  
+
   private setupInstancedVertexBuffers(): void {
     const strideFloats = 16;  // 16 floats per instance (64 bytes)
     const vsize = 4;          // 4 floats per attribute (vec4)
-    
+    const matrixBuffer = this.instanceMatricesStorage.buffer;
+
     const world0 = new BABYLON.VertexBuffer(
       this.engine,
-      this.matrixBuffer.getBuffer(),
+      matrixBuffer.getBuffer(),
       "world0",
       false, false, strideFloats, true, 0, vsize
     );
-    
+
     const world1 = new BABYLON.VertexBuffer(
       this.engine,
-      this.matrixBuffer.getBuffer(),
+      matrixBuffer.getBuffer(),
       "world1",
       false, false, strideFloats, true, 4, vsize
     );
-    
+
     const world2 = new BABYLON.VertexBuffer(
       this.engine,
-      this.matrixBuffer.getBuffer(),
+      matrixBuffer.getBuffer(),
       "world2",
       false, false, strideFloats, true, 8, vsize
     );
-    
+
     const world3 = new BABYLON.VertexBuffer(
       this.engine,
-      this.matrixBuffer.getBuffer(),
+      matrixBuffer.getBuffer(),
       "world3",
       false, false, strideFloats, true, 12, vsize
     );
@@ -186,55 +200,33 @@ export class DrawingScene {
   }
   
   private async setupComputeShader(): Promise<void> {
-    // Create global parameters uniform buffer
-    this.globalParamsBuffer = new BABYLON.UniformBuffer(this.engine);
-    this.globalParamsBuffer.addUniform("time", 1);
-    this.globalParamsBuffer.addUniform("canvasWidth", 1);
-    this.globalParamsBuffer.addUniform("canvasHeight", 1);
-    this.globalParamsBuffer.addUniform("maxAnimations", 1);
-    this.globalParamsBuffer.addUniform("deltaTime", 1);
-    this.globalParamsBuffer.addUniform("textureHeight", 1);
-    this.globalParamsBuffer.addUniform("padding1", 1);
-    this.globalParamsBuffer.addUniform("padding2", 1);
-    
-    // Set initial values
-    this.globalParamsBuffer.updateFloat("canvasWidth", this.canvasWidth);
-    this.globalParamsBuffer.updateFloat("canvasHeight", this.canvasHeight);
-    this.globalParamsBuffer.updateFloat("maxAnimations", this.maxAnimations);
-    this.globalParamsBuffer.updateFloat("textureHeight", DRAWING_CONSTANTS.MAX_STROKES);
-    this.globalParamsBuffer.update();
-    
-    // Store shader in ShaderStore
-    BABYLON.ShaderStore.ShadersStoreWGSL["strokeAnimation"] = strokeAnimationWGSL;
-    
-    // Create compute shader
-    this.computeShader = new BABYLON.ComputeShader(
-      "strokeAnimation",
+    this.globalParamsState = createStrokeAnimationGlobalParamsUniformBuffer(this.engine, {
+      canvasWidth: this.canvasWidth,
+      canvasHeight: this.canvasHeight,
+      maxAnimations: this.maxAnimations,
+      textureHeight: DRAWING_CONSTANTS.MAX_STROKES,
+      time: 0,
+      deltaTime: 0,
+      padding1: 0,
+      padding2: 0,
+    });
+
+    this.shaderState = createStrokeAnimationShader(
       this.engine,
-      { computeSource: strokeAnimationWGSL },
       {
-        bindingsMapping: {
-          "instanceMatrices": { group: 0, binding: 0 },
-          "launchConfigs": { group: 0, binding: 1 },
-          "globalParams": { group: 0, binding: 2 },
-          "strokeTexture": { group: 0, binding: 3 },
-          "strokeSampler": { group: 0, binding: 4 }
-        }
-      }
+        globalParams: this.globalParamsState,
+        instanceMatrices: this.instanceMatricesStorage.buffer,
+        launchConfigs: this.lifecycleManager.getGPUBuffer(),
+        strokeTexture: this.strokeTextureManager.getStrokeTexture(),
+        strokeSampler: new BABYLON.TextureSampler(),
+      },
+      { name: 'strokeAnimation' }
     );
-    
-    // Bind resources
-    this.computeShader.setStorageBuffer("instanceMatrices", this.matrixBuffer);
-    this.computeShader.setStorageBuffer("launchConfigs", this.lifecycleManager.getGPUBuffer());
-    this.computeShader.setUniformBuffer("globalParams", this.globalParamsBuffer);
-    this.computeShader.setTexture("strokeTexture", this.strokeTextureManager.getStrokeTexture(), false);
-    this.computeShader.setTextureSampler("strokeSampler", new BABYLON.TextureSampler());
-    
-    // Wait for shader to be ready
-    while (!this.computeShader.isReady()) {
+
+    while (!this.shaderState.shader.isReady()) {
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
-    
+
     console.log("Compute shader initialized successfully");
   }
   
@@ -250,15 +242,16 @@ export class DrawingScene {
       this.lifecycleManager.tick(currentTime);
       
       // Update global parameters
-      this.globalParamsBuffer.updateFloat("time", currentTime);
-      this.globalParamsBuffer.updateFloat("deltaTime", deltaTime);
-      this.globalParamsBuffer.update();
-      
+      updateStrokeAnimationGlobalParamsUniformBuffer(this.globalParamsState, {
+        time: currentTime,
+        deltaTime,
+      });
+
       // Dispatch compute shader with optimized 1D layout
       const totalThreads = this.maxAnimations * this.pointsPerStroke;
       const workgroupSize = DRAWING_CONSTANTS.WORKGROUP_SIZE;
       const workgroups = Math.ceil(totalThreads / workgroupSize);
-      this.computeShader.dispatch(workgroups, 1, 1);
+      this.shaderState.shader.dispatch(workgroups, 1, 1);
       
       // Debug: Log active animations every few seconds
       if (Math.floor(currentTime) % 3 === 0 && deltaTime < 0.1) {
@@ -476,8 +469,8 @@ export class DrawingScene {
   dispose(): void {
     this.strokeTextureManager?.dispose();
     this.lifecycleManager?.dispose();
-    this.matrixBuffer?.dispose();
-    this.globalParamsBuffer?.dispose();
+    this.instanceMatricesStorage?.buffer.dispose();
+    this.globalParamsState?.buffer.dispose();
     this.scene?.dispose();
     this.engine?.dispose();
   }

@@ -7,11 +7,13 @@ import vue from '@vitejs/plugin-vue'
 import ts from 'typescript';
 import { vitePluginTypescriptTransform } from 'vite-plugin-typescript-transform';
 import vueDevTools from 'vite-plugin-vue-devtools'
+import { wgslTypesPlugin } from './node_src/wgsl/vitePlugin'
 
 // https://vitejs.dev/config/
 export default defineConfig({
   base: "/",
   plugins: [
+    wgslTypesPlugin(),
     vue(), 
     // react(),
     // vueJsx()
