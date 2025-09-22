@@ -3,18 +3,12 @@ import { PriorityQueue } from './priorityQueue';
 import type { LaunchConfig, AnimationControlMode } from './strokeTypes';
 import { DRAWING_CONSTANTS } from './constants';
 import type { StrokeTextureManager } from './strokeTextureManager';
-import {
-  createStrokeAnimationLaunchConfigsStorageBuffer,
-  updateStrokeAnimationLaunchConfigsStorageBuffer,
-  writeStrokeAnimationLaunchConfigsStorageValue,
-  type StrokeAnimationLaunchConfig,
-  type StrokeAnimationLaunchConfigsStorageState,
-} from './strokeAnimation.wgsl.generated';
+import * as strokeAnimation from './strokeAnimation.wgsl.generated';
 
 export class DrawLifecycleManager {
   private priorityQueue: PriorityQueue<LaunchConfig>;
   private activeConfigs: Map<string, LaunchConfig>;
-  private launchConfigStorage!: StrokeAnimationLaunchConfigsStorageState;
+  private launchConfigStorage!: strokeAnimation.LaunchConfigsStorageState;
   private maxSimultaneousAnimations: number = DRAWING_CONSTANTS.MAX_ANIMATIONS;
   private nextId: number = 0;
   private strokeTextureManager?: StrokeTextureManager;
@@ -27,7 +21,7 @@ export class DrawLifecycleManager {
   }
   
   private createGPUBuffer(engine: BABYLON.WebGPUEngine): void {
-    this.launchConfigStorage = createStrokeAnimationLaunchConfigsStorageBuffer(engine, this.maxSimultaneousAnimations);
+    this.launchConfigStorage = strokeAnimation.createStorageBuffer_launchConfigs(engine, this.maxSimultaneousAnimations);
     this.clearGPUBuffer();
   }
 
@@ -157,15 +151,15 @@ export class DrawLifecycleManager {
       if (index >= this.maxSimultaneousAnimations) break;
       
       const gpuConfig = this.convertToGPUFormat(config);
-      writeStrokeAnimationLaunchConfigsStorageValue(storage, index, gpuConfig);
+      strokeAnimation.writeStorageValue_launchConfigs(storage, index, gpuConfig);
       index++;
     }
     
     // Upload to GPU
-    updateStrokeAnimationLaunchConfigsStorageBuffer(storage);
+    strokeAnimation.updateStorageBuffer_launchConfigs(storage);
   }
   
-  private convertToGPUFormat(config: LaunchConfig): StrokeAnimationLaunchConfig {
+  private convertToGPUFormat(config: LaunchConfig): strokeAnimation.StrokeAnimationLaunchConfig {
     return {
       strokeAIndex: config.strokeAIndex,
       strokeBIndex: config.strokeBIndex,
@@ -190,7 +184,7 @@ export class DrawLifecycleManager {
       return;
     }
     storage.data.fill(0);
-    updateStrokeAnimationLaunchConfigsStorageBuffer(storage);
+    strokeAnimation.updateStorageBuffer_launchConfigs(storage);
   }
   
   /**

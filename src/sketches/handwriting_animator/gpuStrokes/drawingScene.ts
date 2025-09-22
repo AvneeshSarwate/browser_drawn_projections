@@ -8,25 +8,17 @@ import { DRAWING_CONSTANTS } from './constants';
 import Stats from '@/rendering/stats';
 import type { LaunchConfig } from './strokeTypes';
 import { getStrokeAnchor, getGroupAnchor, type AnchorKind } from './coordinateUtils';
-import {
-  createStrokeAnimationGlobalParamsUniformBuffer,
-  updateStrokeAnimationGlobalParamsUniformBuffer,
-  type StrokeAnimationGlobalParamsUniformState,
-  createStrokeAnimationInstanceMatricesStorageBuffer,
-  type StrokeAnimationInstanceMatricesStorageState,
-  createStrokeAnimationShader,
-  type StrokeAnimationShaderState,
-} from './strokeAnimation.wgsl.generated';
+import * as strokeAnimation from './strokeAnimation.wgsl.generated';
 
 export class DrawingScene {
   private engine!: BABYLON.WebGPUEngine;
   private scene!: BABYLON.Scene;
   private strokeTextureManager!: StrokeTextureManager;
   private lifecycleManager!: DrawLifecycleManager;
-  private shaderState!: StrokeAnimationShaderState;
+  private shaderState!: strokeAnimation.ShaderState;
   private instancedMesh!: BABYLON.Mesh;
-  private instanceMatricesStorage!: StrokeAnimationInstanceMatricesStorageState;
-  private globalParamsState!: StrokeAnimationGlobalParamsUniformState;
+  private instanceMatricesStorage!: strokeAnimation.InstanceMatricesStorageState;
+  private globalParamsState!: strokeAnimation.GlobalParamsUniformState;
   private maxAnimations: number = DRAWING_CONSTANTS.MAX_ANIMATIONS;
   private pointsPerStroke: number = DRAWING_CONSTANTS.POINTS_PER_STROKE;
   private maxInstances: number = this.maxAnimations * this.pointsPerStroke;
@@ -142,7 +134,7 @@ export class DrawingScene {
     this.instancedMesh.manualUpdateOfWorldMatrixInstancedBuffer = true;
     
     // Create matrix buffer for instances with vertex + storage usage
-    this.instanceMatricesStorage = createStrokeAnimationInstanceMatricesStorageBuffer(
+    this.instanceMatricesStorage = strokeAnimation.createStorageBuffer_instanceMatrices(
       this.engine,
       this.maxInstances,
       {
@@ -200,7 +192,7 @@ export class DrawingScene {
   }
   
   private async setupComputeShader(): Promise<void> {
-    this.globalParamsState = createStrokeAnimationGlobalParamsUniformBuffer(this.engine, {
+    this.globalParamsState = strokeAnimation.createUniformBuffer_globalParams(this.engine, {
       canvasWidth: this.canvasWidth,
       canvasHeight: this.canvasHeight,
       maxAnimations: this.maxAnimations,
@@ -211,7 +203,7 @@ export class DrawingScene {
       padding2: 0,
     });
 
-    this.shaderState = createStrokeAnimationShader(
+    this.shaderState = strokeAnimation.createShader(
       this.engine,
       {
         globalParams: this.globalParamsState,
@@ -242,7 +234,7 @@ export class DrawingScene {
       this.lifecycleManager.tick(currentTime);
       
       // Update global parameters
-      updateStrokeAnimationGlobalParamsUniformBuffer(this.globalParamsState, {
+      strokeAnimation.updateUniformBuffer_globalParams(this.globalParamsState, {
         time: currentTime,
         deltaTime,
       });

@@ -112,7 +112,7 @@ export function packStrokeAnimationGlobalParams(target: Float32Array, floatOffse
   target[offset] = value.padding2 as number;
 }
 
-const StrokeAnimationGlobalParamsUniformLayout = [
+const uniformLayout_globalParams = [
   { name: 'time', slot: 1 },
   { name: 'canvasWidth', slot: 1 },
   { name: 'canvasHeight', slot: 1 },
@@ -123,7 +123,7 @@ const StrokeAnimationGlobalParamsUniformLayout = [
   { name: 'padding2', slot: 1 }
 ] as const;
 
-export interface StrokeAnimationGlobalParamsUniforms {
+export interface GlobalParamsUniforms {
   time: number;
   canvasWidth: number;
   canvasHeight: number;
@@ -134,14 +134,14 @@ export interface StrokeAnimationGlobalParamsUniforms {
   padding2: number;
 }
 
-export interface StrokeAnimationGlobalParamsUniformState {
+export interface GlobalParamsUniformState {
   buffer: BABYLON.UniformBuffer;
-  uniforms: StrokeAnimationGlobalParamsUniforms;
+  uniforms: GlobalParamsUniforms;
 }
 
-export function createStrokeAnimationGlobalParamsUniformBuffer(engine: BABYLON.WebGPUEngine, initial?: Partial<StrokeAnimationGlobalParamsUniforms>): StrokeAnimationGlobalParamsUniformState {
+export function createUniformBuffer_globalParams(engine: BABYLON.WebGPUEngine, initial?: Partial<GlobalParamsUniforms>): GlobalParamsUniformState {
   const buffer = new BABYLON.UniformBuffer(engine);
-  const uniforms: StrokeAnimationGlobalParamsUniforms = {
+  const uniforms: GlobalParamsUniforms = {
     time: 0,
     canvasWidth: 0,
     canvasHeight: 0,
@@ -151,21 +151,21 @@ export function createStrokeAnimationGlobalParamsUniformBuffer(engine: BABYLON.W
     padding1: 0,
     padding2: 0,
   };
-  for (const entry of StrokeAnimationGlobalParamsUniformLayout) {
+  for (const entry of uniformLayout_globalParams) {
     buffer.addUniform(entry.name, entry.slot);
   }
   if (initial) {
-    updateStrokeAnimationGlobalParamsUniformBuffer({ buffer, uniforms }, initial);
+    updateUniformBuffer_globalParams({ buffer, uniforms }, initial);
   } else {
     buffer.update();
   }
   return { buffer, uniforms };
 }
 
-export function updateStrokeAnimationGlobalParamsUniformBuffer(state: StrokeAnimationGlobalParamsUniformState, updates: Partial<StrokeAnimationGlobalParamsUniforms>): void {
+export function updateUniformBuffer_globalParams(state: GlobalParamsUniformState, updates: Partial<GlobalParamsUniforms>): void {
   let dirty = false;
-  for (const entry of StrokeAnimationGlobalParamsUniformLayout) {
-    const key = entry.name as keyof StrokeAnimationGlobalParamsUniforms;
+  for (const entry of uniformLayout_globalParams) {
+    const key = entry.name as keyof GlobalParamsUniforms;
     if (updates[key] === undefined) {
       continue;
     }
@@ -200,14 +200,14 @@ export function updateStrokeAnimationGlobalParamsUniformBuffer(state: StrokeAnim
   }
 }
 
-export interface StrokeAnimationInstanceMatricesStorageState {
+export interface InstanceMatricesStorageState {
   buffer: BABYLON.StorageBuffer;
   data: Float32Array;
   capacity: number;
   floatsPerElement: number;
 }
 
-export function createStrokeAnimationInstanceMatricesStorageBuffer(engine: BABYLON.WebGPUEngine, capacity: number, options?: { initial?: number[][]; usage?: number; }): StrokeAnimationInstanceMatricesStorageState {
+export function createStorageBuffer_instanceMatrices(engine: BABYLON.WebGPUEngine, capacity: number, options?: { initial?: number[][]; usage?: number; }): InstanceMatricesStorageState {
   const byteStride = 16;
   const floatsPerElement = byteStride / Float32Array.BYTES_PER_ELEMENT;
   const totalFloats = floatsPerElement * capacity;
@@ -221,25 +221,25 @@ export function createStrokeAnimationInstanceMatricesStorageBuffer(engine: BABYL
   return { buffer, data, capacity, floatsPerElement };
 }
 
-export function writeStrokeAnimationInstanceMatricesStorageValue(state: StrokeAnimationInstanceMatricesStorageState, index: number, value: number[]): void {
+export function writeStorageValue_instanceMatrices(state: InstanceMatricesStorageState, index: number, value: number[]): void {
   const offset = index * state.floatsPerElement;
   for (let i = 0; i < state.floatsPerElement; i++) {
     state.data[offset + i] = value[i] ?? 0;
   }
 }
 
-export function updateStrokeAnimationInstanceMatricesStorageBuffer(state: StrokeAnimationInstanceMatricesStorageState): void {
+export function updateStorageBuffer_instanceMatrices(state: InstanceMatricesStorageState): void {
   state.buffer.update(state.data);
 }
 
-export interface StrokeAnimationLaunchConfigsStorageState {
+export interface LaunchConfigsStorageState {
   buffer: BABYLON.StorageBuffer;
   data: Float32Array;
   capacity: number;
   floatsPerElement: number;
 }
 
-export function createStrokeAnimationLaunchConfigsStorageBuffer(engine: BABYLON.WebGPUEngine, capacity: number, options?: { initial?: StrokeAnimationLaunchConfig[]; usage?: number; }): StrokeAnimationLaunchConfigsStorageState {
+export function createStorageBuffer_launchConfigs(engine: BABYLON.WebGPUEngine, capacity: number, options?: { initial?: StrokeAnimationLaunchConfig[]; usage?: number; }): LaunchConfigsStorageState {
   const byteStride = 48;
   const floatsPerElement = byteStride / Float32Array.BYTES_PER_ELEMENT;
   const totalFloats = floatsPerElement * capacity;
@@ -255,12 +255,12 @@ export function createStrokeAnimationLaunchConfigsStorageBuffer(engine: BABYLON.
   return { buffer, data, capacity, floatsPerElement };
 }
 
-export function writeStrokeAnimationLaunchConfigsStorageValue(state: StrokeAnimationLaunchConfigsStorageState, index: number, value: StrokeAnimationLaunchConfig): void {
+export function writeStorageValue_launchConfigs(state: LaunchConfigsStorageState, index: number, value: StrokeAnimationLaunchConfig): void {
   const offset = index * state.floatsPerElement;
   packStrokeAnimationLaunchConfig(state.data, offset, value);
 }
 
-export function updateStrokeAnimationLaunchConfigsStorageBuffer(state: StrokeAnimationLaunchConfigsStorageState): void {
+export function updateStorageBuffer_launchConfigs(state: LaunchConfigsStorageState): void {
   state.buffer.update(state.data);
 }
 
@@ -272,20 +272,20 @@ const bindingLayout = {
     strokeSampler: { group: 0, binding: 4 }
 };
 
-export interface StrokeAnimationShaderBindings {
-    globalParams: StrokeAnimationGlobalParamsUniformState;
+export interface ShaderBindings {
+    globalParams: GlobalParamsUniformState;
     instanceMatrices: BABYLON.StorageBuffer;
     launchConfigs: BABYLON.StorageBuffer;
     strokeTexture: BABYLON.BaseTexture;
     strokeSampler: BABYLON.TextureSampler;
 }
 
-export interface StrokeAnimationShaderState {
+export interface ShaderState {
   shader: BABYLON.ComputeShader;
-  bindings: StrokeAnimationShaderBindings;
+  bindings: ShaderBindings;
 }
 
-export function createStrokeAnimationShader(engine: BABYLON.WebGPUEngine, bindings: StrokeAnimationShaderBindings, options?: { entryPoint?: string; source?: string; name?: string; }): StrokeAnimationShaderState {
+export function createShader(engine: BABYLON.WebGPUEngine, bindings: ShaderBindings, options?: { entryPoint?: string; source?: string; name?: string; }): ShaderState {
   const shader = new BABYLON.ComputeShader(options?.name ?? 'strokeAnimation', engine, { computeSource: options?.source ?? shaderSource }, {
     entryPoint: options?.entryPoint ?? 'main',
     bindingsMapping: bindingLayout,
@@ -298,7 +298,7 @@ export function createStrokeAnimationShader(engine: BABYLON.WebGPUEngine, bindin
   return { shader, bindings };
 }
 
-export function updateStrokeAnimationShaderBindings(state: StrokeAnimationShaderState, updates: Partial<StrokeAnimationShaderBindings>): void {
+export function updateBindings(state: ShaderState, updates: Partial<ShaderBindings>): void {
   if (updates.globalParams !== undefined) {
     state.bindings.globalParams = updates.globalParams!;
     state.shader.setUniformBuffer('globalParams', updates.globalParams!.buffer);
@@ -321,5 +321,5 @@ export function updateStrokeAnimationShaderBindings(state: StrokeAnimationShader
   }
 }
 
-export const createUniformBuffer = createStrokeAnimationGlobalParamsUniformBuffer;
-export const updateUniformBuffer = updateStrokeAnimationGlobalParamsUniformBuffer;
+export const createUniformBuffer = createUniformBuffer_globalParams;
+export const updateUniformBuffer = updateUniformBuffer_globalParams;

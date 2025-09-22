@@ -420,10 +420,10 @@ function generateShaderFactory(
     updateLines.push('}');
   });
 
-  const bindingInterfaceName = `${shaderPrefix}ShaderBindings`;
-  const stateInterfaceName = `${shaderPrefix}ShaderState`;
-  const createFunctionName = `create${shaderPrefix}Shader`;
-  const updateFunctionName = `update${shaderPrefix}ShaderBindings`;
+  const bindingInterfaceName = 'ShaderBindings';
+  const stateInterfaceName = 'ShaderState';
+  const createFunctionName = 'createShader';
+  const updateFunctionName = 'updateBindings';
 
   return [
     'const bindingLayout = {',
@@ -484,14 +484,14 @@ export async function generateShaderTypes(
   const structBlocks = structDescriptors.map((descriptor) => generateStructBlock(shaderPrefix, descriptor));
 
   const uniformDescriptors: UniformDescriptor[] = reflect.uniforms.map((variable) => {
-    const safeName = toPascalCase(variable.name);
+    const pascalName = toPascalCase(variable.name);
     return {
       variable,
-      interfaceName: `${shaderPrefix}${safeName}Uniforms`,
-      stateName: `${shaderPrefix}${safeName}UniformState`,
-      layoutName: `${shaderPrefix}${safeName}UniformLayout`,
-      createFn: `create${shaderPrefix}${safeName}UniformBuffer`,
-      updateFn: `update${shaderPrefix}${safeName}UniformBuffer`,
+      interfaceName: `${pascalName}Uniforms`,
+      stateName: `${pascalName}UniformState`,
+      layoutName: `uniformLayout_${variable.name}`,
+      createFn: `createUniformBuffer_${variable.name}`,
+      updateFn: `updateUniformBuffer_${variable.name}`,
       aliasCreate: undefined,
       aliasUpdate: undefined,
     };
@@ -508,16 +508,16 @@ export async function generateShaderTypes(
   });
 
   const storageDescriptors: StorageDescriptor[] = reflect.storage.map((variable) => {
-    const name = toPascalCase(variable.name);
+    const pascalName = toPascalCase(variable.name);
     const struct = structDescriptors.find((entry) => entry.struct.name === variable.format?.getTypeName());
     const valueType = struct ? struct.interfaceName : 'number[]';
     return {
       variable,
-      stateName: `${shaderPrefix}${name}StorageState`,
-      layoutName: struct ? struct.layoutName : `${shaderPrefix}${name}StorageLayout`,
-      createFn: `create${shaderPrefix}${name}StorageBuffer`,
-      updateFn: `update${shaderPrefix}${name}StorageBuffer`,
-      writeFn: `write${shaderPrefix}${name}StorageValue`,
+      stateName: `${pascalName}StorageState`,
+      layoutName: struct ? struct.layoutName : `storageLayout_${variable.name}`,
+      createFn: `createStorageBuffer_${variable.name}`,
+      updateFn: `updateStorageBuffer_${variable.name}`,
+      writeFn: `writeStorageValue_${variable.name}`,
       valueType,
     };
   });
