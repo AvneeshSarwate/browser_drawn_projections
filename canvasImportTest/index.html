@@ -10,7 +10,11 @@
   <p class="instructions">
     This page demonstrates how to use the <code>&lt;handwriting-canvas&gt;</code> custom element alongside a
     simple inline p5.js sketch. Draw inside the canvas component and the p5 preview will mirror the baked
-    stroke and polygon data supplied by the component's state updates.
+    stroke and polygon data supplied by the component's state updates (along with light animation driven py p5.js). 
+    The canvas component defines a callback 
+    function that will be called whenever the component's state updates, and provides the shape data from the canvas.
+    You can also add metadata to individual shapes to annotate them however you want and use that data downstream.
+    The example sketch shows how you can look for 'color' metadata on polygons to control their color in the p5.js drawing. 
   </p>
 
   <div class="layout">
