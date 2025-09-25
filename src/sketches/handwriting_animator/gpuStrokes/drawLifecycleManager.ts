@@ -3,7 +3,7 @@ import { PriorityQueue } from './priorityQueue';
 import type { LaunchConfig, AnimationControlMode } from './strokeTypes';
 import { DRAWING_CONSTANTS } from './constants';
 import type { StrokeTextureManager } from './strokeTextureManager';
-import * as strokeAnimation from './strokeAnimation.wgsl.generated';
+import * as strokeAnimation from './strokeAnimation.compute.wgsl.generated';
 
 export class DrawLifecycleManager {
   private priorityQueue: PriorityQueue<LaunchConfig>;

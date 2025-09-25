@@ -2,7 +2,7 @@
 
 import * as BABYLON from 'babylonjs';
 
-import shaderSource from './strokeAnimation.wgsl?raw';
+import shaderSource from './strokeAnimation.compute.wgsl?raw';
 
 export interface StrokeAnimationLaunchConfig {
   strokeAIndex: number;

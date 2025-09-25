@@ -20,7 +20,7 @@ async function findWgslFiles(root: string): Promise<string[]> {
       const absolute = path.join(dir, entry.name);
       if (entry.isDirectory()) {
         await walk(absolute);
-      } else if (entry.isFile() && absolute.endsWith('.wgsl')) {
+      } else if (entry.isFile() && absolute.endsWith('.compute.wgsl')) {
         results.push(absolute);
       }
     }
@@ -58,7 +58,7 @@ export function wgslTypesPlugin(options: WgslPluginOptions = {}): PluginOption {
     configureServer(server) {
       const watcher = server.watcher;
       const handle = (filePath: string) => {
-        if (!filePath.endsWith('.wgsl')) return;
+        if (!filePath.endsWith('.compute.wgsl')) return;
         processFile(filePath).then(() => {
           const generatedPath = `${filePath}${outputExtension ?? '.generated.ts'}`;
           server.ws.send({ type: 'full-reload', path: `/${path.relative(projectRoot, generatedPath)}` });

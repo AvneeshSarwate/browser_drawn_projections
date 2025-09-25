@@ -657,7 +657,9 @@ export async function generateShaderTypes(
   const shaderCode = await fs.readFile(absoluteSource, 'utf8');
   const reflect = new WgslReflect(shaderCode);
 
-  const shaderPrefix = toPascalCase(path.basename(sourcePath, path.extname(sourcePath)));
+  const baseName = path.basename(sourcePath, path.extname(sourcePath));
+  const sanitizedBaseName = baseName.replace(/\.compute$/i, '');
+  const shaderPrefix = toPascalCase(sanitizedBaseName);
   const outputPath = path.join(path.dirname(absoluteSource), `${path.basename(sourcePath)}${outputExtension}`);
   const relativeOutput = path.relative(projectRoot, outputPath);
 
@@ -758,7 +760,7 @@ export async function generateShaderTypes(
   ];
 
   const shaderFactory = generateShaderFactory(
-    path.basename(sourcePath, path.extname(sourcePath)),
+    sanitizedBaseName,
     shaderPrefix,
     'shaderSource',
     shaderBindings,

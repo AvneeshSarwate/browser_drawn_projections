@@ -8,12 +8,14 @@ import ts from 'typescript';
 import { vitePluginTypescriptTransform } from 'vite-plugin-typescript-transform';
 import vueDevTools from 'vite-plugin-vue-devtools'
 import { wgslTypesPlugin } from './node_src/wgsl/vitePlugin'
+import { wgslFragmentPlugin } from './node_src/wgsl/viteFragmentPlugin'
 
 // https://vitejs.dev/config/
 export default defineConfig({
   base: "/",
   plugins: [
     wgslTypesPlugin(),
+    wgslFragmentPlugin(),
     vue(), 
     // react(),
     // vueJsx()

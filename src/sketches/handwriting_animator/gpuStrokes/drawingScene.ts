@@ -8,7 +8,7 @@ import { DRAWING_CONSTANTS } from './constants';
 import Stats from '@/rendering/stats';
 import type { LaunchConfig } from './strokeTypes';
 import { getStrokeAnchor, getGroupAnchor, type AnchorKind } from './coordinateUtils';
-import * as strokeAnimation from './strokeAnimation.wgsl.generated';
+import * as strokeAnimation from './strokeAnimation.compute.wgsl.generated';
 
 export class DrawingScene {
   private engine!: BABYLON.WebGPUEngine;
