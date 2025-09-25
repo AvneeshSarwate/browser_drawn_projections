@@ -30,6 +30,11 @@ interface UniformField {
   wgslType: string;
 }
 
+interface TextureParam {
+  textureName: string;
+  samplerName: string;
+}
+
 interface UniformTypeMetadata {
   tsType: string;
   setter: string;
@@ -198,8 +203,7 @@ function buildFragmentSource(
   functionName: string,
   uvArgName: string,
   uniformArgName: string | null,
-  textureArgName: string,
-  samplerArgName: string,
+  textureParams: TextureParam[],
   varyingName: string,
 ): string {
   const lines: string[] = [];
@@ -227,8 +231,10 @@ function buildFragmentSource(
   if (uniformStruct) {
     args.push(`${uniformArgName}_value`);
   }
-  args.push(textureArgName);
-  args.push(samplerArgName);
+  textureParams.forEach((param) => {
+    args.push(param.textureName);
+    args.push(param.samplerName);
+  });
   lines.push(`  let color = ${functionName}(${args.join(', ')});`);
   lines.push('  fragmentOutputs.color = color;');
   lines.push('#define CUSTOM_FRAGMENT_MAIN_END');
@@ -265,36 +271,48 @@ export async function generateFragmentShaderArtifacts(
   }
 
   const args = targetFunction.arguments;
-  if (args.length < 3 || args.length > 4) {
-    throw new Error('Fragment function must have 3 or 4 parameters: (uv, uniforms?, texture, sampler).');
+  if (args.length < 3) {
+    throw new Error('Fragment function must include uv followed by at least one texture/sampler pair.');
   }
 
   const uvArg = args[0];
   validateUvArgument(uvArg);
 
-  const textureArg = args[args.length - 2];
-  validateTextureArgument(textureArg);
-
-  const samplerArg = args[args.length - 1];
-  validateSamplerArgument(samplerArg);
-  const expectedSamplerName = `${textureArg.name}Sampler`;
-  if (samplerArg.name !== expectedSamplerName) {
-    throw new Error(`Sampler parameter must be named ${expectedSamplerName} to match the texture parameter ${textureArg.name}.`);
-  }
-
   let uniformStruct: StructInfo | null = null;
   let uniformFields: UniformField[] = [];
   let uniformArgName: string | null = null;
-  if (args.length === 4) {
-    const uniformsArg = args[1];
-    const structName = uniformsArg.type.getTypeName();
-    const structInfo = reflect.structs.find((entry) => entry.name === structName);
-    if (!structInfo) {
-      throw new Error(`Uniforms argument references struct ${structName}, but it was not found.`);
+  let resourceStartIndex = 1;
+
+  if (args.length >= 4) {
+    const potentialUniform = args[1];
+    const structInfo = reflect.structs.find((entry) => entry.name === potentialUniform.type.getTypeName());
+    if (structInfo) {
+      uniformStruct = structInfo;
+      uniformArgName = potentialUniform.name;
+      uniformFields = collectUniformFields(structInfo, uniformArgName);
+      resourceStartIndex = 2;
     }
-    uniformStruct = structInfo;
-    uniformArgName = uniformsArg.name;
-    uniformFields = collectUniformFields(structInfo, uniformArgName);
+  }
+
+  const resourceArgsCount = args.length - resourceStartIndex;
+  if (resourceArgsCount <= 0 || resourceArgsCount % 2 !== 0) {
+    throw new Error('Fragment function must end with pairs of (texture_2d<f32>, sampler).');
+  }
+
+  const textureParams: TextureParam[] = [];
+  for (let i = resourceStartIndex; i < args.length; i += 2) {
+    const textureArg = args[i];
+    const samplerArg = args[i + 1];
+    if (!samplerArg) {
+      throw new Error('Texture parameter must be followed by a sampler parameter.');
+    }
+    validateTextureArgument(textureArg);
+    validateSamplerArgument(samplerArg);
+    const expectedSamplerName = `${textureArg.name}Sampler`;
+    if (samplerArg.name !== expectedSamplerName) {
+      throw new Error(`Sampler parameter must be named ${expectedSamplerName} to match the texture parameter ${textureArg.name}.`);
+    }
+    textureParams.push({ textureName: textureArg.name, samplerName: samplerArg.name });
   }
 
   const shaderBaseName = path.basename(sourcePath, RAW_SUFFIX);
@@ -323,8 +341,10 @@ export async function generateFragmentShaderArtifacts(
   if (uniformDeclarations.length > 0) {
     commonDeclarations.push(...uniformDeclarations);
   }
-  commonDeclarations.push(`var ${textureArg.name}: texture_2d<f32>;`);
-  commonDeclarations.push(`var ${samplerArg.name}: sampler;`);
+  textureParams.forEach((param) => {
+    commonDeclarations.push(`var ${param.textureName}: texture_2d<f32>;`);
+    commonDeclarations.push(`var ${param.samplerName}: sampler;`);
+  });
 
   const vertexSource = buildVertexSource([...commonDeclarations], varyingName);
   const fragmentSource = buildFragmentSource(
@@ -335,8 +355,7 @@ export async function generateFragmentShaderArtifacts(
     targetFunction.name,
     uvArg.name,
     uniformArgName,
-    textureArg.name,
-    samplerArg.name,
+    textureParams,
     varyingName,
   );
 
@@ -377,11 +396,15 @@ export async function generateFragmentShaderArtifacts(
 
   const helperBlocks = Array.from(helperNames).map((name) => HELPER_SNIPPETS[name]);
 
-  const uniformsListLiteral = uniformFields.map((field) => `'${field.bindingName}'`).join(', ');
+  const uniformsArrayLiteral = uniformFields.length
+    ? `[${uniformFields.map((field) => `'${field.bindingName}'`).join(', ')}]`
+    : '[]';
 
-  const textureName = textureArg.name;
-  const samplerName = samplerArg.name;
-  const samplerObjectsLiteral = `'${samplerName}'`;
+  const textureNamesArrayLiteral = `[${textureParams.map((param) => `'${param.textureName}'`).join(', ')}]`;
+  const samplerObjectsArrayLiteral = `[${textureParams.map((param) => `'${param.samplerName}'`).join(', ')}]`;
+  const samplerLookupLiteral = `{ ${textureParams
+    .map((param) => `'${param.textureName}': '${param.samplerName}'`)
+    .join(', ')} } as const`;
 
   const materialHandlesName = `${shaderPrefix}MaterialHandles`;
   const materialOptionsName = `${shaderPrefix}MaterialOptions`;
@@ -409,10 +432,12 @@ export async function generateFragmentShaderArtifacts(
     tsLines.push(`export function set${uniformInterfaceName}(_material: BABYLON.ShaderMaterial, _uniforms: Partial<${uniformInterfaceName}>): void {}`);
     tsLines.push('');
   }
+  const textureNameUnion = textureParams.map((param) => `'${param.textureName}'`).join(' | ');
+  tsLines.push(`export type ${shaderPrefix}TextureName = ${textureNameUnion};`);
   tsLines.push(`export interface ${materialHandlesName} {`);
   tsLines.push('  material: BABYLON.ShaderMaterial;');
-  tsLines.push(`  setTexture(texture: BABYLON.BaseTexture): void;`);
-  tsLines.push(`  setTextureSampler(sampler: BABYLON.TextureSampler): void;`);
+  tsLines.push(`  setTexture(name: ${shaderPrefix}TextureName, texture: BABYLON.BaseTexture): void;`);
+  tsLines.push(`  setTextureSampler(name: ${shaderPrefix}TextureName, sampler: BABYLON.TextureSampler): void;`);
   tsLines.push(`  setUniforms(uniforms: Partial<${uniformInterfaceName}>): void;`);
   tsLines.push('}');
   tsLines.push('');
@@ -427,16 +452,18 @@ export async function generateFragmentShaderArtifacts(
   tsLines.push(`    fragmentSource: ${shaderPrefix}FragmentSource,`);
   tsLines.push('  }, {');
   tsLines.push(`    attributes: ['position', 'uv'],`);
-  tsLines.push(`    uniforms: [${uniformsListLiteral}],`);
-  tsLines.push(`    samplers: ['${textureName}'],`);
-  tsLines.push(`    samplerObjects: [${samplerObjectsLiteral}],`);
+  tsLines.push(`    uniforms: ${uniformsArrayLiteral},`);
+  tsLines.push(`    samplers: ${textureNamesArrayLiteral},`);
+  tsLines.push(`    samplerObjects: ${samplerObjectsArrayLiteral},`);
   tsLines.push('    shaderLanguage: BABYLON.ShaderLanguage.WGSL,');
   tsLines.push('  });');
   tsLines.push('');
+  tsLines.push(`  const samplerLookup = ${samplerLookupLiteral};`);
+  tsLines.push('');
   tsLines.push(`  const handles: ${materialHandlesName} = {`);
   tsLines.push('    material,');
-  tsLines.push(`    setTexture: (texture) => material.setTexture('${textureName}', texture),`);
-  tsLines.push(`    setTextureSampler: (sampler) => material.setTextureSampler('${samplerName}', sampler),`);
+  tsLines.push('    setTexture: (name, texture) => material.setTexture(name, texture),');
+  tsLines.push('    setTextureSampler: (name, sampler) => material.setTextureSampler(samplerLookup[name], sampler),');
   if (setUniformsFunctionName) {
     tsLines.push(`    setUniforms: (values) => ${setUniformsFunctionName}(material, values),`);
   } else {
@@ -452,13 +479,14 @@ export async function generateFragmentShaderArtifacts(
   effectLines.push(`export class ${effectClassName} extends CustomShaderEffect<${uniformInterfaceName}> {`);
   effectLines.push(`  effectName = '${shaderPrefix}'`);
   effectLines.push('');
-  effectLines.push('  constructor(scene: BABYLON.Scene, inputs: ShaderInputs, width = 1280, height = 720) {');
-  effectLines.push('    super(scene, inputs, {');
+  effectLines.push("  constructor(engine: BABYLON.WebGPUEngine, inputs: ShaderInputs, width = 1280, height = 720, sampleMode: 'nearest' | 'linear' = 'linear') {");
+  effectLines.push('    super(engine, inputs, {');
   effectLines.push(`      factory: (sceneRef, options) => create${shaderPrefix}Material(sceneRef, options),`);
-  effectLines.push(`      textureInputKey: '${textureName}',`);
+  effectLines.push(`      textureInputKeys: ${textureNamesArrayLiteral},`);
   effectLines.push('      width,');
   effectLines.push('      height,');
   effectLines.push(`      materialName: '${shaderPrefix}Material',`);
+  effectLines.push('      sampleMode,');
   effectLines.push('    })');
   effectLines.push('  }');
 

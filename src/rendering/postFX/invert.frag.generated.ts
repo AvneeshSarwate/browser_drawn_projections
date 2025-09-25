@@ -66,10 +66,11 @@ export function setInvertUniforms(material: BABYLON.ShaderMaterial, uniforms: Pa
   }
 }
 
+export type InvertTextureName = 'src';
 export interface InvertMaterialHandles {
   material: BABYLON.ShaderMaterial;
-  setTexture(texture: BABYLON.BaseTexture): void;
-  setTextureSampler(sampler: BABYLON.TextureSampler): void;
+  setTexture(name: InvertTextureName, texture: BABYLON.BaseTexture): void;
+  setTextureSampler(name: InvertTextureName, sampler: BABYLON.TextureSampler): void;
   setUniforms(uniforms: Partial<InvertUniforms>): void;
 }
 
@@ -90,10 +91,12 @@ export function createInvertMaterial(scene: BABYLON.Scene, options: InvertMateri
     shaderLanguage: BABYLON.ShaderLanguage.WGSL,
   });
 
+  const samplerLookup = { 'src': 'srcSampler' } as const;
+
   const handles: InvertMaterialHandles = {
     material,
-    setTexture: (texture) => material.setTexture('src', texture),
-    setTextureSampler: (sampler) => material.setTextureSampler('srcSampler', sampler),
+    setTexture: (name, texture) => material.setTexture(name, texture),
+    setTextureSampler: (name, sampler) => material.setTextureSampler(samplerLookup[name], sampler),
     setUniforms: (values) => setInvertUniforms(material, values),
   };
 
@@ -103,13 +106,14 @@ export function createInvertMaterial(scene: BABYLON.Scene, options: InvertMateri
 export class InvertEffect extends CustomShaderEffect<InvertUniforms> {
   effectName = 'Invert'
 
-  constructor(scene: BABYLON.Scene, inputs: ShaderInputs, width = 1280, height = 720) {
-    super(scene, inputs, {
+  constructor(engine: BABYLON.WebGPUEngine, inputs: ShaderInputs, width = 1280, height = 720, sampleMode: 'nearest' | 'linear' = 'linear') {
+    super(engine, inputs, {
       factory: (sceneRef, options) => createInvertMaterial(sceneRef, options),
-      textureInputKey: 'src',
+      textureInputKeys: ['src'],
       width,
       height,
       materialName: 'InvertMaterial',
+      sampleMode,
     })
   }
 
