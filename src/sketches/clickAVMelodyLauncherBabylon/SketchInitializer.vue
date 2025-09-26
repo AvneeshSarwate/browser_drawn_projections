@@ -46,12 +46,6 @@ onMounted(async () => {
   const renderCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
   const engine = new BABYLON.WebGPUEngine(renderCanvas, { antialias: false })
   await engine.initAsync()
-  // const canvas = engine.getInputElement()
-  // if (canvas) {
-  //   const scene = new BABYLON.Scene(engine)
-  //   scene.detachControl(canvas)
-  //   scene.dispose()
-  // }
   engine.resize()
   resizeListener = () => engine.resize()
   window.addEventListener('resize', resizeListener)

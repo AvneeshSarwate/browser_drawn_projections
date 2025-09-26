@@ -177,6 +177,16 @@ export class CustomShaderEffect<U extends object> extends ShaderEffect {
     this.scene = new BABYLON.Scene(engine)
     this.scene.autoClear = false
     this.scene.autoClearDepthAndStencil = false
+    
+    // Disable Babylon's default preventDefault behavior to allow mouse events
+    this.scene.preventDefaultOnPointerDown = false
+    this.scene.preventDefaultOnPointerUp = false
+    this.scene.doNotHandleCursors = true
+    
+    const inputElement = engine.getInputElement()
+    if (inputElement) {
+      this.scene.detachControl()
+    }
     this.inputs = inputs
     this.width = width
     this.height = height
@@ -341,8 +351,6 @@ export class CustomShaderEffect<U extends object> extends ShaderEffect {
 }
 
 export class CanvasPaint extends CustomShaderEffect<Record<string, never>> {
-  private readonly canvas: HTMLCanvasElement | null
-
   effectName = 'CanvasPaint'
 
   constructor(engine: BABYLON.WebGPUEngine, inputs: { src: ShaderSource }, width = 1280, height = 720, sampleMode: 'nearest' | 'linear' = 'linear') {
@@ -363,18 +371,11 @@ export class CanvasPaint extends CustomShaderEffect<Record<string, never>> {
       materialName: 'CanvasPaintMaterial',
       sampleMode,
     })
-
-    const inputElement = engine.getInputElement()
-    this.canvas = inputElement instanceof HTMLCanvasElement ? inputElement : null
-    if (this.canvas) {
-      this.scene.detachControl()
-    }
   }
-
-  setUniforms(_uniforms: Record<string, never>): void {}
 
   override render(engine: BABYLON.Engine): void {
     this._applySources()
+    this.updateUniforms()
     engine.restoreDefaultFramebuffer()
     this.quad.isVisible = true
     this.scene.render(false)

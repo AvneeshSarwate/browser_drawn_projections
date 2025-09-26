@@ -72,9 +72,24 @@ export function touchcancelEvent(listener: (ev: TouchEvent) => void, target: HTM
   target.addEventListener("touchcancel", listener)
 }
 
+export function pointerdownEvent(listener: (ev: PointerEvent) => void, target: HTMLElement = document.body) {
+  eventListeners.push({ type: "pointerdown", cb: listener, target })
+  target.addEventListener("pointerdown", listener)
+}
+
+export function pointerupEvent(listener: (ev: PointerEvent) => void, target: HTMLElement = document.body) {
+  eventListeners.push({ type: "pointerup", cb: listener, target })
+  target.addEventListener("pointerup", listener)
+}
+
+export function pointermoveEvent(listener: (ev: PointerEvent) => void, target: HTMLElement = document.body) {
+  eventListeners.push({ type: "pointermove", cb: listener, target })
+  target.addEventListener("pointermove", listener)
+}
+
 //todo api - need a way to normalize coordinates between input coords and targets
 
-export function targetNormalizedCoords(ev: MouseEvent, target: HTMLElement = document.body) {
+export function targetNormalizedCoords(ev: MouseEvent | PointerEvent, target: HTMLElement = document.body) {
   const rect = target.getBoundingClientRect()
   return {
     x: (ev.clientX - rect.left) / rect.width,
@@ -82,7 +97,7 @@ export function targetNormalizedCoords(ev: MouseEvent, target: HTMLElement = doc
   }
 }
 
-export function targetToP5Coords(ev: MouseEvent, p: p5, target: HTMLElement = document.body) {
+export function targetToP5Coords(ev: MouseEvent | PointerEvent, p: p5, target: HTMLElement = document.body) {
   const norm = targetNormalizedCoords(ev, target) //todo api - should this just use the target from the event?
   return {
     x: norm.x * p.width,
