@@ -31,7 +31,8 @@ var src2Sampler: sampler;
 fn layerBlend(uv: vec2f, src1: texture_2d<f32>, src1Sampler: sampler, src2: texture_2d<f32>, src2Sampler: sampler) -> vec4f {
   let color1 = textureSample(src1, src1Sampler, uv);
   let color2 = textureSample(src2, src2Sampler, uv);
-  let returnColor = select(color2, color1, color1.a > 0.01);
+  // Proper alpha composite of src2 over src1
+  let returnColor = color1 * (1.0 - color2.a) + color2;
   return returnColor;
 }
 

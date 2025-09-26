@@ -146,12 +146,11 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
       const width = p5i.width
       const height = p5i.height
 
-      const debug = true
+      const debug = false
 
       const p5Passthru = new PassthruEffect(engine, { src: p5Canvas }, width, height)
       let chainEnd: CustomShaderEffect<any> | null = null;
       if (debug) {
-        shaderGraphEndNode = p5Passthru
         chainEnd = p5Passthru
       } else {
         const feedback = new FeedbackNode(engine, p5Passthru, width, height)
@@ -164,8 +163,8 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
         feedback.setFeedbackSrc(layerOverlay)
       
         transform.setUniforms({ scale: [0.995, 0.995] })
-        vertBlur.setUniforms({ pixels: 2 })
-        horBlur.setUniforms({ pixels: 2 })
+        vertBlur.setUniforms({ pixels: 2, resolution: height })
+        horBlur.setUniforms({ pixels: 2, resolution: width })
       }
 
 
@@ -178,17 +177,6 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
       console.log('Expected threeCanvas id:', threeCanvas?.id)
       console.log('p5Canvas:', p5Canvas)
       console.log('shaderGraphEndNode:', shaderGraphEndNode)
-      
-      // Try using Babylon's render loop instead of p5's draw loop
-      console.log('Setting up Babylon render loop...')
-      // engine.runRenderLoop(() => {
-      //   try {
-      //     // CanvasPaint should render to default framebuffer (screen)
-      //     shaderGraphEndNode!.renderAll(engine as any)
-      //   } catch (e) {
-      //     console.error('Shader render error:', e)
-      //   }
-      // })
       
       // Keep the old approach as backup (but don't call it)
       appState.shaderDrawFunc = () => {
