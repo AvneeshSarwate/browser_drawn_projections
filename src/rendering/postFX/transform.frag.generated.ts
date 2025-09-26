@@ -160,19 +160,19 @@ export class TransformEffect extends CustomShaderEffect<TransformUniforms> {
     })
   }
 
-  setUniformValues(values: { rotate?: Dynamic<number>, anchor?: Dynamic<BABYLON.Vector2 | readonly [number, number]>, translate?: Dynamic<BABYLON.Vector2 | readonly [number, number]>, scale?: Dynamic<BABYLON.Vector2 | readonly [number, number]> }): void {
+  override setUniforms(uniforms: { rotate?: Dynamic<number>, anchor?: Dynamic<BABYLON.Vector2 | readonly [number, number]>, translate?: Dynamic<BABYLON.Vector2 | readonly [number, number]>, scale?: Dynamic<BABYLON.Vector2 | readonly [number, number]> }): void {
     const record: ShaderUniforms = {};
-    if (values.rotate !== undefined) {
-      record['uniforms_rotate'] = values.rotate;
+    if (uniforms.rotate !== undefined) {
+      record['rotate'] = uniforms.rotate;
     }
-    if (values.anchor !== undefined) {
-      record['uniforms_anchor'] = values.anchor;
+    if (uniforms.anchor !== undefined) {
+      record['anchor'] = uniforms.anchor;
     }
-    if (values.translate !== undefined) {
-      record['uniforms_translate'] = values.translate;
+    if (uniforms.translate !== undefined) {
+      record['translate'] = uniforms.translate;
     }
-    if (values.scale !== undefined) {
-      record['uniforms_scale'] = values.scale;
+    if (uniforms.scale !== undefined) {
+      record['scale'] = uniforms.scale;
     }
     super.setUniforms(record);
   }

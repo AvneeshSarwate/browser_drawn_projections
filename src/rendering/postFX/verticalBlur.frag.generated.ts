@@ -146,13 +146,13 @@ export class VerticalBlurEffect extends CustomShaderEffect<VerticalBlurUniforms>
     })
   }
 
-  setUniformValues(values: { pixels?: Dynamic<number>, resolution?: Dynamic<number> }): void {
+  override setUniforms(uniforms: { pixels?: Dynamic<number>, resolution?: Dynamic<number> }): void {
     const record: ShaderUniforms = {};
-    if (values.pixels !== undefined) {
-      record['uniforms_pixels'] = values.pixels;
+    if (uniforms.pixels !== undefined) {
+      record['pixels'] = uniforms.pixels;
     }
-    if (values.resolution !== undefined) {
-      record['uniforms_resolution'] = values.resolution;
+    if (uniforms.resolution !== undefined) {
+      record['resolution'] = uniforms.resolution;
     }
     super.setUniforms(record);
   }

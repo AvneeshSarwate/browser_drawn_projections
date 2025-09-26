@@ -155,19 +155,19 @@ export class MathOpEffect extends CustomShaderEffect<MathOpUniforms> {
     })
   }
 
-  setUniformValues(values: { preAdd?: Dynamic<number>, postAdd?: Dynamic<number>, mult?: Dynamic<number>, colorOnly?: Dynamic<boolean> }): void {
+  override setUniforms(uniforms: { preAdd?: Dynamic<number>, postAdd?: Dynamic<number>, mult?: Dynamic<number>, colorOnly?: Dynamic<boolean> }): void {
     const record: ShaderUniforms = {};
-    if (values.preAdd !== undefined) {
-      record['uniforms_preAdd'] = values.preAdd;
+    if (uniforms.preAdd !== undefined) {
+      record['preAdd'] = uniforms.preAdd;
     }
-    if (values.postAdd !== undefined) {
-      record['uniforms_postAdd'] = values.postAdd;
+    if (uniforms.postAdd !== undefined) {
+      record['postAdd'] = uniforms.postAdd;
     }
-    if (values.mult !== undefined) {
-      record['uniforms_mult'] = values.mult;
+    if (uniforms.mult !== undefined) {
+      record['mult'] = uniforms.mult;
     }
-    if (values.colorOnly !== undefined) {
-      record['uniforms_colorOnly'] = values.colorOnly;
+    if (uniforms.colorOnly !== undefined) {
+      record['colorOnly'] = uniforms.colorOnly;
     }
     super.setUniforms(record);
   }

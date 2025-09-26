@@ -523,11 +523,11 @@ export async function generateFragmentShaderArtifacts(
       })
       .join(', ');
     effectLines.push('');
-    effectLines.push(`  setUniformValues(values: { ${uniformParams} }): void {`);
+    effectLines.push(`  override setUniforms(uniforms: { ${uniformParams} }): void {`);
     effectLines.push('    const record: ShaderUniforms = {};');
     uniformFields.forEach((field) => {
-      effectLines.push(`    if (values.${field.name} !== undefined) {`);
-      effectLines.push(`      record['${field.bindingName}'] = values.${field.name};`);
+      effectLines.push(`    if (uniforms.${field.name} !== undefined) {`);
+      effectLines.push(`      record['${field.name}'] = uniforms.${field.name};`);
       effectLines.push('    }');
     });
     effectLines.push('    super.setUniforms(record);');

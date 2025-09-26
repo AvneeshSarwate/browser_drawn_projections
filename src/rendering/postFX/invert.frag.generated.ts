@@ -126,10 +126,10 @@ export class InvertEffect extends CustomShaderEffect<InvertUniforms> {
     })
   }
 
-  setUniformValues(values: { strength?: Dynamic<number> }): void {
+  override setUniforms(uniforms: { strength?: Dynamic<number> }): void {
     const record: ShaderUniforms = {};
-    if (values.strength !== undefined) {
-      record['uniforms_strength'] = values.strength;
+    if (uniforms.strength !== undefined) {
+      record['strength'] = uniforms.strength;
     }
     super.setUniforms(record);
   }

@@ -145,16 +145,16 @@ export class WobbleEffect extends CustomShaderEffect<WobbleUniforms> {
     })
   }
 
-  setUniformValues(values: { xStrength?: Dynamic<number>, yStrength?: Dynamic<number>, time?: Dynamic<number> }): void {
+  override setUniforms(uniforms: { xStrength?: Dynamic<number>, yStrength?: Dynamic<number>, time?: Dynamic<number> }): void {
     const record: ShaderUniforms = {};
-    if (values.xStrength !== undefined) {
-      record['uniforms_xStrength'] = values.xStrength;
+    if (uniforms.xStrength !== undefined) {
+      record['xStrength'] = uniforms.xStrength;
     }
-    if (values.yStrength !== undefined) {
-      record['uniforms_yStrength'] = values.yStrength;
+    if (uniforms.yStrength !== undefined) {
+      record['yStrength'] = uniforms.yStrength;
     }
-    if (values.time !== undefined) {
-      record['uniforms_time'] = values.time;
+    if (uniforms.time !== undefined) {
+      record['time'] = uniforms.time;
     }
     super.setUniforms(record);
   }
