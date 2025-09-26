@@ -1,19 +1,24 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
 import { appStateName, type ClickAVAppState } from './appState';
-import { inject, onMounted, onUnmounted } from 'vue';
-import { CanvasPaint, FeedbackNode, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
+import { inject, onMounted, onUnmounted, watch, type WatchStopHandle } from 'vue';
+import { CanvasPaint, FeedbackNode, PassthruEffect, type ShaderEffect } from '@/rendering/shaderFXBabylon';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords, targetNormalizedCoords } from '@/io/keyboardAndMouse';
 import p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri, EventChop, cos, sin } from '@/channels/channels';
 import { listToClip, clipToDeltas, note } from '@/music/clipPlayback';
 import { Scale } from '@/music/scale';
 import { sampler } from '@/music/synths';
-import { HorizontalBlur, LayerBlend, VerticalBlur, Transform } from '@/rendering/customFX';
+import * as BABYLON from 'babylonjs';
+import { VerticalBlurEffect } from '@/rendering/postFX/verticalBlur.frag.generated';
+import { HorizontalBlurEffect } from '@/rendering/postFX/horizontalBlur.frag.generated';
+import { LayerBlendEffect } from '@/rendering/postFX/layerBlend.frag.generated';
+import { TransformEffect } from '@/rendering/postFX/transform.frag.generated';
 
 const appState = inject<ClickAVAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
 let timeLoops: CancelablePromisePoxy<any>[] = []
+let engineWatcher: WatchStopHandle | undefined
 
 const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromisePoxy<any> => {
   const loop = launch(block)
@@ -26,8 +31,7 @@ const clearDrawFuncs = () => {
   appState.drawFuncMap.clear()
 }
 
-
-onMounted(() => {
+const setupSketch = (engine: BABYLON.WebGPUEngine) => {
   try {
 
     const p5i = appState.p5Instance!!
@@ -130,14 +134,17 @@ onMounted(() => {
 
       }, threeCanvas)
 
-      const p5Passthru = new Passthru({ src: p5Canvas })
-      const feedback = new FeedbackNode(p5Passthru)
-      const vertBlur = new VerticalBlur({ src: feedback })
-      const horBlur = new HorizontalBlur({ src: vertBlur })
-      const transform = new Transform({ src: horBlur })
-      const layerOverlay = new LayerBlend({ src1: p5Passthru, src2: transform })
+      const width = p5i.width
+      const height = p5i.height
+
+      const p5Passthru = new PassthruEffect(engine, { src: p5Canvas }, width, height)
+      const feedback = new FeedbackNode(engine, p5Passthru, width, height)
+      const vertBlur = new VerticalBlurEffect(engine, { src: feedback }, width, height)
+      const horBlur = new HorizontalBlurEffect(engine, { src: vertBlur }, width, height)
+      const transform = new TransformEffect(engine, { src: horBlur }, width, height)
+      const layerOverlay = new LayerBlendEffect(engine, { src1: p5Passthru, src2: transform }, width, height)
       feedback.setFeedbackSrc(layerOverlay)
-      const canvasPaint = new CanvasPaint({ src: layerOverlay })
+      const canvasPaint = new CanvasPaint(engine, { src: layerOverlay }, width, height)
       shaderGraphEndNode = canvasPaint
 
       transform.setUniforms({ scale: [0.995, 0.995] })
@@ -145,7 +152,7 @@ onMounted(() => {
       horBlur.setUniforms({ pixels: 2 })
 
 
-      appState.shaderDrawFunc = () => shaderGraphEndNode!!.renderAll(appState.threeRenderer!!)
+      appState.shaderDrawFunc = () => shaderGraphEndNode!!.renderAll(engine)
 
       singleKeydownEvent('u', (ev) => {
         const lastId = loopIdStack.pop()
@@ -173,17 +180,39 @@ onMounted(() => {
   } catch (e) {
     console.warn(e)
   }
+}
 
+onMounted(() => {
+  const engine = appState.engine
+  if (engine) {
+    setupSketch(engine)
+  } else {
+    engineWatcher = watch(
+      () => appState.engine,
+      (engineValue) => {
+        if (engineValue) {
+          engineWatcher?.()
+          engineWatcher = undefined
+          setupSketch(engineValue)
+        }
+      },
+    )
+  }
 })
 
 
 
 onUnmounted(() => {
+  engineWatcher?.()
+  engineWatcher = undefined
   clearDrawFuncs()
   console.log("disposing livecoded resources")
   shaderGraphEndNode?.disposeAll()
+  shaderGraphEndNode = undefined
   clearListeners()
   timeLoops.forEach(tl => tl.cancel())
+  timeLoops = []
+  appState.shaderDrawFunc = undefined
 })
 
 </script>

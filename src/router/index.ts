@@ -8,6 +8,7 @@ export const sketchNames = [
   'tonePianoSequencer',
   'three5Example',
   'clickAVMelodyLauncher',
+  'clickAVMelodyLauncherBabylon',
   'pianoRollMelodyLauncher',
   'pianoRollLivecoding',
   'multiPianoRollComposing',

@@ -1,5 +1,5 @@
 import p5 from 'p5'
-import * as THREE from 'three'
+import * as BABYLON from 'babylonjs'
 import { Entity, EntityList } from '@/stores/undoCommands'
 
 
@@ -111,7 +111,7 @@ stats.showPanel( 1 ); // 0: fps, 1: ms, 2: mb, 3+: custom
 export type ClickAVAppState = {
   circles: EntityList<PulseCircle>
   p5Instance: p5 | undefined
-  threeRenderer: THREE.WebGLRenderer | undefined
+  engine: BABYLON.WebGPUEngine | undefined
   codeStack: (() => void)[]
   codeStackIndex: number
   drawFunctions: ((p5: p5) => void)[]
@@ -126,7 +126,7 @@ export type ClickAVAppState = {
 export const appState: ClickAVAppState = {
   circles: new EntityList(PulseCircle),
   p5Instance: undefined,
-  threeRenderer: undefined,
+  engine: undefined,
   codeStack: [],
   codeStackIndex: 0,
   drawFunctions: [],

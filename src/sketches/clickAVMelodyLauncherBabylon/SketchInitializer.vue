@@ -2,7 +2,7 @@
 import { createP5Sketch } from './p5Sketch';
 import { appStateName, type ClickAVAppState } from './appState';
 import type p5 from 'p5';
-import * as THREE from 'three';
+import * as BABYLON from 'babylonjs';
 import { inject, onMounted, onUnmounted } from 'vue';
 
 
@@ -32,7 +32,9 @@ const neutralizeSketch = (instance: p5) => {
 }
 
 
-onMounted(() => {
+let resizeListener: ((this: Window, ev: UIEvent) => any) | undefined
+
+onMounted(async () => {
   //explanation - the closest you can get to removing a p5 instance without removing the underlying canvas
   if(appState.p5Instance) neutralizeSketch(appState.p5Instance)
 
@@ -41,13 +43,33 @@ onMounted(() => {
   p5Instance.disableFriendlyErrors = true //explanation - for performance
   appState.p5Instance = p5Instance
 
-  appState.threeRenderer = new THREE.WebGLRenderer({canvas: document.getElementById('threeCanvas') as HTMLCanvasElement})
+  const renderCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
+  const engine = new BABYLON.WebGPUEngine(renderCanvas, { antialias: false })
+  await engine.initAsync()
+  // const canvas = engine.getInputElement()
+  // if (canvas) {
+  //   const scene = new BABYLON.Scene(engine)
+  //   scene.detachControl(canvas)
+  //   scene.dispose()
+  // }
+  engine.resize()
+  resizeListener = () => engine.resize()
+  window.addEventListener('resize', resizeListener)
+  appState.engine = engine
 })
 
 onUnmounted(() => {
   if (appState.p5Instance) {
     neutralizeSketch(appState.p5Instance)
     document.getElementsByClassName('frameRateStats')[0]?.remove() 
+  }
+  if (resizeListener) {
+    window.removeEventListener('resize', resizeListener)
+    resizeListener = undefined
+  }
+  if (appState.engine) {
+    appState.engine.dispose()
+    appState.engine = undefined
   }
 })
 
