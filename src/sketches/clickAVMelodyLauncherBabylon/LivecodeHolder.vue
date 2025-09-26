@@ -172,7 +172,28 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
 
       const canvasPaint = new CanvasPaint(engine, { src: chainEnd }, width, height)
       shaderGraphEndNode = canvasPaint
-      appState.shaderDrawFunc = () => shaderGraphEndNode!!.renderAll(engine)
+      
+      // Debug: Check engine and canvas setup
+      console.log('Engine canvas:', engine.getRenderingCanvas()?.id)
+      console.log('Expected threeCanvas id:', threeCanvas?.id)
+      console.log('p5Canvas:', p5Canvas)
+      console.log('shaderGraphEndNode:', shaderGraphEndNode)
+      
+      // Try using Babylon's render loop instead of p5's draw loop
+      console.log('Setting up Babylon render loop...')
+      engine.runRenderLoop(() => {
+        try {
+          // CanvasPaint should render to default framebuffer (screen)
+          canvasPaint.renderAll(engine as any)
+        } catch (e) {
+          console.error('Shader render error:', e)
+        }
+      })
+      
+      // Keep the old approach as backup (but don't call it)
+      appState.shaderDrawFunc = () => {
+        console.log('shaderDrawFunc called (backup)')
+      }
 
       singleKeydownEvent('u', (ev) => {
         const lastId = loopIdStack.pop()
