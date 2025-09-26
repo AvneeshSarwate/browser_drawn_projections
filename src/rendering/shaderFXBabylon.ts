@@ -1,4 +1,5 @@
 import * as BABYLON from 'babylonjs'
+import { createPassthruMaterial } from './postFX/passthru.frag.generated'
 
 export type ShaderSource =
   | BABYLON.BaseTexture
@@ -288,6 +289,30 @@ export class CustomShaderEffect<U extends object> extends ShaderEffect {
       this.handles.setTexture(key, texture)
       this.handles.setTextureSampler(key, this.sampler ?? this.defaultSampler)
     }
+  }
+}
+
+export class CanvasPaint extends CustomShaderEffect<Record<string, never>> {
+  effectName = 'CanvasPaint'
+  constructor(engine: BABYLON.WebGPUEngine, inputs: { src: ShaderSource }, width = 1280, height = 720, sampleMode: 'nearest' | 'linear' = 'linear') {
+    super(engine, inputs, {
+      factory: (sceneRef, options) => createPassthruMaterial(sceneRef, options),
+      textureInputKeys: ['src'],
+      width,
+      height,
+      materialName: 'CanvasPaintMaterial',
+      sampleMode,
+    })
+  }
+
+  setUniforms(_uniforms: Record<string, never>): void {}
+
+  override render(engine: BABYLON.Engine): void {
+    this._applySources()
+    engine.restoreDefaultFramebuffer()
+    this.quad.isVisible = true
+    this.scene.render(false)
+    this.quad.isVisible = false
   }
 }
 
