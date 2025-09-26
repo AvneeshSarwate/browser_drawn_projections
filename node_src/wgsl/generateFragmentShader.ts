@@ -187,8 +187,8 @@ function buildVertexSource(commonDeclarations: string[], varyingName: string): s
   lines.push('@vertex');
   lines.push('fn main(input : VertexInputs) -> FragmentInputs {');
   lines.push('#define CUSTOM_VERTEX_MAIN_BEGIN');
-  lines.push('  vertexOutputs.position = vec4f(input.position, 1.0);');
-  lines.push(`  vertexOutputs.${varyingName} = input.uv;`);
+  lines.push('  vertexOutputs.position = vec4<f32>(vertexInputs.position, 1.0);');
+  lines.push(`  vertexOutputs.${varyingName} = vertexInputs.uv;`);
   lines.push('#define CUSTOM_VERTEX_MAIN_END');
   lines.push('}');
   lines.push('');
@@ -226,7 +226,7 @@ function buildFragmentSource(
   if (uniformStruct) {
     lines.push(`  let ${uniformArgName}_value = load_${uniformStruct.name}();`);
   }
-  lines.push(`  let ${uvArgName}_local = input.${varyingName};`);
+  lines.push(`  let ${uvArgName}_local = fragmentInputs.${varyingName};`);
   const args: string[] = [`${uvArgName}_local`];
   if (uniformStruct) {
     args.push(`${uniformArgName}_value`);
@@ -337,19 +337,37 @@ export async function generateFragmentShaderArtifacts(
   const uniformDeclarations = uniformFields.map((field) => `uniform ${field.bindingName}: ${field.wgslType};`);
 
   const varyingName = 'vUV';
-  const commonDeclarations: string[] = [`varying ${varyingName}: vec2f;`];
+  
+  // Vertex shader declarations (includes attributes)
+  const vertexDeclarations: string[] = [
+    'attribute position: vec3<f32>;',
+    'attribute uv: vec2<f32>;',
+    `varying ${varyingName}: vec2<f32>;`
+  ];
   if (uniformDeclarations.length > 0) {
-    commonDeclarations.push(...uniformDeclarations);
+    vertexDeclarations.push(...uniformDeclarations);
   }
   textureParams.forEach((param) => {
-    commonDeclarations.push(`var ${param.textureName}: texture_2d<f32>;`);
-    commonDeclarations.push(`var ${param.samplerName}: sampler;`);
+    vertexDeclarations.push(`var ${param.textureName}: texture_2d<f32>;`);
+    vertexDeclarations.push(`var ${param.samplerName}: sampler;`);
   });
 
-  const vertexSource = buildVertexSource([...commonDeclarations], varyingName);
+  // Fragment shader declarations (no attributes, only varyings and resources)
+  const fragmentDeclarations: string[] = [
+    `varying ${varyingName}: vec2<f32>;`
+  ];
+  if (uniformDeclarations.length > 0) {
+    fragmentDeclarations.push(...uniformDeclarations);
+  }
+  textureParams.forEach((param) => {
+    fragmentDeclarations.push(`var ${param.textureName}: texture_2d<f32>;`);
+    fragmentDeclarations.push(`var ${param.samplerName}: sampler;`);
+  });
+
+  const vertexSource = buildVertexSource(vertexDeclarations, varyingName);
   const fragmentSource = buildFragmentSource(
     shaderCode,
-    [...commonDeclarations],
+    fragmentDeclarations,
     uniformStruct,
     uniformLoaderFn,
     targetFunction.name,
@@ -447,9 +465,16 @@ export async function generateFragmentShaderArtifacts(
   tsLines.push('');
   tsLines.push(`export function create${shaderPrefix}Material(scene: BABYLON.Scene, options: ${materialOptionsName} = {}): ${materialHandlesName} {`);
   tsLines.push(`  const name = options.name ?? '${shaderPrefix}Material';`);
+  tsLines.push('  // Register shaders in the WGSL store to enable preprocessor');
+  tsLines.push(`  const vertexShaderName = \`\${name}VertexShader\`;`);
+  tsLines.push(`  const fragmentShaderName = \`\${name}FragmentShader\`;`);
+  tsLines.push('  ');
+  tsLines.push(`  BABYLON.ShaderStore.ShadersStoreWGSL[vertexShaderName] = ${shaderPrefix}VertexSource;`);
+  tsLines.push(`  BABYLON.ShaderStore.ShadersStoreWGSL[fragmentShaderName] = ${shaderPrefix}FragmentSource;`);
+  tsLines.push('  ');
   tsLines.push('  const material = new BABYLON.ShaderMaterial(name, scene, {');
-  tsLines.push(`    vertexSource: ${shaderPrefix}VertexSource,`);
-  tsLines.push(`    fragmentSource: ${shaderPrefix}FragmentSource,`);
+  tsLines.push(`    vertex: name,`);
+  tsLines.push(`    fragment: name,`);
   tsLines.push('  }, {');
   tsLines.push(`    attributes: ['position', 'uv'],`);
   tsLines.push(`    uniforms: ${uniformsArrayLiteral},`);
