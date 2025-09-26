@@ -350,14 +350,14 @@ export class CustomShaderEffect<U extends object> extends ShaderEffect {
         const imageSource = resolved as HTMLCanvasElement | OffscreenCanvas
         
         // Debug: Log canvas texture update
-        console.log('Updating canvas texture:', {
-          key,
-          width,
-          height,
-          canvasId: (imageSource as HTMLCanvasElement).id,
-          canvasWidth: imageSource.width,
-          canvasHeight: imageSource.height
-        })
+        // console.log('Updating canvas texture:', {
+        //   key,
+        //   width,
+        //   height,
+        //   canvasId: (imageSource as HTMLCanvasElement).id,
+        //   canvasWidth: imageSource.width,
+        //   canvasHeight: imageSource.height
+        // })
         
         this.engine.updateDynamicTexture(entry.internal, imageSource, false, false, BABYLON.Constants.TEXTUREFORMAT_RGBA)
         entry.width = width
