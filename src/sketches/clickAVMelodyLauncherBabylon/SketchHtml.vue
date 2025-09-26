@@ -1,6 +1,7 @@
 <template>
   <div id="canvasContainer">
     <canvas id="p5Canvas" width="1280" height="720" abitrary-prop="somethi"></canvas>
+    <div id="divider"></div>
     <canvas id="threeCanvas" width="1280" height="720" abitrary-prop="somethi"></canvas>
   </div>
   <div>
@@ -24,14 +25,20 @@
   top: 0;
   left: 0;
   z-index: -1;
-  visibility: hidden;
+  /* visibility: hidden; */
 }
 
 #threeCanvas {
   border: 1px solid black;
-  position: absolute;
-  top: 0;
-  left: 0;
+  /* position: absolute; */
+  /* top: 0; */
+  /* left: 0; */
   visibility: visible;
+}
+
+#divider {
+  width: 100%;
+  height: 10px;
+  background-color: white;
 }
 </style>

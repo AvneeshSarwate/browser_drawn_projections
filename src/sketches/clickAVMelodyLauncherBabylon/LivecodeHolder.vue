@@ -2,7 +2,7 @@
 <script setup lang="ts">
 import { appStateName, type ClickAVAppState, engineRef } from './appState';
 import { inject, onMounted, onUnmounted, watch, type WatchStopHandle } from 'vue';
-import { CanvasPaint, FeedbackNode, PassthruEffect, type ShaderEffect } from '@/rendering/shaderFXBabylon';
+import { CanvasPaint, CustomShaderEffect, FeedbackNode, PassthruEffect, type ShaderEffect } from '@/rendering/shaderFXBabylon';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords, targetNormalizedCoords } from '@/io/keyboardAndMouse';
 import p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri, EventChop, cos, sin } from '@/channels/channels';
@@ -146,21 +146,32 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
       const width = p5i.width
       const height = p5i.height
 
+      const debug = true
+
       const p5Passthru = new PassthruEffect(engine, { src: p5Canvas }, width, height)
-      const feedback = new FeedbackNode(engine, p5Passthru, width, height)
-      const vertBlur = new VerticalBlurEffect(engine, { src: feedback }, width, height)
-      const horBlur = new HorizontalBlurEffect(engine, { src: vertBlur }, width, height)
-      const transform = new TransformEffect(engine, { src: horBlur }, width, height)
-      const layerOverlay = new LayerBlendEffect(engine, { src1: p5Passthru, src2: transform }, width, height)
-      feedback.setFeedbackSrc(layerOverlay)
-      const canvasPaint = new CanvasPaint(engine, { src: layerOverlay }, width, height)
+      let chainEnd: CustomShaderEffect<any> | null = null;
+      if (debug) {
+        shaderGraphEndNode = p5Passthru
+        chainEnd = p5Passthru
+      } else {
+        const feedback = new FeedbackNode(engine, p5Passthru, width, height)
+        const vertBlur = new VerticalBlurEffect(engine, { src: feedback }, width, height)
+        const horBlur = new HorizontalBlurEffect(engine, { src: vertBlur }, width, height)
+        const transform = new TransformEffect(engine, { src: horBlur }, width, height)
+        const layerOverlay = new LayerBlendEffect(engine, { src1: p5Passthru, src2: transform }, width, height)
+        chainEnd = layerOverlay
+
+        feedback.setFeedbackSrc(layerOverlay)
+      
+        transform.setUniforms({ scale: [0.995, 0.995] })
+        vertBlur.setUniforms({ pixels: 2 })
+        horBlur.setUniforms({ pixels: 2 })
+      }
+
+
+
+      const canvasPaint = new CanvasPaint(engine, { src: chainEnd }, width, height)
       shaderGraphEndNode = canvasPaint
-
-      transform.setUniforms({ scale: [0.995, 0.995] })
-      vertBlur.setUniforms({ pixels: 2 })
-      horBlur.setUniforms({ pixels: 2 })
-
-
       appState.shaderDrawFunc = () => shaderGraphEndNode!!.renderAll(engine)
 
       singleKeydownEvent('u', (ev) => {
