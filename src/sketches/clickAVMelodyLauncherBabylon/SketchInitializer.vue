@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { createP5Sketch } from './p5Sketch';
-import { appStateName, type ClickAVAppState } from './appState';
+import { appStateName, type ClickAVAppState, engineRef } from './appState';
 import type p5 from 'p5';
 import * as BABYLON from 'babylonjs';
 import { inject, onMounted, onUnmounted } from 'vue';
@@ -35,21 +35,30 @@ const neutralizeSketch = (instance: p5) => {
 let resizeListener: ((this: Window, ev: UIEvent) => any) | undefined
 
 onMounted(async () => {
+  console.log('SketchInitializer onMounted, starting initialization...')
+  
   //explanation - the closest you can get to removing a p5 instance without removing the underlying canvas
   if(appState.p5Instance) neutralizeSketch(appState.p5Instance)
 
   const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
+  console.log('Creating p5 instance...', { p5Canvas })
   const p5Instance = createP5Sketch(p5Canvas, () => appState)
   p5Instance.disableFriendlyErrors = true //explanation - for performance
   appState.p5Instance = p5Instance
 
   const renderCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
+  console.log('Creating Babylon engine...', { renderCanvas })
   const engine = new BABYLON.WebGPUEngine(renderCanvas, { antialias: false })
+  console.log('Engine created, initializing...')
   await engine.initAsync()
+  console.log('Engine initialized, resizing...')
   engine.resize()
   resizeListener = () => engine.resize()
   window.addEventListener('resize', resizeListener)
+  console.log('Setting engine in appState and engineRef...', { engine })
   appState.engine = engine
+  engineRef.value = engine
+  console.log('SketchInitializer complete')
 })
 
 onUnmounted(() => {

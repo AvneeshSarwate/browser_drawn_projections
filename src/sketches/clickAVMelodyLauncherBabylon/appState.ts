@@ -7,7 +7,7 @@ import { Entity, EntityList } from '@/stores/undoCommands'
 import Stats from '@/rendering/Stats'
 import { Ramp } from '@/channels/channels'
 import { defineStore, acceptHMRUpdate } from 'pinia'
-import { ref } from 'vue'
+import { shallowRef } from 'vue'
 
 
 type PulseCircleSerialized = {
@@ -123,10 +123,13 @@ export type ClickAVAppState = {
   drawing: boolean
 }
 
+// Separate reactive engine ref
+export const engineRef = shallowRef<BABYLON.WebGPUEngine | undefined>(undefined)
+
 export const appState: ClickAVAppState = {
   circles: new EntityList(PulseCircle),
   p5Instance: undefined,
-  engine: undefined,
+  engine: undefined, // Keep for backward compatibility, but use engineRef for reactivity
   codeStack: [],
   codeStackIndex: 0,
   drawFunctions: [],
@@ -141,12 +144,10 @@ export const appState: ClickAVAppState = {
 export const appStateName = 'clickAVAppState'
 
 export const globalStore = defineStore(appStateName, () => {
-  const appStateRef = ref(appState)
-
   //@ts-ignore
-  window.appState = appStateRef
+  window.appState = appState
 
-  return { appStateRef }
+  return { appState }
 });
 
 if (import.meta.hot) {

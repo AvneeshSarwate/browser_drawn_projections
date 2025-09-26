@@ -1,6 +1,6 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
-import { appStateName, type ClickAVAppState } from './appState';
+import { appStateName, type ClickAVAppState, engineRef } from './appState';
 import { inject, onMounted, onUnmounted, watch, type WatchStopHandle } from 'vue';
 import { CanvasPaint, FeedbackNode, PassthruEffect, type ShaderEffect } from '@/rendering/shaderFXBabylon';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords, targetNormalizedCoords } from '@/io/keyboardAndMouse';
@@ -38,6 +38,9 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
     const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
     const threeCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
 
+    // Debug: Check canvas state
+    console.log('setupSketch called')
+
     const scale = new Scale(undefined, 24)
 
 
@@ -50,6 +53,11 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
     const code = () => {
 
       const mousePos = { x: 0, y: 0 }
+
+      // Debug: Simple event logging
+      threeCanvas.addEventListener('mousedown', (e) => {
+        console.log('mousedown fired on threeCanvas')
+      }, { capture: true })
 
       mousemoveEvent(ev => {
         const p5xy = targetToP5Coords(ev, p5i, ev.target as HTMLCanvasElement)
@@ -71,6 +79,7 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
       const loopIdStack = [] as string[]
 
       mousedownEvent(ev => {
+        console.log('mousedownEvent callback fired!', ev.type, ev.target)
 
         const p5xy = targetToP5Coords(ev, p5i, ev.target as HTMLCanvasElement)
         const normCoords = targetNormalizedCoords(ev, ev.target as HTMLCanvasElement)
@@ -176,6 +185,7 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
     }
 
     appState.codeStack.push(code)
+    
     code()
   } catch (e) {
     console.warn(e)
@@ -183,12 +193,12 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
 }
 
 onMounted(() => {
-  const engine = appState.engine
+  const engine = engineRef.value
   if (engine) {
     setupSketch(engine)
   } else {
     engineWatcher = watch(
-      () => appState.engine,
+      engineRef,
       (engineValue) => {
         if (engineValue) {
           engineWatcher?.()
@@ -196,6 +206,7 @@ onMounted(() => {
           setupSketch(engineValue)
         }
       },
+      { immediate: true }
     )
   }
 })

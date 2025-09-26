@@ -504,8 +504,8 @@ export class FeedbackNode extends ShaderEffect {
 
   setFeedbackSrc(effect: ShaderEffect): void {
     this.feedbackSrc = effect
-    const inputs = this.inputs as ShaderInputs
-    inputs['feedback'] = effect
+    // DON'T add to inputs - that would create a cycle in renderAll traversal
+    // The feedback connection is handled by swapping texture sources after first render
   }
 
   setSrcs(inputs: { initialState: ShaderEffect }): void {
