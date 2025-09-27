@@ -148,7 +148,7 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
 
       const debug = false
 
-      const p5Passthru = new PassthruEffect(engine, { src: p5Canvas }, width, height)
+      const p5Passthru = new PassthruEffect(engine, { src: p5Canvas }, width, height, 'nearest')
       let chainEnd: CustomShaderEffect<any> | null = null;
       if (debug) {
         chainEnd = p5Passthru
