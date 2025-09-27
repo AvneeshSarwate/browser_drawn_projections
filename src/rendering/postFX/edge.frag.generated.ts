@@ -102,19 +102,36 @@ fn pass0(uv: vec2f, uniforms: EdgeUniforms, src: texture_2d<f32>, srcSampler: sa
   baseValue = max(baseValue - uniforms.blackLevel, 0.0);
 
   var maxDiff = 0.0;
-  let offsets = array<vec2f, 8>(
-    vec2f(step.x, 0.0),
-    vec2f(-step.x, 0.0),
-    vec2f(0.0, step.y),
-    vec2f(0.0, -step.y),
-    vec2f(step.x, step.y),
-    vec2f(-step.x, step.y),
-    vec2f(step.x, -step.y),
-    vec2f(-step.x, -step.y),
-  );
 
   for (var i = 0u; i < 8u; i = i + 1u) {
-    let sampleUV = uv + offsets[i];
+    var offset = vec2f(step.x, 0.0);
+    switch i {
+      case 0u: {
+        offset = vec2f(step.x, 0.0);
+      }
+      case 1u: {
+        offset = vec2f(-step.x, 0.0);
+      }
+      case 2u: {
+        offset = vec2f(0.0, step.y);
+      }
+      case 3u: {
+        offset = vec2f(0.0, -step.y);
+      }
+      case 4u: {
+        offset = vec2f(step.x, step.y);
+      }
+      case 5u: {
+        offset = vec2f(-step.x, step.y);
+      }
+      case 6u: {
+        offset = vec2f(step.x, -step.y);
+      }
+      default: {
+        offset = vec2f(-step.x, -step.y);
+      }
+    }
+    let sampleUV = uv + offset;
     let neighborColor = textureSample(src, srcSampler, sampleUV);
     var neighborValue = 0.0;
     switch uniforms.channelMode {

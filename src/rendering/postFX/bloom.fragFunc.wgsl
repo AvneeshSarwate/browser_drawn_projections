@@ -67,17 +67,6 @@ fn pass1(uv: vec2f, uniforms: BloomUniforms, src: texture_2d<f32>, srcSampler: s
   );
   let minRadius = min(uniforms.minBloomRadius, uniforms.maxBloomRadius);
   let maxRadius = max(uniforms.minBloomRadius, uniforms.maxBloomRadius);
-  let directions = array<vec2f, 8>(
-    vec2f(1.0, 0.0),
-    vec2f(-1.0, 0.0),
-    vec2f(0.0, 1.0),
-    vec2f(0.0, -1.0),
-    vec2f(0.7071, 0.7071),
-    vec2f(-0.7071, 0.7071),
-    vec2f(0.7071, -0.7071),
-    vec2f(-0.7071, -0.7071),
-  );
-
   var accum = preColor;
   var totalWeight = 1.0;
   let levelCount = 6;
@@ -87,7 +76,34 @@ fn pass1(uv: vec2f, uniforms: BloomUniforms, src: texture_2d<f32>, srcSampler: s
     let offsetScale = computeRadiusUv(radiusNorm, uniforms.bloomFill, texelSize);
     let weightBase = 1.0 / (1.0 + radiusNorm * 8.0 + uniforms.bloomFill * 4.0);
     for (var i = 0; i < 8; i = i + 1) {
-      let offsetUV = uv + directions[i] * offsetScale;
+      var direction = vec2f(1.0, 0.0);
+      switch u32(i) {
+        case 0u: {
+          direction = vec2f(1.0, 0.0);
+        }
+        case 1u: {
+          direction = vec2f(-1.0, 0.0);
+        }
+        case 2u: {
+          direction = vec2f(0.0, 1.0);
+        }
+        case 3u: {
+          direction = vec2f(0.0, -1.0);
+        }
+        case 4u: {
+          direction = vec2f(0.7071, 0.7071);
+        }
+        case 5u: {
+          direction = vec2f(-0.7071, 0.7071);
+        }
+        case 6u: {
+          direction = vec2f(0.7071, -0.7071);
+        }
+        default: {
+          direction = vec2f(-0.7071, -0.7071);
+        }
+      }
+      let offsetUV = uv + direction * offsetScale;
       let sampleColor = textureSample(src, srcSampler, offsetUV).rgb;
       accum = accum + sampleColor * weightBase;
       totalWeight = totalWeight + weightBase;
