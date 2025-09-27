@@ -377,7 +377,7 @@ export class CustomShaderEffect<U extends object, I extends ShaderInputShape<I> 
         //   canvasHeight: imageSource.height
         // })
         
-        this.engine.updateDynamicTexture(ensuredEntry.internal, imageSource, true, false, BABYLON.Constants.TEXTUREFORMAT_RGBA)
+        this.engine.updateDynamicTexture(ensuredEntry.internal, imageSource, true, false, this.samplingMode)
         ensuredEntry.width = width
         ensuredEntry.height = height
         texture = ensuredEntry.texture
