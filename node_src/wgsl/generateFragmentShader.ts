@@ -456,11 +456,11 @@ export async function generateFragmentShaderArtifacts(
   const textureNameUnion = textureParams.map((param) => `'${param.textureName}'`).join(' | ');
   const inputsTypeName = `${shaderPrefix}Inputs`;
   tsLines.push(`export type ${shaderPrefix}TextureName = ${textureNameUnion};`);
-  tsLines.push(`export type ${inputsTypeName} = Partial<{`);
+  tsLines.push(`export interface ${inputsTypeName} {`);
   textureParams.forEach((param) => {
     tsLines.push(`  ${param.textureName}: ShaderSource;`);
   });
-  tsLines.push('}>;');
+  tsLines.push('}');
   tsLines.push('');
   tsLines.push(`export interface ${materialHandlesName} {`);
   tsLines.push('  material: BABYLON.ShaderMaterial;');
@@ -614,7 +614,7 @@ async function writeErrorArtifact(options: ErrorArtifactOptions): Promise<boolea
   lines.push(`export const shaderGenerationErrorMessage = ${JSON.stringify(message)} as const;`);
   lines.push(`export type ${uniformInterfaceName} = never;`);
   lines.push(`export type ${textureNameType} = never;`);
-  lines.push(`export type ${inputsTypeName} = Record<string, never>;`);
+  lines.push(`export interface ${inputsTypeName} {}`);
   lines.push(`export type ${materialHandlesName} = never;`);
   lines.push(`export interface ${materialOptionsName} { name?: string }`);
   lines.push(`export function create${shaderPrefix}Material(): never { throw new Error(shaderGenerationErrorMessage); }`);

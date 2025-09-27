@@ -51,10 +51,10 @@ export type LayerBlendUniforms = Record<string, never>;
 export function setLayerBlendUniforms(_material: BABYLON.ShaderMaterial, _uniforms: Partial<LayerBlendUniforms>): void {}
 
 export type LayerBlendTextureName = 'src1' | 'src2';
-export type LayerBlendInputs = Partial<{
+export interface LayerBlendInputs {
   src1: ShaderSource;
   src2: ShaderSource;
-}>;
+}
 
 export interface LayerBlendMaterialHandles {
   material: BABYLON.ShaderMaterial;

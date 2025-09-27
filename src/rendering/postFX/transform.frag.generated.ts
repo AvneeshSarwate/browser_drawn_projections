@@ -103,9 +103,9 @@ export function setTransformUniforms(material: BABYLON.ShaderMaterial, uniforms:
 }
 
 export type TransformTextureName = 'src';
-export type TransformInputs = Partial<{
+export interface TransformInputs {
   src: ShaderSource;
-}>;
+}
 
 export interface TransformMaterialHandles {
   material: BABYLON.ShaderMaterial;

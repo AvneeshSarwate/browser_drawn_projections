@@ -69,9 +69,9 @@ export function setInvertUniforms(material: BABYLON.ShaderMaterial, uniforms: Pa
 }
 
 export type InvertTextureName = 'src';
-export type InvertInputs = Partial<{
+export interface InvertInputs {
   src: ShaderSource;
-}>;
+}
 
 export interface InvertMaterialHandles {
   material: BABYLON.ShaderMaterial;

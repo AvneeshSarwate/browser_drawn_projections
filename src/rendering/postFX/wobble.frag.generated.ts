@@ -88,9 +88,9 @@ export function setWobbleUniforms(material: BABYLON.ShaderMaterial, uniforms: Pa
 }
 
 export type WobbleTextureName = 'src';
-export type WobbleInputs = Partial<{
+export interface WobbleInputs {
   src: ShaderSource;
-}>;
+}
 
 export interface WobbleMaterialHandles {
   material: BABYLON.ShaderMaterial;

@@ -89,9 +89,9 @@ export function setVerticalBlurUniforms(material: BABYLON.ShaderMaterial, unifor
 }
 
 export type VerticalBlurTextureName = 'src';
-export type VerticalBlurInputs = Partial<{
+export interface VerticalBlurInputs {
   src: ShaderSource;
-}>;
+}
 
 export interface VerticalBlurMaterialHandles {
   material: BABYLON.ShaderMaterial;

@@ -89,9 +89,9 @@ export function setHorizontalBlurUniforms(material: BABYLON.ShaderMaterial, unif
 }
 
 export type HorizontalBlurTextureName = 'src';
-export type HorizontalBlurInputs = Partial<{
+export interface HorizontalBlurInputs {
   src: ShaderSource;
-}>;
+}
 
 export interface HorizontalBlurMaterialHandles {
   material: BABYLON.ShaderMaterial;

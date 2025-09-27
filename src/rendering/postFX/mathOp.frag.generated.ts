@@ -98,9 +98,9 @@ export function setMathOpUniforms(material: BABYLON.ShaderMaterial, uniforms: Pa
 }
 
 export type MathOpTextureName = 'src';
-export type MathOpInputs = Partial<{
+export interface MathOpInputs {
   src: ShaderSource;
-}>;
+}
 
 export interface MathOpMaterialHandles {
   material: BABYLON.ShaderMaterial;
