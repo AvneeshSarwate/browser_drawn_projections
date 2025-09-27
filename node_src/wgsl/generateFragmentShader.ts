@@ -332,7 +332,7 @@ export async function generateFragmentShaderArtifacts(
     }
     return relative.replace(/\.ts$/, '');
   })();
-  const shaderFxImports = ['CustomShaderEffect', 'type ShaderSource'];
+  const shaderFxImports = ['CustomShaderEffect', 'type ShaderSource', 'type RenderPrecision'];
   if (uniformFields.length > 0) {
     shaderFxImports.push('type ShaderUniforms', 'type Dynamic');
   }
@@ -514,7 +514,7 @@ export async function generateFragmentShaderArtifacts(
   effectLines.push(`export class ${effectClassName} extends CustomShaderEffect<${uniformInterfaceName}, ${inputsTypeName}> {`);
   effectLines.push(`  effectName = '${shaderPrefix}'`);
   effectLines.push('');
-  effectLines.push(`  constructor(engine: BABYLON.WebGPUEngine, inputs: ${inputsTypeName}, width = 1280, height = 720, sampleMode: 'nearest' | 'linear' = 'linear') {`);
+ effectLines.push(`  constructor(engine: BABYLON.WebGPUEngine, inputs: ${inputsTypeName}, width = 1280, height = 720, sampleMode: 'nearest' | 'linear' = 'linear', precision: RenderPrecision = 'half_float') {`);
   effectLines.push('    super(engine, inputs, {');
   effectLines.push(`      factory: (sceneRef, options) => create${shaderPrefix}Material(sceneRef, options),`);
   effectLines.push(`      textureInputKeys: ${textureNamesArrayLiteral},`);
@@ -522,7 +522,18 @@ export async function generateFragmentShaderArtifacts(
   effectLines.push('      height,');
   effectLines.push(`      materialName: '${shaderPrefix}Material',`);
   effectLines.push('      sampleMode,');
+  effectLines.push('      precision,');
   effectLines.push('    })');
+  const uniformNames = new Set(uniformFields.map((field) => field.name));
+  const hasTransformDefaults = ['rotate', 'anchor', 'translate', 'scale'].every((name) => uniformNames.has(name));
+  if (hasTransformDefaults) {
+    effectLines.push('    this.setUniforms({ rotate: 0, anchor: [0.5, 0.5], translate: [0, 0], scale: [1, 1] });');
+  }
+  effectLines.push('  }');
+
+  effectLines.push('');
+  effectLines.push(`  override setSrcs(inputs: Partial<${inputsTypeName}>): void {`);
+  effectLines.push('    super.setSrcs(inputs);');
   effectLines.push('  }');
 
   if (uniformFields.length > 0) {

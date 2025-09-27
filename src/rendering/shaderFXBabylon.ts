@@ -7,6 +7,7 @@ export type ShaderSource =
   | OffscreenCanvas
   | ShaderEffect
 export type ShaderInputs = Record<string, ShaderSource>
+export type RenderPrecision = 'unsigned_int' | 'half_float'
 
 export type Dynamic<T> = T | (() => T)
 export type ShaderUniform = unknown
@@ -146,6 +147,7 @@ export interface CustomShaderEffectOptions<U, I extends ShaderInputShape<I> = Sh
   sampler?: BABYLON.TextureSampler
   materialName?: string
   sampleMode?: 'nearest' | 'linear'
+  precision?: RenderPrecision
 }
 
 export class CustomShaderEffect<U extends object, I extends ShaderInputShape<I> = ShaderInputs> extends ShaderEffect<I> {
@@ -222,13 +224,17 @@ export class CustomShaderEffect<U extends object, I extends ShaderInputShape<I> 
     this.camera.setEnabled(false)
     this.scene.activeCamera = this.camera
 
+    const textureType = options.precision === 'unsigned_int'
+      ? BABYLON.Engine.TEXTURETYPE_UNSIGNED_INT
+      : BABYLON.Engine.TEXTURETYPE_HALF_FLOAT
+
     this.output = new BABYLON.RenderTargetTexture(
       'shaderFXOutput',
       { width, height },
       this.scene,
       false,
       true,
-      BABYLON.Engine.TEXTURETYPE_UNSIGNED_INT,
+      textureType,
       false,
       samplingConstant,
       false,
@@ -389,7 +395,14 @@ export interface CanvasPaintInputs {
 export class CanvasPaint extends CustomShaderEffect<Record<string, never>, CanvasPaintInputs> {
   effectName = 'CanvasPaint'
 
-  constructor(engine: BABYLON.WebGPUEngine, inputs: CanvasPaintInputs, width = 1280, height = 720, sampleMode: 'nearest' | 'linear' = 'linear') {
+  constructor(
+    engine: BABYLON.WebGPUEngine,
+    inputs: CanvasPaintInputs,
+    width = 1280,
+    height = 720,
+    sampleMode: 'nearest' | 'linear' = 'linear',
+    precision: RenderPrecision = 'half_float',
+  ) {
     super(engine, inputs, {
       factory: (sceneRef, options) => {
         const material = createCanvasPaintMaterial(sceneRef, options?.name ?? 'CanvasPaintMaterial')
@@ -406,6 +419,7 @@ export class CanvasPaint extends CustomShaderEffect<Record<string, never>, Canva
       height,
       materialName: 'CanvasPaintMaterial',
       sampleMode,
+      precision,
     })
   }
 
@@ -515,7 +529,14 @@ export function createPassthruMaterial(scene: BABYLON.Scene, options: PassthruMa
 export class PassthruEffect extends CustomShaderEffect<PassthruUniforms, PassthruInputs> {
   effectName = 'Passthru'
 
-  constructor(engine: BABYLON.WebGPUEngine, inputs: PassthruInputs, width = 1280, height = 720, sampleMode: 'nearest' | 'linear' = 'linear') {
+  constructor(
+    engine: BABYLON.WebGPUEngine,
+    inputs: PassthruInputs,
+    width = 1280,
+    height = 720,
+    sampleMode: 'nearest' | 'linear' = 'linear',
+    precision: RenderPrecision = 'half_float',
+  ) {
     super(engine, inputs, {
       factory: (sceneRef, options) => createPassthruMaterial(sceneRef, options),
       textureInputKeys: ['src'],
@@ -523,6 +544,7 @@ export class PassthruEffect extends CustomShaderEffect<PassthruUniforms, Passthr
       height,
       materialName: 'PassthruMaterial',
       sampleMode,
+      precision,
     })
   }
 }
@@ -544,13 +566,14 @@ export class FeedbackNode extends ShaderEffect<FeedbackInputs> {
     width = startState.width,
     height = startState.height,
     sampleMode: 'nearest' | 'linear' = 'linear',
+    precision: RenderPrecision = 'half_float',
   ) {
     super()
     this.width = width
     this.height = height
     this.inputs = { initialState: startState }
     this.sampleMode = sampleMode
-    this.passthrough = new PassthruEffect(engine, { src: startState.output }, width, height, sampleMode)
+    this.passthrough = new PassthruEffect(engine, { src: startState.output }, width, height, sampleMode, precision)
     this.output = this.passthrough.output
   }
 

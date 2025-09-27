@@ -153,7 +153,7 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
       if (debug) {
         chainEnd = p5Passthru
       } else {
-        const feedback = new FeedbackNode(engine, p5Passthru, width, height)
+        const feedback = new FeedbackNode(engine, p5Passthru, width, height, 'linear', 'half_float')
         const vertBlur = new VerticalBlurEffect(engine, { src: feedback }, width, height)
         const horBlur = new HorizontalBlurEffect(engine, { src: vertBlur }, width, height)
         const transform = new TransformEffect(engine, { src: horBlur }, width, height)
@@ -162,7 +162,7 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
 
         feedback.setFeedbackSrc(layerOverlay)
       
-        transform.setUniforms({ scale: [0.995, 0.995] })
+        transform.setUniforms({ rotate: 0, anchor: [0.5, 0.5], translate: [0, 0], scale: [0.995, 0.995] })
         vertBlur.setUniforms({ pixels: 2, resolution: height })
         horBlur.setUniforms({ pixels: 2, resolution: width })
       }
