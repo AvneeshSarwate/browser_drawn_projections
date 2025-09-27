@@ -6,9 +6,8 @@ export type ShaderSource =
   | HTMLCanvasElement
   | OffscreenCanvas
   | ShaderEffect
-export type ShaderInputs = {
-  [key: string]: ShaderSource
-}
+export type ShaderInputs = Record<string, ShaderSource>
+export type ShaderInputMap<T extends string = string> = Partial<Record<T, ShaderSource>>
 
 export type Dynamic<T> = T | (() => T)
 export type ShaderUniform = unknown
@@ -95,8 +94,8 @@ function createCanvasPaintMaterial(scene: BABYLON.Scene, name = 'CanvasPaintMate
   });
 }
 
-export abstract class ShaderEffect {
-  abstract setSrcs(fx: ShaderInputs): void
+export abstract class ShaderEffect<I extends ShaderInputMap = ShaderInputMap> {
+  abstract setSrcs(fx: I): void
   abstract render(engine: BABYLON.Engine): void
   abstract setUniforms(uniforms: ShaderUniforms): void
   abstract updateUniforms(): void
@@ -105,15 +104,16 @@ export abstract class ShaderEffect {
   effectName = 'unset'
   width = 1280
   height = 720
-  inputs: ShaderInputs = {}
+  inputs: I = {} as I
   uniforms: ShaderUniforms = {}
 
   abstract dispose(): void
 
   disposeAll(): void {
     this.dispose()
-    for (const key in this.inputs) {
-      const input = this.inputs[key]
+    const inputs = this.inputs as Record<string, ShaderSource | undefined>
+    for (const key in inputs) {
+      const input = inputs[key]
       if (input instanceof ShaderEffect) {
         input.disposeAll()
       }
@@ -121,8 +121,9 @@ export abstract class ShaderEffect {
   }
 
   renderAll(engine: BABYLON.Engine): void {
-    for (const key in this.inputs) {
-      const input = this.inputs[key]
+    const inputs = this.inputs as Record<string, ShaderSource | undefined>
+    for (const key in inputs) {
+      const input = inputs[key]
       if (input instanceof ShaderEffect) {
         input.renderAll(engine)
       }
@@ -131,19 +132,19 @@ export abstract class ShaderEffect {
   }
 }
 
-interface MaterialHandles<U> {
+interface MaterialHandles<U, TName extends string = string> {
   material: BABYLON.ShaderMaterial
-  setTexture(name: string, texture: BABYLON.BaseTexture): void
-  setTextureSampler(name: string, sampler: BABYLON.TextureSampler): void
+  setTexture(name: TName, texture: BABYLON.BaseTexture): void
+  setTextureSampler(name: TName, sampler: BABYLON.TextureSampler): void
   setUniforms(uniforms: Partial<U>): void
 }
 
-export type ShaderMaterialFactory<U> = (scene: BABYLON.Scene, options?: { name?: string }) => MaterialHandles<U>
+export type ShaderMaterialFactory<U, TName extends string = string> = (scene: BABYLON.Scene, options?: { name?: string }) => MaterialHandles<U, TName>
 
-export interface CustomShaderEffectOptions<U> {
-  factory: ShaderMaterialFactory<U>
-  textureInputKey?: string
-  textureInputKeys?: string[]
+export interface CustomShaderEffectOptions<U, I extends ShaderInputMap> {
+  factory: ShaderMaterialFactory<U, keyof I & string>
+  textureInputKey?: keyof I & string
+  textureInputKeys?: Array<keyof I & string>
   width?: number
   height?: number
   sampler?: BABYLON.TextureSampler
@@ -151,24 +152,25 @@ export interface CustomShaderEffectOptions<U> {
   sampleMode?: 'nearest' | 'linear'
 }
 
-export class CustomShaderEffect<U extends object> extends ShaderEffect {
+export class CustomShaderEffect<U extends object, I extends ShaderInputMap = ShaderInputMap> extends ShaderEffect<I> {
   readonly engine: BABYLON.WebGPUEngine
   readonly scene: BABYLON.Scene
   readonly output: BABYLON.RenderTargetTexture
   protected readonly quad: BABYLON.Mesh
   protected readonly camera: BABYLON.FreeCamera
-  protected readonly handles: MaterialHandles<U>
-  protected readonly textureKeys: string[]
+  protected readonly handles: MaterialHandles<U, keyof I & string>
+  protected readonly textureKeys: Array<keyof I & string>
   protected readonly defaultSampler: BABYLON.TextureSampler
   protected sampler?: BABYLON.TextureSampler
-  protected readonly canvasTextures: Record<string, CanvasTextureEntry> = {}
+  protected readonly canvasTextures: Partial<Record<keyof I & string, CanvasTextureEntry>> = {}
+  protected readonly samplerState: Partial<Record<keyof I & string, BABYLON.TextureSampler>> = {}
   protected readonly samplingMode: number
 
   get material(): BABYLON.ShaderMaterial {
     return this.handles.material
   }
 
-  constructor(engine: BABYLON.WebGPUEngine, inputs: ShaderInputs, options: CustomShaderEffectOptions<U>) {
+  constructor(engine: BABYLON.WebGPUEngine, inputs: I, options: CustomShaderEffectOptions<U, I>) {
     super()
     this.engine = engine
     const width = options.width ?? this.width
@@ -177,7 +179,7 @@ export class CustomShaderEffect<U extends object> extends ShaderEffect {
     const samplingConstant = sampleMode === 'nearest' ? BABYLON.Texture.NEAREST_SAMPLINGMODE : BABYLON.Texture.BILINEAR_SAMPLINGMODE
     this.samplingMode = samplingConstant
 
-    const textureKeys = options.textureInputKeys ?? (options.textureInputKey ? [options.textureInputKey] : [])
+    const textureKeys = (options.textureInputKeys ?? (options.textureInputKey ? [options.textureInputKey] : [])) as Array<keyof I & string>
     if (textureKeys.length === 0) {
       throw new Error('CustomShaderEffect requires at least one textureInputKey')
     }
@@ -250,12 +252,12 @@ export class CustomShaderEffect<U extends object> extends ShaderEffect {
       )
     }
     for (const key of this.textureKeys) {
-      this.handles.setTextureSampler(key, this.defaultSampler)
+      this.applySampler(key, this.defaultSampler)
     }
     if (options.sampler) {
       this.sampler = options.sampler
       for (const key of this.textureKeys) {
-        this.handles.setTextureSampler(key, options.sampler)
+        this.applySampler(key, options.sampler)
       }
     }
 
@@ -265,12 +267,21 @@ export class CustomShaderEffect<U extends object> extends ShaderEffect {
   setTextureSampler(sampler: BABYLON.TextureSampler): void {
     this.sampler = sampler
     for (const key of this.textureKeys) {
-      this.handles.setTextureSampler(key, sampler)
+      this.applySampler(key, sampler)
     }
   }
 
-  setSrcs(fx: ShaderInputs): void {
-    this.inputs = { ...this.inputs, ...fx }
+  protected applySampler(key: keyof I & string, sampler: BABYLON.TextureSampler): void {
+    const current = this.samplerState[key]
+    if (current === sampler) {
+      return
+    }
+    this.handles.setTextureSampler(key, sampler)
+    this.samplerState[key] = sampler
+  }
+
+  setSrcs(fx: I): void {
+    this.inputs = { ...this.inputs, ...fx } as I
     this._applySources()
   }
 
@@ -302,8 +313,8 @@ export class CustomShaderEffect<U extends object> extends ShaderEffect {
     this.camera.dispose()
     this.handles.material.dispose(true, false)
     Object.values(this.canvasTextures).forEach((entry) => {
-      entry.internal.dispose()
-      entry.texture.dispose()
+      entry?.internal.dispose()
+      entry?.texture.dispose()
     })
     this.scene.dispose()
   }
@@ -365,15 +376,15 @@ export class CustomShaderEffect<U extends object> extends ShaderEffect {
         texture = entry.texture
       }
       this.handles.setTexture(key, texture)
-      this.handles.setTextureSampler(key, this.sampler ?? this.defaultSampler)
+      this.applySampler(key, this.sampler ?? this.defaultSampler)
     }
   }
 }
 
-export class CanvasPaint extends CustomShaderEffect<Record<string, never>> {
+export class CanvasPaint extends CustomShaderEffect<Record<string, never>, ShaderInputMap<'src'>> {
   effectName = 'CanvasPaint'
 
-  constructor(engine: BABYLON.WebGPUEngine, inputs: { src: ShaderSource }, width = 1280, height = 720, sampleMode: 'nearest' | 'linear' = 'linear') {
+  constructor(engine: BABYLON.WebGPUEngine, inputs: ShaderInputMap<'src'>, width = 1280, height = 720, sampleMode: 'nearest' | 'linear' = 'linear') {
     super(engine, inputs, {
       factory: (sceneRef, options) => {
         const material = createCanvasPaintMaterial(sceneRef, options?.name ?? 'CanvasPaintMaterial')
@@ -450,6 +461,9 @@ export type PassthruUniforms = Record<string, never>;
 export function setPassthruUniforms(_material: BABYLON.ShaderMaterial, _uniforms: Partial<PassthruUniforms>): void {}
 
 export type PassthruTextureName = 'src';
+export type PassthruInputs = Partial<{
+  src: ShaderSource;
+}>;
 export interface PassthruMaterialHandles {
   material: BABYLON.ShaderMaterial;
   setTexture(name: PassthruTextureName, texture: BABYLON.BaseTexture): void;
@@ -493,10 +507,10 @@ export function createPassthruMaterial(scene: BABYLON.Scene, options: PassthruMa
   return handles;
 }
 
-export class PassthruEffect extends CustomShaderEffect<PassthruUniforms> {
+export class PassthruEffect extends CustomShaderEffect<PassthruUniforms, PassthruInputs> {
   effectName = 'Passthru'
 
-  constructor(engine: BABYLON.WebGPUEngine, inputs: ShaderInputs, width = 1280, height = 720, sampleMode: 'nearest' | 'linear' = 'linear') {
+  constructor(engine: BABYLON.WebGPUEngine, inputs: PassthruInputs, width = 1280, height = 720, sampleMode: 'nearest' | 'linear' = 'linear') {
     super(engine, inputs, {
       factory: (sceneRef, options) => createPassthruMaterial(sceneRef, options),
       textureInputKeys: ['src'],
@@ -508,7 +522,9 @@ export class PassthruEffect extends CustomShaderEffect<PassthruUniforms> {
   }
 }
 
-export class FeedbackNode extends ShaderEffect {
+type FeedbackInputs = { initialState: ShaderEffect }
+
+export class FeedbackNode extends ShaderEffect<FeedbackInputs> {
   output: BABYLON.RenderTargetTexture
   private readonly passthrough: PassthruEffect
   private readonly sampleMode: 'nearest' | 'linear'
@@ -537,7 +553,7 @@ export class FeedbackNode extends ShaderEffect {
     // The feedback connection is handled by swapping texture sources after first render
   }
 
-  setSrcs(inputs: { initialState: ShaderEffect }): void {
+  setSrcs(inputs: FeedbackInputs): void {
     this.inputs = inputs
     this.passthrough.setSrcs({ src: inputs.initialState.output })
     this.firstRender = true

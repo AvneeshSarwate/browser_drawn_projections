@@ -253,8 +253,16 @@ export async function generateFragmentShaderArtifacts(
 
   const { projectRoot, logger } = options;
   const absoluteSource = path.resolve(sourcePath);
-  const shaderCode = await fs.readFile(absoluteSource, 'utf8');
-  const reflect = new WgslReflect(shaderCode);
+  const shaderDirectory = path.dirname(absoluteSource);
+  const shaderBaseName = path.basename(sourcePath, RAW_SUFFIX);
+  const typesPath = path.join(shaderDirectory, `${shaderBaseName}${TYPES_SUFFIX}`);
+  const shaderPrefix = toPascalCase(shaderBaseName);
+  const effectClassName = `${shaderPrefix}Effect`;
+  const defaultUniformInterfaceName = `${shaderPrefix}Uniforms`;
+
+  try {
+    const shaderCode = await fs.readFile(absoluteSource, 'utf8');
+    const reflect = new WgslReflect(shaderCode);
 
   const candidateFunctions = reflect.functions.filter((fn) => !fn.stage);
   if (candidateFunctions.length === 0) {
@@ -315,10 +323,6 @@ export async function generateFragmentShaderArtifacts(
     textureParams.push({ textureName: textureArg.name, samplerName: samplerArg.name });
   }
 
-  const shaderBaseName = path.basename(sourcePath, RAW_SUFFIX);
-  const shaderDirectory = path.dirname(absoluteSource);
-  const typesPath = path.join(shaderDirectory, `${shaderBaseName}${TYPES_SUFFIX}`);
-
   const shaderPrefix = toPascalCase(shaderBaseName);
   const shaderFxImportPath = (() => {
     const shaderFxAbsolute = path.join(options.projectRoot, 'src/rendering/shaderFXBabylon.ts');
@@ -328,7 +332,7 @@ export async function generateFragmentShaderArtifacts(
     }
     return relative.replace(/\.ts$/, '');
   })();
-  const shaderFxImports = ['CustomShaderEffect', 'type ShaderInputs'];
+  const shaderFxImports = ['CustomShaderEffect', 'type ShaderSource'];
   if (uniformFields.length > 0) {
     shaderFxImports.push('type ShaderUniforms', 'type Dynamic');
   }
@@ -379,7 +383,7 @@ export async function generateFragmentShaderArtifacts(
 
   const uniformInterfaceName = uniformStruct
     ? (uniformStruct.name.startsWith(shaderPrefix) ? uniformStruct.name : `${shaderPrefix}${uniformStruct.name}`)
-    : `${shaderPrefix}Uniforms`;
+    : defaultUniformInterfaceName;
 
   const helperNames = new Set<string>();
   const uniformInterfaceLines: string[] = [];
@@ -427,7 +431,6 @@ export async function generateFragmentShaderArtifacts(
   const materialHandlesName = `${shaderPrefix}MaterialHandles`;
   const materialOptionsName = `${shaderPrefix}MaterialOptions`;
   const setUniformsFunctionName = uniformStruct && uniformFields.length > 0 ? `set${uniformInterfaceName}` : null;
-  const effectClassName = `${shaderPrefix}Effect`;
 
   const tsLines: string[] = [];
   tsLines.push(HEADER_COMMENT);
@@ -451,7 +454,14 @@ export async function generateFragmentShaderArtifacts(
     tsLines.push('');
   }
   const textureNameUnion = textureParams.map((param) => `'${param.textureName}'`).join(' | ');
+  const inputsTypeName = `${shaderPrefix}Inputs`;
   tsLines.push(`export type ${shaderPrefix}TextureName = ${textureNameUnion};`);
+  tsLines.push(`export type ${inputsTypeName} = Partial<{`);
+  textureParams.forEach((param) => {
+    tsLines.push(`  ${param.textureName}: ShaderSource;`);
+  });
+  tsLines.push('}>;');
+  tsLines.push('');
   tsLines.push(`export interface ${materialHandlesName} {`);
   tsLines.push('  material: BABYLON.ShaderMaterial;');
   tsLines.push(`  setTexture(name: ${shaderPrefix}TextureName, texture: BABYLON.BaseTexture): void;`);
@@ -501,10 +511,10 @@ export async function generateFragmentShaderArtifacts(
   tsLines.push('');
 
   const effectLines: string[] = [];
-  effectLines.push(`export class ${effectClassName} extends CustomShaderEffect<${uniformInterfaceName}> {`);
+  effectLines.push(`export class ${effectClassName} extends CustomShaderEffect<${uniformInterfaceName}, ${inputsTypeName}> {`);
   effectLines.push(`  effectName = '${shaderPrefix}'`);
   effectLines.push('');
-  effectLines.push("  constructor(engine: BABYLON.WebGPUEngine, inputs: ShaderInputs, width = 1280, height = 720, sampleMode: 'nearest' | 'linear' = 'linear') {");
+  effectLines.push(`  constructor(engine: BABYLON.WebGPUEngine, inputs: ${inputsTypeName}, width = 1280, height = 720, sampleMode: 'nearest' | 'linear' = 'linear') {`);
   effectLines.push('    super(engine, inputs, {');
   effectLines.push(`      factory: (sceneRef, options) => create${shaderPrefix}Material(sceneRef, options),`);
   effectLines.push(`      textureInputKeys: ${textureNamesArrayLiteral},`);
@@ -554,6 +564,23 @@ export async function generateFragmentShaderArtifacts(
     typesPath,
     updated: typesUpdated,
   };
+  } catch (error: any) {
+    const message = error instanceof Error ? error.message : String(error);
+    const errorUpdated = await writeErrorArtifact({
+      typesPath,
+      effectClassName,
+      uniformInterfaceName: defaultUniformInterfaceName,
+      shaderPrefix,
+      projectRoot,
+      sourcePath: absoluteSource,
+      errorMessage: message,
+    });
+    if (logger) {
+      const relativeTypes = path.relative(projectRoot, typesPath);
+      logger(`${errorUpdated ? 'Updated' : 'Retained'} error artifact for ${relativeTypes}`);
+    }
+    throw error;
+  }
 }
 
 function expectMeta(typeName: string): UniformTypeMetadata {
@@ -562,4 +589,40 @@ function expectMeta(typeName: string): UniformTypeMetadata {
     throw new Error(`Unsupported uniform type ${typeName}`);
   }
   return meta;
+}
+
+interface ErrorArtifactOptions {
+  typesPath: string;
+  effectClassName: string;
+  uniformInterfaceName: string;
+  shaderPrefix: string;
+  projectRoot: string;
+  sourcePath: string;
+  errorMessage: string;
+}
+
+async function writeErrorArtifact(options: ErrorArtifactOptions): Promise<boolean> {
+  const { typesPath, effectClassName, uniformInterfaceName, shaderPrefix, projectRoot, sourcePath, errorMessage } = options;
+  const relativeSource = path.relative(projectRoot, sourcePath).replace(/\\/g, '/');
+  const materialHandlesName = `${shaderPrefix}MaterialHandles`;
+  const materialOptionsName = `${shaderPrefix}MaterialOptions`;
+  const inputsTypeName = `${shaderPrefix}Inputs`;
+  const textureNameType = `${shaderPrefix}TextureName`;
+  const message = `Failed to generate shader for ${relativeSource}: ${errorMessage}`;
+  const lines: string[] = [];
+  lines.push(HEADER_COMMENT);
+  lines.push(`export const shaderGenerationErrorMessage = ${JSON.stringify(message)} as const;`);
+  lines.push(`export type ${uniformInterfaceName} = never;`);
+  lines.push(`export type ${textureNameType} = never;`);
+  lines.push(`export type ${inputsTypeName} = Record<string, never>;`);
+  lines.push(`export type ${materialHandlesName} = never;`);
+  lines.push(`export interface ${materialOptionsName} { name?: string }`);
+  lines.push(`export function create${shaderPrefix}Material(): never { throw new Error(shaderGenerationErrorMessage); }`);
+  lines.push(`export class ${effectClassName} {`);
+  lines.push('  constructor() {');
+  lines.push('    throw new Error(shaderGenerationErrorMessage);');
+  lines.push('  }');
+  lines.push('}');
+  lines.push('');
+  return writeFileIfChanged(typesPath, `${lines.join('\n')}\n`);
 }
