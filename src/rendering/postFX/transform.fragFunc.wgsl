@@ -5,7 +5,7 @@ struct TransformUniforms {
   scale: vec2f,
 };
 
-fn transformEffect(uv: vec2f, uniforms: TransformUniforms, src: texture_2d<f32>, srcSampler: sampler) -> vec4f {
+fn pass0(uv: vec2f, uniforms: TransformUniforms, src: texture_2d<f32>, srcSampler: sampler) -> vec4f {
   var uvLocal = uv - uniforms.anchor;
   uvLocal = uvLocal * uniforms.scale;
   let cosR = cos(uniforms.rotate);

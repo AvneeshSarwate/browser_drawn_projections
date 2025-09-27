@@ -15,7 +15,7 @@ struct LimitUniforms {
   positionOffset: vec2f,
 };
 
-fn limitEffect(uv: vec2f, uniforms: LimitUniforms, src: texture_2d<f32>, srcSampler: sampler) -> vec4f {
+fn pass0(uv: vec2f, uniforms: LimitUniforms, src: texture_2d<f32>, srcSampler: sampler) -> vec4f {
   var sampleUv = uv;
   if (uniforms.quantizePositionMode != 0u) {
     let step = uniforms.positionStep;

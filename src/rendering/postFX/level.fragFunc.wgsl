@@ -23,7 +23,7 @@ struct LevelUniforms {
   postClamp: f32,
 };
 
-fn levelEffect(uv: vec2f, uniforms: LevelUniforms, src: texture_2d<f32>, srcSampler: sampler) -> vec4f {
+fn pass0(uv: vec2f, uniforms: LevelUniforms, src: texture_2d<f32>, srcSampler: sampler) -> vec4f {
   var color = textureSample(src, srcSampler, uv);
   var rgb = color.rgb;
   var alpha = color.a;

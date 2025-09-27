@@ -264,20 +264,54 @@ export async function generateFragmentShaderArtifacts(
     const shaderCode = await fs.readFile(absoluteSource, 'utf8');
     const reflect = new WgslReflect(shaderCode);
 
-  const candidateFunctions = reflect.functions.filter((fn) => !fn.stage);
-  if (candidateFunctions.length === 0) {
-    throw new Error('No free function found in fragment shader source. Exactly one function is required.');
-  }
-  if (candidateFunctions.length > 1) {
-    const names = candidateFunctions.map((fn) => fn.name).join(', ');
-    throw new Error(`Multiple functions found (${names}). Exactly one function is supported per fragment shader.`);
-  }
-  const targetFunction = candidateFunctions[0];
-  const returnType = targetFunction.returnType?.getTypeName();
-  if (returnType !== 'vec4f') {
-    throw new Error(`Fragment function must return vec4f. Received ${returnType ?? 'void'}.`);
+  const freeFunctions = reflect.functions.filter((fn) => !fn.stage);
+  const passFunctions = freeFunctions.filter((fn) => /^pass\d+$/.test(fn.name));
+
+  if (passFunctions.length === 0) {
+    const helperNames = freeFunctions.map((fn) => fn.name).join(', ');
+    const suffix = helperNames ? ` Found helper functions: ${helperNames}` : '';
+    throw new Error(`No pass functions found. Expected one or more functions named pass0, pass1, ... in fragment shader.${suffix}`);
   }
 
+  const indexedPasses = passFunctions.map((fn) => {
+    const index = Number(fn.name.replace('pass', ''));
+    if (!Number.isInteger(index)) {
+      throw new Error(`Pass function ${fn.name} uses an invalid index.`);
+    }
+    return { fn, index };
+  }).sort((a, b) => a.index - b.index);
+
+  const seenIndexes = new Set<number>();
+  indexedPasses.forEach(({ fn, index }) => {
+    if (seenIndexes.has(index)) {
+      throw new Error(`Duplicate pass index detected for pass${index}.`);
+    }
+    seenIndexes.add(index);
+  });
+
+  indexedPasses.forEach(({ index }) => {
+    if (index < 0) {
+      throw new Error(`Pass indexes must start at 0. Received pass${index}.`);
+    }
+  });
+
+  indexedPasses.forEach(({ index }, position) => {
+    if (index !== position) {
+      throw new Error(`Missing pass${position}. Pass functions must form a contiguous sequence starting at pass0.`);
+    }
+  });
+
+  const orderedPassFunctions = indexedPasses.map(({ fn }) => fn);
+  const passCount = orderedPassFunctions.length;
+
+  orderedPassFunctions.forEach((fn) => {
+    const returnType = fn.returnType?.getTypeName();
+    if (returnType !== 'vec4f') {
+      throw new Error(`Fragment pass ${fn.name} must return vec4f. Received ${returnType ?? 'void'}.`);
+    }
+  });
+
+  const targetFunction = orderedPassFunctions[0];
   const args = targetFunction.arguments;
   if (args.length < 3) {
     throw new Error('Fragment function must include uv followed by at least one texture/sampler pair.');
@@ -285,6 +319,27 @@ export async function generateFragmentShaderArtifacts(
 
   const uvArg = args[0];
   validateUvArgument(uvArg);
+
+  const baseArgumentTypes = args.map((argument) => argument.type.getTypeName());
+  const baseArgumentNames = args.map((argument) => argument.name);
+
+  orderedPassFunctions.slice(1).forEach((passFn) => {
+    const passArgs = passFn.arguments;
+    if (passArgs.length !== args.length) {
+      throw new Error(`Pass ${passFn.name} must have ${args.length} arguments to match pass0. Received ${passArgs.length}.`);
+    }
+    passArgs.forEach((argument, index) => {
+      const expectedType = baseArgumentTypes[index];
+      const actualType = argument.type.getTypeName();
+      if (actualType !== expectedType) {
+        throw new Error(`Argument ${index} of ${passFn.name} must be ${expectedType}. Received ${actualType}.`);
+      }
+      const expectedName = baseArgumentNames[index];
+      if (argument.name !== expectedName) {
+        throw new Error(`Argument ${index} of ${passFn.name} must be named ${expectedName}. Received ${argument.name}.`);
+      }
+    });
+  });
 
   let uniformStruct: StructInfo | null = null;
   let uniformFields: UniformField[] = [];
@@ -321,6 +376,11 @@ export async function generateFragmentShaderArtifacts(
       throw new Error(`Sampler parameter must be named ${expectedSamplerName} to match the texture parameter ${textureArg.name}.`);
     }
     textureParams.push({ textureName: textureArg.name, samplerName: samplerArg.name });
+  }
+
+  const primaryTextureName = textureParams[0]?.textureName;
+  if (!primaryTextureName) {
+    throw new Error('At least one texture argument is required for a pass.');
   }
 
   const shaderPrefix = toPascalCase(shaderBaseName);
@@ -369,17 +429,17 @@ export async function generateFragmentShaderArtifacts(
   });
 
   const vertexSource = buildVertexSource(vertexDeclarations, varyingName);
-  const fragmentSource = buildFragmentSource(
+  const fragmentSources = orderedPassFunctions.map((passFn) => buildFragmentSource(
     shaderCode,
     fragmentDeclarations,
     uniformStruct,
     uniformLoaderFn,
-    targetFunction.name,
+    passFn.name,
     uvArg.name,
     uniformArgName,
     textureParams,
     varyingName,
-  );
+  ));
 
   const uniformInterfaceName = uniformStruct
     ? (uniformStruct.name.startsWith(shaderPrefix) ? uniformStruct.name : `${shaderPrefix}${uniformStruct.name}`)
@@ -437,7 +497,13 @@ export async function generateFragmentShaderArtifacts(
   tsLines.push(`import * as BABYLON from 'babylonjs';`);
   tsLines.push(`import { ${shaderFxImports.join(', ')} } from '${shaderFxImportPath}';`);
   tsLines.push(`export const ${shaderPrefix}VertexSource = ${escapeTemplateLiteral(vertexSource)};`);
-  tsLines.push(`export const ${shaderPrefix}FragmentSource = ${escapeTemplateLiteral(fragmentSource)};`);
+  tsLines.push(`export const ${shaderPrefix}FragmentSources = [`);
+  fragmentSources.forEach((source, index) => {
+    tsLines.push(`  ${escapeTemplateLiteral(source)}, // pass${index}`);
+  });
+  tsLines.push(`] as const;`);
+  tsLines.push(`export const ${shaderPrefix}PassCount = ${passCount} as const;`);
+  tsLines.push(`export const ${shaderPrefix}PrimaryTextureName = '${primaryTextureName}' as const;`);
   tsLines.push('');
   if (helperBlocks.length > 0) {
     tsLines.push(...helperBlocks);
@@ -471,20 +537,26 @@ export async function generateFragmentShaderArtifacts(
   tsLines.push('');
   tsLines.push(`export interface ${materialOptionsName} {`);
   tsLines.push('  name?: string;');
+  tsLines.push('  passIndex?: number;');
   tsLines.push('}');
   tsLines.push('');
   tsLines.push(`export function create${shaderPrefix}Material(scene: BABYLON.Scene, options: ${materialOptionsName} = {}): ${materialHandlesName} {`);
-  tsLines.push(`  const name = options.name ?? '${shaderPrefix}Material';`);
+  tsLines.push('  const passIndex = options.passIndex ?? 0;');
+  tsLines.push(`  if (passIndex < 0 || passIndex >= ${passCount}) {`);
+  tsLines.push(`    throw new Error(\`Invalid passIndex \${passIndex} for ${shaderPrefix}. Expected 0 <= passIndex < ${passCount}.\`);`);
+  tsLines.push('  }');
+  tsLines.push(`  const baseName = options.name ?? '${shaderPrefix}Material';`);
+  tsLines.push('  const shaderName = `${baseName}_pass${passIndex}`;');
   tsLines.push('  // Register shaders in the WGSL store to enable preprocessor');
-  tsLines.push(`  const vertexShaderName = \`\${name}VertexShader\`;`);
-  tsLines.push(`  const fragmentShaderName = \`\${name}FragmentShader\`;`);
+  tsLines.push('  const vertexShaderName = `${shaderName}VertexShader`;');
+  tsLines.push('  const fragmentShaderName = `${shaderName}FragmentShader`;');
   tsLines.push('  ');
   tsLines.push(`  BABYLON.ShaderStore.ShadersStoreWGSL[vertexShaderName] = ${shaderPrefix}VertexSource;`);
-  tsLines.push(`  BABYLON.ShaderStore.ShadersStoreWGSL[fragmentShaderName] = ${shaderPrefix}FragmentSource;`);
+  tsLines.push(`  BABYLON.ShaderStore.ShadersStoreWGSL[fragmentShaderName] = ${shaderPrefix}FragmentSources[passIndex];`);
   tsLines.push('  ');
-  tsLines.push('  const material = new BABYLON.ShaderMaterial(name, scene, {');
-  tsLines.push(`    vertex: name,`);
-  tsLines.push(`    fragment: name,`);
+  tsLines.push('  const material = new BABYLON.ShaderMaterial(shaderName, scene, {');
+  tsLines.push('    vertex: shaderName,');
+  tsLines.push('    fragment: shaderName,');
   tsLines.push('  }, {');
   tsLines.push(`    attributes: ['position', 'uv'],`);
   tsLines.push(`    uniforms: ${uniformsArrayLiteral},`);
@@ -514,10 +586,12 @@ export async function generateFragmentShaderArtifacts(
   effectLines.push(`export class ${effectClassName} extends CustomShaderEffect<${uniformInterfaceName}, ${inputsTypeName}> {`);
   effectLines.push(`  effectName = '${shaderPrefix}'`);
   effectLines.push('');
- effectLines.push(`  constructor(engine: BABYLON.WebGPUEngine, inputs: ${inputsTypeName}, width = 1280, height = 720, sampleMode: 'nearest' | 'linear' = 'linear', precision: RenderPrecision = 'half_float') {`);
+  effectLines.push(`  constructor(engine: BABYLON.WebGPUEngine, inputs: ${inputsTypeName}, width = 1280, height = 720, sampleMode: 'nearest' | 'linear' = 'linear', precision: RenderPrecision = 'half_float') {`);
   effectLines.push('    super(engine, inputs, {');
   effectLines.push(`      factory: (sceneRef, options) => create${shaderPrefix}Material(sceneRef, options),`);
   effectLines.push(`      textureInputKeys: ${textureNamesArrayLiteral},`);
+  effectLines.push(`      passCount: ${passCount},`);
+  effectLines.push(`      primaryTextureKey: '${primaryTextureName}',`);
   effectLines.push('      width,');
   effectLines.push('      height,');
   effectLines.push(`      materialName: '${shaderPrefix}Material',`);

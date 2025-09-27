@@ -9,7 +9,7 @@ struct EdgeUniforms {
   composite: u32,
 };
 
-fn edgeEffect(uv: vec2f, uniforms: EdgeUniforms, src: texture_2d<f32>, srcSampler: sampler) -> vec4f {
+fn pass0(uv: vec2f, uniforms: EdgeUniforms, src: texture_2d<f32>, srcSampler: sampler) -> vec4f {
   let dims = textureDimensions(src);
   let texelSize = vec2f(
     select(1.0 / f32(dims.x), 0.0, dims.x == 0u),

@@ -3,7 +3,7 @@ struct HorizontalBlurUniforms {
   resolution: f32,
 };
 
-fn horizontalBlur(uv: vec2f, uniforms: HorizontalBlurUniforms, src: texture_2d<f32>, srcSampler: sampler) -> vec4f {
+fn pass0(uv: vec2f, uniforms: HorizontalBlurUniforms, src: texture_2d<f32>, srcSampler: sampler) -> vec4f {
   var color = vec4f(0.0);
   var total = 0.0;
   let offset = 1.0 / uniforms.resolution;

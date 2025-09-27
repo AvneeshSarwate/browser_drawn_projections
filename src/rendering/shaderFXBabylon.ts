@@ -137,11 +137,13 @@ interface MaterialHandles<U, TName extends string = string> {
   setUniforms(uniforms: Partial<U>): void
 }
 
-export type ShaderMaterialFactory<U, TName extends string = string> = (scene: BABYLON.Scene, options?: { name?: string }) => MaterialHandles<U, TName>
+export type ShaderMaterialFactory<U, TName extends string = string> = (scene: BABYLON.Scene, options?: { name?: string; passIndex?: number }) => MaterialHandles<U, TName>
 
 export interface CustomShaderEffectOptions<U, I extends ShaderInputShape<I> = ShaderInputs> {
   factory: ShaderMaterialFactory<U, keyof I & string>
   textureInputKeys: Array<keyof I & string>
+  passCount?: number
+  primaryTextureKey?: keyof I & string
   width?: number
   height?: number
   sampler?: BABYLON.TextureSampler
@@ -156,16 +158,20 @@ export class CustomShaderEffect<U extends object, I extends ShaderInputShape<I> 
   readonly output: BABYLON.RenderTargetTexture
   protected readonly quad: BABYLON.Mesh
   protected readonly camera: BABYLON.FreeCamera
-  protected readonly handles: MaterialHandles<U, keyof I & string>
+  protected readonly passHandles: Array<MaterialHandles<U, keyof I & string>>
   protected readonly textureKeys: Array<keyof I & string>
+  protected readonly passCount: number
+  protected readonly primaryTextureKey: keyof I & string
   protected readonly defaultSampler: BABYLON.TextureSampler
   protected sampler?: BABYLON.TextureSampler
   protected readonly canvasTextures: Record<string, CanvasTextureEntry | undefined> = {}
-  protected readonly samplerState: Record<string, BABYLON.TextureSampler | undefined> = {}
+  protected readonly samplerState: Array<Record<string, BABYLON.TextureSampler | undefined>>
   protected readonly samplingMode: number
+  protected readonly textureType: number
+  protected pingPongTarget?: BABYLON.RenderTargetTexture
 
   get material(): BABYLON.ShaderMaterial {
-    return this.handles.material
+    return this.passHandles[0].material
   }
 
   constructor(engine: BABYLON.WebGPUEngine, inputs: I, options: CustomShaderEffectOptions<U, I>) {
@@ -201,12 +207,31 @@ export class CustomShaderEffect<U extends object, I extends ShaderInputShape<I> 
     this.height = height
 
     const materialName = options.materialName ?? 'ShaderFXMaterial'
-    this.handles = options.factory(this.scene, { name: materialName })
-    this.handles.material.backFaceCulling = false
+    const passCount = Math.max(1, options.passCount ?? 1)
+    this.passCount = passCount
+    const primaryTextureKey = options.primaryTextureKey ?? textureKeys[0]
+    if (!primaryTextureKey) {
+      throw new Error('CustomShaderEffect requires a primaryTextureKey to manage multi-pass routing')
+    }
+    if (!textureKeys.includes(primaryTextureKey)) {
+      throw new Error(`Primary texture key ${primaryTextureKey} must be one of the textureInputKeys`)
+    }
+    this.primaryTextureKey = primaryTextureKey
+
+    const samplerState: Array<Record<string, BABYLON.TextureSampler | undefined>> = []
+    this.passHandles = []
+    for (let i = 0; i < passCount; i++) {
+      const passName = passCount === 1 ? materialName : `${materialName}_pass${i}`
+      const handles = options.factory(this.scene, { name: passName, passIndex: i })
+      handles.material.backFaceCulling = false
+      this.passHandles.push(handles)
+      samplerState.push({})
+    }
+    this.samplerState = samplerState
 
     this.quad = BABYLON.MeshBuilder.CreatePlane('shaderFXQuad', { size: 2 }, this.scene)
     this.quad.isVisible = false
-    this.quad.material = this.handles.material
+    this.quad.material = this.passHandles[0].material
     this.quad.alwaysSelectAsActiveMesh = true
 
     const layerMask = 0x40000000
@@ -227,6 +252,7 @@ export class CustomShaderEffect<U extends object, I extends ShaderInputShape<I> 
     const textureType = options.precision === 'unsigned_int'
       ? BABYLON.Engine.TEXTURETYPE_UNSIGNED_INT
       : BABYLON.Engine.TEXTURETYPE_HALF_FLOAT
+    this.textureType = textureType
 
     this.output = new BABYLON.RenderTargetTexture(
       'shaderFXOutput',
@@ -253,17 +279,12 @@ export class CustomShaderEffect<U extends object, I extends ShaderInputShape<I> 
         samplingConstant,
       )
     }
-    for (const key of this.textureKeys) {
-      this.applySampler(key, this.defaultSampler)
-    }
     if (options.sampler) {
       this.sampler = options.sampler
-      for (const key of this.textureKeys) {
-        this.applySampler(key, options.sampler)
-      }
     }
+    this.applyDefaultSamplers()
 
-    this._applySources()
+    this.applyInitialSources()
   }
 
   setTextureSampler(sampler: BABYLON.TextureSampler): void {
@@ -274,17 +295,36 @@ export class CustomShaderEffect<U extends object, I extends ShaderInputShape<I> 
   }
 
   protected applySampler(key: keyof I & string, sampler: BABYLON.TextureSampler): void {
-    const current = this.samplerState[key]
+    for (let passIndex = 0; passIndex < this.passCount; passIndex++) {
+      this.applySamplerForPass(passIndex, key, sampler)
+    }
+  }
+
+  protected applySamplerForPass(passIndex: number, key: keyof I & string, sampler: BABYLON.TextureSampler): void {
+    const state = this.samplerState[passIndex]
+    const current = state[key]
     if (current === sampler) {
       return
     }
-    this.handles.setTextureSampler(key, sampler)
-    this.samplerState[key] = sampler
+    this.passHandles[passIndex].setTextureSampler(key, sampler)
+    state[key] = sampler
+  }
+
+  protected applyDefaultSamplers(): void {
+    const sampler = this.sampler ?? this.defaultSampler
+    for (const key of this.textureKeys) {
+      this.applySampler(key, sampler)
+    }
   }
 
   setSrcs(fx: Partial<I>): void {
     this.inputs = { ...this.inputs, ...fx }
-    this._applySources()
+    this.applyInitialSources()
+  }
+
+  protected applyInitialSources(): void {
+    const resolved = this.resolveInputTextures()
+    this.applySourcesToAllPasses(resolved)
   }
 
   setUniforms(uniforms: ShaderUniforms): void {
@@ -294,97 +334,173 @@ export class CustomShaderEffect<U extends object, I extends ShaderInputShape<I> 
   }
 
   updateUniforms(): void {
-    const resolved: Record<string, unknown> = {}
+    const resolvedUniforms: Record<string, unknown> = {}
     for (const key in this.uniforms) {
-      resolved[key] = extract(this.uniforms[key])
+      resolvedUniforms[key] = extract(this.uniforms[key])
     }
-    this.handles.setUniforms(resolved as Partial<U>)
+    const partial = resolvedUniforms as Partial<U>
+    for (const handles of this.passHandles) {
+      handles.setUniforms(partial)
+    }
   }
 
-  render(_engine: BABYLON.Engine): void {
-    this._applySources()
-    this.updateUniforms()
-    this.quad.isVisible = true
-    this.output.render(false)
-    this.quad.isVisible = false
-  }
-
-  dispose(): void {
-    this.output.dispose()
-    this.quad.dispose(false, false)
-    this.camera.dispose()
-    this.handles.material.dispose(true, false)
-    Object.values(this.canvasTextures).forEach((entry) => {
-      entry?.internal.dispose()
-      entry?.texture.dispose()
-    })
-    this.scene.dispose()
-  }
-
-  protected _applySources(): void {
+  protected resolveInputTextures(): Partial<Record<keyof I & string, BABYLON.BaseTexture>> {
+    const resolved: Partial<Record<keyof I & string, BABYLON.BaseTexture>> = {}
     for (const key of this.textureKeys) {
       const source = this.inputs[key]
       if (!source) {
         continue
       }
-      const resolved = resolveTexture(this.engine, this.scene, source)
-      let texture: BABYLON.BaseTexture
-      if (resolved instanceof BABYLON.BaseTexture) {
-        texture = resolved
-      } else if (resolved instanceof BABYLON.RenderTargetTexture) {
-        texture = resolved
-      } else {
-        let entry = this.canvasTextures[key]
-        const width = resolved.width as number
-        const height = resolved.height as number
-        if (!entry) {
-          const internal = this.engine.createDynamicTexture(width, height, false, this.samplingMode)
-          internal.wrapU = BABYLON.Texture.CLAMP_ADDRESSMODE
-          internal.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE
-          const wrapper = new BABYLON.BaseTexture(this.scene, internal)
-          wrapper.wrapU = BABYLON.Texture.CLAMP_ADDRESSMODE
-          wrapper.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE
-          wrapper.updateSamplingMode(this.samplingMode)
-          entry = { texture: wrapper, internal, width, height }
-          this.canvasTextures[key] = entry
-        } else if (entry.width !== width || entry.height !== height) {
-          entry.internal.dispose()
-          const internal = this.engine.createDynamicTexture(width, height, false, this.samplingMode)
-          internal.wrapU = BABYLON.Texture.CLAMP_ADDRESSMODE
-          internal.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE
-          entry.texture._texture = internal
-          entry.texture.wrapU = BABYLON.Texture.CLAMP_ADDRESSMODE
-          entry.texture.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE
-          entry.texture.updateSamplingMode(this.samplingMode)
-          entry.internal = internal
-          entry.width = width
-          entry.height = height
-        }
-        entry = this.canvasTextures[key]
-        const ensuredEntry = entry
-        if (!ensuredEntry) {
-          continue
-        }
-        const imageSource = resolved as HTMLCanvasElement | OffscreenCanvas
-
-        // Debug: Log canvas texture update
-        // console.log('Updating canvas texture:', {
-        //   key,
-        //   width,
-        //   height,
-        //   canvasId: (imageSource as HTMLCanvasElement).id,
-        //   canvasWidth: imageSource.width,
-        //   canvasHeight: imageSource.height
-        // })
-        
-        this.engine.updateDynamicTexture(ensuredEntry.internal, imageSource, true, false, this.samplingMode)
-        ensuredEntry.width = width
-        ensuredEntry.height = height
-        texture = ensuredEntry.texture
+      const texture = this.resolveSourceTexture(key, source)
+      if (texture) {
+        resolved[key] = texture
       }
-      this.handles.setTexture(key, texture)
-      this.applySampler(key, this.sampler ?? this.defaultSampler)
     }
+    return resolved
+  }
+
+  protected resolveSourceTexture(key: keyof I & string, source: ShaderSource): BABYLON.BaseTexture | undefined {
+    const resolved = resolveTexture(this.engine, this.scene, source)
+    if (resolved instanceof BABYLON.BaseTexture) {
+      return resolved
+    }
+    if (resolved instanceof BABYLON.RenderTargetTexture) {
+      return resolved
+    }
+
+    let entry = this.canvasTextures[key]
+    const width = resolved.width as number
+    const height = resolved.height as number
+    if (!entry) {
+      const internal = this.engine.createDynamicTexture(width, height, false, this.samplingMode)
+      internal.wrapU = BABYLON.Texture.CLAMP_ADDRESSMODE
+      internal.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE
+      const wrapper = new BABYLON.BaseTexture(this.scene, internal)
+      wrapper.wrapU = BABYLON.Texture.CLAMP_ADDRESSMODE
+      wrapper.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE
+      wrapper.updateSamplingMode(this.samplingMode)
+      entry = { texture: wrapper, internal, width, height }
+      this.canvasTextures[key] = entry
+    } else if (entry.width !== width || entry.height !== height) {
+      entry.internal.dispose()
+      const internal = this.engine.createDynamicTexture(width, height, false, this.samplingMode)
+      internal.wrapU = BABYLON.Texture.CLAMP_ADDRESSMODE
+      internal.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE
+      entry.texture._texture = internal
+      entry.texture.wrapU = BABYLON.Texture.CLAMP_ADDRESSMODE
+      entry.texture.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE
+      entry.texture.updateSamplingMode(this.samplingMode)
+      entry.internal = internal
+      entry.width = width
+      entry.height = height
+    }
+    const ensuredEntry = this.canvasTextures[key]
+    if (!ensuredEntry) {
+      return undefined
+    }
+    const imageSource = resolved as HTMLCanvasElement | OffscreenCanvas
+    this.engine.updateDynamicTexture(ensuredEntry.internal, imageSource, true, false, this.samplingMode)
+    ensuredEntry.width = width
+    ensuredEntry.height = height
+    return ensuredEntry.texture
+  }
+
+  protected applySourcesForPass(
+    passIndex: number,
+    resolvedTextures: Partial<Record<keyof I & string, BABYLON.BaseTexture>>,
+    primaryOverride?: BABYLON.BaseTexture,
+  ): void {
+    const handles = this.passHandles[passIndex]
+    for (const key of this.textureKeys) {
+      let texture = resolvedTextures[key]
+      if (key === this.primaryTextureKey && primaryOverride) {
+        texture = primaryOverride
+      }
+      if (!texture) {
+        continue
+      }
+      handles.setTexture(key, texture)
+      this.applySamplerForPass(passIndex, key, this.sampler ?? this.defaultSampler)
+    }
+  }
+
+  protected applySourcesToAllPasses(resolvedTextures: Partial<Record<keyof I & string, BABYLON.BaseTexture>>): void {
+    for (let passIndex = 0; passIndex < this.passCount; passIndex++) {
+      this.applySourcesForPass(passIndex, resolvedTextures)
+    }
+  }
+
+  protected ensurePingPongTarget(): BABYLON.RenderTargetTexture {
+    if (this.pingPongTarget) {
+      return this.pingPongTarget
+    }
+    const target = new BABYLON.RenderTargetTexture(
+      'shaderFXPingPong',
+      { width: this.width, height: this.height },
+      this.scene,
+      false,
+      true,
+      this.textureType,
+      false,
+      this.samplingMode,
+      false,
+    )
+    target.activeCamera = this.camera
+    target.ignoreCameraViewport = true
+    target.clearColor = new BABYLON.Color4(0, 0, 0, 0)
+    target.renderList = [this.quad]
+    this.pingPongTarget = target
+    return target
+  }
+
+  render(_engine: BABYLON.Engine): void {
+    const resolvedInputs = this.resolveInputTextures()
+    this.updateUniforms()
+
+    let previousOutput: BABYLON.RenderTargetTexture | undefined
+    let pingTarget: BABYLON.RenderTargetTexture | undefined
+    if (this.passCount > 1) {
+      pingTarget = this.ensurePingPongTarget()
+    }
+    let writeTarget = this.passCount > 1
+      ? (this.passCount % 2 === 0 ? pingTarget! : this.output)
+      : this.output
+
+    for (let passIndex = 0; passIndex < this.passCount; passIndex++) {
+      const isFinalPass = passIndex === this.passCount - 1
+      const target = isFinalPass ? this.output : writeTarget
+
+      const primaryOverride = passIndex === 0 ? undefined : (previousOutput as BABYLON.BaseTexture | undefined)
+      this.applySourcesForPass(passIndex, resolvedInputs, primaryOverride)
+
+      this.quad.material = this.passHandles[passIndex].material
+      this.quad.isVisible = true
+      try {
+        target.render(false)
+      } finally {
+        this.quad.isVisible = false
+      }
+
+      previousOutput = target
+      if (!isFinalPass && pingTarget) {
+        writeTarget = target === pingTarget ? this.output : pingTarget
+      }
+    }
+  }
+
+  dispose(): void {
+    this.output.dispose()
+    this.pingPongTarget?.dispose()
+    this.quad.dispose(false, false)
+    this.camera.dispose()
+    this.passHandles.forEach((handles) => {
+      handles.material.dispose(true, false)
+    })
+    Object.values(this.canvasTextures).forEach((entry) => {
+      entry?.internal.dispose()
+      entry?.texture.dispose()
+    })
+    this.scene.dispose()
   }
 }
 
@@ -424,12 +540,17 @@ export class CanvasPaint extends CustomShaderEffect<Record<string, never>, Canva
   }
 
   override render(engine: BABYLON.Engine): void {
-    this._applySources()
+    const resolved = this.resolveInputTextures()
+    this.applySourcesForPass(0, resolved)
     this.updateUniforms()
     engine.restoreDefaultFramebuffer()
+    this.quad.material = this.passHandles[0].material
     this.quad.isVisible = true
-    this.scene.render(false)
-    this.quad.isVisible = false
+    try {
+      this.scene.render(false)
+    } finally {
+      this.quad.isVisible = false
+    }
   }
 }
 
