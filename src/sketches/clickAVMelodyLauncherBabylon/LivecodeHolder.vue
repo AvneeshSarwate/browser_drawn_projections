@@ -14,6 +14,7 @@ import { VerticalBlurEffect } from '@/rendering/postFX/verticalBlur.frag.generat
 import { HorizontalBlurEffect } from '@/rendering/postFX/horizontalBlur.frag.generated';
 import { LayerBlendEffect } from '@/rendering/postFX/layerBlend.frag.generated';
 import { TransformEffect } from '@/rendering/postFX/transform.frag.generated';
+import { BloomEffect } from '@/rendering/postFX/bloom.frag.generated';
 
 const appState = inject<ClickAVAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
@@ -158,13 +159,27 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
         const horBlur = new HorizontalBlurEffect(engine, { src: vertBlur }, width, height)
         const transform = new TransformEffect(engine, { src: horBlur }, width, height)
         const layerOverlay = new LayerBlendEffect(engine, { src1: p5Passthru, src2: transform }, width, height)
-        chainEnd = layerOverlay
+        const bloom = new BloomEffect(engine, { src: layerOverlay, base: layerOverlay }, width, height)
+        chainEnd = bloom
 
-        feedback.setFeedbackSrc(layerOverlay)
+        feedback.setFeedbackSrc(bloom)
       
         transform.setUniforms({ rotate: 0, anchor: [0.5, 0.5], translate: [0, 0], scale: [0.995, 0.995] })
         vertBlur.setUniforms({ pixels: 2, resolution: height })
         horBlur.setUniforms({ pixels: 2, resolution: width })
+        bloom.setUniforms({
+          preBlackLevel: 0.05,
+          preGamma: 1.0,
+          preBrightness: 2.0,
+          minBloomRadius: 0.1,
+          maxBloomRadius: 0.6,
+          bloomThreshold: 0.12,
+          bloomSCurve: 0.35,
+          bloomFill: 0.25,
+          bloomIntensity: 0.2,
+          outputMode: 0,
+          inputImage: 1.0,
+        })
       }
 
 
