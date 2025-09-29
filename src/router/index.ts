@@ -43,7 +43,8 @@ export const sketchNames = [
   'sonar_sketch',
   'draw_to_piano_roll',
   'polygonFill',
-  'handwriting_animator'
+  'handwriting_animator',
+  'vuePianoRoll'
 ]
 
 const sketchRoutes = sketchNames.map(name => {
