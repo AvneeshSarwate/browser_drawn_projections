@@ -12,6 +12,16 @@ export type NoteData = {
   metadata?: any
 }
 
+// Input type for notes that may be missing id or velocity
+export type NoteDataInput = {
+  id?: string
+  pitch: number
+  position: number
+  duration: number
+  velocity?: number
+  metadata?: any
+}
+
 export interface PianoRollState {
   stage?: Konva.Stage
   konvaContainer?: HTMLDivElement
@@ -39,6 +49,7 @@ export interface PianoRollState {
     subdivision: number  // 16 for 16th notes
     numMeasures: number
     timeSignature: number
+    maxLength: number  // max length in quarter notes
     backgroundColor1: string
     backgroundColor2: string
     noteColor: string
@@ -89,10 +100,16 @@ export interface PianoRollState {
   needsRedraw: boolean
   rafHandle?: number
 
-  // Cursor
-  cursor: {
+  // Queue playhead (green) - where playback will start from
+  queuePlayhead: {
     position: number  // in quarter notes
-    element?: Konva.Rect
+    element?: Konva.Line
+  }
+
+  // Live playhead (orange) - controlled during playback
+  livePlayhead: {
+    position: number  // in quarter notes
+    element?: Konva.Line
   }
 }
 
@@ -120,6 +137,7 @@ export const createPianoRollState = (): PianoRollState => {
       subdivision: 16,
       numMeasures: 100,
       timeSignature: 4,
+      maxLength: 64,  // 16 bars * 4 beats = 64 quarter notes
       backgroundColor1: '#ddd',
       backgroundColor2: '#bbb',
       noteColor: '#f23',
@@ -162,8 +180,13 @@ export const createPianoRollState = (): PianoRollState => {
     needsRedraw: false,
     rafHandle: undefined,
 
-    cursor: {
-      position: 0.25,
+    queuePlayhead: {
+      position: 0,
+      element: undefined
+    },
+
+    livePlayhead: {
+      position: 0,
       element: undefined
     }
   }

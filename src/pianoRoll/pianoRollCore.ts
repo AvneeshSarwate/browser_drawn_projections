@@ -70,16 +70,24 @@ export function initializeLayers(state: PianoRollState, stage: Konva.Stage) {
   })
   overlayLayer.add(state.selection.selectionRect)
 
-  // Create cursor element
-  const cursorWidth = 2
+  // Create queue playhead element (green)
   const pianoRollHeight = 128 * state.grid.noteHeight
-  state.cursor.element = new Konva.Rect({
-    width: cursorWidth,
-    height: pianoRollHeight,
-    fill: state.grid.noteColor,
+  state.queuePlayhead.element = new Konva.Line({
+    points: [0, 0, 0, pianoRollHeight],
+    stroke: '#00ff00',
+    strokeWidth: 2,
     listening: false
   })
-  overlayLayer.add(state.cursor.element)
+  overlayLayer.add(state.queuePlayhead.element)
+
+  // Create live playhead element (orange)
+  state.livePlayhead.element = new Konva.Line({
+    points: [0, 0, 0, pianoRollHeight],
+    stroke: '#ff8800',
+    strokeWidth: 2,
+    listening: false
+  })
+  overlayLayer.add(state.livePlayhead.element)
 
   // Initialize command stack
   state.command.stack = new CommandStack(
@@ -343,13 +351,23 @@ export function renderMarqueeRect(state: PianoRollState) {
   state.layers.overlay?.batchDraw()
 }
 
-export function updateCursorPosition(state: PianoRollState) {
-  if (!state.cursor.element) return
+export function updateQueuePlayheadPosition(state: PianoRollState) {
+  if (!state.queuePlayhead.element) return
 
   const { scrollX } = state.viewport
-  const x = state.cursor.position * state.grid.quarterNoteWidth - scrollX
+  const x = state.queuePlayhead.position * state.grid.quarterNoteWidth - scrollX
 
-  state.cursor.element.x(x)
+  state.queuePlayhead.element.x(x)
+  state.layers.overlay?.batchDraw()
+}
+
+export function updateLivePlayheadPosition(state: PianoRollState) {
+  if (!state.livePlayhead.element) return
+
+  const { scrollX } = state.viewport
+  const x = state.livePlayhead.position * state.grid.quarterNoteWidth - scrollX
+
+  state.livePlayhead.element.x(x)
   state.layers.overlay?.batchDraw()
 }
 
@@ -499,10 +517,25 @@ export function setupEventHandlers(state: PianoRollState, stage: Konva.Stage) {
     }
 
     if (state.interaction.isMarqueeSelecting) {
+      const wasClick = state.interaction.marqueeStart && state.interaction.marqueeCurrent &&
+        Math.abs(state.interaction.marqueeStart.x - state.interaction.marqueeCurrent.x) < 5 &&
+        Math.abs(state.interaction.marqueeStart.y - state.interaction.marqueeCurrent.y) < 5
+
       state.interaction.isMarqueeSelecting = false
       if (state.selection.selectionRect) {
         state.selection.selectionRect.visible(false)
         state.layers.overlay?.batchDraw()
+      }
+
+      // If it was a click (not a drag), move queue playhead to clicked position
+      if (wasClick && e.target === stage || e.target.getLayer() === gridLayer) {
+        const pos = stage.getPointerPosition()
+        if (pos) {
+          const { position } = screenToPitchPosition(pos, state)
+          const quantizedPos = quantizeToGrid(position, state.grid.subdivision)
+          state.queuePlayhead.position = Math.max(0, Math.min(quantizedPos, state.grid.maxLength))
+          state.needsRedraw = true
+        }
       }
     }
   })

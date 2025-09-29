@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import Konva from 'konva'
-import { createPianoRollState, type PianoRollState, type NoteData } from './pianoRollState'
+import { createPianoRollState, type PianoRollState, type NoteData, type NoteDataInput } from './pianoRollState'
 import {
   initializeLayers,
   setupEventHandlers,
   renderGrid,
   renderVisibleNotes,
   renderResizeHandles,
-  updateCursorPosition,
+  updateQueuePlayheadPosition,
+  updateLivePlayheadPosition,
   captureState,
   restoreState
 } from './pianoRollCore'
@@ -83,7 +84,8 @@ const renderLoop = () => {
     renderGrid(state)
     renderVisibleNotes(state)
     renderResizeHandles(state)
-    updateCursorPosition(state)
+    updateQueuePlayheadPosition(state)
+    updateLivePlayheadPosition(state)
     state.needsRedraw = false
   }
   state.rafHandle = requestAnimationFrame(renderLoop)
@@ -183,7 +185,7 @@ const handleKeyDown = (e: KeyboardEvent) => {
           const newNote: NoteData = {
             ...note,
             id: `note_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            position: state.cursor.position + note.position
+            position: state.queuePlayhead.position + note.position
           }
           state.notes.set(newNote.id, newNote)
           state.selection.selectedIds.add(newNote.id)
@@ -265,6 +267,49 @@ watch(() => props.height, (newHeight) => {
     state.stage.height(newHeight)
     state.needsRedraw = true
   }
+})
+
+// Expose methods for web component API
+const setNotes = (notes: NoteDataInput[]) => {
+  const usedIds = new Set<string>()
+
+  state.notes.clear()
+
+  notes.forEach((noteInput, index) => {
+    // Generate unique ID if missing or duplicate
+    let id = noteInput.id || `note_${Date.now()}_${index}`
+    while (usedIds.has(id)) {
+      id = `note_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    }
+    usedIds.add(id)
+
+    // Add default velocity if missing
+    const note: NoteData = {
+      ...noteInput,
+      id,
+      velocity: noteInput.velocity ?? 100
+    }
+
+    state.notes.set(id, note)
+  })
+
+  state.needsRedraw = true
+}
+
+const setLivePlayheadPosition = (position: number) => {
+  // Cap at max piano roll length
+  state.livePlayhead.position = Math.max(0, Math.min(position, state.grid.maxLength))
+  state.needsRedraw = true
+}
+
+const getPlayStartPosition = (): number => {
+  return state.queuePlayhead.position
+}
+
+defineExpose({
+  setNotes,
+  setLivePlayheadPosition,
+  getPlayStartPosition
 })
 </script>
 
