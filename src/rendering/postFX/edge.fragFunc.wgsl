@@ -1,12 +1,12 @@
 struct EdgeUniforms {
-  channelMode: u32,
-  blackLevel: f32,
-  strength: f32,
-  sampleStep: vec2f,
-  sampleStepUnit: u32,
-  edgeColor: vec4f,
-  alphaMode: u32,
-  composite: u32,
+  channelMode: u32, // 0
+  blackLevel: f32, // 0.0
+  strength: f32, // 1.0
+  sampleStep: vec2f, // [1.0, 1.0]
+  sampleStepUnit: u32, // 1
+  edgeColor: vec4f, // [1.0, 1.0, 1.0, 1.0]
+  alphaMode: u32, // 0
+  composite: u32, // 1
 };
 
 fn pass0(uv: vec2f, uniforms: EdgeUniforms, src: texture_2d<f32>, srcSampler: sampler) -> vec4f {

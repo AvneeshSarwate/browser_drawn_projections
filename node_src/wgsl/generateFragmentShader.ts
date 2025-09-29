@@ -28,6 +28,7 @@ interface UniformField {
   name: string;
   bindingName: string;
   wgslType: string;
+  defaultExpression?: string;
 }
 
 interface TextureParam {
@@ -150,7 +151,8 @@ function validateSamplerArgument(argument: ArgumentInfo): void {
   }
 }
 
-function collectUniformFields(struct: StructInfo, uniformArgName: string): UniformField[] {
+function collectUniformFields(struct: StructInfo, uniformArgName: string, shaderSource: string): UniformField[] {
+  const defaultMap = extractUniformDefaults(shaderSource, struct.name);
   return struct.members.map((member) => {
     if (member.type.isStruct || member.type.isArray) {
       throw new Error(`Uniform field ${member.name} uses unsupported type ${member.type.getTypeName()}. Nested structs/arrays are not supported.`);
@@ -164,8 +166,87 @@ function collectUniformFields(struct: StructInfo, uniformArgName: string): Unifo
       name: member.name,
       bindingName,
       wgslType: typeName,
+      defaultExpression: defaultMap[member.name],
     };
   });
+}
+
+function extractUniformDefaults(source: string, structName: string): Record<string, string> {
+  const defaults: Record<string, string> = {};
+  const structRegex = new RegExp(`struct\\s+${structName}\\s*\\{`, 'g');
+  const match = structRegex.exec(source);
+  if (!match) {
+    return defaults;
+  }
+  const braceStart = source.indexOf('{', match.index);
+  if (braceStart === -1) {
+    return defaults;
+  }
+  let depth = 0;
+  let endIndex = braceStart;
+  for (let i = braceStart; i < source.length; i++) {
+    const char = source[i];
+    if (char === '{') {
+      depth++;
+    } else if (char === '}') {
+      depth--;
+      if (depth === 0) {
+        endIndex = i;
+        break;
+      }
+    }
+  }
+  const body = source.slice(braceStart + 1, endIndex);
+  const lines = body.split(/\r?\n/);
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) {
+      continue;
+    }
+    const commentIndex = line.indexOf('//');
+    if (commentIndex === -1) {
+      continue;
+    }
+    const comment = line.slice(commentIndex + 2).trim();
+    if (!comment) {
+      continue;
+    }
+    const declarationPart = line.slice(0, commentIndex).trim().replace(/,+$/, '');
+    const fieldMatch = declarationPart.match(/^([A-Za-z0-9_]+)\s*:/);
+    if (!fieldMatch) {
+      continue;
+    }
+    const fieldName = fieldMatch[1];
+    const expression = parseDefaultExpression(comment);
+    if (expression !== null) {
+      defaults[fieldName] = expression;
+    }
+  }
+  return defaults;
+}
+
+function parseDefaultExpression(comment: string): string | null {
+  const trimmed = comment.trim();
+  if (!trimmed) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (typeof parsed === 'boolean') {
+      return parsed ? 'true' : 'false';
+    }
+    return trimmed;
+  } catch (error) {
+    const lower = trimmed.toLowerCase();
+    if (lower === 'true' || lower === 'false') {
+      return lower;
+    }
+    const numeric = Number(trimmed);
+    if (!Number.isNaN(numeric)) {
+      return trimmed;
+    }
+  }
+  return null;
 }
 
 function generateUniformStructConstruction(struct: StructInfo, fields: UniformField[]): string {
@@ -352,7 +433,7 @@ export async function generateFragmentShaderArtifacts(
     if (structInfo) {
       uniformStruct = structInfo;
       uniformArgName = potentialUniform.name;
-      uniformFields = collectUniformFields(structInfo, uniformArgName);
+      uniformFields = collectUniformFields(structInfo, uniformArgName, shaderCode);
       resourceStartIndex = 2;
     }
   }
@@ -598,10 +679,19 @@ export async function generateFragmentShaderArtifacts(
   effectLines.push('      sampleMode,');
   effectLines.push('      precision,');
   effectLines.push('    })');
-  const uniformNames = new Set(uniformFields.map((field) => field.name));
-  const hasTransformDefaults = ['rotate', 'anchor', 'translate', 'scale'].every((name) => uniformNames.has(name));
-  if (hasTransformDefaults) {
-    effectLines.push('    this.setUniforms({ rotate: 0, anchor: [0.5, 0.5], translate: [0, 0], scale: [1, 1] });');
+  const fieldsWithDefaults = uniformFields.filter((field) => field.defaultExpression);
+  if (fieldsWithDefaults.length > 0) {
+    effectLines.push('    this.setUniforms({');
+    fieldsWithDefaults.forEach((field) => {
+      effectLines.push(`      ${field.name}: ${field.defaultExpression},`);
+    });
+    effectLines.push('    });');
+  } else {
+    const uniformNames = new Set(uniformFields.map((field) => field.name));
+    const hasTransformDefaults = ['rotate', 'anchor', 'translate', 'scale'].every((name) => uniformNames.has(name));
+    if (hasTransformDefaults) {
+      effectLines.push('    this.setUniforms({ rotate: 0, anchor: [0.5, 0.5], translate: [0, 0], scale: [1, 1] });');
+    }
   }
   effectLines.push('  }');
 

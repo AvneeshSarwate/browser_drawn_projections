@@ -167,19 +167,6 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
         transform.setUniforms({ rotate: 0, anchor: [0.5, 0.5], translate: [0, 0], scale: [0.995, 0.995] })
         vertBlur.setUniforms({ pixels: 2, resolution: height })
         horBlur.setUniforms({ pixels: 2, resolution: width })
-        bloom.setUniforms({
-          preBlackLevel: 0.05,
-          preGamma: 1.0,
-          preBrightness: 2.0,
-          minBloomRadius: 0.1,
-          maxBloomRadius: 0.6,
-          bloomThreshold: 0.12,
-          bloomSCurve: 0.35,
-          bloomFill: 0.25,
-          bloomIntensity: 0.2,
-          outputMode: 0,
-          inputImage: 1.0,
-        })
       }
 
 

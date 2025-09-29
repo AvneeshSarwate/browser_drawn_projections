@@ -52,17 +52,17 @@ var baseSampler: sampler;
 
 // Source fragment function
 struct BloomUniforms {
-  preBlackLevel: f32,
-  preGamma: f32,
-  preBrightness: f32,
-  minBloomRadius: f32,
-  maxBloomRadius: f32,
-  bloomThreshold: f32,
-  bloomSCurve: f32,
-  bloomFill: f32,
-  bloomIntensity: f32,
-  outputMode: u32,
-  inputImage: f32,
+  preBlackLevel: f32, // 0.05
+  preGamma: f32, // 1.0
+  preBrightness: f32, // 2.0
+  minBloomRadius: f32, // 0.1
+  maxBloomRadius: f32, // 0.6
+  bloomThreshold: f32, // 0.12
+  bloomSCurve: f32, // 0.35
+  bloomFill: f32, // 0.25
+  bloomIntensity: f32, // 1.1
+  outputMode: u32, // 0
+  inputImage: f32, // 1.0
 };
 
 fn saturateVec3(value: vec3f) -> vec3f {
@@ -250,17 +250,17 @@ var baseSampler: sampler;
 
 // Source fragment function
 struct BloomUniforms {
-  preBlackLevel: f32,
-  preGamma: f32,
-  preBrightness: f32,
-  minBloomRadius: f32,
-  maxBloomRadius: f32,
-  bloomThreshold: f32,
-  bloomSCurve: f32,
-  bloomFill: f32,
-  bloomIntensity: f32,
-  outputMode: u32,
-  inputImage: f32,
+  preBlackLevel: f32, // 0.05
+  preGamma: f32, // 1.0
+  preBrightness: f32, // 2.0
+  minBloomRadius: f32, // 0.1
+  maxBloomRadius: f32, // 0.6
+  bloomThreshold: f32, // 0.12
+  bloomSCurve: f32, // 0.35
+  bloomFill: f32, // 0.25
+  bloomIntensity: f32, // 1.1
+  outputMode: u32, // 0
+  inputImage: f32, // 1.0
 };
 
 fn saturateVec3(value: vec3f) -> vec3f {
@@ -555,6 +555,19 @@ export class BloomEffect extends CustomShaderEffect<BloomUniforms, BloomInputs> 
       sampleMode,
       precision,
     })
+    this.setUniforms({
+      preBlackLevel: 0.05,
+      preGamma: 1.0,
+      preBrightness: 2.0,
+      minBloomRadius: 0.1,
+      maxBloomRadius: 0.6,
+      bloomThreshold: 0.12,
+      bloomSCurve: 0.35,
+      bloomFill: 0.25,
+      bloomIntensity: 1.1,
+      outputMode: 0,
+      inputImage: 1.0,
+    });
   }
 
   override setSrcs(inputs: Partial<BloomInputs>): void {

@@ -54,20 +54,20 @@ var srcSampler: sampler;
 
 // Source fragment function
 struct LimitUniforms {
-  minFunction: u32,
-  maxFunction: u32,
-  minValue: f32,
-  maxValue: f32,
-  positiveOnly: u32,
-  normalize: u32,
-  normalizeMin: f32,
-  normalizeMax: f32,
-  quantizeValueMode: u32,
-  valueStep: f32,
-  valueOffset: f32,
-  quantizePositionMode: u32,
-  positionStep: vec2f,
-  positionOffset: vec2f,
+  minFunction: u32, // 0
+  maxFunction: u32, // 0
+  minValue: f32, // 0.0
+  maxValue: f32, // 1.0
+  positiveOnly: u32, // 0
+  normalize: u32, // 0
+  normalizeMin: f32, // 0.0
+  normalizeMax: f32, // 1.0
+  quantizeValueMode: u32, // 0
+  valueStep: f32, // 0.1
+  valueOffset: f32, // 0.0
+  quantizePositionMode: u32, // 0
+  positionStep: vec2f, // [0.0, 0.0]
+  positionOffset: vec2f, // [0.0, 0.0]
 };
 
 fn pass0(uv: vec2f, uniforms: LimitUniforms, src: texture_2d<f32>, srcSampler: sampler) -> vec4f {
@@ -476,6 +476,22 @@ export class LimitEffect extends CustomShaderEffect<LimitUniforms, LimitInputs> 
       sampleMode,
       precision,
     })
+    this.setUniforms({
+      minFunction: 0,
+      maxFunction: 0,
+      minValue: 0.0,
+      maxValue: 1.0,
+      positiveOnly: 0,
+      normalize: 0,
+      normalizeMin: 0.0,
+      normalizeMax: 1.0,
+      quantizeValueMode: 0,
+      valueStep: 0.1,
+      valueOffset: 0.0,
+      quantizePositionMode: 0,
+      positionStep: [0.0, 0.0],
+      positionOffset: [0.0, 0.0],
+    });
   }
 
   override setSrcs(inputs: Partial<LimitInputs>): void {
