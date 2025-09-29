@@ -17,12 +17,11 @@ const props = withDefaults(defineProps<{
   width?: number
   height?: number
   initialNotes?: Array<[string, NoteData]>
-  gridSubdivision?: number
+  syncState?: (state: PianoRollState) => void
 }>(), {
   width: 640,
   height: 360,
-  initialNotes: () => [],
-  gridSubdivision: 16
+  initialNotes: () => []
 })
 
 const emit = defineEmits<{
@@ -46,13 +45,7 @@ const selectionCount = computed(() => state.selection.selectedIds.size)
 watch(gridSubdivision, (newValue) => {
   state.grid.subdivision = newValue
   state.needsRedraw = true
-})
-
-// Watch grid subdivision prop
-watch(() => props.gridSubdivision, (newValue) => {
-  gridSubdivision.value = newValue
-  state.grid.subdivision = newValue
-  state.needsRedraw = true
+  props.syncState?.(state)
 })
 
 // Undo/redo functions
@@ -99,6 +92,7 @@ const renderLoop = () => {
 // Emit state updates
 const emitStateUpdate = () => {
   emit('notes-update', Array.from(state.notes.entries()))
+  props.syncState?.(state)
 }
 
 // Watch for state changes to emit updates
