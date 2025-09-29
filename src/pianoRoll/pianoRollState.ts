@@ -70,6 +70,7 @@ export interface PianoRollState {
 
     // Overlap preview tracking
     hiddenNoteIds: Set<string>  // notes hidden due to drag/resize overlap
+    truncatedNotes: Map<string, number>  // noteId -> truncated duration for display
   }
 
   // Undo/redo (simple snapshot-based)
@@ -144,7 +145,8 @@ export const createPianoRollState = (): PianoRollState => {
       marqueeCurrent: undefined,
       marqueeIsShift: false,
 
-      hiddenNoteIds: new Set()
+      hiddenNoteIds: new Set(),
+      truncatedNotes: new Map()
     },
 
     command: {

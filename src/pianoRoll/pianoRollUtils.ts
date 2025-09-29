@@ -131,30 +131,66 @@ export function notesOverlap(note1: NoteData, note2: NoteData): boolean {
   return !(note1End <= note2.position || note2End <= note1.position)
 }
 
-// Update overlap preview: mark notes that should be hidden
+// Update overlap preview: mark notes that should be hidden or truncated (for display only)
 export function updateOverlapPreview(state: PianoRollState) {
   state.interaction.hiddenNoteIds.clear()
+  state.interaction.truncatedNotes.clear()
 
   state.selection.selectedIds.forEach(selectedId => {
     const selectedNote = state.notes.get(selectedId)
     if (!selectedNote) return
+
+    const selectedEnd = selectedNote.position + selectedNote.duration
 
     // Find notes at same pitch
     state.notes.forEach((otherNote, otherId) => {
       if (state.selection.selectedIds.has(otherId)) return
       if (otherNote.pitch !== selectedNote.pitch) return
 
-      // Check overlap
-      const selectedEnd = selectedNote.position + selectedNote.duration
       const otherEnd = otherNote.position + otherNote.duration
 
-      // If selected note overlaps with START of other note → hide other
-      if (selectedNote.position <= otherNote.position &&
-          otherNote.position < selectedEnd) {
+      // Case 1: Truncate - selected note's start overlaps middle of other note
+      // (other note starts before selected, but ends after selected starts)
+      if (otherNote.position < selectedNote.position &&
+          selectedNote.position < otherEnd) {
+        // Store truncated duration for rendering
+        const truncatedDuration = selectedNote.position - otherNote.position
+        state.interaction.truncatedNotes.set(otherId, truncatedDuration)
+      }
+      // Case 2: Delete - selected note overlaps start of other note
+      else if (selectedNote.position <= otherNote.position &&
+               otherNote.position < selectedEnd) {
         state.interaction.hiddenNoteIds.add(otherId)
       }
     })
   })
+}
+
+// Get the display duration for a note (may be truncated during drag/resize)
+export function getNoteDisplayDuration(state: PianoRollState, noteId: string, originalDuration: number): number {
+  return state.interaction.truncatedNotes.get(noteId) ?? originalDuration
+}
+
+// Execute overlap changes: actually truncate/delete notes in state
+export function executeOverlapChanges(state: PianoRollState) {
+  // Delete hidden notes
+  state.interaction.hiddenNoteIds.forEach(noteId => {
+    state.notes.delete(noteId)
+  })
+
+  // Truncate notes
+  state.interaction.truncatedNotes.forEach((truncatedDuration, noteId) => {
+    const note = state.notes.get(noteId)
+    if (note) {
+      note.duration = truncatedDuration
+    }
+  })
+}
+
+// Clear overlap preview state (call on drag/resize end)
+export function clearOverlapPreview(state: PianoRollState) {
+  state.interaction.truncatedNotes.clear()
+  state.interaction.hiddenNoteIds.clear()
 }
 
 // Apply snap-to-note-start feature

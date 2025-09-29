@@ -36,13 +36,21 @@ const state: PianoRollState = createPianoRollState()
 const konvaContainer = ref<HTMLDivElement>()
 const canUndo = ref(false)
 const canRedo = ref(false)
+const gridSubdivision = ref(state.grid.subdivision)
 
 // Computed properties
 const noteCount = computed(() => state.notes.size)
 const selectionCount = computed(() => state.selection.selectedIds.size)
 
+// Watch grid subdivision changes
+watch(gridSubdivision, (newValue) => {
+  state.grid.subdivision = newValue
+  state.needsRedraw = true
+})
+
 // Watch grid subdivision prop
 watch(() => props.gridSubdivision, (newValue) => {
+  gridSubdivision.value = newValue
   state.grid.subdivision = newValue
   state.needsRedraw = true
 })
@@ -274,7 +282,7 @@ watch(() => props.height, (newHeight) => {
       <span class="separator">|</span>
       <label>
         Grid:
-        <select v-model.number="state.grid.subdivision">
+        <select v-model.number="gridSubdivision">
           <option :value="4">Quarter</option>
           <option :value="8">Eighth</option>
           <option :value="16">16th</option>

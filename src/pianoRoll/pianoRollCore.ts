@@ -8,6 +8,9 @@ import {
   isNoteVisible,
   getNotesInRect,
   updateOverlapPreview,
+  clearOverlapPreview,
+  executeOverlapChanges,
+  getNoteDisplayDuration,
   applySnapToNoteStart,
   getGridUnitWidth,
   midiPitchToString,
@@ -89,18 +92,22 @@ export function initializeLayers(state: PianoRollState, stage: Konva.Stage) {
 
 let lastGridScrollX = -1
 let lastGridScrollY = -1
+let lastGridSubdivision = -1
 
 export function renderGrid(state: PianoRollState) {
   const gridLayer = state.layers.grid
   if (!gridLayer || !state.stage) return
 
-  // Only redraw if viewport changed
-  if (lastGridScrollX === state.viewport.scrollX && lastGridScrollY === state.viewport.scrollY) {
+  // Only redraw if viewport or subdivision changed
+  if (lastGridScrollX === state.viewport.scrollX &&
+      lastGridScrollY === state.viewport.scrollY &&
+      lastGridSubdivision === state.grid.subdivision) {
     return
   }
 
   lastGridScrollX = state.viewport.scrollX
   lastGridScrollY = state.viewport.scrollY
+  lastGridSubdivision = state.grid.subdivision
 
   gridLayer.destroyChildren()
 
@@ -180,12 +187,26 @@ export function renderVisibleNotes(state: PianoRollState) {
   const { scrollX, scrollY } = state.viewport
   const { quarterNoteWidth, noteHeight } = state.grid
 
+  // Separate notes into selected and unselected for proper z-order
+  const unselectedNotes: Array<[string, NoteData]> = []
+  const selectedNotes: Array<[string, NoteData]> = []
+
   state.notes.forEach((note, id) => {
     if (!isNoteVisible(note, state)) return
 
+    if (state.selection.selectedIds.has(id)) {
+      selectedNotes.push([id, note])
+    } else {
+      unselectedNotes.push([id, note])
+    }
+  })
+
+  // Render unselected notes first (back)
+  unselectedNotes.forEach(([id, note]) => {
     const screen = pitchPositionToScreen(note.pitch, note.position, state)
-    const width = note.duration * quarterNoteWidth
-    const isSelected = state.selection.selectedIds.has(id)
+    // Use display duration (may be truncated)
+    const displayDuration = getNoteDisplayDuration(state, id, note.duration)
+    const width = displayDuration * quarterNoteWidth
     const isHidden = state.interaction.hiddenNoteIds.has(id)
 
     const rect = new Konva.Rect({
@@ -193,12 +214,43 @@ export function renderVisibleNotes(state: PianoRollState) {
       y: screen.y,
       width,
       height: noteHeight,
-      fill: isSelected ? state.grid.selectedNoteColor : state.grid.noteColor,
+      fill: state.grid.noteColor,
       opacity: isHidden ? 0.3 : 1.0,
       listening: true
     })
     rect.setAttr('noteId', id)
+    notesLayer.add(rect)
 
+    // Add note label
+    const labelText = midiPitchToString(note.pitch)
+    const label = new Konva.Text({
+      x: screen.x + 4,
+      y: screen.y + 2,
+      text: labelText,
+      fontSize: 14,
+      fill: '#000',
+      listening: false
+    })
+    notesLayer.add(label)
+  })
+
+  // Render selected notes last (front) - ensures they appear on top
+  selectedNotes.forEach(([id, note]) => {
+    const screen = pitchPositionToScreen(note.pitch, note.position, state)
+    // Selected notes use their actual duration (not truncated)
+    const width = note.duration * quarterNoteWidth
+    const isHidden = state.interaction.hiddenNoteIds.has(id)
+
+    const rect = new Konva.Rect({
+      x: screen.x,
+      y: screen.y,
+      width,
+      height: noteHeight,
+      fill: state.grid.selectedNoteColor,
+      opacity: isHidden ? 0.3 : 1.0,
+      listening: true
+    })
+    rect.setAttr('noteId', id)
     notesLayer.add(rect)
 
     // Add note label
@@ -515,13 +567,16 @@ function updateNoteDrag(state: PianoRollState, stage: Konva.Stage) {
 }
 
 function finishNoteDrag(state: PianoRollState) {
+  // Execute overlap changes (truncate/delete notes)
+  executeOverlapChanges(state)
+
   const after = captureState(state)
   if (state.interaction.dragBeforeState && state.interaction.dragBeforeState !== after) {
     state.command.stack?.pushCommand('Move Notes', state.interaction.dragBeforeState, after)
   }
 
   state.interaction.isDragging = false
-  state.interaction.hiddenNoteIds.clear()
+  clearOverlapPreview(state)
   state.needsRedraw = true
 }
 
@@ -589,12 +644,15 @@ function updateNoteResize(state: PianoRollState, stage: Konva.Stage) {
 }
 
 function finishNoteResize(state: PianoRollState) {
+  // Execute overlap changes (truncate/delete notes)
+  executeOverlapChanges(state)
+
   const after = captureState(state)
   if (state.interaction.resizeBeforeState && state.interaction.resizeBeforeState !== after) {
     state.command.stack?.pushCommand('Resize Notes', state.interaction.resizeBeforeState, after)
   }
 
   state.interaction.isResizing = false
-  state.interaction.hiddenNoteIds.clear()
+  clearOverlapPreview(state)
   state.needsRedraw = true
 }
