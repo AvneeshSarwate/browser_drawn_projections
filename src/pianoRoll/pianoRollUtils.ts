@@ -38,10 +38,10 @@ export function pitchPositionToScreen(
   }
 }
 
-// Quantize position to grid subdivision
+// Quantize position to grid subdivision (floor - snaps to start of grid cell)
 export function quantizeToGrid(position: number, subdivision: number): number {
   const notesPerQuarterNote = subdivision / 4
-  return Math.round(position * notesPerQuarterNote) / notesPerQuarterNote
+  return Math.floor(position * notesPerQuarterNote) / notesPerQuarterNote
 }
 
 // Quantize value to a given interval

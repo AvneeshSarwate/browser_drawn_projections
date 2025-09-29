@@ -215,6 +215,8 @@ export function renderVisibleNotes(state: PianoRollState) {
       width,
       height: noteHeight,
       fill: state.grid.noteColor,
+      stroke: '#000',
+      strokeWidth: 1,
       opacity: isHidden ? 0.3 : 1.0,
       listening: true
     })
@@ -247,6 +249,8 @@ export function renderVisibleNotes(state: PianoRollState) {
       width,
       height: noteHeight,
       fill: state.grid.selectedNoteColor,
+      stroke: '#000',
+      strokeWidth: 1,
       opacity: isHidden ? 0.3 : 1.0,
       listening: true
     })
