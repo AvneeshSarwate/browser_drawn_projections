@@ -19,10 +19,14 @@ const props = withDefaults(defineProps<{
   height?: number
   initialNotes?: Array<[string, NoteData]>
   syncState?: (state: PianoRollState) => void
+  showControlPanel?: boolean
+  interactive?: boolean
 }>(), {
   width: 640,
   height: 360,
-  initialNotes: () => []
+  initialNotes: () => [],
+  showControlPanel: true,
+  interactive: true
 })
 
 const emit = defineEmits<{
@@ -41,6 +45,11 @@ const gridSubdivision = ref(state.grid.subdivision)
 // Computed properties
 const noteCount = computed(() => state.notes.size)
 const selectionCount = computed(() => state.selection.selectedIds.size)
+const isInteractive = computed(() => props.interactive)
+const showControlPanel = computed(() => props.showControlPanel)
+
+let eventHandlersInitialized = false
+let keyboardListenerAttached = false
 
 // Watch grid subdivision changes
 watch(gridSubdivision, (newValue) => {
@@ -102,6 +111,8 @@ watch(() => state.notes.size, emitStateUpdate)
 
 // Keyboard handlers
 const handleKeyDown = (e: KeyboardEvent) => {
+  if (!props.interactive) return
+
   // Undo (Cmd/Ctrl+Z)
   if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
     e.preventDefault()
@@ -201,6 +212,39 @@ const handleKeyDown = (e: KeyboardEvent) => {
   }
 }
 
+const enableInteractivity = () => {
+  if (!state.stage) return
+
+  if (!eventHandlersInitialized) {
+    setupEventHandlers(state, state.stage)
+    eventHandlersInitialized = true
+  }
+
+  state.stage.listening(true)
+
+  if (!keyboardListenerAttached) {
+    window.addEventListener('keydown', handleKeyDown)
+    keyboardListenerAttached = true
+  }
+}
+
+const disableInteractivity = () => {
+  if (!state.stage) return
+
+  state.stage.listening(false)
+  state.interaction.isDragging = false
+  state.interaction.isResizing = false
+  state.interaction.isMarqueeSelecting = false
+  state.selection.selectionRect?.visible(false)
+
+  if (keyboardListenerAttached) {
+    window.removeEventListener('keydown', handleKeyDown)
+    keyboardListenerAttached = false
+  }
+
+  state.layers.overlay?.batchDraw()
+}
+
 onMounted(() => {
   if (!konvaContainer.value) {
     console.error('Konva container ref not found')
@@ -219,8 +263,12 @@ onMounted(() => {
   // Initialize layers with callback to update buttons
   initializeLayers(state, stageInstance, updateCommandStackButtons)
 
-  // Setup event handlers
-  setupEventHandlers(state, stageInstance)
+  // Configure interactivity after layers are ready
+  if (props.interactive) {
+    enableInteractivity()
+  } else {
+    disableInteractivity()
+  }
 
   // Load initial notes
   if (props.initialNotes && props.initialNotes.length > 0) {
@@ -234,9 +282,6 @@ onMounted(() => {
   // Initial render
   state.needsRedraw = true
 
-  // Add keyboard listener
-  window.addEventListener('keydown', handleKeyDown)
-
   // Update command stack buttons
   updateCommandStackButtons()
 })
@@ -247,14 +292,23 @@ onUnmounted(() => {
     cancelAnimationFrame(state.rafHandle)
   }
 
-  // Remove keyboard listener
-  window.removeEventListener('keydown', handleKeyDown)
+  // Disable interactivity
+  disableInteractivity()
 
   // Destroy stage
   state.stage?.destroy()
 })
 
 // Watch for prop changes
+watch(() => props.interactive, (interactive) => {
+  if (!state.stage) return
+  if (interactive) {
+    enableInteractivity()
+  } else {
+    disableInteractivity()
+  }
+})
+
 watch(() => props.width, (newWidth) => {
   if (state.stage) {
     state.stage.width(newWidth)
@@ -315,13 +369,13 @@ defineExpose({
 
 <template>
   <div class="piano-roll-root">
-    <div class="control-panel">
-      <button @click="undo" :disabled="!canUndo">↶ Undo</button>
-      <button @click="redo" :disabled="!canRedo">↷ Redo</button>
+    <div v-if="showControlPanel" class="control-panel">
+      <button @click="undo" :disabled="!isInteractive || !canUndo">↶ Undo</button>
+      <button @click="redo" :disabled="!isInteractive || !canRedo">↷ Redo</button>
       <span class="separator">|</span>
       <label>
         Grid:
-        <select v-model.number="gridSubdivision">
+        <select v-model.number="gridSubdivision" :disabled="!isInteractive">
           <option :value="4">Quarter</option>
           <option :value="8">Eighth</option>
           <option :value="16">16th</option>
@@ -329,13 +383,16 @@ defineExpose({
         </select>
       </label>
       <span class="separator">|</span>
-      <button @click="deleteSelected" :disabled="selectionCount === 0">
+      <button @click="deleteSelected" :disabled="!isInteractive || selectionCount === 0">
         🗑️ Delete
       </button>
       <span class="separator">|</span>
       <span class="info">{{ noteCount }} notes, {{ selectionCount }} selected</span>
     </div>
-    <div ref="konvaContainer" class="piano-roll-container"></div>
+    <div
+      ref="konvaContainer"
+      :class="['piano-roll-container', { 'is-disabled': !isInteractive }]"
+    ></div>
   </div>
 </template>
 
@@ -391,6 +448,11 @@ defineExpose({
   background-color: white;
   border: 1px solid black;
   cursor: default;
+}
+
+.piano-roll-container.is-disabled {
+  pointer-events: none;
+  cursor: not-allowed;
 }
 
 label {
