@@ -216,8 +216,8 @@ onMounted(() => {
   state.stage = stageInstance
   state.konvaContainer = konvaContainer.value
 
-  // Initialize layers
-  initializeLayers(state, stageInstance)
+  // Initialize layers with callback to update buttons
+  initializeLayers(state, stageInstance, updateCommandStackButtons)
 
   // Setup event handlers
   setupEventHandlers(state, stageInstance)

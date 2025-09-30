@@ -36,7 +36,7 @@ export function restoreState(state: PianoRollState, snapshot: string) {
 
 // ================= Layer Initialization =================
 
-export function initializeLayers(state: PianoRollState, stage: Konva.Stage) {
+export function initializeLayers(state: PianoRollState, stage: Konva.Stage, onCommandStackChange?: () => void) {
   // Grid layer (bottom, non-interactive)
   const gridLayer = new Konva.Layer({
     listening: false,
@@ -92,7 +92,11 @@ export function initializeLayers(state: PianoRollState, stage: Konva.Stage) {
   // Initialize command stack
   state.command.stack = new CommandStack(
     () => captureState(state),
-    (snapshot) => restoreState(state, snapshot)
+    (snapshot) => restoreState(state, snapshot),
+    () => {
+      state.needsRedraw = true
+      onCommandStackChange?.()
+    }
   )
 }
 
