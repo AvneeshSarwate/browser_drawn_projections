@@ -13,6 +13,7 @@ import {
   captureState,
   restoreState
 } from './pianoRollCore'
+import { executeOverlapChanges } from './pianoRollUtils'
 
 const props = withDefaults(defineProps<{
   width?: number
@@ -666,6 +667,7 @@ const handleKeyDown = (e: KeyboardEvent) => {
         }
       })
 
+      executeOverlapChanges(state, state.selection.selectedIds)
       state.needsRedraw = true
     })
 
@@ -712,6 +714,7 @@ const handleKeyDown = (e: KeyboardEvent) => {
           state.selection.selectedIds.add(newNote.id)
         })
 
+        executeOverlapChanges(state, state.selection.selectedIds)
         state.needsRedraw = true
       })
 

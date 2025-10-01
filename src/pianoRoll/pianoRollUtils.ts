@@ -132,38 +132,66 @@ export function notesOverlap(note1: NoteData, note2: NoteData): boolean {
 }
 
 // Update overlap preview: mark notes that should be hidden or truncated (for display only)
-export function updateOverlapPreview(state: PianoRollState) {
-  state.interaction.hiddenNoteIds.clear()
-  state.interaction.truncatedNotes.clear()
+export type OverlapAdjustments = {
+  toDelete: Set<string>
+  toTruncate: Map<string, number>
+}
 
-  state.selection.selectedIds.forEach(selectedId => {
+export function calculateOverlapAdjustments(
+  state: PianoRollState,
+  referenceIds: Iterable<string>
+): OverlapAdjustments {
+  const referenceSet = new Set(referenceIds)
+  if (referenceSet.size === 0) {
+    return state.interaction.createEmptyOverlapAdjustments()
+  }
+
+  const toDelete = new Set<string>()
+  const toTruncate = new Map<string, number>()
+
+  referenceSet.forEach(selectedId => {
     const selectedNote = state.notes.get(selectedId)
     if (!selectedNote) return
 
     const selectedEnd = selectedNote.position + selectedNote.duration
 
-    // Find notes at same pitch
     state.notes.forEach((otherNote, otherId) => {
-      if (state.selection.selectedIds.has(otherId)) return
+      if (referenceSet.has(otherId)) return
       if (otherNote.pitch !== selectedNote.pitch) return
 
       const otherEnd = otherNote.position + otherNote.duration
 
-      // Case 1: Truncate - selected note's start overlaps middle of other note
-      // (other note starts before selected, but ends after selected starts)
-      if (otherNote.position < selectedNote.position &&
-          selectedNote.position < otherEnd) {
-        // Store truncated duration for rendering
+      if (otherNote.position < selectedNote.position && selectedNote.position < otherEnd) {
         const truncatedDuration = selectedNote.position - otherNote.position
-        state.interaction.truncatedNotes.set(otherId, truncatedDuration)
-      }
-      // Case 2: Delete - selected note overlaps start of other note
-      else if (selectedNote.position <= otherNote.position &&
-               otherNote.position < selectedEnd) {
-        state.interaction.hiddenNoteIds.add(otherId)
+        if (truncatedDuration > 0) {
+          if (!toDelete.has(otherId)) {
+            toTruncate.set(otherId, truncatedDuration)
+          }
+        } else {
+          toDelete.add(otherId)
+          toTruncate.delete(otherId)
+        }
+      } else if (selectedNote.position <= otherNote.position && otherNote.position < selectedEnd) {
+        toDelete.add(otherId)
+        toTruncate.delete(otherId)
       }
     })
   })
+
+  if (toDelete.size === 0 && toTruncate.size === 0) {
+    return state.interaction.createEmptyOverlapAdjustments()
+  }
+
+  return { toDelete, toTruncate }
+}
+
+export function updateOverlapPreview(state: PianoRollState) {
+  state.interaction.hiddenNoteIds.clear()
+  state.interaction.truncatedNotes.clear()
+
+  const adjustments = calculateOverlapAdjustments(state, state.selection.selectedIds)
+  adjustments.toDelete.forEach(id => state.interaction.hiddenNoteIds.add(id))
+  adjustments.toTruncate.forEach((duration, id) => state.interaction.truncatedNotes.set(id, duration))
 }
 
 // Get the display duration for a note (may be truncated during drag/resize)
@@ -172,19 +200,52 @@ export function getNoteDisplayDuration(state: PianoRollState, noteId: string, or
 }
 
 // Execute overlap changes: actually truncate/delete notes in state
-export function executeOverlapChanges(state: PianoRollState) {
-  // Delete hidden notes
-  state.interaction.hiddenNoteIds.forEach(noteId => {
+export function executeOverlapChanges(
+  state: PianoRollState,
+  referenceIds?: Iterable<string>
+): OverlapAdjustments {
+  let adjustments: OverlapAdjustments | null = null
+  let usedPreview = false
+
+  if (!referenceIds && (state.interaction.hiddenNoteIds.size > 0 || state.interaction.truncatedNotes.size > 0)) {
+    adjustments = {
+      toDelete: new Set(state.interaction.hiddenNoteIds),
+      toTruncate: new Map(state.interaction.truncatedNotes)
+    }
+    usedPreview = true
+  } else {
+    const reference = referenceIds ?? state.selection.selectedIds
+    adjustments = calculateOverlapAdjustments(state, reference)
+  }
+
+  if (adjustments.toDelete.size === 0 && adjustments.toTruncate.size === 0) {
+    if (!usedPreview) {
+      state.interaction.hiddenNoteIds.clear()
+      state.interaction.truncatedNotes.clear()
+    }
+    return adjustments
+  }
+
+  adjustments.toDelete.forEach(noteId => {
     state.notes.delete(noteId)
+    state.selection.selectedIds.delete(noteId)
   })
 
-  // Truncate notes
-  state.interaction.truncatedNotes.forEach((truncatedDuration, noteId) => {
+  adjustments.toTruncate.forEach((truncatedDuration, noteId) => {
     const note = state.notes.get(noteId)
     if (note) {
-      note.duration = truncatedDuration
+      note.duration = Math.max(truncatedDuration, 0)
     }
   })
+
+  state.needsRedraw = true
+
+  if (!usedPreview) {
+    state.interaction.hiddenNoteIds.clear()
+    state.interaction.truncatedNotes.clear()
+  }
+
+  return adjustments
 }
 
 // Clear overlap preview state (call on drag/resize end)
