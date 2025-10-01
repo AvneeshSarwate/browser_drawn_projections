@@ -10,9 +10,12 @@ A Konva.js-based piano roll editor with immediate-mode rendering, wrapped in a V
 - **Drag quantization**: Vertical (pitch) and horizontal (grid snap) quantization
 - **Snap-to-note-start**: Notes snap to non-selected note start positions during drag
 - **Overlap preview**: Notes that will be deleted during drag/resize are shown with reduced opacity
+- **Scrollbar zoom controls**: Horizontal/vertical bars with draggable ends for anchored zoom + scroll
 - **Undo/redo**: Simple snapshot-based command stack
 - **Keyboard shortcuts**: Arrow keys, delete, copy/paste, undo/redo
 - **Resize handles**: Resize note start or end (affects entire selection)
+- **Auto-fit viewport**: `fitZoomToNotes()` zooms and scrolls to the active note bounds with sensible minimums
+- **Overlap resolution**: Moves and pastes truncate or remove colliding notes automatically
 
 ## Architecture
 
@@ -82,6 +85,22 @@ import '@/pianoRoll/web-component.ts'
 </script>
 ```
 
+### Public Props
+
+- `width` *(number, default 640)*: Canvas width in pixels
+- `height` *(number, default 360)*: Canvas height in pixels
+- `initialNotes` *(Array<[id, NoteData]>)*: Seed notes loaded on mount
+- `syncState` *(function)*: Callback invoked when internal state changes
+- `showControlPanel` *(boolean, default true)*: Toggles the built-in toolbar
+- `interactive` *(boolean, default true)*: Enables pointer and keyboard input
+
+### Exposed Methods
+
+- `setNotes(notes: NoteDataInput[])`: Replace all notes with the provided list
+- `setLivePlayheadPosition(position: number)`: Update the live playhead (quarter notes)
+- `getPlayStartPosition(): number`: Read the current queue playhead (quarter notes)
+- `fitZoomToNotes()`: Zoom and scroll to fit all notes with minimum 4 beats × 12 pitches
+
 ## Interactions
 
 ### Adding Notes
@@ -122,7 +141,7 @@ import '@/pianoRoll/web-component.ts'
 ```typescript
 {
   id: string
-  pitch: number        // MIDI 0-127
+  pitch: number        // 0-1
   position: number     // in quarter notes
   duration: number     // in quarter notes
   velocity: number     // 0-1
@@ -144,14 +163,3 @@ import '@/pianoRoll/web-component.ts'
 3. **Snapshot-based undo/redo**: Entire state serialized as JSON for commands
 4. **No explicit modes**: Interactions determined by click target
 5. **RAF-based rendering**: Redraw triggered by `needsRedraw` flag
-
-## Future Enhancements
-
-From original `pianoRoll.ts`:
-- Velocity editing
-- Play cursor animation
-- Zoom controls
-- Scroll controls (currently no UI)
-- Voice colors from metadata
-- Note truncation (currently delete preview only)
-- Out-of-bounds handling
