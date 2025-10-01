@@ -7,18 +7,18 @@ if (!ToneGlobal) {
 const START_DELAY = 0.05; // seconds before starting the transport
 
 const defaultNotes = [
-  { pitch: 60, position: 0, duration: 1, velocity: 110 },
-  { pitch: 64, position: 0, duration: 1, velocity: 105 },
-  { pitch: 67, position: 0, duration: 1, velocity: 108 },
-  { pitch: 72, position: 0, duration: 1, velocity: 102 },
-  { pitch: 60, position: 2, duration: 1.5, velocity: 110 },
-  { pitch: 67, position: 2, duration: 1.5, velocity: 108 },
-  { pitch: 74, position: 2, duration: 1.5, velocity: 104 },
-  { pitch: 62, position: 4, duration: 0.5, velocity: 100 },
-  { pitch: 65, position: 4.5, duration: 0.5, velocity: 98 },
-  { pitch: 69, position: 5, duration: 1, velocity: 100 },
-  { pitch: 72, position: 6, duration: 1, velocity: 102 },
-  { pitch: 76, position: 6.5, duration: 0.75, velocity: 96 }
+  { pitch: 60, position: 0, duration: 1, velocity: 0.86 },
+  { pitch: 64, position: 0, duration: 1, velocity: 0.83 },
+  { pitch: 67, position: 0, duration: 1, velocity: 0.85 },
+  { pitch: 72, position: 0, duration: 1, velocity: 0.80 },
+  { pitch: 60, position: 2, duration: 1.5, velocity: 0.86 },
+  { pitch: 67, position: 2, duration: 1.5, velocity: 0.85 },
+  { pitch: 74, position: 2, duration: 1.5, velocity: 0.82 },
+  { pitch: 62, position: 4, duration: 0.5, velocity: 0.78 },
+  { pitch: 65, position: 4.5, duration: 0.5, velocity: 0.77 },
+  { pitch: 69, position: 5, duration: 1, velocity: 0.79 },
+  { pitch: 72, position: 6, duration: 1, velocity: 0.80 },
+  { pitch: 76, position: 6.5, duration: 0.75, velocity: 0.75 }
 ];
 
 var pianoRollDemoState = {
@@ -46,7 +46,6 @@ var rafId = null;
 var stopScheduleId = null;
 var isPlaying = false;
 var playbackStartPosition = 0;
-
 ToneGlobal?.Transport && (ToneGlobal.Transport.loop = false);
 ToneGlobal?.Transport && (ToneGlobal.Transport.bpm.value = 120);
 
@@ -110,9 +109,11 @@ function handleStateSync(state) {
   };
 
   syncQueuePositionDisplay(state.queuePlayhead.position);
+
+  stopPlayback();
 }
 
-async function startPlayback() {
+async function startPlayback(startOverride) {
   if (!ToneGlobal || !pianoRollElement) return;
 
   await ToneGlobal.start();
@@ -127,7 +128,10 @@ async function startPlayback() {
     return;
   }
 
-  playbackStartPosition = pianoRollElement.getPlayStartPosition?.() ?? pianoRollDemoState.queuePosition ?? 0;
+  playbackStartPosition =
+    typeof startOverride === 'number'
+      ? startOverride
+      : pianoRollElement.getPlayStartPosition?.() ?? pianoRollDemoState.queuePosition ?? 0;
 
   const activeNotes = notes.filter((note) => note.position + note.duration > playbackStartPosition);
   if (activeNotes.length === 0) {
@@ -142,6 +146,7 @@ async function startPlayback() {
     const offset = Math.max(0, note.position - playbackStartPosition);
     return {
       ...note,
+      velocity: Math.max(0, Math.min(1, note.velocity ?? 0.8)),
       time: offset * quarterSeconds
     };
   });
@@ -154,7 +159,7 @@ async function startPlayback() {
   clearTransportSchedules();
 
   part = new ToneGlobal.Part((time, event) => {
-    const velocity = Math.min(1, Math.max(0, (event.velocity ?? 100) / 127));
+    const velocity = Math.max(0, Math.min(1, event.velocity ?? 0.8));
     const noteName = ToneGlobal.Frequency(event.pitch, 'midi').toNote();
     const durationSeconds = Math.max(event.duration, 0.0625) * quarterSeconds;
     synth?.triggerAttackRelease(noteName, durationSeconds, time, velocity);
@@ -229,7 +234,9 @@ function initialize() {
 
   pianoRollElement.syncState = handleStateSync;
 
-  playButton?.addEventListener('click', startPlayback);
+  playButton?.addEventListener('click', () => {
+    startPlayback().catch((error) => console.error(error));
+  });
   stopButton?.addEventListener('click', () => stopPlayback());
 
   customElements.whenDefined('piano-roll-component').then(() => {
