@@ -236,6 +236,7 @@ interface HorizontalDragState {
   anchorQuarter: number
   spanQuarter: number
   stageWidth: number
+  pointerOffset: number
 }
 
 interface VerticalDragState {
@@ -248,6 +249,7 @@ interface VerticalDragState {
   anchorIndex: number
   span: number
   stageHeight: number
+  pointerOffset: number
 }
 
 const horizontalDragState = ref<HorizontalDragState | null>(null)
@@ -282,6 +284,15 @@ const startHorizontalDrag = (mode: HorizontalDragMode, event: PointerEvent) => {
   const totalQuarter = state.grid.maxLength
   if (stageWidth <= 0 || totalQuarter <= 0) return
 
+  const startNormalized = startQuarter / totalQuarter
+  const endNormalized = endQuarter / totalQuarter
+  let pointerOffset = 0
+  if (mode === 'resize-start') {
+    pointerOffset = event.clientX - (trackRect.left + startNormalized * trackRect.width)
+  } else if (mode === 'resize-end') {
+    pointerOffset = event.clientX - (trackRect.left + endNormalized * trackRect.width)
+  }
+
   horizontalDragState.value = {
     mode,
     pointerId: event.pointerId,
@@ -291,7 +302,8 @@ const startHorizontalDrag = (mode: HorizontalDragMode, event: PointerEvent) => {
     endQuarter,
     anchorQuarter: mode === 'resize-start' ? endQuarter : startQuarter,
     spanQuarter,
-    stageWidth
+    stageWidth,
+    pointerOffset
   }
 
   window.addEventListener('pointermove', handleHorizontalPointerMove)
@@ -314,6 +326,15 @@ const startVerticalDrag = (mode: VerticalDragMode, event: PointerEvent) => {
   const stageHeight = getStageHeight()
   if (stageHeight <= 0) return
 
+  const topNormalized = topIndex / TOTAL_PITCHES
+  const bottomNormalized = bottomIndex / TOTAL_PITCHES
+  let pointerOffset = 0
+  if (mode === 'resize-start') {
+    pointerOffset = event.clientY - (trackRect.top + topNormalized * trackRect.height)
+  } else if (mode === 'resize-end') {
+    pointerOffset = event.clientY - (trackRect.top + bottomNormalized * trackRect.height)
+  }
+
   verticalDragState.value = {
     mode,
     pointerId: event.pointerId,
@@ -323,7 +344,8 @@ const startVerticalDrag = (mode: VerticalDragMode, event: PointerEvent) => {
     bottomIndex,
     anchorIndex: mode === 'resize-start' ? bottomIndex : topIndex,
     span,
-    stageHeight
+    stageHeight,
+    pointerOffset
   }
 
   window.addEventListener('pointermove', handleVerticalPointerMove)
@@ -355,8 +377,9 @@ const handleHorizontalPointerMove = (event: PointerEvent) => {
     return
   }
 
-  const pointerX = clamp(event.clientX, trackRect.left, trackRect.right)
-  const norm = (pointerX - trackRect.left) / trackRect.width
+  const rawX = clamp(event.clientX, trackRect.left, trackRect.right)
+  const adjustedX = clamp(rawX - drag.pointerOffset, trackRect.left, trackRect.right)
+  const norm = (adjustedX - trackRect.left) / trackRect.width
 
   if (drag.mode === 'resize-start') {
     let newStartQuarter = norm * totalQuarter
@@ -408,8 +431,9 @@ const handleVerticalPointerMove = (event: PointerEvent) => {
     return
   }
 
-  const pointerY = clamp(event.clientY, trackRect.top, trackRect.bottom)
-  const norm = (pointerY - trackRect.top) / trackRect.height
+  const rawY = clamp(event.clientY, trackRect.top, trackRect.bottom)
+  const adjustedY = clamp(rawY - drag.pointerOffset, trackRect.top, trackRect.bottom)
+  const norm = (adjustedY - trackRect.top) / trackRect.height
 
   if (drag.mode === 'resize-start') {
     let newTopIndex = norm * TOTAL_PITCHES
