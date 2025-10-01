@@ -37,6 +37,9 @@ const emit = defineEmits<{
 const MIN_HORIZONTAL_SPAN = 0.25  // quarter notes
 const MIN_VERTICAL_SPAN = 1  // pitches
 const TOTAL_PITCHES = 128
+const MIN_FIT_HORIZONTAL_BEATS = 4
+const MIN_FIT_VERTICAL_NOTES = 12
+const DEFAULT_FIT_BOTTOM_NOTE = 55
 
 const state: PianoRollState = createPianoRollState()
 
@@ -151,6 +154,55 @@ const applyVerticalZoom = (newNoteHeight: number, newTopIndex: number) => {
   updateScrollBounds()
   state.needsRedraw = true
   notifyViewportChange()
+}
+
+const fitZoomToNotes = () => {
+  const stageWidth = getStageWidth()
+  const stageHeight = getStageHeight()
+  if (stageWidth <= 0 || stageHeight <= 0) return
+
+  const notes = Array.from(state.notes.values())
+
+  // Horizontal fit
+  if (notes.length === 0) {
+    const targetSpanQuarter = MIN_FIT_HORIZONTAL_BEATS
+    const newQuarterNoteWidth = stageWidth / targetSpanQuarter
+    applyHorizontalZoom(newQuarterNoteWidth, 0)
+
+    const targetSpanNotes = MIN_FIT_VERTICAL_NOTES
+    const newNoteHeight = stageHeight / targetSpanNotes
+    const bottomIndex = 127 - DEFAULT_FIT_BOTTOM_NOTE
+    const maxTopIndex = Math.max(0, TOTAL_PITCHES - targetSpanNotes)
+    const topIndex = clamp(bottomIndex - (targetSpanNotes - 1), 0, maxTopIndex)
+    applyVerticalZoom(newNoteHeight, topIndex)
+    return
+  }
+
+  const minPos = notes.reduce((min, note) => Math.min(min, note.position), Number.POSITIVE_INFINITY)
+  const maxPos = notes.reduce((max, note) => Math.max(max, note.position + note.duration), Number.NEGATIVE_INFINITY)
+  const actualSpanQuarter = Math.max(maxPos - minPos, 0)
+  const targetSpanQuarter = Math.max(actualSpanQuarter, MIN_FIT_HORIZONTAL_BEATS)
+  const newQuarterNoteWidth = stageWidth / targetSpanQuarter
+
+  const maxStartQuarter = Math.max(0, state.grid.maxLength - targetSpanQuarter)
+  const spanPadding = Math.max(targetSpanQuarter - actualSpanQuarter, 0)
+  const startQuarterRaw = minPos - spanPadding / 2
+  const startQuarter = clamp(startQuarterRaw, 0, maxStartQuarter)
+  applyHorizontalZoom(newQuarterNoteWidth, startQuarter)
+
+  const highestPitch = notes.reduce((max, note) => Math.max(max, note.pitch), Number.NEGATIVE_INFINITY)
+  const lowestPitch = notes.reduce((min, note) => Math.min(min, note.pitch), Number.POSITIVE_INFINITY)
+  const topIndexForHighest = 127 - highestPitch
+  const bottomIndexForLowest = 127 - lowestPitch
+  const actualSpanNotes = Math.max(bottomIndexForLowest - topIndexForHighest + 1, 1)
+  const targetSpanNotes = Math.max(actualSpanNotes, MIN_FIT_VERTICAL_NOTES)
+  const newNoteHeight = stageHeight / targetSpanNotes
+
+  const extraSpace = Math.max(targetSpanNotes - actualSpanNotes, 0)
+  const topIndexRaw = topIndexForHighest - extraSpace / 2
+  const maxTopIndex = Math.max(0, TOTAL_PITCHES - targetSpanNotes)
+  const topIndex = clamp(topIndexRaw, 0, maxTopIndex)
+  applyVerticalZoom(newNoteHeight, topIndex)
 }
 
 const notifyViewportChange = () => {
@@ -833,7 +885,8 @@ const getPlayStartPosition = (): number => {
 defineExpose({
   setNotes,
   setLivePlayheadPosition,
-  getPlayStartPosition
+  getPlayStartPosition,
+  fitZoomToNotes
 })
 </script>
 

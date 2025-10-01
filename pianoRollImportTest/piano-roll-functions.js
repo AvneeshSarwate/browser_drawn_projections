@@ -242,6 +242,9 @@ function initialize() {
   customElements.whenDefined('piano-roll-component').then(() => {
     if (typeof pianoRollElement.setNotes === 'function') {
       pianoRollElement.setNotes(defaultNotes);
+      if (typeof pianoRollElement.fitZoomToNotes === 'function') {
+        pianoRollElement.fitZoomToNotes();
+      }
     } else {
       console.warn('setNotes is not available on the piano roll element.');
     }
