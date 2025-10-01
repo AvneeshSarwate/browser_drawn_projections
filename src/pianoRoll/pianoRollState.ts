@@ -1,4 +1,3 @@
-import { ref, type Ref } from 'vue'
 import Konva from 'konva'
 import type { CommandStack } from './commandStack'
 
@@ -39,13 +38,16 @@ export interface PianoRollState {
   viewport: {
     scrollX: number  // horizontal scroll in px
     scrollY: number  // vertical scroll in px
-    zoom: number
+    zoomX: number
+    zoomY: number
   }
 
   // Grid configuration
   grid: {
-    quarterNoteWidth: number  // px
-    noteHeight: number  // px
+    quarterNoteWidth: number  // px (derived from base * zoom)
+    noteHeight: number  // px (derived from base * zoom)
+    baseQuarterNoteWidth: number  // px at zoom 1
+    baseNoteHeight: number  // px at zoom 1
     subdivision: number  // 16 for 16th notes
     numMeasures: number
     timeSignature: number
@@ -102,6 +104,8 @@ export interface PianoRollState {
       lastScrollX: number
       lastScrollY: number
       lastSubdivision: number
+      lastQuarterNoteWidth: number
+      lastNoteHeight: number
     }
   }
 
@@ -126,6 +130,9 @@ export interface PianoRollState {
 }
 
 export const createPianoRollState = (): PianoRollState => {
+  const baseQuarterNoteWidth = 120
+  const baseNoteHeight = 20
+
   return {
     stage: undefined,
     konvaContainer: undefined,
@@ -139,13 +146,16 @@ export const createPianoRollState = (): PianoRollState => {
 
     viewport: {
       scrollX: 0,
-      scrollY: 55 * 20,  // Start at middle C
-      zoom: 1
+      scrollY: 55 * baseNoteHeight,  // Start at middle C
+      zoomX: 1,
+      zoomY: 1
     },
 
     grid: {
-      quarterNoteWidth: 120,
-      noteHeight: 20,
+      quarterNoteWidth: baseQuarterNoteWidth,
+      noteHeight: baseNoteHeight,
+      baseQuarterNoteWidth,
+      baseNoteHeight,
       subdivision: 16,
       numMeasures: 100,
       timeSignature: 4,
@@ -193,7 +203,9 @@ export const createPianoRollState = (): PianoRollState => {
       grid: {
         lastScrollX: -1,
         lastScrollY: -1,
-        lastSubdivision: -1
+        lastSubdivision: -1,
+        lastQuarterNoteWidth: -1,
+        lastNoteHeight: -1
       }
     },
 

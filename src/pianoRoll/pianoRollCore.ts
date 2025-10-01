@@ -131,13 +131,17 @@ export function renderGrid(state: PianoRollState) {
   // Only redraw if viewport or subdivision changed
   if (gridCache.lastScrollX === state.viewport.scrollX &&
       gridCache.lastScrollY === state.viewport.scrollY &&
-      gridCache.lastSubdivision === state.grid.subdivision) {
+      gridCache.lastSubdivision === state.grid.subdivision &&
+      gridCache.lastQuarterNoteWidth === state.grid.quarterNoteWidth &&
+      gridCache.lastNoteHeight === state.grid.noteHeight) {
     return
   }
 
   gridCache.lastScrollX = state.viewport.scrollX
   gridCache.lastScrollY = state.viewport.scrollY
   gridCache.lastSubdivision = state.grid.subdivision
+  gridCache.lastQuarterNoteWidth = state.grid.quarterNoteWidth
+  gridCache.lastNoteHeight = state.grid.noteHeight
 
   gridLayer.destroyChildren()
 
