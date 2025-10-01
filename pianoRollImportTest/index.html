@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Piano Roll Web Component Demo</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <h1>Piano Roll Component Integration Demo</h1>
+  <p class="instructions">
+    This page demonstrates how to use the <code>&lt;piano-roll-component&gt;</code> custom element in a standalone
+    environment. The demo wires up <a href="https://tonejs.github.io/" target="_blank" rel="noreferrer">Tone.js</a>
+    to schedule notes entered in the piano roll, updates the live playhead with <code>requestAnimationFrame</code>,
+    and shares note data with a lightweight p5.js sketch. Run <code>npm run buildPianoRoll</code> to generate the
+    <code>piano-roll.js</code> bundle referenced below.
+  </p>
+
+  <div class="layout">
+    <section class="piano-roll-card">
+      <div class="controls">
+        <button id="playButton">Play</button>
+        <button id="stopButton" disabled>Stop</button>
+        <span class="status" id="playStatus">Stopped</span>
+      </div>
+      <p class="note">Use the green queue playhead inside the roll to choose a start point, then press play.</p>
+      <p class="meta">Queue start (quarter notes): <span id="queuePosition">0.00</span></p>
+
+      <piano-roll-component
+        id="pianoRoll"
+        width="900"
+        height="340"
+        show-control-panel="true"
+        interactive="true"
+      ></piano-roll-component>
+    </section>
+
+    <section class="visualizer-card">
+      <h2 class="visualizer-title">p5.js Timeline Preview</h2>
+      <p class="note">Incoming notes and playhead data are mirrored here for custom visualizations.</p>
+      <div id="p5-container"></div>
+    </section>
+  </div>
+
+  <script src="./piano-roll.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.min.js" integrity="sha512-Q2XDEQsGlp1Zkarma6sS3KXBtdtiT7iUKZhzYKJzAkT9p0VnI1tIq9ap8ErE4DhNvjL7Eib3bZ2izX0cJscjpw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="./piano-roll-functions.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/p5@1.11.1/lib/p5.js"></script>
+  <script src="./sketch.js"></script>
+</body>
+</html>

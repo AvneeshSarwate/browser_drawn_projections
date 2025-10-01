@@ -96,6 +96,15 @@ export interface PianoRollState {
     overlay?: Konva.Layer
   }
 
+  // Rendering cache to avoid unnecessary redraws
+  renderCache: {
+    grid: {
+      lastScrollX: number
+      lastScrollY: number
+      lastSubdivision: number
+    }
+  }
+
   // RAF control
   needsRedraw: boolean
   rafHandle?: number
@@ -175,6 +184,14 @@ export const createPianoRollState = (): PianoRollState => {
       grid: undefined,
       notes: undefined,
       overlay: undefined
+    },
+
+    renderCache: {
+      grid: {
+        lastScrollX: -1,
+        lastScrollY: -1,
+        lastSubdivision: -1
+      }
     },
 
     needsRedraw: false,

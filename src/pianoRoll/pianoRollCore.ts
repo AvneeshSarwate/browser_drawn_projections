@@ -102,24 +102,22 @@ export function initializeLayers(state: PianoRollState, stage: Konva.Stage, onCo
 
 // ================= Rendering Functions =================
 
-let lastGridScrollX = -1
-let lastGridScrollY = -1
-let lastGridSubdivision = -1
-
 export function renderGrid(state: PianoRollState) {
   const gridLayer = state.layers.grid
   if (!gridLayer || !state.stage) return
 
+  const gridCache = state.renderCache.grid
+
   // Only redraw if viewport or subdivision changed
-  if (lastGridScrollX === state.viewport.scrollX &&
-      lastGridScrollY === state.viewport.scrollY &&
-      lastGridSubdivision === state.grid.subdivision) {
+  if (gridCache.lastScrollX === state.viewport.scrollX &&
+      gridCache.lastScrollY === state.viewport.scrollY &&
+      gridCache.lastSubdivision === state.grid.subdivision) {
     return
   }
 
-  lastGridScrollX = state.viewport.scrollX
-  lastGridScrollY = state.viewport.scrollY
-  lastGridSubdivision = state.grid.subdivision
+  gridCache.lastScrollX = state.viewport.scrollX
+  gridCache.lastScrollY = state.viewport.scrollY
+  gridCache.lastSubdivision = state.grid.subdivision
 
   gridLayer.destroyChildren()
 

@@ -1,0 +1,146 @@
+:root {
+  color-scheme: light;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+body {
+  margin: 0;
+  padding: 24px;
+  background: #f5f6fb;
+  color: #1f2330;
+}
+
+h1 {
+  margin: 0 0 12px;
+  font-size: 1.7rem;
+  font-weight: 600;
+}
+
+.instructions {
+  margin: 0 0 20px;
+  max-width: 960px;
+  line-height: 1.6;
+}
+
+.instructions code {
+  background: rgba(31, 35, 48, 0.08);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.layout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+}
+
+section {
+  background: #ffffff;
+  border: 1px solid #d5d9e6;
+  border-radius: 16px;
+  box-shadow: 0 18px 36px rgba(12, 14, 32, 0.12);
+  padding: 20px;
+  flex: 1 1 480px;
+  box-sizing: border-box;
+}
+
+.piano-roll-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.visualizer-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.controls button {
+  background: linear-gradient(135deg, #4a6cf7, #667aff);
+  border: none;
+  border-radius: 8px;
+  color: #ffffff;
+  padding: 8px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.2s ease;
+  box-shadow: 0 8px 18px rgba(74, 108, 247, 0.2);
+}
+
+.controls button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.controls button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(74, 108, 247, 0.28);
+}
+
+.controls button:nth-of-type(2) {
+  background: linear-gradient(135deg, #ff5b6c, #ff7a85);
+  box-shadow: 0 8px 18px rgba(255, 91, 108, 0.2);
+}
+
+.status {
+  font-weight: 600;
+  color: #3a3f55;
+}
+
+.note {
+  margin: 0;
+  color: #4d5268;
+  font-size: 0.95rem;
+}
+
+.meta {
+  margin: 0;
+  color: #2f7f48;
+  font-weight: 600;
+}
+
+.visualizer-title {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #303553;
+}
+
+#p5-container canvas {
+  display: block;
+  width: 100%;
+  max-width: 640px;
+  border-radius: 12px;
+  margin: 0 auto;
+  box-shadow: inset 0 0 0 1px rgba(48, 53, 83, 0.12);
+}
+
+piano-roll-component {
+  display: block;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(46, 50, 68, 0.12);
+}
+
+@media (max-width: 900px) {
+  body {
+    padding: 16px;
+  }
+
+  .layout {
+    flex-direction: column;
+  }
+
+  section {
+    flex: 1 1 auto;
+  }
+}
