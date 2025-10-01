@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
-import Konva from 'konva'
 import { createPianoRollState, type PianoRollState, type NoteData, type NoteDataInput } from './pianoRollState'
 import {
   initializeLayers,
@@ -14,6 +13,23 @@ import {
   restoreState
 } from './pianoRollCore'
 import { executeOverlapChanges } from './pianoRollUtils'
+import {
+  applyHorizontalZoom,
+  applyVerticalZoom,
+  fitZoomToNotes as fitZoomToNotesHelper,
+  getHorizontalViewportRange,
+  getVerticalViewportRange,
+  updateScrollBounds
+} from './pianoRollViewport'
+import {
+  HorizontalScrollbarController,
+  VerticalScrollbarController,
+  type HorizontalDragMode,
+  type VerticalDragMode
+} from './pianoRollScrollbars'
+import { createCommandHandlers } from './pianoRollCommands'
+import { createKeyboardController } from './pianoRollKeyboard'
+import { StageManager } from './pianoRollStageManager'
 
 const props = withDefaults(defineProps<{
   width?: number
@@ -34,14 +50,6 @@ const emit = defineEmits<{
   (event: 'notes-update', notes: Array<[string, NoteData]>): void
 }>()
 
-// Create piano roll state
-const MIN_HORIZONTAL_SPAN = 0.25  // quarter notes
-const MIN_VERTICAL_SPAN = 1  // pitches
-const TOTAL_PITCHES = 128
-const MIN_FIT_HORIZONTAL_BEATS = 4
-const MIN_FIT_VERTICAL_NOTES = 12
-const DEFAULT_FIT_BOTTOM_NOTE = 55
-
 const state: PianoRollState = createPianoRollState()
 
 state.viewport = reactive(state.viewport) as PianoRollState['viewport']
@@ -61,498 +69,81 @@ const selectionCount = ref(state.selection.selectedIds.size)
 const isInteractive = computed(() => props.interactive)
 const showControlPanel = computed(() => props.showControlPanel)
 
-let eventHandlersInitialized = false
-let keyboardListenerAttached = false
-
 const syncUiCounters = () => {
   noteCount.value = state.notes.size
   selectionCount.value = state.selection.selectedIds.size
-}
-
-const clamp = (value: number, min: number, max: number) => {
-  if (max < min) return min
-  return Math.min(Math.max(value, min), max)
-}
-
-const getStageWidth = () => state.stage?.width() ?? props.width
-const getStageHeight = () => state.stage?.height() ?? props.height
-
-const getHorizontalContentWidth = () => state.grid.maxLength * state.grid.quarterNoteWidth
-const getVerticalContentHeight = () => TOTAL_PITCHES * state.grid.noteHeight
-
-const setHorizontalZoom = (newQuarterNoteWidth: number) => {
-  state.grid.quarterNoteWidth = newQuarterNoteWidth
-  state.viewport.zoomX = newQuarterNoteWidth / state.grid.baseQuarterNoteWidth
-}
-
-const setVerticalZoom = (newNoteHeight: number) => {
-  state.grid.noteHeight = newNoteHeight
-  state.viewport.zoomY = newNoteHeight / state.grid.baseNoteHeight
-}
-
-const getHorizontalViewportRange = () => {
-  const quarterNoteWidth = state.grid.quarterNoteWidth
-  const stageWidth = getStageWidth()
-  const startQuarter = quarterNoteWidth === 0 ? 0 : state.viewport.scrollX / quarterNoteWidth
-  const endQuarter = startQuarter + (stageWidth / (quarterNoteWidth || 1))
-  return { startQuarter, endQuarter }
-}
-
-const getVerticalViewportRange = () => {
-  const noteHeight = state.grid.noteHeight
-  const stageHeight = getStageHeight()
-  const topIndex = noteHeight === 0 ? 0 : state.viewport.scrollY / noteHeight
-  const bottomIndex = topIndex + (stageHeight / (noteHeight || 1))
-  return { topIndex, bottomIndex }
-}
-
-const updateScrollBounds = () => {
-  const stageWidth = getStageWidth()
-  const stageHeight = getStageHeight()
-
-  const maxScrollX = Math.max(0, getHorizontalContentWidth() - stageWidth)
-  const clampedScrollX = clamp(state.viewport.scrollX, 0, maxScrollX)
-  if (clampedScrollX !== state.viewport.scrollX) {
-    state.viewport.scrollX = clampedScrollX
-    state.needsRedraw = true
-    notifyViewportChange()
-  }
-
-  const maxScrollY = Math.max(0, getVerticalContentHeight() - stageHeight)
-  const clampedScrollY = clamp(state.viewport.scrollY, 0, maxScrollY)
-  if (clampedScrollY !== state.viewport.scrollY) {
-    state.viewport.scrollY = clampedScrollY
-    state.needsRedraw = true
-    notifyViewportChange()
-  }
-}
-
-const applyHorizontalZoom = (newQuarterNoteWidth: number, newStartQuarter: number) => {
-  if (!Number.isFinite(newQuarterNoteWidth) || newQuarterNoteWidth <= 0) return
-  setHorizontalZoom(newQuarterNoteWidth)
-
-  const stageWidth = getStageWidth()
-  const visibleSpanQuarter = stageWidth / state.grid.quarterNoteWidth
-  const maxStartQuarter = Math.max(0, state.grid.maxLength - visibleSpanQuarter)
-  const clampedStartQuarter = clamp(newStartQuarter, 0, maxStartQuarter)
-  state.viewport.scrollX = clampedStartQuarter * state.grid.quarterNoteWidth
-
-  updateScrollBounds()
-  state.needsRedraw = true
-  notifyViewportChange()
-}
-
-const applyVerticalZoom = (newNoteHeight: number, newTopIndex: number) => {
-  if (!Number.isFinite(newNoteHeight) || newNoteHeight <= 0) return
-  setVerticalZoom(newNoteHeight)
-
-  const stageHeight = getStageHeight()
-  const visibleSpan = stageHeight / state.grid.noteHeight
-  const maxTopIndex = Math.max(0, TOTAL_PITCHES - visibleSpan)
-  const clampedTopIndex = clamp(newTopIndex, 0, maxTopIndex)
-  state.viewport.scrollY = clampedTopIndex * state.grid.noteHeight
-
-  updateScrollBounds()
-  state.needsRedraw = true
-  notifyViewportChange()
-}
-
-const fitZoomToNotes = () => {
-  const stageWidth = getStageWidth()
-  const stageHeight = getStageHeight()
-  if (stageWidth <= 0 || stageHeight <= 0) return
-
-  const notes = Array.from(state.notes.values())
-
-  // Horizontal fit
-  if (notes.length === 0) {
-    const targetSpanQuarter = MIN_FIT_HORIZONTAL_BEATS
-    const newQuarterNoteWidth = stageWidth / targetSpanQuarter
-    applyHorizontalZoom(newQuarterNoteWidth, 0)
-
-    const targetSpanNotes = MIN_FIT_VERTICAL_NOTES
-    const newNoteHeight = stageHeight / targetSpanNotes
-    const bottomIndex = 127 - DEFAULT_FIT_BOTTOM_NOTE
-    const maxTopIndex = Math.max(0, TOTAL_PITCHES - targetSpanNotes)
-    const topIndex = clamp(bottomIndex - (targetSpanNotes - 1), 0, maxTopIndex)
-    applyVerticalZoom(newNoteHeight, topIndex)
-    return
-  }
-
-  const minPos = notes.reduce((min, note) => Math.min(min, note.position), Number.POSITIVE_INFINITY)
-  const maxPos = notes.reduce((max, note) => Math.max(max, note.position + note.duration), Number.NEGATIVE_INFINITY)
-  const actualSpanQuarter = Math.max(maxPos - minPos, 0)
-  const targetSpanQuarter = Math.max(actualSpanQuarter, MIN_FIT_HORIZONTAL_BEATS)
-  const newQuarterNoteWidth = stageWidth / targetSpanQuarter
-
-  const maxStartQuarter = Math.max(0, state.grid.maxLength - targetSpanQuarter)
-  const spanPadding = Math.max(targetSpanQuarter - actualSpanQuarter, 0)
-  const startQuarterRaw = minPos - spanPadding / 2
-  const startQuarter = clamp(startQuarterRaw, 0, maxStartQuarter)
-  applyHorizontalZoom(newQuarterNoteWidth, startQuarter)
-
-  const highestPitch = notes.reduce((max, note) => Math.max(max, note.pitch), Number.NEGATIVE_INFINITY)
-  const lowestPitch = notes.reduce((min, note) => Math.min(min, note.pitch), Number.POSITIVE_INFINITY)
-  const topIndexForHighest = 127 - highestPitch
-  const bottomIndexForLowest = 127 - lowestPitch
-  const actualSpanNotes = Math.max(bottomIndexForLowest - topIndexForHighest + 1, 1)
-  const targetSpanNotes = Math.max(actualSpanNotes, MIN_FIT_VERTICAL_NOTES)
-  const newNoteHeight = stageHeight / targetSpanNotes
-
-  const extraSpace = Math.max(targetSpanNotes - actualSpanNotes, 0)
-  const topIndexRaw = topIndexForHighest - extraSpace / 2
-  const maxTopIndex = Math.max(0, TOTAL_PITCHES - targetSpanNotes)
-  const topIndex = clamp(topIndexRaw, 0, maxTopIndex)
-  applyVerticalZoom(newNoteHeight, topIndex)
 }
 
 const notifyViewportChange = () => {
   props.syncState?.(state)
 }
 
-const horizontalThumbMetrics = computed(() => {
-  const totalQuarter = state.grid.maxLength
-  if (totalQuarter <= 0) return { start: 0, size: 1 }
-
-  const quarterNoteWidth = state.grid.quarterNoteWidth
-  const stageWidth = getStageWidth()
-  if (quarterNoteWidth <= 0 || stageWidth <= 0) return { start: 0, size: 1 }
-
-  const startQuarter = state.viewport.scrollX / quarterNoteWidth
-  const visibleSpanQuarter = stageWidth / quarterNoteWidth
-
-  const normalizedSize = Math.min(1, visibleSpanQuarter / totalQuarter)
-  if (normalizedSize >= 1) {
-    return { start: 0, size: 1 }
-  }
-
-  const normalizedStart = startQuarter / totalQuarter
-  const clampedStart = clamp(normalizedStart, 0, 1 - normalizedSize)
-
-  return { start: clampedStart, size: normalizedSize }
-})
-
-const verticalThumbMetrics = computed(() => {
-  const total = TOTAL_PITCHES
-  if (total <= 0) return { start: 0, size: 1 }
-
-  const noteHeight = state.grid.noteHeight
-  const stageHeight = getStageHeight()
-  if (noteHeight <= 0 || stageHeight <= 0) return { start: 0, size: 1 }
-
-  const topIndex = state.viewport.scrollY / noteHeight
-  const visibleSpan = stageHeight / noteHeight
-
-  const normalizedSize = Math.min(1, visibleSpan / total)
-  if (normalizedSize >= 1) {
-    return { start: 0, size: 1 }
-  }
-
-  const normalizedStart = topIndex / total
-  const clampedStart = clamp(normalizedStart, 0, 1 - normalizedSize)
-
-  return { start: clampedStart, size: normalizedSize }
-})
-
-const horizontalThumbStyle = computed(() => {
-  const { start, size } = horizontalThumbMetrics.value
-  const clampedSize = clamp(size, 0, 1)
-  const width = Math.min(1, Math.max(clampedSize, 0.01))
-  const left = clamp(start, 0, 1 - width)
-  return {
-    left: `${left * 100}%`,
-    width: `${width * 100}%`
-  }
-})
-
-const verticalThumbStyle = computed(() => {
-  const { start, size } = verticalThumbMetrics.value
-  const clampedSize = clamp(size, 0, 1)
-  const height = Math.min(1, Math.max(clampedSize, 0.01))
-  const top = clamp(start, 0, 1 - height)
-  return {
-    top: `${top * 100}%`,
-    height: `${height * 100}%`
-  }
-})
-
-type HorizontalDragMode = 'move' | 'resize-start' | 'resize-end'
-type VerticalDragMode = 'move' | 'resize-start' | 'resize-end'
-
-interface HorizontalDragState {
-  mode: HorizontalDragMode
-  pointerId: number
-  pointerStart: number
-  trackRect: DOMRect
-  startQuarter: number
-  endQuarter: number
-  anchorQuarter: number
-  spanQuarter: number
-  stageWidth: number
-  pointerOffset: number
+const fitZoomToNotes = () => {
+  fitZoomToNotesHelper(state, props.width, props.height, notifyViewportChange)
 }
 
-interface VerticalDragState {
-  mode: VerticalDragMode
-  pointerId: number
-  pointerStart: number
-  trackRect: DOMRect
-  topIndex: number
-  bottomIndex: number
-  anchorIndex: number
-  span: number
-  stageHeight: number
-  pointerOffset: number
+const enforceScrollBounds = () => {
+  updateScrollBounds(state, props.width, props.height, notifyViewportChange)
 }
 
-const horizontalDragState = ref<HorizontalDragState | null>(null)
-const verticalDragState = ref<VerticalDragState | null>(null)
-
-const stopHorizontalDrag = () => {
-  if (!horizontalDragState.value) return
-  window.removeEventListener('pointermove', handleHorizontalPointerMove)
-  window.removeEventListener('pointerup', stopHorizontalDrag)
-  horizontalDragState.value = null
+const applyHorizontalZoomWithState = (newQuarterNoteWidth: number, newStartQuarter: number) => {
+  applyHorizontalZoom(state, newQuarterNoteWidth, newStartQuarter, props.width, props.height, notifyViewportChange)
 }
 
-const stopVerticalDrag = () => {
-  if (!verticalDragState.value) return
-  window.removeEventListener('pointermove', handleVerticalPointerMove)
-  window.removeEventListener('pointerup', stopVerticalDrag)
-  verticalDragState.value = null
+const applyVerticalZoomWithState = (newNoteHeight: number, newTopIndex: number) => {
+  applyVerticalZoom(state, newNoteHeight, newTopIndex, props.width, props.height, notifyViewportChange)
 }
+
+const getHorizontalViewportRangeWithState = () => getHorizontalViewportRange(state, props.width)
+const getVerticalViewportRangeWithState = () => getVerticalViewportRange(state, props.height)
+
+const horizontalScrollbar = new HorizontalScrollbarController({
+  state,
+  horizontalTrack,
+  isInteractive: () => props.interactive,
+  getViewportRange: getHorizontalViewportRangeWithState,
+  applyHorizontalZoom: applyHorizontalZoomWithState,
+  enforceScrollBounds,
+  notifyViewportChange,
+  getFallbackWidth: () => props.width
+})
+
+const verticalScrollbar = new VerticalScrollbarController({
+  state,
+  verticalTrack,
+  isInteractive: () => props.interactive,
+  getViewportRange: getVerticalViewportRangeWithState,
+  applyVerticalZoom: applyVerticalZoomWithState,
+  enforceScrollBounds,
+  notifyViewportChange,
+  getFallbackHeight: () => props.height
+})
+
+const horizontalThumbStyle = computed(() => horizontalScrollbar.getThumbStyle())
+const verticalThumbStyle = computed(() => verticalScrollbar.getThumbStyle())
 
 const startHorizontalDrag = (mode: HorizontalDragMode, event: PointerEvent) => {
-  if (!props.interactive) return
-  if (!horizontalTrack.value) return
+  horizontalScrollbar.startDrag(mode, event)
+}
 
-  stopHorizontalDrag()
-
-  const trackRect = horizontalTrack.value.getBoundingClientRect()
-  if (trackRect.width <= 0) return
-
-  const { startQuarter, endQuarter } = getHorizontalViewportRange()
-  const spanQuarter = Math.max(MIN_HORIZONTAL_SPAN, endQuarter - startQuarter)
-  const stageWidth = getStageWidth()
-  const totalQuarter = state.grid.maxLength
-  if (stageWidth <= 0 || totalQuarter <= 0) return
-
-  const startNormalized = startQuarter / totalQuarter
-  const endNormalized = endQuarter / totalQuarter
-  let pointerOffset = 0
-  if (mode === 'resize-start') {
-    pointerOffset = event.clientX - (trackRect.left + startNormalized * trackRect.width)
-  } else if (mode === 'resize-end') {
-    pointerOffset = event.clientX - (trackRect.left + endNormalized * trackRect.width)
-  }
-
-  horizontalDragState.value = {
-    mode,
-    pointerId: event.pointerId,
-    pointerStart: event.clientX,
-    trackRect,
-    startQuarter,
-    endQuarter,
-    anchorQuarter: mode === 'resize-start' ? endQuarter : startQuarter,
-    spanQuarter,
-    stageWidth,
-    pointerOffset
-  }
-
-  window.addEventListener('pointermove', handleHorizontalPointerMove)
-  window.addEventListener('pointerup', stopHorizontalDrag)
-
-  event.preventDefault()
+const stopHorizontalDrag = () => {
+  horizontalScrollbar.stopDrag()
 }
 
 const startVerticalDrag = (mode: VerticalDragMode, event: PointerEvent) => {
-  if (!props.interactive) return
-  if (!verticalTrack.value) return
-
-  stopVerticalDrag()
-
-  const trackRect = verticalTrack.value.getBoundingClientRect()
-  if (trackRect.height <= 0) return
-
-  const { topIndex, bottomIndex } = getVerticalViewportRange()
-  const span = Math.max(MIN_VERTICAL_SPAN, bottomIndex - topIndex)
-  const stageHeight = getStageHeight()
-  if (stageHeight <= 0) return
-
-  const topNormalized = topIndex / TOTAL_PITCHES
-  const bottomNormalized = bottomIndex / TOTAL_PITCHES
-  let pointerOffset = 0
-  if (mode === 'resize-start') {
-    pointerOffset = event.clientY - (trackRect.top + topNormalized * trackRect.height)
-  } else if (mode === 'resize-end') {
-    pointerOffset = event.clientY - (trackRect.top + bottomNormalized * trackRect.height)
-  }
-
-  verticalDragState.value = {
-    mode,
-    pointerId: event.pointerId,
-    pointerStart: event.clientY,
-    trackRect,
-    topIndex,
-    bottomIndex,
-    anchorIndex: mode === 'resize-start' ? bottomIndex : topIndex,
-    span,
-    stageHeight,
-    pointerOffset
-  }
-
-  window.addEventListener('pointermove', handleVerticalPointerMove)
-  window.addEventListener('pointerup', stopVerticalDrag)
-
-  event.preventDefault()
+  verticalScrollbar.startDrag(mode, event)
 }
 
-const handleHorizontalPointerMove = (event: PointerEvent) => {
-  const drag = horizontalDragState.value
-  if (!drag || event.pointerId !== drag.pointerId) return
-
-  const totalQuarter = state.grid.maxLength
-  const trackRect = drag.trackRect
-  if (totalQuarter <= 0 || trackRect.width <= 0 || drag.stageWidth <= 0) return
-
-  event.preventDefault()
-
-  if (drag.mode === 'move') {
-    const deltaPx = event.clientX - drag.pointerStart
-    const deltaQuarter = (deltaPx / trackRect.width) * totalQuarter
-    const maxStartQuarter = Math.max(0, totalQuarter - drag.spanQuarter)
-    const newStartQuarter = clamp(drag.startQuarter + deltaQuarter, 0, maxStartQuarter)
-
-    state.viewport.scrollX = newStartQuarter * state.grid.quarterNoteWidth
-    updateScrollBounds()
-    state.needsRedraw = true
-    notifyViewportChange()
-    return
-  }
-
-  const rawX = clamp(event.clientX, trackRect.left, trackRect.right)
-  const adjustedX = clamp(rawX - drag.pointerOffset, trackRect.left, trackRect.right)
-  const norm = (adjustedX - trackRect.left) / trackRect.width
-
-  if (drag.mode === 'resize-start') {
-    let newStartQuarter = norm * totalQuarter
-    const maxStartQuarter = drag.anchorQuarter - MIN_HORIZONTAL_SPAN
-    newStartQuarter = clamp(newStartQuarter, 0, Math.max(0, maxStartQuarter))
-
-    const newSpanQuarter = Math.max(MIN_HORIZONTAL_SPAN, drag.anchorQuarter - newStartQuarter)
-    const newQuarterNoteWidth = drag.stageWidth / newSpanQuarter
-    applyHorizontalZoom(newQuarterNoteWidth, newStartQuarter)
-
-    drag.startQuarter = newStartQuarter
-    drag.spanQuarter = newSpanQuarter
-    return
-  }
-
-  if (drag.mode === 'resize-end') {
-    let newEndQuarter = norm * totalQuarter
-    const minEndQuarter = drag.anchorQuarter + MIN_HORIZONTAL_SPAN
-    newEndQuarter = clamp(newEndQuarter, Math.min(minEndQuarter, totalQuarter), totalQuarter)
-
-    const newSpanQuarter = Math.max(MIN_HORIZONTAL_SPAN, newEndQuarter - drag.anchorQuarter)
-    const newQuarterNoteWidth = drag.stageWidth / newSpanQuarter
-    applyHorizontalZoom(newQuarterNoteWidth, drag.anchorQuarter)
-
-    drag.endQuarter = newEndQuarter
-    drag.spanQuarter = newSpanQuarter
-  }
-}
-
-const handleVerticalPointerMove = (event: PointerEvent) => {
-  const drag = verticalDragState.value
-  if (!drag || event.pointerId !== drag.pointerId) return
-
-  const trackRect = drag.trackRect
-  if (trackRect.height <= 0 || drag.stageHeight <= 0) return
-
-  event.preventDefault()
-
-  if (drag.mode === 'move') {
-    const deltaPx = event.clientY - drag.pointerStart
-    const deltaIndex = (deltaPx / trackRect.height) * TOTAL_PITCHES
-    const maxTopIndex = Math.max(0, TOTAL_PITCHES - drag.span)
-    const newTopIndex = clamp(drag.topIndex + deltaIndex, 0, maxTopIndex)
-
-    state.viewport.scrollY = newTopIndex * state.grid.noteHeight
-    updateScrollBounds()
-    state.needsRedraw = true
-    notifyViewportChange()
-    return
-  }
-
-  const rawY = clamp(event.clientY, trackRect.top, trackRect.bottom)
-  const adjustedY = clamp(rawY - drag.pointerOffset, trackRect.top, trackRect.bottom)
-  const norm = (adjustedY - trackRect.top) / trackRect.height
-
-  if (drag.mode === 'resize-start') {
-    let newTopIndex = norm * TOTAL_PITCHES
-    const maxTopIndex = drag.anchorIndex - MIN_VERTICAL_SPAN
-    newTopIndex = clamp(newTopIndex, 0, Math.max(0, maxTopIndex))
-
-    const newSpan = Math.max(MIN_VERTICAL_SPAN, drag.anchorIndex - newTopIndex)
-    const newNoteHeight = drag.stageHeight / newSpan
-    applyVerticalZoom(newNoteHeight, newTopIndex)
-
-    drag.topIndex = newTopIndex
-    drag.span = newSpan
-    return
-  }
-
-  if (drag.mode === 'resize-end') {
-    let newBottomIndex = norm * TOTAL_PITCHES
-    const minBottomIndex = drag.anchorIndex + MIN_VERTICAL_SPAN
-    newBottomIndex = clamp(newBottomIndex, Math.min(minBottomIndex, TOTAL_PITCHES), TOTAL_PITCHES)
-
-    const newSpan = Math.max(MIN_VERTICAL_SPAN, newBottomIndex - drag.anchorIndex)
-    const newNoteHeight = drag.stageHeight / newSpan
-    applyVerticalZoom(newNoteHeight, drag.anchorIndex)
-
-    drag.bottomIndex = newBottomIndex
-    drag.span = newSpan
-  }
+const stopVerticalDrag = () => {
+  verticalScrollbar.stopDrag()
 }
 
 const onHorizontalTrackPointerDown = (event: PointerEvent) => {
-  if (!props.interactive) return
-  if (!horizontalTrack.value) return
-
-  const trackRect = horizontalTrack.value.getBoundingClientRect()
-  if (trackRect.width <= 0) return
-
-  const norm = clamp((event.clientX - trackRect.left) / trackRect.width, 0, 1)
-  const { startQuarter, endQuarter } = getHorizontalViewportRange()
-  const spanQuarter = Math.max(MIN_HORIZONTAL_SPAN, endQuarter - startQuarter)
-  const totalQuarter = state.grid.maxLength
-  const maxStartQuarter = Math.max(0, totalQuarter - spanQuarter)
-  const targetStartQuarter = clamp(norm * totalQuarter - spanQuarter / 2, 0, maxStartQuarter)
-
-  state.viewport.scrollX = targetStartQuarter * state.grid.quarterNoteWidth
-  updateScrollBounds()
-  state.needsRedraw = true
-  notifyViewportChange()
+  horizontalScrollbar.onTrackPointerDown(event)
 }
 
 const onVerticalTrackPointerDown = (event: PointerEvent) => {
-  if (!props.interactive) return
-  if (!verticalTrack.value) return
-
-  const trackRect = verticalTrack.value.getBoundingClientRect()
-  if (trackRect.height <= 0) return
-
-  const norm = clamp((event.clientY - trackRect.top) / trackRect.height, 0, 1)
-  const { topIndex, bottomIndex } = getVerticalViewportRange()
-  const span = Math.max(MIN_VERTICAL_SPAN, bottomIndex - topIndex)
-  const maxTopIndex = Math.max(0, TOTAL_PITCHES - span)
-  const targetTopIndex = clamp(norm * TOTAL_PITCHES - span / 2, 0, maxTopIndex)
-
-  state.viewport.scrollY = targetTopIndex * state.grid.noteHeight
-  updateScrollBounds()
-  state.needsRedraw = true
-  notifyViewportChange()
+  verticalScrollbar.onTrackPointerDown(event)
 }
 
 // Watch grid subdivision changes
@@ -562,54 +153,6 @@ watch(gridSubdivision, (newValue) => {
   props.syncState?.(state)
 })
 
-// Undo/redo functions
-const undo = () => {
-  state.command.stack?.undo()
-  updateCommandStackButtons()
-}
-
-const redo = () => {
-  state.command.stack?.redo()
-  updateCommandStackButtons()
-}
-
-const updateCommandStackButtons = () => {
-  canUndo.value = state.command.stack?.canUndo() ?? false
-  canRedo.value = state.command.stack?.canRedo() ?? false
-}
-
-const handleCommandStackUpdate = () => {
-  updateCommandStackButtons()
-  emitStateUpdate()
-}
-
-// Delete selected notes
-const deleteSelected = () => {
-  if (state.selection.selectedIds.size === 0) return
-
-  state.command.stack?.executeCommand('Delete Selected', () => {
-    state.selection.selectedIds.forEach(id => state.notes.delete(id))
-    state.selection.selectedIds.clear()
-    state.needsRedraw = true
-  })
-
-  updateCommandStackButtons()
-}
-
-// RAF loop for rendering
-const renderLoop = () => {
-  if (state.needsRedraw) {
-    renderGrid(state)
-    renderVisibleNotes(state)
-    renderResizeHandles(state)
-    updateQueuePlayheadPosition(state)
-    updateLivePlayheadPosition(state)
-    state.needsRedraw = false
-  }
-  state.rafHandle = requestAnimationFrame(renderLoop)
-}
-
-// Emit state updates
 const emitStateUpdate = () => {
   syncUiCounters()
   emit('notes-update', Array.from(state.notes.entries()))
@@ -620,231 +163,75 @@ state.notifyExternalChange = () => {
   emitStateUpdate()
 }
 
-// Keyboard handlers
-const handleKeyDown = (e: KeyboardEvent) => {
-  if (!props.interactive) return
+const {
+  undo,
+  redo,
+  deleteSelected,
+  updateCommandStackButtons,
+  handleCommandStackUpdate
+} = createCommandHandlers({
+  state,
+  canUndo,
+  canRedo,
+  emitStateUpdate
+})
 
-  // Undo (Cmd/Ctrl+Z)
-  if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
-    e.preventDefault()
-    undo()
-  }
+const keyboardController = createKeyboardController({
+  state,
+  isInteractive: () => props.interactive,
+  undo,
+  redo,
+  deleteSelected,
+  updateCommandStackButtons,
+  executeOverlapChanges
+})
 
-  // Redo (Cmd/Ctrl+Shift+Z)
-  if ((e.metaKey || e.ctrlKey) && e.key === 'z' && e.shiftKey) {
-    e.preventDefault()
-    redo()
-  }
-
-  // Delete (Backspace/Delete)
-  if (e.key === 'Backspace' || e.key === 'Delete') {
-    e.preventDefault()
-    deleteSelected()
-  }
-
-  // Arrow keys to move selection
-  if (e.key.startsWith('Arrow') && state.selection.selectedIds.size > 0) {
-    e.preventDefault()
-
-    state.command.stack?.executeCommand('Move Selection', () => {
-      state.selection.selectedIds.forEach(id => {
-        const note = state.notes.get(id)
-        if (!note) return
-
-        switch (e.key) {
-          case 'ArrowUp':
-            note.pitch = Math.min(127, note.pitch + 1)
-            break
-          case 'ArrowDown':
-            note.pitch = Math.max(0, note.pitch - 1)
-            break
-          case 'ArrowLeft':
-            note.position = Math.max(0, note.position - 0.25)
-            break
-          case 'ArrowRight':
-            note.position += 0.25
-            break
-        }
-      })
-
-      executeOverlapChanges(state, state.selection.selectedIds)
-      state.needsRedraw = true
-    })
-
-    updateCommandStackButtons()
-  }
-
-  // Copy (Cmd/Ctrl+C)
-  if ((e.metaKey || e.ctrlKey) && e.key === 'c' && state.selection.selectedIds.size > 0) {
-    e.preventDefault()
-    // Store copied notes in a simple array
-    const copiedNotes = Array.from(state.selection.selectedIds).map(id => {
-      const note = state.notes.get(id)
-      return note ? { ...note } : null
-    }).filter(n => n !== null) as NoteData[]
-
-    // Find minimum position for relative copying
-    const minPos = Math.min(...copiedNotes.map(n => n.position))
-
-    // Store in session storage for simplicity
-    sessionStorage.setItem('copiedPianoRollNotes', JSON.stringify({
-      notes: copiedNotes.map(n => ({ ...n, position: n.position - minPos }))
-    }))
-  }
-
-  // Paste (Cmd/Ctrl+V)
-  if ((e.metaKey || e.ctrlKey) && e.key === 'v') {
-    e.preventDefault()
-    const stored = sessionStorage.getItem('copiedPianoRollNotes')
-    if (!stored) return
-
-    try {
-      const { notes } = JSON.parse(stored)
-
-      state.command.stack?.executeCommand('Paste Notes', () => {
-        state.selection.selectedIds.clear()
-
-        notes.forEach((note: NoteData) => {
-          const newNote: NoteData = {
-            ...note,
-            id: `note_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            position: state.queuePlayhead.position + note.position
-          }
-          state.notes.set(newNote.id, newNote)
-          state.selection.selectedIds.add(newNote.id)
-        })
-
-        executeOverlapChanges(state, state.selection.selectedIds)
-        state.needsRedraw = true
-      })
-
-      updateCommandStackButtons()
-    } catch (e) {
-      console.error('Failed to paste notes', e)
-    }
-  }
-}
-
-const enableInteractivity = () => {
-  if (!state.stage) return
-
-  if (!eventHandlersInitialized) {
-    setupEventHandlers(state, state.stage)
-    eventHandlersInitialized = true
-  }
-
-  state.stage.listening(true)
-
-  if (!keyboardListenerAttached) {
-    window.addEventListener('keydown', handleKeyDown)
-    keyboardListenerAttached = true
-  }
-}
-
-const disableInteractivity = () => {
-  if (!state.stage) return
-
-  state.stage.listening(false)
-  state.interaction.isDragging = false
-  state.interaction.isResizing = false
-  state.interaction.isMarqueeSelecting = false
-  state.selection.selectionRect?.visible(false)
-
-  if (keyboardListenerAttached) {
-    window.removeEventListener('keydown', handleKeyDown)
-    keyboardListenerAttached = false
-  }
-
-  state.layers.overlay?.batchDraw()
-  syncUiCounters()
-}
+const stageManager = new StageManager({
+  state,
+  konvaContainer,
+  initializeLayers,
+  setupEventHandlers,
+  renderGrid,
+  renderVisibleNotes,
+  renderResizeHandles,
+  updateQueuePlayheadPosition,
+  updateLivePlayheadPosition,
+  handleCommandStackUpdate,
+  syncUiCounters,
+  enforceScrollBounds,
+  attachKeyboard: () => keyboardController.attach(),
+  detachKeyboard: () => keyboardController.detach()
+})
 
 onMounted(() => {
-  if (!konvaContainer.value) {
-    console.error('Konva container ref not found')
-    return
-  }
-
-  // Initialize Konva stage
-  const stageInstance = new Konva.Stage({
-    container: konvaContainer.value,
+  stageManager.mount({
     width: props.width,
-    height: props.height
+    height: props.height,
+    interactive: props.interactive,
+    initialNotes: props.initialNotes ?? []
   })
-  state.stage = stageInstance
-  state.konvaContainer = konvaContainer.value
-
-  // Initialize layers with callback to update buttons
-  initializeLayers(state, stageInstance, handleCommandStackUpdate)
-
-  // Configure interactivity after layers are ready
-  if (props.interactive) {
-    enableInteractivity()
-  } else {
-    disableInteractivity()
-  }
-
-  // Load initial notes
-  if (props.initialNotes && props.initialNotes.length > 0) {
-    state.notes = new Map(props.initialNotes)
-    state.needsRedraw = true
-    syncUiCounters()
-  }
-
-  // Start render loop
-  state.rafHandle = requestAnimationFrame(renderLoop)
-
-  // Initial render
-  state.needsRedraw = true
-
-  updateScrollBounds()
-
-  // Update command stack buttons and emit initial state sync
-  handleCommandStackUpdate()
 })
 
 onUnmounted(() => {
   stopHorizontalDrag()
   stopVerticalDrag()
-
-  // Stop RAF loop
-  if (state.rafHandle) {
-    cancelAnimationFrame(state.rafHandle)
-  }
-
-  // Disable interactivity
-  disableInteractivity()
-
-  // Destroy stage
-  state.stage?.destroy()
+  stageManager.unmount()
 })
 
-// Watch for prop changes
 watch(() => props.interactive, (interactive) => {
-  if (!state.stage) return
-  if (interactive) {
-    enableInteractivity()
-  } else {
-    disableInteractivity()
+  stageManager.setInteractive(interactive)
+  if (!interactive) {
     stopHorizontalDrag()
     stopVerticalDrag()
   }
 })
 
 watch(() => props.width, (newWidth) => {
-  if (state.stage) {
-    state.stage.width(newWidth)
-    state.needsRedraw = true
-    updateScrollBounds()
-  }
+  stageManager.resize(newWidth, props.height)
 })
 
 watch(() => props.height, (newHeight) => {
-  if (state.stage) {
-    state.stage.height(newHeight)
-    state.needsRedraw = true
-    updateScrollBounds()
-  }
+  stageManager.resize(props.width, newHeight)
 })
 
 // Expose methods for web component API
