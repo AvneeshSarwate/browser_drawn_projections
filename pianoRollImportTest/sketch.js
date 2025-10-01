@@ -47,15 +47,17 @@ function drawNotes(state, padding) {
   const pitchRange = Math.max(maxPitch - minPitch, 1);
 
   const innerWidth = width - padding * 2;
-  const innerHeight = height - padding * 2 - 24;
+  const timelineHeight = height - padding * 2;
   const quartToPixels = innerWidth / span;
-  const noteHeight = Math.max(innerHeight / Math.min(pitchRange + 1, 24), 6);
+  const noteHeight = Math.max(timelineHeight / Math.min(pitchRange + 1, 24), 6);
+  const usableHeight = Math.max(timelineHeight - noteHeight, 0);
 
   notes.forEach((note) => {
     const velocity = Math.min(1, Math.max(0.2, (note.velocity ?? 100) / 127));
     const brightness = 160 + velocity * 70;
     const x = padding + (note.position - minPos) * quartToPixels;
-    const y = padding + innerHeight - ((note.pitch - minPitch) / pitchRange) * innerHeight - noteHeight;
+    const pitchRatio = (note.pitch - minPitch) / pitchRange;
+    const y = padding + usableHeight - pitchRatio * usableHeight;
     const w = Math.max(note.duration * quartToPixels, 3);
 
     fill(255, 120, 140, brightness);
@@ -90,11 +92,12 @@ function drawIndicators(state, padding) {
 function drawLabels(state, padding) {
   fill(40);
   textAlign(LEFT, BOTTOM);
-  text(`Notes: ${state.notes.length}`, padding + 6, height - padding - 6);
+  const labelBaseY = height - padding / 2 + 8;
+  text(`Notes: ${state.notes.length}`, padding + 6, labelBaseY);
   text(
     `Playhead: ${state.playheadPosition.toFixed(2)} • Queue: ${state.queuePosition.toFixed(2)}`,
     padding + 6,
-    height - padding - 22,
+    labelBaseY - 16,
   );
 }
 

@@ -6,3 +6,5 @@
 - figure out layer based multi-clip editting, like ableton?
 - extensions 
   - ableton clip-view style clip organizer?
+- add playNoteOnSelected and playNotesAtCursor callbacks like original
+- mouseup doesn't release properly when dragged off canvas
