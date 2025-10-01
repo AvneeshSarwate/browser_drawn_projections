@@ -120,6 +120,9 @@ export interface PianoRollState {
     position: number  // in quarter notes
     element?: Konva.Line
   }
+
+  // Optional callback to notify external listeners when state changes outside command stack
+  notifyExternalChange?: () => void
 }
 
 export const createPianoRollState = (): PianoRollState => {
@@ -205,6 +208,8 @@ export const createPianoRollState = (): PianoRollState => {
     livePlayhead: {
       position: 0,
       element: undefined
-    }
+    },
+
+    notifyExternalChange: undefined
   }
 }

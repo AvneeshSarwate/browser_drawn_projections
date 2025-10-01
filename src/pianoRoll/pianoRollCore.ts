@@ -34,6 +34,26 @@ export function restoreState(state: PianoRollState, snapshot: string) {
   state.needsRedraw = true
 }
 
+function selectionSetsDiffer(previous: Set<string>, current: Set<string>): boolean {
+  if (previous.size !== current.size) return true
+  for (const id of previous) {
+    if (!current.has(id)) {
+      return true
+    }
+  }
+  return false
+}
+
+function mutateSelection(state: PianoRollState, mutate: () => void): boolean {
+  const before = new Set(state.selection.selectedIds)
+  mutate()
+  const changed = selectionSetsDiffer(before, state.selection.selectedIds)
+  if (changed) {
+    state.notifyExternalChange?.()
+  }
+  return changed
+}
+
 // ================= Layer Initialization =================
 
 export function initializeLayers(state: PianoRollState, stage: Konva.Stage, onCommandStackChange?: () => void) {
@@ -421,20 +441,22 @@ export function setupEventHandlers(state: PianoRollState, stage: Konva.Stage) {
       const isShift = e.evt.shiftKey || e.evt.ctrlKey
       const isSelected = state.selection.selectedIds.has(noteId)
 
-      if (isShift) {
-        // Toggle selection
-        if (isSelected) {
-          state.selection.selectedIds.delete(noteId)
+      mutateSelection(state, () => {
+        if (isShift) {
+          // Toggle selection
+          if (isSelected) {
+            state.selection.selectedIds.delete(noteId)
+          } else {
+            state.selection.selectedIds.add(noteId)
+          }
         } else {
-          state.selection.selectedIds.add(noteId)
+          // Replace selection unless single note already selected
+          if (!isSelected || state.selection.selectedIds.size > 1) {
+            state.selection.selectedIds.clear()
+            state.selection.selectedIds.add(noteId)
+          }
         }
-      } else {
-        // Replace selection (unless clicking already-selected note)
-        if (!isSelected) {
-          state.selection.selectedIds.clear()
-          state.selection.selectedIds.add(noteId)
-        }
-      }
+      })
 
       // Start drag for selected notes
       startNoteDrag(state, stage)
@@ -453,7 +475,9 @@ export function setupEventHandlers(state: PianoRollState, stage: Konva.Stage) {
       state.interaction.marqueeIsShift = e.evt.shiftKey || e.evt.ctrlKey
 
       if (!state.interaction.marqueeIsShift) {
-        state.selection.selectedIds.clear()
+        mutateSelection(state, () => {
+          state.selection.selectedIds.clear()
+        })
       }
 
       state.needsRedraw = true
@@ -493,14 +517,20 @@ export function setupEventHandlers(state: PianoRollState, stage: Konva.Stage) {
 
       const intersecting = getNotesInRect(state, rect)
 
-      if (state.interaction.marqueeIsShift) {
-        // Add to selection
-        intersecting.forEach(id => state.selection.selectedIds.add(id))
-      } else {
-        // Replace selection
-        state.selection.selectedIds.clear()
-        intersecting.forEach(id => state.selection.selectedIds.add(id))
-      }
+      mutateSelection(state, () => {
+        if (state.interaction.marqueeIsShift) {
+          // Add to selection without removing existing
+          intersecting.forEach(id => {
+            state.selection.selectedIds.add(id)
+          })
+        } else {
+          // Replace selection with intersecting notes
+          state.selection.selectedIds.clear()
+          intersecting.forEach(id => {
+            state.selection.selectedIds.add(id)
+          })
+        }
+      })
 
       state.needsRedraw = true
     }
@@ -537,6 +567,7 @@ export function setupEventHandlers(state: PianoRollState, stage: Konva.Stage) {
           const quantizedPos = quantizeToGrid(position, state.grid.subdivision)
           state.queuePlayhead.position = Math.max(0, Math.min(quantizedPos, state.grid.maxLength))
           state.needsRedraw = true
+          state.notifyExternalChange?.() //for queue playhead update
         }
       }
     }

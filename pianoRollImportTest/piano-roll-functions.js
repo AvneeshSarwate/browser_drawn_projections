@@ -216,8 +216,6 @@ function stopPlayback(resetToQueue = true) {
 }
 
 function initialize() {
-  if (!ToneGlobal) return;
-
   pianoRollElement = document.getElementById('pianoRoll');
   playButton = document.getElementById('playButton');
   stopButton = document.getElementById('stopButton');
@@ -246,8 +244,14 @@ function initialize() {
   updateStatus();
 }
 
+function setup() {
+  initialize();
+}
+
 // Expose globals for novice-friendly access
+window.setupPianoRollDemo = setup;
 window.initializePianoRollDemo = initialize;
+window.initializePianoRoll = initialize;
 window.startPlayback = startPlayback;
 window.stopPlayback = stopPlayback;
 window.handlePianoRollStateSync = handleStateSync;

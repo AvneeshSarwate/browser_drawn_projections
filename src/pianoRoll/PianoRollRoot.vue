@@ -74,6 +74,11 @@ const updateCommandStackButtons = () => {
   canRedo.value = state.command.stack?.canRedo() ?? false
 }
 
+const handleCommandStackUpdate = () => {
+  updateCommandStackButtons()
+  emitStateUpdate()
+}
+
 // Delete selected notes
 const deleteSelected = () => {
   if (state.selection.selectedIds.size === 0) return
@@ -104,6 +109,10 @@ const renderLoop = () => {
 const emitStateUpdate = () => {
   emit('notes-update', Array.from(state.notes.entries()))
   props.syncState?.(state)
+}
+
+state.notifyExternalChange = () => {
+  emitStateUpdate()
 }
 
 // Watch for state changes to emit updates
@@ -261,7 +270,7 @@ onMounted(() => {
   state.konvaContainer = konvaContainer.value
 
   // Initialize layers with callback to update buttons
-  initializeLayers(state, stageInstance, updateCommandStackButtons)
+  initializeLayers(state, stageInstance, handleCommandStackUpdate)
 
   // Configure interactivity after layers are ready
   if (props.interactive) {
@@ -282,8 +291,8 @@ onMounted(() => {
   // Initial render
   state.needsRedraw = true
 
-  // Update command stack buttons
-  updateCommandStackButtons()
+  // Update command stack buttons and emit initial state sync
+  handleCommandStackUpdate()
 })
 
 onUnmounted(() => {
@@ -348,6 +357,7 @@ const setNotes = (notes: NoteDataInput[]) => {
   })
 
   state.needsRedraw = true
+  emitStateUpdate()
 }
 
 const setLivePlayheadPosition = (position: number) => {
