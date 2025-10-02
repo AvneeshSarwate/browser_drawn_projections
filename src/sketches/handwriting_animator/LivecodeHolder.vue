@@ -6,7 +6,9 @@ import { appStateName, type TemplateAppState, drawFlattenedStrokeGroup, resoluti
 import { updateGPUStrokes, getDrawingScene } from './strokeLauncher'
 import type { CanvasStateSnapshot } from '@/canvas/canvasState'
 import { CanvasPaint as GLCanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX'
-import { CanvasPaint as BabylonCanvasPaint } from '@/rendering/shaderFXBabylon'
+import { CanvasPaint as BabylonCanvasPaint, PassthruEffect, FeedbackNode } from '@/rendering/shaderFXBabylon'
+import { AlphaTimeTagEffect } from '@/rendering/postFX/alphaTimeTag.frag.generated'
+import { FloodFillStepEffect } from '@/rendering/postFX/floodFillStep.frag.generated'
 import { clearListeners, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse'
 import type p5 from 'p5'
 import { sinN } from '@/channels/channels'
@@ -88,16 +90,32 @@ onMounted(async () => {
   glShaderGraph = canvasPaint
 
   if (gpuReady) {
+    gpuCanvasPaint?.disposeAll()
+    gpuCanvasPaint = undefined
+    drawingSceneRef = undefined
+
     const drawingScene = getDrawingScene()
     const renderTarget = drawingScene?.getRenderTarget()
     if (drawingScene && renderTarget) {
       const size = renderTarget.getSize()
-      gpuCanvasPaint = new BabylonCanvasPaint(
-        drawingScene.getEngine(),
-        { src: renderTarget },
-        size.width,
-        size.height,
-      )
+      const width = size.width
+      const height = size.height
+      const engine = drawingScene.getEngine()
+      const sampleMode: 'nearest' | 'linear' = 'nearest'
+
+      const timeTag = new AlphaTimeTagEffect(engine, { src: renderTarget }, width, height, sampleMode)
+      timeTag.setUniforms({ drawTime: () => performance.now() * 0.001 })
+
+      const floodFillSeed = new FloodFillStepEffect(engine, { seed: timeTag, feedback: timeTag }, width, height, sampleMode)
+
+      const passThruForFeedback = new PassthruEffect(engine, { src: floodFillSeed }, width, height, sampleMode, 'half_float')
+
+      const feedbackNode = new FeedbackNode(engine, passThruForFeedback, width, height, sampleMode, 'half_float')
+
+      const floodFillFinal = new FloodFillStepEffect(engine, { seed: timeTag, feedback: feedbackNode }, width, height, sampleMode)
+      feedbackNode.setFeedbackSrc(floodFillFinal)
+
+      gpuCanvasPaint = new BabylonCanvasPaint(engine, { src: floodFillFinal }, width, height)
       drawingSceneRef = drawingScene
     } else {
       console.warn('DrawingScene render target unavailable; GPU strokes will not render to canvas')
@@ -105,6 +123,7 @@ onMounted(async () => {
       drawingSceneRef = undefined
     }
   } else {
+    gpuCanvasPaint?.disposeAll()
     gpuCanvasPaint = undefined
     drawingSceneRef = undefined
   }
@@ -120,7 +139,7 @@ onMounted(async () => {
       engine.beginFrame()
       try {
         drawingSceneRef.renderFrame()
-        gpuCanvasPaint.renderAll(engine)
+        gpuCanvasPaint.renderAll(engine as any)
       } finally {
         engine.endFrame()
       }

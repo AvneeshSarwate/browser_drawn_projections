@@ -1,0 +1,166 @@
+// Auto-generated manually for AlphaTimeTag effect.
+import * as BABYLON from 'babylonjs';
+import { CustomShaderEffect, type ShaderSource, type RenderPrecision, type ShaderUniforms, type Dynamic } from '../shaderFXBabylon';
+
+export const AlphaTimeTagVertexSource = `// Auto-generated style passthrough for AlphaTimeTag
+attribute position: vec3<f32>;
+attribute uv: vec2<f32>;
+varying vUV: vec2<f32>;
+uniform uniforms_drawTime: f32;
+var src: texture_2d<f32>;
+var srcSampler: sampler;
+
+#define CUSTOM_VERTEX_DEFINITIONS
+@vertex
+fn main(input : VertexInputs) -> FragmentInputs {
+#define CUSTOM_VERTEX_MAIN_BEGIN
+  vertexOutputs.position = vec4<f32>(vertexInputs.position, 1.0);
+  vertexOutputs.vUV = vertexInputs.uv;
+#define CUSTOM_VERTEX_MAIN_END
+}
+
+`;
+
+export const AlphaTimeTagFragmentSources = [
+  `varying vUV: vec2<f32>;
+uniform uniforms_drawTime: f32;
+var src: texture_2d<f32>;
+var srcSampler: sampler;
+
+struct AlphaTimeTagUniforms {
+  drawTime: f32,
+};
+
+fn pass0(uv: vec2f, uniforms: AlphaTimeTagUniforms, src: texture_2d<f32>, srcSampler: sampler) -> vec4f {
+  let color = textureSample(src, srcSampler, uv);
+  let alphaTime = select(0.0, uniforms.drawTime, color.a > 0.0);
+  return vec4f(color.rgb, alphaTime);
+}
+
+fn load_AlphaTimeTagUniforms() -> AlphaTimeTagUniforms {
+  return AlphaTimeTagUniforms(
+    uniforms.uniforms_drawTime
+  );
+}
+
+#define CUSTOM_FRAGMENT_DEFINITIONS
+@fragment
+fn main(input: FragmentInputs) -> FragmentOutputs {
+#define CUSTOM_FRAGMENT_MAIN_BEGIN
+  let uniforms_value = load_AlphaTimeTagUniforms();
+  let uv_local = fragmentInputs.vUV;
+  let color = pass0(uv_local, uniforms_value, src, srcSampler);
+  fragmentOutputs.color = color;
+#define CUSTOM_FRAGMENT_MAIN_END
+}
+
+`,
+] as const;
+
+export const AlphaTimeTagPassCount = 1 as const;
+export const AlphaTimeTagPrimaryTextureName = 'src' as const;
+
+export interface AlphaTimeTagUniformValues {
+  drawTime: number;
+}
+
+export function setAlphaTimeTagUniforms(material: BABYLON.ShaderMaterial, uniforms: Partial<AlphaTimeTagUniformValues>): void {
+  if (!uniforms) {
+    return;
+  }
+  if (uniforms.drawTime !== undefined) {
+    material.setFloat('uniforms_drawTime', uniforms.drawTime);
+  }
+}
+
+export type AlphaTimeTagTextureName = 'src';
+export interface AlphaTimeTagInputs {
+  src: ShaderSource;
+}
+
+export interface AlphaTimeTagMaterialHandles {
+  material: BABYLON.ShaderMaterial;
+  setTexture(name: AlphaTimeTagTextureName, texture: BABYLON.BaseTexture): void;
+  setTextureSampler(name: AlphaTimeTagTextureName, sampler: BABYLON.TextureSampler): void;
+  setUniforms(uniforms: Partial<AlphaTimeTagUniformValues>): void;
+}
+
+export interface AlphaTimeTagMaterialOptions {
+  name?: string;
+  passIndex?: number;
+}
+
+export function createAlphaTimeTagMaterial(scene: BABYLON.Scene, options: AlphaTimeTagMaterialOptions = {}): AlphaTimeTagMaterialHandles {
+  const passIndex = options.passIndex ?? 0;
+  if (passIndex !== 0) {
+    throw new Error(`Invalid passIndex ${passIndex} for AlphaTimeTag.`);
+  }
+  const baseName = options.name ?? 'AlphaTimeTagMaterial';
+  const shaderName = `${baseName}_pass${passIndex}`;
+
+  const vertexShaderName = `${shaderName}VertexShader`;
+  const fragmentShaderName = `${shaderName}FragmentShader`;
+
+  BABYLON.ShaderStore.ShadersStoreWGSL[vertexShaderName] = AlphaTimeTagVertexSource;
+  BABYLON.ShaderStore.ShadersStoreWGSL[fragmentShaderName] = AlphaTimeTagFragmentSources[passIndex];
+
+  const material = new BABYLON.ShaderMaterial(shaderName, scene, {
+    vertex: shaderName,
+    fragment: shaderName,
+  }, {
+    attributes: ['position', 'uv'],
+    uniforms: ['uniforms_drawTime'],
+    samplers: ['src'],
+    samplerObjects: ['srcSampler'],
+    shaderLanguage: BABYLON.ShaderLanguage.WGSL,
+  });
+
+  const samplerLookup = { src: 'srcSampler' } as const;
+
+  const handles: AlphaTimeTagMaterialHandles = {
+    material,
+    setTexture: (name, texture) => material.setTexture(name, texture),
+    setTextureSampler: (name, sampler) => material.setTextureSampler(samplerLookup[name], sampler),
+    setUniforms: (values) => setAlphaTimeTagUniforms(material, values),
+  };
+
+  return handles;
+}
+
+export class AlphaTimeTagEffect extends CustomShaderEffect<AlphaTimeTagUniformValues, AlphaTimeTagInputs> {
+  effectName = 'AlphaTimeTag'
+
+  constructor(
+    engine: BABYLON.WebGPUEngine,
+    inputs: AlphaTimeTagInputs,
+    width = 1280,
+    height = 720,
+    sampleMode: 'nearest' | 'linear' = 'linear',
+    precision: RenderPrecision = 'half_float',
+  ) {
+    super(engine, inputs, {
+      factory: (sceneRef, options) => createAlphaTimeTagMaterial(sceneRef, options),
+      textureInputKeys: ['src'],
+      passCount: AlphaTimeTagPassCount,
+      primaryTextureKey: 'src',
+      width,
+      height,
+      materialName: 'AlphaTimeTagMaterial',
+      sampleMode,
+      precision,
+    })
+  }
+
+  override setSrcs(inputs: Partial<AlphaTimeTagInputs>): void {
+    super.setSrcs(inputs);
+  }
+
+  override setUniforms(uniforms: { drawTime?: Dynamic<number> }): void {
+    const record: ShaderUniforms = {};
+    if (uniforms.drawTime !== undefined) {
+      record['drawTime'] = uniforms.drawTime;
+    }
+    super.setUniforms(record);
+  }
+}
+

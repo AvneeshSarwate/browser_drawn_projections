@@ -1,0 +1,166 @@
+// Auto-generated manually for FloodFillStep effect.
+import * as BABYLON from 'babylonjs';
+import { CustomShaderEffect, type ShaderSource, type RenderPrecision } from '../shaderFXBabylon';
+
+export const FloodFillStepVertexSource = `// Auto-generated style passthrough for FloodFillStep
+attribute position: vec3<f32>;
+attribute uv: vec2<f32>;
+varying vUV: vec2<f32>;
+var seed: texture_2d<f32>;
+var seedSampler: sampler;
+var feedback: texture_2d<f32>;
+var feedbackSampler: sampler;
+
+#define CUSTOM_VERTEX_DEFINITIONS
+@vertex
+fn main(input : VertexInputs) -> FragmentInputs {
+#define CUSTOM_VERTEX_MAIN_BEGIN
+  vertexOutputs.position = vec4<f32>(vertexInputs.position, 1.0);
+  vertexOutputs.vUV = vertexInputs.uv;
+#define CUSTOM_VERTEX_MAIN_END
+}
+
+`;
+
+export const FloodFillStepFragmentSources = [
+  `varying vUV: vec2<f32>;
+var seed: texture_2d<f32>;
+var seedSampler: sampler;
+var feedback: texture_2d<f32>;
+var feedbackSampler: sampler;
+
+fn pass0(uv: vec2f, seed: texture_2d<f32>, seedSampler: sampler, feedback: texture_2d<f32>, feedbackSampler: sampler) -> vec4f {
+  let seedColor = textureSample(seed, seedSampler, uv);
+  let feedbackColor = textureSample(feedback, feedbackSampler, uv);
+
+  let dims = vec2f(textureDimensions(feedback, 0));
+  let invDims = 1.0 / dims;
+
+  var recentColor = vec4f(-1.0);
+
+  for (var x = -1; x <= 1; x = x + 1) {
+    for (var y = -1; y <= 1; y = y + 1) {
+      let offset = vec2f(f32(x), f32(y)) * invDims;
+      let neighborUV = clamp(uv + offset, vec2f(0.0), vec2f(1.0));
+      let candidate = textureSample(feedback, feedbackSampler, neighborUV);
+      if (candidate.a > recentColor.a) {
+        recentColor = candidate;
+      }
+    }
+  }
+
+  var chosenFeedback = recentColor;
+  if (feedbackColor.a == recentColor.a) {
+    chosenFeedback = feedbackColor;
+  }
+
+  if (seedColor.a > 0.0) {
+    return seedColor;
+  }
+
+  return chosenFeedback;
+}
+
+#define CUSTOM_FRAGMENT_DEFINITIONS
+@fragment
+fn main(input: FragmentInputs) -> FragmentOutputs {
+#define CUSTOM_FRAGMENT_MAIN_BEGIN
+  let uv_local = fragmentInputs.vUV;
+  let color = pass0(uv_local, seed, seedSampler, feedback, feedbackSampler);
+  fragmentOutputs.color = color;
+#define CUSTOM_FRAGMENT_MAIN_END
+}
+
+`,
+] as const;
+
+export const FloodFillStepPassCount = 1 as const;
+export const FloodFillStepPrimaryTextureName = 'seed' as const;
+
+export type FloodFillStepUniforms = Record<string, never>;
+export function setFloodFillStepUniforms(_material: BABYLON.ShaderMaterial, _uniforms: Partial<FloodFillStepUniforms>): void {}
+
+export type FloodFillStepTextureName = 'seed' | 'feedback';
+export interface FloodFillStepInputs {
+  seed: ShaderSource;
+  feedback: ShaderSource;
+}
+
+export interface FloodFillStepMaterialHandles {
+  material: BABYLON.ShaderMaterial;
+  setTexture(name: FloodFillStepTextureName, texture: BABYLON.BaseTexture): void;
+  setTextureSampler(name: FloodFillStepTextureName, sampler: BABYLON.TextureSampler): void;
+  setUniforms(uniforms: Partial<FloodFillStepUniforms>): void;
+}
+
+export interface FloodFillStepMaterialOptions {
+  name?: string;
+  passIndex?: number;
+}
+
+export function createFloodFillStepMaterial(scene: BABYLON.Scene, options: FloodFillStepMaterialOptions = {}): FloodFillStepMaterialHandles {
+  const passIndex = options.passIndex ?? 0;
+  if (passIndex !== 0) {
+    throw new Error(`Invalid passIndex ${passIndex} for FloodFillStep.`);
+  }
+  const baseName = options.name ?? 'FloodFillStepMaterial';
+  const shaderName = `${baseName}_pass${passIndex}`;
+
+  const vertexShaderName = `${shaderName}VertexShader`;
+  const fragmentShaderName = `${shaderName}FragmentShader`;
+
+  BABYLON.ShaderStore.ShadersStoreWGSL[vertexShaderName] = FloodFillStepVertexSource;
+  BABYLON.ShaderStore.ShadersStoreWGSL[fragmentShaderName] = FloodFillStepFragmentSources[passIndex];
+
+  const material = new BABYLON.ShaderMaterial(shaderName, scene, {
+    vertex: shaderName,
+    fragment: shaderName,
+  }, {
+    attributes: ['position', 'uv'],
+    uniforms: [],
+    samplers: ['seed', 'feedback'],
+    samplerObjects: ['seedSampler', 'feedbackSampler'],
+    shaderLanguage: BABYLON.ShaderLanguage.WGSL,
+  });
+
+  const samplerLookup = { seed: 'seedSampler', feedback: 'feedbackSampler' } as const;
+
+  const handles: FloodFillStepMaterialHandles = {
+    material,
+    setTexture: (name, texture) => material.setTexture(name, texture),
+    setTextureSampler: (name, sampler) => material.setTextureSampler(samplerLookup[name], sampler),
+    setUniforms: () => {},
+  };
+
+  return handles;
+}
+
+export class FloodFillStepEffect extends CustomShaderEffect<FloodFillStepUniforms, FloodFillStepInputs> {
+  effectName = 'FloodFillStep'
+
+  constructor(
+    engine: BABYLON.WebGPUEngine,
+    inputs: FloodFillStepInputs,
+    width = 1280,
+    height = 720,
+    sampleMode: 'nearest' | 'linear' = 'linear',
+    precision: RenderPrecision = 'half_float',
+  ) {
+    super(engine, inputs, {
+      factory: (sceneRef, options) => createFloodFillStepMaterial(sceneRef, options),
+      textureInputKeys: ['seed', 'feedback'],
+      passCount: FloodFillStepPassCount,
+      primaryTextureKey: 'seed',
+      width,
+      height,
+      materialName: 'FloodFillStepMaterial',
+      sampleMode,
+      precision,
+    })
+  }
+
+  override setSrcs(inputs: Partial<FloodFillStepInputs>): void {
+    super.setSrcs(inputs);
+  }
+}
+
