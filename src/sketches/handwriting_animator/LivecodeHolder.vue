@@ -3,12 +3,14 @@ import { inject, onMounted, onUnmounted } from 'vue'
 import CanvasRoot from '@/canvas/CanvasRoot.vue'
 import StrokeLaunchControls from './StrokeLaunchControls.vue'
 import { appStateName, type TemplateAppState, drawFlattenedStrokeGroup, resolution } from './appState'
-import { updateGPUStrokes } from './strokeLauncher'
+import { updateGPUStrokes, getDrawingScene } from './strokeLauncher'
 import type { CanvasStateSnapshot } from '@/canvas/canvasState'
-import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX'
+import { CanvasPaint as GLCanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX'
+import { CanvasPaint as BabylonCanvasPaint } from '@/rendering/shaderFXBabylon'
 import { clearListeners, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse'
 import type p5 from 'p5'
 import { sinN } from '@/channels/channels'
+import type { DrawingScene } from '@/rendering/gpuStrokes/drawingScene'
 
 const appState = inject<TemplateAppState>(appStateName)!!
 
@@ -21,17 +23,26 @@ const syncCanvasState = (state: CanvasStateSnapshot) => {
   updateGPUStrokes()
 }
 
-let shaderGraphEndNode: ShaderEffect | undefined = undefined
+let glShaderGraph: ShaderEffect | undefined = undefined
+let gpuCanvasPaint: BabylonCanvasPaint | undefined = undefined
+let drawingSceneRef: DrawingScene | undefined = undefined
 const clearDrawFuncs = () => {
   appState.drawFunctions = []
   appState.drawFuncMap = new Map()
 }
 
-onMounted(() => {
+const sleepWait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+onMounted(async () => {
   // p5/Three canvas elements
   const p5i = appState.p5Instance!!
   const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
   const threeCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
+
+  while (!appState.gpuStrokesReadyPromise) {
+    await sleepWait(16)
+  }
+  const gpuReady = await appState.gpuStrokesReadyPromise
 
   // Track mouse in p5 coordinates (available for future use)
   let p5Mouse = { x: 0, y: 0 }
@@ -73,9 +84,48 @@ onMounted(() => {
 
   // Wire p5 canvas through shader graph to three renderer
   const passthru = new Passthru({ src: p5Canvas })
-  const canvasPaint = new CanvasPaint({ src: passthru })
-  shaderGraphEndNode = canvasPaint
-  appState.shaderDrawFunc = () => shaderGraphEndNode!!.renderAll(appState.threeRenderer!!)
+  const canvasPaint = new GLCanvasPaint({ src: passthru })
+  glShaderGraph = canvasPaint
+
+  if (gpuReady) {
+    const drawingScene = getDrawingScene()
+    const renderTarget = drawingScene?.getRenderTarget()
+    if (drawingScene && renderTarget) {
+      const size = renderTarget.getSize()
+      gpuCanvasPaint = new BabylonCanvasPaint(
+        drawingScene.getEngine(),
+        { src: renderTarget },
+        size.width,
+        size.height,
+      )
+      drawingSceneRef = drawingScene
+    } else {
+      console.warn('DrawingScene render target unavailable; GPU strokes will not render to canvas')
+      gpuCanvasPaint = undefined
+      drawingSceneRef = undefined
+    }
+  } else {
+    gpuCanvasPaint = undefined
+    drawingSceneRef = undefined
+  }
+
+  appState.shaderDrawFunc = () => {
+    if (glShaderGraph && appState.threeRenderer) {
+      glShaderGraph.renderAll(appState.threeRenderer)
+    }
+
+    //codex - add  
+    if (drawingSceneRef && gpuCanvasPaint) {
+      const engine = drawingSceneRef.getEngine()
+      engine.beginFrame()
+      try {
+        drawingSceneRef.renderFrame()
+        gpuCanvasPaint.renderAll(engine)
+      } finally {
+        engine.endFrame()
+      }
+    }
+  }
 
   // Pause toggle
   singleKeydownEvent('p', () => { appState.paused = !appState.paused })
@@ -83,7 +133,12 @@ onMounted(() => {
 
 onUnmounted(() => {
   // Dispose shader graph and input listeners, and clear any registered draw funcs
-  shaderGraphEndNode?.disposeAll()
+  glShaderGraph?.disposeAll()
+  glShaderGraph = undefined
+  gpuCanvasPaint?.disposeAll()
+  gpuCanvasPaint = undefined
+  drawingSceneRef = undefined
+  appState.shaderDrawFunc = undefined
   clearListeners()
   clearDrawFuncs()
 })

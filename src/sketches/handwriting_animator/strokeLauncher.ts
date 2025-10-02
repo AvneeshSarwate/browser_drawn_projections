@@ -43,6 +43,8 @@ let scriptEditor: EditorView | undefined
 // let stats: Stats | undefined
 const timeLoops: CancelablePromisePoxy<any>[] = []
 
+export const getDrawingScene = (): DrawingScene | undefined => drawingScene
+
 const gridXY = { x: 16, y: 9 }
 const letterLoops: (LoopHandle | null)[][] = arrayOf(gridXY.x).map(() => arrayOf(gridXY.y).map(() => null))
 const letterAnimationGroups: string[][][] = arrayOf(gridXY.x).map(() => arrayOf(gridXY.y).map(() => [] as string[]))
@@ -156,13 +158,20 @@ export const updateGPUStrokes = () => {
   }
 }
 
-export const initializeGPUStrokes = async () => {
-  if (!babylonContainer.value) return
+export const initializeGPUStrokes = async (): Promise<boolean> => {
+  if (!babylonContainer.value) return false
 
   try {
     if (!navigator.gpu) {
       console.warn('WebGPU not supported - GPU strokes disabled')
-      return
+      return false
+    }
+
+    gpuStrokesReady.value = false
+
+    if (drawingScene) {
+      drawingScene.dispose()
+      drawingScene = undefined
     }
 
     drawingScene = new DrawingScene()
@@ -172,16 +181,25 @@ export const initializeGPUStrokes = async () => {
     // stats.showPanel(0)
     // babylonContainer.value.parentElement?.appendChild(stats.dom)
 
-    await drawingScene.createScene(babylonContainer.value, null)
+    await drawingScene.createScene(babylonContainer.value, null, {
+      renderTarget: {
+        width: resolution.width,
+        height: resolution.height,
+        name: 'handwritingAnimatorGpuStrokes',
+      },
+      startRenderLoop: false,
+    })
 
     gpuStrokesReady.value = true
 
     updateGPUStrokes()
 
     console.log('GPU Strokes initialized successfully')
+    return true
   } catch (error) {
     console.error('Failed to initialize GPU Strokes:', error)
     gpuStrokesReady.value = false
+    return false
   }
 }
 
@@ -498,5 +516,7 @@ export const disposeStrokeLauncher = () => {
     const loop = timeLoops.pop()
     loop?.cancel()
   }
+  gpuStrokesReady.value = false
+  appState.gpuStrokesReadyPromise = null
   // stats = undefined
 }

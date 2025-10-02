@@ -28,6 +28,7 @@ export type TemplateAppState = {
   freehandGroupMap: Record<string, number[]>
   polygonStateString: string
   polygonRenderData: PolygonRenderData
+  gpuStrokesReadyPromise: Promise<boolean> | null
 }
 
 export const appState: TemplateAppState = {
@@ -47,6 +48,7 @@ export const appState: TemplateAppState = {
   freehandGroupMap: {},
   polygonStateString: '',
   polygonRenderData: [],
+  gpuStrokesReadyPromise: null,
 } 
 
 export const appStateName = 'templateAppState'

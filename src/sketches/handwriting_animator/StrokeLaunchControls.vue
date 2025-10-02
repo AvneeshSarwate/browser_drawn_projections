@@ -10,7 +10,9 @@ const getGroupStrokeIndices = (groupName: string): number[] => {
 }
 
 onMounted(async () => {
-  await initializeGPUStrokes()
+  const initPromise = initializeGPUStrokes()
+  appState.gpuStrokesReadyPromise = initPromise
+  await initPromise
 
   await nextTick()
   initializeScriptEditor()
@@ -204,6 +206,7 @@ onUnmounted(() => {
   cursor: crosshair;
   display: block;
   margin: 0 auto 20px auto;
+  background-color: #000;
 }
 
 .babylon-canvas:hover {

@@ -10,6 +10,19 @@ import type { LaunchConfig } from './strokeTypes';
 import { getStrokeAnchor, getGroupAnchor, type AnchorKind } from './coordinateUtils';
 import * as strokeAnimation from './strokeAnimation.compute.wgsl.generated';
 
+export interface RenderTargetOptions {
+  width: number;
+  height: number;
+  name?: string;
+  sampleMode?: number;
+  textureType?: number;
+}
+
+export interface DrawingSceneOptions {
+  renderTarget?: RenderTargetOptions;
+  startRenderLoop?: boolean;
+}
+
 export class DrawingScene {
   private engine!: BABYLON.WebGPUEngine;
   private scene!: BABYLON.Scene;
@@ -17,6 +30,7 @@ export class DrawingScene {
   private lifecycleManager!: DrawLifecycleManager;
   private shaderState!: strokeAnimation.ShaderState;
   private instancedMesh!: BABYLON.Mesh;
+  private camera!: BABYLON.FreeCamera;
   private instanceMatricesStorage!: strokeAnimation.InstanceMatricesStorageState;
   private globalParamsState!: strokeAnimation.GlobalParamsUniformState;
   private maxAnimations: number = DRAWING_CONSTANTS.MAX_ANIMATIONS;
@@ -24,18 +38,37 @@ export class DrawingScene {
   private maxInstances: number = this.maxAnimations * this.pointsPerStroke;
   private canvasWidth!: number;
   private canvasHeight!: number;
+  private renderTarget?: BABYLON.RenderTargetTexture;
+  private lastFrameTime = 0;
+  private resizeHandler?: () => void;
+  private renderLoopCallback?: () => void;
+  private autoRenderLoop = true;
   
-  async createScene(canvas: HTMLCanvasElement, stats: Stats | null): Promise<void> {
-    // Store canvas dimensions for use throughout the system
-    this.canvasWidth = canvas.width;
-    this.canvasHeight = canvas.height;
+  async createScene(canvas: HTMLCanvasElement, stats: Stats | null, options: DrawingSceneOptions = {}): Promise<void> {
+    const renderTargetOptions = options.renderTarget;
+
+    // Store canvas dimensions for use throughout the system (allow override from render target)
+    this.canvasWidth = renderTargetOptions?.width ?? canvas.width;
+    this.canvasHeight = renderTargetOptions?.height ?? canvas.height;
     
     await this.initializeEngine(canvas);
     this.setupCamera();
     // await this.setupStrokeData(); // only for test data
     this.setupMaterials();
     await this.setupComputeShader();
-    this.startRenderLoop(stats);
+
+    if (renderTargetOptions) {
+      this.createRenderTarget(renderTargetOptions);
+    }
+
+    this.lastFrameTime = performance.now() * 0.001;
+    this.autoRenderLoop = options.startRenderLoop ?? !renderTargetOptions;
+
+    this.attachResizeHandler();
+
+    if (this.autoRenderLoop) {
+      this.startRenderLoop(stats);
+    }
   }
   
   private async initializeEngine(canvas: HTMLCanvasElement): Promise<void> {
@@ -70,6 +103,9 @@ export class DrawingScene {
     camera.orthoBottom = -1;
     camera.minZ = 0.1;
     camera.maxZ = 100;
+
+    this.camera = camera;
+    this.scene.activeCamera = camera;
   }
   
   private async setupStrokeData(): Promise<void> {
@@ -223,47 +259,105 @@ export class DrawingScene {
   }
   
   private startRenderLoop(stats: Stats | null): void {
-    let lastTime = performance.now() * 0.001;
-    
-    this.scene.registerBeforeRender(() => {
-      const currentTime = performance.now() * 0.001;
-      const deltaTime = currentTime - lastTime;
-      lastTime = currentTime;
-      
-      // Update animation lifecycle
-      this.lifecycleManager.tick(currentTime);
-      
-      // Update global parameters
-      strokeAnimation.updateUniformBuffer_globalParams(this.globalParamsState, {
-        time: currentTime,
-        deltaTime,
-      });
-
-      // Dispatch compute shader with optimized 1D layout
-      const totalThreads = this.maxAnimations * this.pointsPerStroke;
-      const workgroupSize = DRAWING_CONSTANTS.WORKGROUP_SIZE;
-      const workgroups = Math.ceil(totalThreads / workgroupSize);
-      this.shaderState.shader.dispatch(workgroups, 1, 1);
-      
-      // Debug: Log active animations every few seconds
-      if (Math.floor(currentTime) % 3 === 0 && deltaTime < 0.1) {
-        const status = this.lifecycleManager.getStatus();
-        if (status.activeCount > 0) {
-          // console.log(`Active animations: ${status.activeCount}, dispatching ${workgroups} workgroups (${totalThreads} threads)`);
-        }
-      }
-    });
-    
-    this.engine.runRenderLoop(() => {
+    this.renderLoopCallback = () => {
       stats?.begin();
-      this.scene.render();
+      this.renderFrameInternal();
       stats?.end();
-    });
-    
-    // Handle resize
-    window.addEventListener("resize", () => {
+    };
+
+    this.engine.runRenderLoop(this.renderLoopCallback);
+  }
+
+  private createRenderTarget(options: RenderTargetOptions): void {
+    const textureType = options.textureType ?? BABYLON.Constants.TEXTURETYPE_HALF_FLOAT;
+    const renderTarget = new BABYLON.RenderTargetTexture(
+      options.name ?? 'DrawingSceneRenderTarget',
+      { width: options.width, height: options.height },
+      this.scene,
+      /* renderLoop */ false,
+      /* generateMipMaps */ false,
+      textureType,
+      /* isCube */ false
+    );
+
+    renderTarget.updateSamplingMode(options.sampleMode ?? BABYLON.Texture.BILINEAR_SAMPLINGMODE);
+    renderTarget.clearColor = new BABYLON.Color4(0, 0, 0, 0);
+    renderTarget.ignoreCameraViewport = true;
+    renderTarget.renderList = [this.instancedMesh];
+    renderTarget.activeCamera = this.camera;
+
+    this.camera.outputRenderTarget = renderTarget;
+    this.renderTarget = renderTarget;
+  }
+
+  private attachResizeHandler(): void {
+    if (this.resizeHandler) {
+      return;
+    }
+
+    this.resizeHandler = () => {
       this.engine.resize();
+    };
+
+    window.addEventListener('resize', this.resizeHandler);
+  }
+
+  private updateFrameTimers(): { currentTime: number; deltaTime: number } {
+    const currentTime = performance.now() * 0.001;
+    if (this.lastFrameTime === 0) {
+      this.lastFrameTime = currentTime;
+    }
+    const deltaTime = currentTime - this.lastFrameTime;
+    this.lastFrameTime = currentTime;
+    return { currentTime, deltaTime };
+  }
+
+  private dispatchCompute(currentTime: number, deltaTime: number): void {
+    // Update animation lifecycle
+    this.lifecycleManager.tick(currentTime);
+
+    // Update global parameters
+    strokeAnimation.updateUniformBuffer_globalParams(this.globalParamsState, {
+      time: currentTime,
+      deltaTime,
     });
+
+    // Dispatch compute shader with optimized 1D layout
+    const totalThreads = this.maxAnimations * this.pointsPerStroke;
+    const workgroupSize = DRAWING_CONSTANTS.WORKGROUP_SIZE;
+    const workgroups = Math.ceil(totalThreads / workgroupSize);
+    this.shaderState.shader.dispatch(workgroups, 1, 1);
+  }
+
+  private renderFrameInternal(): void {
+    const { currentTime, deltaTime } = this.updateFrameTimers();
+    this.dispatchCompute(currentTime, deltaTime);
+
+    if (this.renderTarget) {
+      this.scene.render();
+      this.engine.restoreDefaultFramebuffer();
+    } else {
+      this.scene.render();
+    }
+  }
+
+  /**
+   * Render one frame. Intended for manual render loop usage.
+   */
+  renderFrame(): void {
+    if (!this.engine || !this.scene) {
+      return;
+    }
+
+    this.renderFrameInternal();
+  }
+
+  getRenderTarget(): BABYLON.RenderTargetTexture | undefined {
+    return this.renderTarget;
+  }
+
+  getEngine(): BABYLON.WebGPUEngine {
+    return this.engine;
   }
   
   /**
@@ -459,6 +553,21 @@ export class DrawingScene {
    * Dispose of all resources
    */
   dispose(): void {
+    if (this.renderLoopCallback) {
+      this.engine?.stopRenderLoop(this.renderLoopCallback);
+      this.renderLoopCallback = undefined;
+    }
+    if (this.resizeHandler) {
+      window.removeEventListener('resize', this.resizeHandler);
+      this.resizeHandler = undefined;
+    }
+
+    if (this.camera) {
+      this.camera.outputRenderTarget = null;
+    }
+
+    this.renderTarget?.dispose();
+    this.renderTarget = undefined;
     this.strokeTextureManager?.dispose();
     this.lifecycleManager?.dispose();
     this.instanceMatricesStorage?.buffer.dispose();
