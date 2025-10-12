@@ -21,6 +21,13 @@ export type Stroke = {
 
 export type AnimationControlMode = 'manual' | 'auto';
 
+export type StrokeColor = {
+  r: number;
+  g: number;
+  b: number;
+  a: number;
+}
+
 export type LaunchConfig = {
   id: string;
   strokeAIndex: number;     // Index into stroke texture (0-63)
@@ -37,6 +44,7 @@ export type LaunchConfig = {
   // Spatial transform
   startPoint: { x: number; y: number };  // Canvas coordinates
   scale: number;            // Size multiplier
+  color: StrokeColor;       // Stroke color in linear space [0,1]
   
   // Animation state
   active: boolean;

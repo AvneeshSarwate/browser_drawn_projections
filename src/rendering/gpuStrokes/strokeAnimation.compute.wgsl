@@ -11,8 +11,10 @@ struct LaunchConfig {
     
     isActive: f32,
     phase: f32,
-    reserved1: f32,
-    reserved2: f32,
+    colorR: f32,
+    colorG: f32,
+    colorB: f32,
+    colorA: f32,
 };
 
 struct GlobalParams {
@@ -32,6 +34,7 @@ struct GlobalParams {
 @group(0) @binding(2) var<uniform> globalParams: GlobalParams;
 @group(0) @binding(3) var strokeTexture: texture_2d<f32>;
 @group(0) @binding(4) var strokeSampler: sampler;
+@group(0) @binding(5) var<storage, read_write> instanceColors: array<vec4<f32>>;
 
 // Optimized compute shader with flexible workgroup sizing
 const POINTS_PER_STROKE: u32 = 1024u;
@@ -84,10 +87,12 @@ fn main(@builtin(global_invocation_id) globalId: vec3<u32>) {
     // Use global index directly for instance indexing
     let instanceIndex = globalIndex;
     
+    let strokeColor = vec4<f32>(config.colorR, config.colorG, config.colorB, config.colorA);
+    
     // Scale point size based on reveal phase for smooth appearance
     // Make points much larger to ensure visibility
     let pointScale = 0.1; // * phaseVal;  // Large visible circles that fade in
-    buildTransformMatrix(instanceIndex, ndc, pointScale);
+    buildTransformMatrix(instanceIndex, ndc, pointScale, strokeColor);
 }
 
 fn phaser(pct: f32, phase: f32, e: f32) -> f32 {
@@ -117,7 +122,7 @@ fn canvasToNDC(canvasPos: vec2<f32>, canvasWidth: f32, canvasHeight: f32) -> vec
     return vec2<f32>(ndcX, ndcY);
 }
 
-fn buildTransformMatrix(instanceIndex: u32, position: vec2<f32>, scale: f32) {
+fn buildTransformMatrix(instanceIndex: u32, position: vec2<f32>, scale: f32, strokeColor: vec4<f32>) {
     let base = instanceIndex * 4u;
     
     // Simple 2D translation matrix (no rotation for stroke points)
@@ -125,6 +130,7 @@ fn buildTransformMatrix(instanceIndex: u32, position: vec2<f32>, scale: f32) {
     instanceMatrices[base + 1u] = vec4<f32>(0.0, scale, 0.0, 0.0);
     instanceMatrices[base + 2u] = vec4<f32>(0.0, 0.0, 1.0, 0.0);
     instanceMatrices[base + 3u] = vec4<f32>(position.x, position.y, 0.0, 1.0);
+    instanceColors[instanceIndex] = strokeColor;
 }
 
 fn setInactiveInstance(instanceIndex: u32) {
@@ -134,4 +140,5 @@ fn setInactiveInstance(instanceIndex: u32) {
     instanceMatrices[base + 1u] = vec4<f32>(0.0, 0.0, 0.0, 0.0);
     instanceMatrices[base + 2u] = vec4<f32>(0.0, 0.0, 0.0, 0.0);
     instanceMatrices[base + 3u] = vec4<f32>(-10000.0, 0.0, 0.0, 1.0);
+    instanceColors[instanceIndex] = vec4<f32>(0.0, 0.0, 0.0, 0.0);
 }

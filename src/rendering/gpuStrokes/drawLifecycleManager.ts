@@ -1,6 +1,6 @@
 import * as BABYLON from 'babylonjs';
 import { PriorityQueue } from './priorityQueue';
-import type { LaunchConfig, AnimationControlMode } from './strokeTypes';
+import type { LaunchConfig, AnimationControlMode, StrokeColor } from './strokeTypes';
 import { DRAWING_CONSTANTS } from './constants';
 import type { StrokeTextureManager } from './strokeTextureManager';
 import * as strokeAnimation from './strokeAnimation.compute.wgsl.generated';
@@ -32,8 +32,11 @@ export class DrawLifecycleManager {
       return false;
     }
 
-    // Update the config with the new values
-    Object.assign(config, updates);
+    const { color, ...rest } = updates;
+    Object.assign(config, rest);
+    if (color) {
+      config.color = this.normalizeColor(color);
+    }
     return true;
   }
 
@@ -46,6 +49,7 @@ export class DrawLifecycleManager {
     
     const fullConfig: LaunchConfig = {
       ...config,
+      color: this.normalizeColor(config.color),
       id,
       startTime: currentTime,
       elapsedTime: 0,
@@ -173,8 +177,10 @@ export class DrawLifecycleManager {
       
       isActive: config.active ? 1.0 : 0.0,
       phase: config.phase,
-      reserved1: 0,
-      reserved2: 0
+      colorR: config.color.r,
+      colorG: config.color.g,
+      colorB: config.color.b,
+      colorA: config.color.a
     };
   }
 
@@ -228,6 +234,7 @@ export class DrawLifecycleManager {
       startPhase?: number;
       controlMode?: AnimationControlMode;
       active?: boolean;
+      color?: Partial<StrokeColor>;
     } = {}
   ): string {
     const config = {
@@ -240,7 +247,8 @@ export class DrawLifecycleManager {
       loop: options.loop ?? false,
       startPhase: options.startPhase ?? 0.0,
       controlMode: options.controlMode ?? 'auto',
-      active: options.active ?? true
+      active: options.active ?? true,
+      color: this.normalizeColor(options.color)
     };
     
     return this.addAnimation(config);
@@ -264,6 +272,7 @@ export class DrawLifecycleManager {
       startPhase?: number;
       controlMode?: AnimationControlMode;
       active?: boolean;
+      color?: Partial<StrokeColor>;
     } = {}
   ): string {
     // Calculate position offset based on stroke bounds and position setting
@@ -365,6 +374,26 @@ export class DrawLifecycleManager {
     this.clearGPUBuffer();
   }
   
+  private normalizeColor(color?: Partial<StrokeColor>): StrokeColor {
+    const base = color ?? {};
+    const clamp = (value: number | undefined, fallback: number): number => {
+      if (value === undefined) {
+        return fallback;
+      }
+      if (!isFinite(value)) {
+        return fallback;
+      }
+      return Math.min(1, Math.max(0, value));
+    };
+
+    return {
+      r: clamp(base.r, 1),
+      g: clamp(base.g, 1),
+      b: clamp(base.b, 1),
+      a: clamp(base.a, 1),
+    };
+  }
+  
   /**
    * Validate animation configuration
    */
@@ -393,6 +422,17 @@ export class DrawLifecycleManager {
     
     if (!isFinite(config.startPoint.x) || !isFinite(config.startPoint.y)) {
       errors.push(`startPoint coordinates must be finite: (${config.startPoint.x}, ${config.startPoint.y})`);
+    }
+
+    const { r, g, b, a } = config.color;
+    if (
+      !Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b) || !Number.isFinite(a) ||
+      r < 0 || r > 1 ||
+      g < 0 || g > 1 ||
+      b < 0 || b > 1 ||
+      a < 0 || a > 1
+    ) {
+      errors.push('color components must be finite and within [0, 1]');
     }
     
     return {

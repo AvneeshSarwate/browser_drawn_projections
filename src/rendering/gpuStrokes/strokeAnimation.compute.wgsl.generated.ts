@@ -15,12 +15,14 @@ export interface StrokeAnimationLaunchConfig {
   scale: number;
   isActive: number;
   phase: number;
-  reserved1: number;
-  reserved2: number;
+  colorR: number;
+  colorG: number;
+  colorB: number;
+  colorA: number;
 }
 
 export const StrokeAnimationLaunchConfigLayout = {
-  size: 48,
+  size: 56,
   align: 4,
   members: [
   { name: 'strokeAIndex', offset: 0, size: 4, slot: 1 },
@@ -33,8 +35,10 @@ export const StrokeAnimationLaunchConfigLayout = {
   { name: 'scale', offset: 28, size: 4, slot: 1 },
   { name: 'isActive', offset: 32, size: 4, slot: 1 },
   { name: 'phase', offset: 36, size: 4, slot: 1 },
-  { name: 'reserved1', offset: 40, size: 4, slot: 1 },
-  { name: 'reserved2', offset: 44, size: 4, slot: 1 }
+  { name: 'colorR', offset: 40, size: 4, slot: 1 },
+  { name: 'colorG', offset: 44, size: 4, slot: 1 },
+  { name: 'colorB', offset: 48, size: 4, slot: 1 },
+  { name: 'colorA', offset: 52, size: 4, slot: 1 }
   ] as const,
 } as const;
 
@@ -91,12 +95,22 @@ export function packStrokeAnimationLaunchConfig(target: Float32Array, floatOffse
   }
   {
     const base = floatOffset + 10;
-    const raw = value.reserved1;
+    const raw = value.colorR;
     target[base] = raw !== undefined ? Number(raw) : 0;
   }
   {
     const base = floatOffset + 11;
-    const raw = value.reserved2;
+    const raw = value.colorG;
+    target[base] = raw !== undefined ? Number(raw) : 0;
+  }
+  {
+    const base = floatOffset + 12;
+    const raw = value.colorB;
+    target[base] = raw !== undefined ? Number(raw) : 0;
+  }
+  {
+    const base = floatOffset + 13;
+    const raw = value.colorA;
     target[base] = raw !== undefined ? Number(raw) : 0;
   }
 }
@@ -339,7 +353,7 @@ export interface LaunchConfigsStorageState {
 }
 
 export function createStorageBuffer_launchConfigs(engine: BABYLON.WebGPUEngine, capacity: number, options?: { initial?: StrokeAnimationLaunchConfig[]; usage?: number; }): LaunchConfigsStorageState {
-  const byteStride = 48;
+  const byteStride = 56;
   const floatsPerElement = byteStride / Float32Array.BYTES_PER_ELEMENT;
   const totalFloats = floatsPerElement * capacity;
   const data = new Float32Array(totalFloats);
@@ -363,10 +377,43 @@ export function updateStorageBuffer_launchConfigs(state: LaunchConfigsStorageSta
   state.buffer.update(state.data);
 }
 
+export interface InstanceColorsStorageState {
+  buffer: BABYLON.StorageBuffer;
+  data: Float32Array;
+  capacity: number;
+  floatsPerElement: number;
+}
+
+export function createStorageBuffer_instanceColors(engine: BABYLON.WebGPUEngine, capacity: number, options?: { initial?: number[][]; usage?: number; }): InstanceColorsStorageState {
+  const byteStride = 16;
+  const floatsPerElement = byteStride / Float32Array.BYTES_PER_ELEMENT;
+  const totalFloats = floatsPerElement * capacity;
+  const data = new Float32Array(totalFloats);
+  const usage = options?.usage ?? (BABYLON.Constants.BUFFER_CREATIONFLAG_STORAGE | BABYLON.Constants.BUFFER_CREATIONFLAG_WRITE);
+  const buffer = new BABYLON.StorageBuffer(engine, byteStride * capacity, usage);
+  if (options?.initial) {
+    data.set(options.initial.flat().slice(0, totalFloats));
+    buffer.update(data);
+  }
+  return { buffer, data, capacity, floatsPerElement };
+}
+
+export function writeStorageValue_instanceColors(state: InstanceColorsStorageState, index: number, value: number[]): void {
+  const offset = index * state.floatsPerElement;
+  for (let i = 0; i < state.floatsPerElement; i++) {
+    state.data[offset + i] = value[i] ?? 0;
+  }
+}
+
+export function updateStorageBuffer_instanceColors(state: InstanceColorsStorageState): void {
+  state.buffer.update(state.data);
+}
+
 const bindingLayout = {
     globalParams: { group: 0, binding: 2 },
     instanceMatrices: { group: 0, binding: 0 },
     launchConfigs: { group: 0, binding: 1 },
+    instanceColors: { group: 0, binding: 5 },
     strokeTexture: { group: 0, binding: 3 },
     strokeSampler: { group: 0, binding: 4 }
 };
@@ -375,6 +422,7 @@ export interface ShaderBindings {
     globalParams: GlobalParamsUniformState;
     instanceMatrices: BABYLON.StorageBuffer;
     launchConfigs: BABYLON.StorageBuffer;
+    instanceColors: BABYLON.StorageBuffer;
     strokeTexture: BABYLON.BaseTexture;
     strokeSampler: BABYLON.TextureSampler;
 }
@@ -392,6 +440,7 @@ export function createShader(engine: BABYLON.WebGPUEngine, bindings: ShaderBindi
   shader.setUniformBuffer('globalParams', bindings.globalParams.buffer);
   shader.setStorageBuffer('instanceMatrices', bindings.instanceMatrices);
   shader.setStorageBuffer('launchConfigs', bindings.launchConfigs);
+  shader.setStorageBuffer('instanceColors', bindings.instanceColors);
   shader.setTexture('strokeTexture', bindings.strokeTexture, false);
   shader.setTextureSampler('strokeSampler', bindings.strokeSampler);
   return { shader, bindings };
@@ -409,6 +458,10 @@ export function updateBindings(state: ShaderState, updates: Partial<ShaderBindin
   if (updates.launchConfigs !== undefined) {
     state.bindings.launchConfigs = updates.launchConfigs!;
     state.shader.setStorageBuffer('launchConfigs', updates.launchConfigs!);
+  }
+  if (updates.instanceColors !== undefined) {
+    state.bindings.instanceColors = updates.instanceColors!;
+    state.shader.setStorageBuffer('instanceColors', updates.instanceColors!);
   }
   if (updates.strokeTexture !== undefined) {
     state.bindings.strokeTexture = updates.strokeTexture!;

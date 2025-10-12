@@ -46,6 +46,14 @@ const timeLoops: CancelablePromisePoxy<any>[] = []
 export const getDrawingScene = (): DrawingScene | undefined => drawingScene
 
 const gridXY = { x: 16, y: 9 }
+
+const randomStrokeColor = () => ({
+  r: Math.random(),
+  g: Math.random(),
+  b: Math.random(),
+  a: 1
+})
+
 const letterLoops: (LoopHandle | null)[][] = arrayOf(gridXY.x).map(() => arrayOf(gridXY.y).map(() => null))
 const letterAnimationGroups: string[][][] = arrayOf(gridXY.x).map(() => arrayOf(gridXY.y).map(() => [] as string[]))
 let lastMouseGridCell = { x: -1, y: -1 }
@@ -238,11 +246,13 @@ const launchLetterAtCell = (xInd: number, yInd: number, letterGroupName: string)
   const yShift = bboxHeight * scale * baseline
   const launchX = cellWidth * xInd
   const launchY = cellHeight * yInd - yShift
+  const strokeColor = randomStrokeColor()
 
   const launchedAnimationIds = drawingScene!.launchGroup(launchX, launchY, strokeIndices, {
     anchor: 'bbox-tl',
     scale,
-    controlMode: 'manual'
+    controlMode: 'manual',
+    color: strokeColor
   })
 
   letterAnimationGroups[xInd][yInd] = launchedAnimationIds
@@ -331,6 +341,7 @@ export const handleBabylonCanvasClick = (event: MouseEvent) => {
         return
       }
 
+      const strokeColor = randomStrokeColor()
       const launchedAnimationIds = drawingScene.launchGroup(
         x,
         y,
@@ -341,7 +352,8 @@ export const handleBabylonCanvasClick = (event: MouseEvent) => {
           scale: animationParams.value.scale,
           loop: animationParams.value.loop,
           startPhase: animationParams.value.startPhase,
-          controlMode: 'manual'
+          controlMode: 'manual',
+          color: strokeColor
         }
       )
 
@@ -398,6 +410,7 @@ export const handleBabylonCanvasClick = (event: MouseEvent) => {
         return
       }
 
+      const strokeColor = randomStrokeColor()
       const animationId = drawingScene.launchStrokeWithAnchor(
         x,
         y,
@@ -409,7 +422,8 @@ export const handleBabylonCanvasClick = (event: MouseEvent) => {
           duration: animationParams.value.duration,
           scale: animationParams.value.scale,
           loop: animationParams.value.loop,
-          startPhase: animationParams.value.startPhase
+          startPhase: animationParams.value.startPhase,
+          color: strokeColor
         }
       )
 

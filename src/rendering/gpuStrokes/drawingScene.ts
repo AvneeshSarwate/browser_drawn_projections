@@ -6,7 +6,7 @@ import { DrawLifecycleManager } from './drawLifecycleManager';
 import { DRAWING_CONSTANTS } from './constants';
 //@ts-ignore
 import Stats from '@/rendering/stats';
-import type { LaunchConfig } from './strokeTypes';
+import type { LaunchConfig, StrokeColor } from './strokeTypes';
 import { getStrokeAnchor, getGroupAnchor, type AnchorKind } from './coordinateUtils';
 import * as strokeAnimation from './strokeAnimation.compute.wgsl.generated';
 
@@ -32,6 +32,7 @@ export class DrawingScene {
   private instancedMesh!: BABYLON.Mesh;
   private camera!: BABYLON.FreeCamera;
   private instanceMatricesStorage!: strokeAnimation.InstanceMatricesStorageState;
+  private instanceColorsStorage!: strokeAnimation.InstanceColorsStorageState;
   private globalParamsState!: strokeAnimation.GlobalParamsUniformState;
   private maxAnimations: number = DRAWING_CONSTANTS.MAX_ANIMATIONS;
   private pointsPerStroke: number = DRAWING_CONSTANTS.POINTS_PER_STROKE;
@@ -162,6 +163,7 @@ export class DrawingScene {
     material.diffuseColor = new BABYLON.Color3(1.0, 1.0, 1.0); // White color
     material.emissiveColor = new BABYLON.Color3(1.0, 1.0, 1.0); // White emissive for visibility
     material.disableLighting = true; // For 2D we don't need lighting
+    material.useVertexColor = true;
     this.instancedMesh.material = material;
     
     // Set up instancing
@@ -182,6 +184,19 @@ export class DrawingScene {
     );
     this.instanceMatricesStorage.data.fill(0);
     this.instanceMatricesStorage.buffer.update(this.instanceMatricesStorage.data);
+
+    this.instanceColorsStorage = strokeAnimation.createStorageBuffer_instanceColors(
+      this.engine,
+      this.maxInstances,
+      {
+        usage:
+          BABYLON.Constants.BUFFER_CREATIONFLAG_VERTEX |
+          BABYLON.Constants.BUFFER_CREATIONFLAG_STORAGE |
+          BABYLON.Constants.BUFFER_CREATIONFLAG_WRITE,
+      }
+    );
+    this.instanceColorsStorage.data.fill(0);
+    this.instanceColorsStorage.buffer.update(this.instanceColorsStorage.data);
 
     // Set up vertex buffers for world matrix
     this.setupInstancedVertexBuffers();
@@ -225,6 +240,19 @@ export class DrawingScene {
     this.instancedMesh.setVerticesBuffer(world1);
     this.instancedMesh.setVerticesBuffer(world2);
     this.instancedMesh.setVerticesBuffer(world3);
+    
+    const colorBuffer = new BABYLON.VertexBuffer(
+      this.engine,
+      this.instanceColorsStorage.buffer.getBuffer(),
+      BABYLON.VertexBuffer.ColorKind,
+      false,
+      false,
+      this.instanceColorsStorage.floatsPerElement,
+      true,
+      0,
+      this.instanceColorsStorage.floatsPerElement
+    );
+    this.instancedMesh.setVerticesBuffer(colorBuffer);
   }
   
   private async setupComputeShader(): Promise<void> {
@@ -245,6 +273,7 @@ export class DrawingScene {
         globalParams: this.globalParamsState,
         instanceMatrices: this.instanceMatricesStorage.buffer,
         launchConfigs: this.lifecycleManager.getGPUBuffer(),
+        instanceColors: this.instanceColorsStorage.buffer,
         strokeTexture: this.strokeTextureManager.getStrokeTexture(),
         strokeSampler: new BABYLON.TextureSampler(),
       },
@@ -398,6 +427,7 @@ export class DrawingScene {
       startPhase?: number;
       active?: boolean;
       controlMode?: 'manual' | 'auto';
+      color?: Partial<StrokeColor>;
     }
   ): string | undefined {
     return this.lifecycleManager?.launchStroke(x, y, strokeA, strokeB, options);
@@ -420,6 +450,7 @@ export class DrawingScene {
       startPhase?: number;
       active?: boolean;
       controlMode?: 'manual' | 'auto';
+      color?: Partial<StrokeColor>;
     } = {}
   ): string | undefined {
     if (!this.strokeTextureManager || !this.lifecycleManager) {
@@ -459,6 +490,7 @@ export class DrawingScene {
       startPhase?: number;
       active?: boolean;
       controlMode?: 'manual' | 'auto';
+      color?: Partial<StrokeColor>;
     } = {}
   ): string[] {
     if (!this.strokeTextureManager || !this.lifecycleManager) {
@@ -504,7 +536,8 @@ export class DrawingScene {
           loop: options.loop,
           startPhase: options.startPhase,
           active: options.active,
-          controlMode: options.controlMode ?? 'manual' // Default to manual for groups
+          controlMode: options.controlMode ?? 'manual', // Default to manual for groups
+          color: options.color
         }
       );
 
@@ -571,6 +604,7 @@ export class DrawingScene {
     this.strokeTextureManager?.dispose();
     this.lifecycleManager?.dispose();
     this.instanceMatricesStorage?.buffer.dispose();
+    this.instanceColorsStorage?.buffer.dispose();
     this.globalParamsState?.buffer.dispose();
     this.scene?.dispose();
     this.engine?.dispose();
