@@ -163,7 +163,7 @@ export class DrawingScene {
     material.diffuseColor = new BABYLON.Color3(1.0, 1.0, 1.0); // White color
     material.emissiveColor = new BABYLON.Color3(1.0, 1.0, 1.0); // White emissive for visibility
     material.disableLighting = true; // For 2D we don't need lighting
-    material.useVertexColor = true;
+    // material.useVertexColors = true;
     this.instancedMesh.material = material;
     
     // Set up instancing
