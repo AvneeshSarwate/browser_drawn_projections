@@ -30,6 +30,7 @@ import {
 import { createCommandHandlers } from './pianoRollCommands'
 import { createKeyboardController } from './pianoRollKeyboard'
 import { StageManager } from './pianoRollStageManager'
+import NoteMetadataEditor from './NoteMetadataEditor.vue'
 
 const props = withDefaults(defineProps<{
   width?: number
@@ -62,16 +63,41 @@ const verticalTrack = ref<HTMLDivElement>()
 const canUndo = ref(false)
 const canRedo = ref(false)
 const gridSubdivision = ref(state.grid.subdivision)
+const showMetadataEditor = ref(false)
+const selectedNoteId = ref<string | null>(null)
+const selectedNoteMetadata = ref<Record<string, any> | null>(null)
 
 // Computed properties
 const noteCount = ref(state.notes.size)
 const selectionCount = ref(state.selection.selectedIds.size)
 const isInteractive = computed(() => props.interactive)
 const showControlPanel = computed(() => props.showControlPanel)
+const canEditMetadata = computed(() => selectedNoteId.value !== null && isInteractive.value)
+const metadataEditorVisible = computed(() => showControlPanel.value && showMetadataEditor.value)
+
+const normalizeMetadata = (metadata: any) => {
+  if (metadata === null || metadata === undefined) {
+    return {}
+  }
+  try {
+    return JSON.parse(JSON.stringify(metadata))
+  } catch {
+    return metadata
+  }
+}
 
 const syncUiCounters = () => {
   noteCount.value = state.notes.size
   selectionCount.value = state.selection.selectedIds.size
+  if (state.selection.selectedIds.size === 1) {
+    const [id] = Array.from(state.selection.selectedIds)
+    const note = state.notes.get(id)
+    selectedNoteId.value = note?.id ?? null
+    selectedNoteMetadata.value = note ? normalizeMetadata(note.metadata) : {}
+  } else {
+    selectedNoteId.value = null
+    selectedNoteMetadata.value = null
+  }
 }
 
 const notifyViewportChange = () => {
@@ -157,6 +183,50 @@ const emitStateUpdate = () => {
   syncUiCounters()
   emit('notes-update', Array.from(state.notes.entries()))
   props.syncState?.(state)
+}
+
+watch(showControlPanel, (visible) => {
+  if (!visible) {
+    showMetadataEditor.value = false
+  }
+})
+
+const handleApplyNoteMetadata = (metadata: any) => {
+  if (!selectedNoteId.value) {
+    return
+  }
+
+  const noteId = selectedNoteId.value
+  const note = state.notes.get(noteId)
+  if (!note) {
+    return
+  }
+
+  const normalizedIncoming = metadata ?? {}
+  const normalizedExisting = note.metadata ?? {}
+
+  if (JSON.stringify(normalizedExisting) === JSON.stringify(normalizedIncoming)) {
+    return
+  }
+
+  state.command.stack?.executeCommand('Edit Note Metadata', () => {
+    const target = state.notes.get(noteId)
+    if (!target) {
+      return
+    }
+    const nextMetadata = normalizedIncoming && Object.keys(normalizedIncoming).length === 0
+      ? undefined
+      : normalizedIncoming
+    const updatedNote: NoteData = {
+      ...target,
+      metadata: nextMetadata
+    }
+    if (!nextMetadata) {
+      delete (updatedNote as any).metadata
+    }
+    state.notes.set(noteId, updatedNote)
+    state.needsRedraw = true
+  })
 }
 
 state.notifyExternalChange = () => {
@@ -300,6 +370,14 @@ defineExpose({
         🗑️ Delete
       </button>
       <span class="separator">|</span>
+      <button
+        class="metadata-toggle"
+        :class="{ active: showMetadataEditor }"
+        @click="showMetadataEditor = !showMetadataEditor"
+      >
+        📝 Metadata
+      </button>
+      <span class="separator">|</span>
       <span class="info">{{ noteCount }} notes, {{ selectionCount }} selected</span>
     </div>
     <div class="piano-roll-layout">
@@ -352,6 +430,14 @@ defineExpose({
         </div>
       </div>
     </div>
+    <div v-if="showControlPanel" class="metadata-editor-wrapper">
+      <NoteMetadataEditor
+        :visible="metadataEditorVisible"
+        :metadata="selectedNoteMetadata ?? undefined"
+        :can-edit="canEditMetadata"
+        @apply="handleApplyNoteMetadata"
+      />
+    </div>
   </div>
 </template>
 
@@ -396,6 +482,18 @@ defineExpose({
 
 .separator {
   color: #ccc;
+}
+
+.metadata-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.metadata-toggle.active {
+  background: #d6eaff;
+  border-color: #6aa8ff;
+  color: #0b5394;
 }
 
 .info {
@@ -527,5 +625,11 @@ select {
   border-radius: 4px;
   font-size: 14px;
   cursor: pointer;
+}
+
+.metadata-editor-wrapper {
+  width: 100%;
+  display: flex;
+  justify-content: center;
 }
 </style>
