@@ -351,521 +351,521 @@ export async function generateFragmentShaderArtifacts(
     const shaderCode = await fs.readFile(absoluteSource, 'utf8');
     const reflect = new WgslReflect(shaderCode);
 
-  const freeFunctions = reflect.functions.filter((fn) => !fn.stage);
-  const passFunctions = freeFunctions.filter((fn) => /^pass\d+$/.test(fn.name));
+    const freeFunctions = reflect.functions.filter((fn) => !fn.stage);
+    const passFunctions = freeFunctions.filter((fn) => /^pass\d+$/.test(fn.name));
 
-  if (passFunctions.length === 0) {
-    const helperNames = freeFunctions.map((fn) => fn.name).join(', ');
-    const suffix = helperNames ? ` Found helper functions: ${helperNames}` : '';
-    throw new Error(`No pass functions found. Expected one or more functions named pass0, pass1, ... in fragment shader.${suffix}`);
-  }
-
-  const indexedPasses = passFunctions.map((fn) => {
-    const index = Number(fn.name.replace('pass', ''));
-    if (!Number.isInteger(index)) {
-      throw new Error(`Pass function ${fn.name} uses an invalid index.`);
+    if (passFunctions.length === 0) {
+      const helperNames = freeFunctions.map((fn) => fn.name).join(', ');
+      const suffix = helperNames ? ` Found helper functions: ${helperNames}` : '';
+      throw new Error(`No pass functions found. Expected one or more functions named pass0, pass1, ... in fragment shader.${suffix}`);
     }
-    return { fn, index };
-  }).sort((a, b) => a.index - b.index);
 
-  const seenIndexes = new Set<number>();
-  indexedPasses.forEach(({ fn, index }) => {
-    if (seenIndexes.has(index)) {
-      throw new Error(`Duplicate pass index detected for pass${index}.`);
-    }
-    seenIndexes.add(index);
-  });
-
-  indexedPasses.forEach(({ index }) => {
-    if (index < 0) {
-      throw new Error(`Pass indexes must start at 0. Received pass${index}.`);
-    }
-  });
-
-  indexedPasses.forEach(({ index }, position) => {
-    if (index !== position) {
-      throw new Error(`Missing pass${position}. Pass functions must form a contiguous sequence starting at pass0.`);
-    }
-  });
-
-  const orderedPassFunctions = indexedPasses.map(({ fn }) => fn);
-  const passCount = orderedPassFunctions.length;
-
-  orderedPassFunctions.forEach((fn) => {
-    const returnType = fn.returnType?.getTypeName();
-    if (returnType !== 'vec4f') {
-      throw new Error(`Fragment pass ${fn.name} must return vec4f. Received ${returnType ?? 'void'}.`);
-    }
-  });
-
-  const targetFunction = orderedPassFunctions[0];
-  const args = targetFunction.arguments;
-  if (args.length < 3) {
-    throw new Error('Fragment function must include uv followed by at least one texture/sampler pair.');
-  }
-
-  const uvArg = args[0];
-  validateUvArgument(uvArg);
-
-  const baseArgumentTypes = args.map((argument) => argument.type.getTypeName());
-  const baseArgumentNames = args.map((argument) => argument.name);
-
-  orderedPassFunctions.slice(1).forEach((passFn) => {
-    const passArgs = passFn.arguments;
-    if (passArgs.length < args.length) {
-      throw new Error(
-        `Pass ${passFn.name} must have at least ${args.length} arguments to match pass0. Received ${passArgs.length}.`,
-      );
-    }
-    for (let index = 0; index < args.length; index++) {
-      const argument = passArgs[index];
-      const expectedType = baseArgumentTypes[index];
-      const actualType = argument.type.getTypeName();
-      if (actualType !== expectedType) {
-        throw new Error(`Argument ${index} of ${passFn.name} must be ${expectedType}. Received ${actualType}.`);
+    const indexedPasses = passFunctions.map((fn) => {
+      const index = Number(fn.name.replace('pass', ''));
+      if (!Number.isInteger(index)) {
+        throw new Error(`Pass function ${fn.name} uses an invalid index.`);
       }
-      const expectedName = baseArgumentNames[index];
-      if (argument.name !== expectedName) {
-        throw new Error(`Argument ${index} of ${passFn.name} must be named ${expectedName}. Received ${argument.name}.`);
+      return { fn, index };
+    }).sort((a, b) => a.index - b.index);
+
+    const seenIndexes = new Set<number>();
+    indexedPasses.forEach(({ index }) => {
+      if (seenIndexes.has(index)) {
+        throw new Error(`Duplicate pass index detected for pass${index}.`);
+      }
+      seenIndexes.add(index);
+    });
+
+    indexedPasses.forEach(({ index }) => {
+      if (index < 0) {
+        throw new Error(`Pass indexes must start at 0. Received pass${index}.`);
+      }
+    });
+
+    indexedPasses.forEach(({ index }, position) => {
+      if (index !== position) {
+        throw new Error(`Missing pass${position}. Pass functions must form a contiguous sequence starting at pass0.`);
+      }
+    });
+
+    const orderedPassFunctions = indexedPasses.map(({ fn }) => fn);
+    const passCount = orderedPassFunctions.length;
+
+    orderedPassFunctions.forEach((fn) => {
+      const returnType = fn.returnType?.getTypeName();
+      if (returnType !== 'vec4f') {
+        throw new Error(`Fragment pass ${fn.name} must return vec4f. Received ${returnType ?? 'void'}.`);
+      }
+    });
+
+    const targetFunction = orderedPassFunctions[0];
+    const args = targetFunction.arguments;
+    if (args.length < 3) {
+      throw new Error('Fragment function must include uv followed by at least one texture/sampler pair.');
+    }
+
+    const uvArg = args[0];
+    validateUvArgument(uvArg);
+
+    const baseArgumentTypes = args.map((argument) => argument.type.getTypeName());
+    const baseArgumentNames = args.map((argument) => argument.name);
+
+    orderedPassFunctions.slice(1).forEach((passFn) => {
+      const passArgs = passFn.arguments;
+      if (passArgs.length < args.length) {
+        throw new Error(
+          `Pass ${passFn.name} must have at least ${args.length} arguments to match pass0. Received ${passArgs.length}.`,
+        );
+      }
+      for (let index = 0; index < args.length; index++) {
+        const argument = passArgs[index];
+        const expectedType = baseArgumentTypes[index];
+        const actualType = argument.type.getTypeName();
+        if (actualType !== expectedType) {
+          throw new Error(`Argument ${index} of ${passFn.name} must be ${expectedType}. Received ${actualType}.`);
+        }
+        const expectedName = baseArgumentNames[index];
+        if (argument.name !== expectedName) {
+          throw new Error(`Argument ${index} of ${passFn.name} must be named ${expectedName}. Received ${argument.name}.`);
+        }
+      }
+    });
+
+    let uniformStruct: StructInfo | null = null;
+    let uniformFields: UniformField[] = [];
+    let uniformArgName: string | null = null;
+    let resourceStartIndex = 1;
+
+    if (args.length >= 4) {
+      const potentialUniform = args[1];
+      const structInfo = reflect.structs.find((entry) => entry.name === potentialUniform.type.getTypeName());
+      if (structInfo) {
+        uniformStruct = structInfo;
+        uniformArgName = potentialUniform.name;
+        uniformFields = collectUniformFields(structInfo, uniformArgName, shaderCode);
+        resourceStartIndex = 2;
       }
     }
-  });
 
-  let uniformStruct: StructInfo | null = null;
-  let uniformFields: UniformField[] = [];
-  let uniformArgName: string | null = null;
-  let resourceStartIndex = 1;
-
-  if (args.length >= 4) {
-    const potentialUniform = args[1];
-    const structInfo = reflect.structs.find((entry) => entry.name === potentialUniform.type.getTypeName());
-    if (structInfo) {
-      uniformStruct = structInfo;
-      uniformArgName = potentialUniform.name;
-      uniformFields = collectUniformFields(structInfo, uniformArgName, shaderCode);
-      resourceStartIndex = 2;
-    }
-  }
-
-  const resourceArgsCount = args.length - resourceStartIndex;
-  if (resourceArgsCount <= 0 || resourceArgsCount % 2 !== 0) {
-    throw new Error('Fragment function must end with pairs of (texture_2d<f32>, sampler).');
-  }
-
-  const baseTextureParams: TextureParam[] = [];
-  for (let i = resourceStartIndex; i < args.length; i += 2) {
-    const textureArg = args[i];
-    const samplerArg = args[i + 1];
-    if (!samplerArg) {
-      throw new Error('Texture parameter must be followed by a sampler parameter.');
-    }
-    validateTextureArgument(textureArg);
-    validateSamplerArgument(samplerArg);
-    const expectedSamplerName = `${textureArg.name}Sampler`;
-    if (samplerArg.name !== expectedSamplerName) {
-      throw new Error(`Sampler parameter must be named ${expectedSamplerName} to match the texture parameter ${textureArg.name}.`);
-    }
-    baseTextureParams.push({ textureName: textureArg.name, samplerName: samplerArg.name });
-  }
-
-  const baseArgumentCount = args.length;
-
-  const passTextureBindings: PassTextureBinding[][] = orderedPassFunctions.map((passFn, passIndex) => {
-    const passArgs = passFn.arguments;
-
-    if (passIndex === 0 && passArgs.length !== baseArgumentCount) {
-      throw new Error('pass0 cannot declare dependencies on earlier passes.');
+    const resourceArgsCount = args.length - resourceStartIndex;
+    if (resourceArgsCount <= 0 || resourceArgsCount % 2 !== 0) {
+      throw new Error('Fragment function must end with pairs of (texture_2d<f32>, sampler).');
     }
 
-    const bindings: PassTextureBinding[] = baseTextureParams.map((param) => ({
-      textureName: param.textureName,
-      samplerName: param.samplerName,
-      source: 'input',
-    }));
-
-    const extraCount = passArgs.length - baseArgumentCount;
-    if (passIndex === 0) {
-      if (extraCount !== 0) {
-        throw new Error('pass0 cannot declare dependencies on earlier passes.');
-      }
-      return bindings;
-    }
-
-    if (extraCount < 0 || extraCount % 2 !== 0) {
-      throw new Error(`Additional arguments for ${passFn.name} must be provided in texture/sampler pairs.`);
-    }
-
-    const seenPassDependencies = new Set<number>();
-    for (let offset = 0; offset < extraCount; offset += 2) {
-      const argumentIndex = baseArgumentCount + offset;
-      const textureArg = passArgs[argumentIndex];
-      const samplerArg = passArgs[argumentIndex + 1];
+    const baseTextureParams: TextureParam[] = [];
+    for (let i = resourceStartIndex; i < args.length; i += 2) {
+      const textureArg = args[i];
+      const samplerArg = args[i + 1];
       if (!samplerArg) {
         throw new Error('Texture parameter must be followed by a sampler parameter.');
       }
       validateTextureArgument(textureArg);
       validateSamplerArgument(samplerArg);
-
-      const match = /^pass(\d+)Texture$/.exec(textureArg.name);
-      if (!match) {
-        throw new Error(
-          `Additional texture arguments in ${passFn.name} must be named passNTexture (e.g. pass0Texture). Received ${textureArg.name}.`,
-        );
-      }
-      const dependencyIndex = Number(match[1]);
-      if (!Number.isInteger(dependencyIndex)) {
-        throw new Error(`Invalid pass dependency ${textureArg.name} in ${passFn.name}.`);
-      }
-      if (dependencyIndex < 0 || dependencyIndex >= passIndex) {
-        throw new Error(
-          `Pass ${passFn.name} can only depend on earlier passes. Received dependency on pass${dependencyIndex}.`,
-        );
-      }
-      if (seenPassDependencies.has(dependencyIndex)) {
-        throw new Error(`Duplicate dependency on pass${dependencyIndex} detected in ${passFn.name}.`);
-      }
-      seenPassDependencies.add(dependencyIndex);
-
-      const expectedSamplerName = `pass${dependencyIndex}Sampler`;
+      const expectedSamplerName = `${textureArg.name}Sampler`;
       if (samplerArg.name !== expectedSamplerName) {
-        throw new Error(
-          `Sampler parameter for dependency ${textureArg.name} must be named ${expectedSamplerName}. Received ${samplerArg.name}.`,
-        );
+        throw new Error(`Sampler parameter must be named ${expectedSamplerName} to match the texture parameter ${textureArg.name}.`);
       }
-
-      bindings.push({
-        textureName: textureArg.name,
-        samplerName: samplerArg.name,
-        source: 'pass',
-        passIndex: dependencyIndex,
-      });
+      baseTextureParams.push({ textureName: textureArg.name, samplerName: samplerArg.name });
     }
 
-    return bindings;
-  });
+    const baseArgumentCount = args.length;
 
-  const textureParamMap = new Map<string, TextureParam>();
-  baseTextureParams.forEach((param) => textureParamMap.set(param.textureName, param));
-  passTextureBindings.forEach((bindings) => {
-    bindings.forEach((binding) => {
-      if (!textureParamMap.has(binding.textureName)) {
-        textureParamMap.set(binding.textureName, {
-          textureName: binding.textureName,
-          samplerName: binding.samplerName,
+    const passTextureBindings: PassTextureBinding[][] = orderedPassFunctions.map((passFn, passIndex) => {
+      const passArgs = passFn.arguments;
+
+      if (passIndex === 0 && passArgs.length !== baseArgumentCount) {
+        throw new Error('pass0 cannot declare dependencies on earlier passes.');
+      }
+
+      const bindings: PassTextureBinding[] = baseTextureParams.map((param) => ({
+        textureName: param.textureName,
+        samplerName: param.samplerName,
+        source: 'input',
+      }));
+
+      const extraCount = passArgs.length - baseArgumentCount;
+      if (passIndex === 0) {
+        if (extraCount !== 0) {
+          throw new Error('pass0 cannot declare dependencies on earlier passes.');
+        }
+        return bindings;
+      }
+
+      if (extraCount < 0 || extraCount % 2 !== 0) {
+        throw new Error(`Additional arguments for ${passFn.name} must be provided in texture/sampler pairs.`);
+      }
+
+      const seenPassDependencies = new Set<number>();
+      for (let offset = 0; offset < extraCount; offset += 2) {
+        const argumentIndex = baseArgumentCount + offset;
+        const textureArg = passArgs[argumentIndex];
+        const samplerArg = passArgs[argumentIndex + 1];
+        if (!samplerArg) {
+          throw new Error('Texture parameter must be followed by a sampler parameter.');
+        }
+        validateTextureArgument(textureArg);
+        validateSamplerArgument(samplerArg);
+
+        const match = /^pass(\d+)Texture$/.exec(textureArg.name);
+        if (!match) {
+          throw new Error(
+            `Additional texture arguments in ${passFn.name} must be named passNTexture (e.g. pass0Texture). Received ${textureArg.name}.`,
+          );
+        }
+        const dependencyIndex = Number(match[1]);
+        if (!Number.isInteger(dependencyIndex)) {
+          throw new Error(`Invalid pass dependency ${textureArg.name} in ${passFn.name}.`);
+        }
+        if (dependencyIndex < 0 || dependencyIndex >= passIndex) {
+          throw new Error(
+            `Pass ${passFn.name} can only depend on earlier passes. Received dependency on pass${dependencyIndex}.`,
+          );
+        }
+        if (seenPassDependencies.has(dependencyIndex)) {
+          throw new Error(`Duplicate dependency on pass${dependencyIndex} detected in ${passFn.name}.`);
+        }
+        seenPassDependencies.add(dependencyIndex);
+
+        const expectedSamplerName = `pass${dependencyIndex}Sampler`;
+        if (samplerArg.name !== expectedSamplerName) {
+          throw new Error(
+            `Sampler parameter for dependency ${textureArg.name} must be named ${expectedSamplerName}. Received ${samplerArg.name}.`,
+          );
+        }
+
+        bindings.push({
+          textureName: textureArg.name,
+          samplerName: samplerArg.name,
+          source: 'pass',
+          passIndex: dependencyIndex,
         });
       }
+
+      return bindings;
     });
-  });
 
-  const textureParams = Array.from(textureParamMap.values());
-  const inputTextureParams = baseTextureParams;
-
-  const primaryTextureName = inputTextureParams[0]?.textureName;
-  if (!primaryTextureName) {
-    throw new Error('At least one texture argument is required for a pass.');
-  }
-
-  const shaderPrefix = toPascalCase(shaderBaseName);
-  const shaderFxImportPath = (() => {
-    const shaderFxAbsolute = path.join(options.projectRoot, 'src/rendering/shaderFXBabylon.ts');
-    let relative = path.relative(shaderDirectory, shaderFxAbsolute).replace(/\\/g, '/');
-    if (!relative.startsWith('.')) {
-      relative = `./${relative}`;
-    }
-    return relative.replace(/\.ts$/, '');
-  })();
-  const shaderFxImports = ['CustomShaderEffect', 'type ShaderSource', 'type RenderPrecision'];
-  if (uniformFields.length > 0) {
-    shaderFxImports.push('type ShaderUniforms', 'type Dynamic');
-  }
-
-  const uniformLoaderFn = uniformStruct ? generateUniformStructConstruction(uniformStruct, uniformFields) : '';
-  const uniformDeclarations = uniformFields.map((field) => `uniform ${field.bindingName}: ${field.wgslType};`);
-
-  const varyingName = 'vUV';
-  
-  // Vertex shader declarations (includes attributes)
-  const vertexDeclarations: string[] = [
-    'attribute position: vec3<f32>;',
-    'attribute uv: vec2<f32>;',
-    `varying ${varyingName}: vec2<f32>;`
-  ];
-  if (uniformDeclarations.length > 0) {
-    vertexDeclarations.push(...uniformDeclarations);
-  }
-  textureParams.forEach((param) => {
-    vertexDeclarations.push(`var ${param.textureName}: texture_2d<f32>;`);
-    vertexDeclarations.push(`var ${param.samplerName}: sampler;`);
-  });
-
-  // Fragment shader declarations (no attributes, only varyings and resources)
-  const fragmentDeclarations: string[] = [
-    `varying ${varyingName}: vec2<f32>;`
-  ];
-  if (uniformDeclarations.length > 0) {
-    fragmentDeclarations.push(...uniformDeclarations);
-  }
-  textureParams.forEach((param) => {
-    fragmentDeclarations.push(`var ${param.textureName}: texture_2d<f32>;`);
-    fragmentDeclarations.push(`var ${param.samplerName}: sampler;`);
-  });
-
-  const vertexSource = buildVertexSource(vertexDeclarations, varyingName);
-  const fragmentSources = orderedPassFunctions.map((passFn) => buildFragmentSource(
-    shaderCode,
-    fragmentDeclarations,
-    uniformStruct,
-    uniformLoaderFn,
-    passFn.name,
-    uvArg.name,
-    uniformArgName,
-    passFn.arguments,
-    resourceStartIndex,
-    varyingName,
-  ));
-
-  const uniformInterfaceName = uniformStruct
-    ? (uniformStruct.name.startsWith(shaderPrefix) ? uniformStruct.name : `${shaderPrefix}${uniformStruct.name}`)
-    : defaultUniformInterfaceName;
-
-  const helperNames = new Set<string>();
-  const uniformInterfaceLines: string[] = [];
-  const uniformSetterLines: string[] = [];
-
-  if (uniformStruct && uniformFields.length > 0) {
-    uniformInterfaceLines.push(`export interface ${uniformInterfaceName} {`);
-    for (const field of uniformFields) {
-      const meta = UNIFORM_TYPE_MAP[field.wgslType];
-      if (!meta) {
-        throw new Error(`Unsupported uniform field type ${field.wgslType}.`);
-      }
-      uniformInterfaceLines.push(`  ${field.name}: ${meta.tsType};`);
-      if (meta.helper) {
-        helperNames.add(meta.helper);
-      }
-    }
-    uniformInterfaceLines.push('}');
-
-    uniformSetterLines.push(`export function set${uniformInterfaceName}(material: BABYLON.ShaderMaterial, uniforms: Partial<${uniformInterfaceName}>): void {`);
-    uniformSetterLines.push('  if (!uniforms) {');
-    uniformSetterLines.push('    return;');
-    uniformSetterLines.push('  }');
-    for (const field of uniformFields) {
-      const meta = expectMeta(field.wgslType);
-      uniformSetterLines.push(`  if (uniforms.${field.name} !== undefined) {`);
-      uniformSetterLines.push(`    material.${meta.setter}('${field.bindingName}', ${meta.expression(`uniforms.${field.name}`)});`);
-      uniformSetterLines.push('  }');
-    }
-    uniformSetterLines.push('}');
-  }
-
-  const helperBlocks = Array.from(helperNames).map((name) => HELPER_SNIPPETS[name]);
-
-  const uniformsArrayLiteral = uniformFields.length
-    ? `[${uniformFields.map((field) => `'${field.bindingName}'`).join(', ')}]`
-    : '[]';
-
-  const textureNamesArrayLiteral = `[${textureParams.map((param) => `'${param.textureName}'`).join(', ')}]`;
-  const samplerObjectsArrayLiteral = `[${textureParams.map((param) => `'${param.samplerName}'`).join(', ')}]`;
-  const samplerLookupLiteral = `{ ${textureParams
-    .map((param) => `'${param.textureName}': '${param.samplerName}'`)
-    .join(', ')} } as const`;
-  const inputTextureNamesArrayLiteral = `[${inputTextureParams.map((param) => `'${param.textureName}'`).join(', ')}]`;
-
-  const materialHandlesName = `${shaderPrefix}MaterialHandles`;
-  const materialOptionsName = `${shaderPrefix}MaterialOptions`;
-  const setUniformsFunctionName = uniformStruct && uniformFields.length > 0 ? `set${uniformInterfaceName}` : null;
-
-  const tsLines: string[] = [];
-  tsLines.push(HEADER_COMMENT);
-  tsLines.push(`import * as BABYLON from 'babylonjs';`);
-  tsLines.push(`import { ${shaderFxImports.join(', ')} } from '${shaderFxImportPath}';`);
-  tsLines.push(`export const ${shaderPrefix}VertexSource = ${escapeTemplateLiteral(vertexSource)};`);
-  tsLines.push(`export const ${shaderPrefix}FragmentSources = [`);
-  fragmentSources.forEach((source, index) => {
-    tsLines.push(`  ${escapeTemplateLiteral(source)}, // pass${index}`);
-  });
-  tsLines.push(`] as const;`);
-  tsLines.push(`export const ${shaderPrefix}PassCount = ${passCount} as const;`);
-  tsLines.push(`export const ${shaderPrefix}PrimaryTextureName = '${primaryTextureName}' as const;`);
-  tsLines.push('');
-
-  const passTextureSourceLines: string[] = [];
-  passTextureSourceLines.push(`export const ${shaderPrefix}PassTextureSources = [`);
-  passTextureBindings.forEach((bindings) => {
-    passTextureSourceLines.push('  [');
-    bindings.forEach((binding) => {
-      if (binding.source === 'input') {
-        passTextureSourceLines.push(
-          `    { binding: '${binding.textureName}', source: { kind: 'input', key: '${binding.textureName}' } },`,
-        );
-      } else {
-        passTextureSourceLines.push(
-          `    { binding: '${binding.textureName}', source: { kind: 'pass', passIndex: ${binding.passIndex} } },`,
-        );
-      }
+    const textureParamMap = new Map<string, TextureParam>();
+    baseTextureParams.forEach((param) => textureParamMap.set(param.textureName, param));
+    passTextureBindings.forEach((bindings) => {
+      bindings.forEach((binding) => {
+        if (!textureParamMap.has(binding.textureName)) {
+          textureParamMap.set(binding.textureName, {
+            textureName: binding.textureName,
+            samplerName: binding.samplerName,
+          });
+        }
+      });
     });
-    passTextureSourceLines.push('  ],');
-  });
-  passTextureSourceLines.push(`] as const;`);
-  passTextureSourceLines.push('');
-  tsLines.push(...passTextureSourceLines);
 
-  if (helperBlocks.length > 0) {
-    tsLines.push(...helperBlocks);
-    tsLines.push('');
-  }
-  if (uniformStruct && uniformFields.length > 0) {
-    tsLines.push(...uniformInterfaceLines);
-    tsLines.push('');
-    tsLines.push(...uniformSetterLines);
-    tsLines.push('');
-  } else {
-    tsLines.push(`export type ${uniformInterfaceName} = Record<string, never>;`);
-    tsLines.push(`export function set${uniformInterfaceName}(_material: BABYLON.ShaderMaterial, _uniforms: Partial<${uniformInterfaceName}>): void {}`);
-    tsLines.push('');
-  }
-  const textureNameUnion = textureParams.map((param) => `'${param.textureName}'`).join(' | ');
-  const inputsTypeName = `${shaderPrefix}Inputs`;
-  tsLines.push(`export type ${shaderPrefix}TextureName = ${textureNameUnion};`);
-  tsLines.push(`export interface ${inputsTypeName} {`);
-  inputTextureParams.forEach((param) => {
-    tsLines.push(`  ${param.textureName}: ShaderSource;`);
-  });
-  tsLines.push('}');
-  tsLines.push('');
-  tsLines.push(`export interface ${materialHandlesName} {`);
-  tsLines.push('  material: BABYLON.ShaderMaterial;');
-  tsLines.push(`  setTexture(name: ${shaderPrefix}TextureName, texture: BABYLON.BaseTexture): void;`);
-  tsLines.push(`  setTextureSampler(name: ${shaderPrefix}TextureName, sampler: BABYLON.TextureSampler): void;`);
-  tsLines.push(`  setUniforms(uniforms: Partial<${uniformInterfaceName}>): void;`);
-  tsLines.push('}');
-  tsLines.push('');
-  tsLines.push(`export interface ${materialOptionsName} {`);
-  tsLines.push('  name?: string;');
-  tsLines.push('  passIndex?: number;');
-  tsLines.push('}');
-  tsLines.push('');
-  tsLines.push(`export function create${shaderPrefix}Material(scene: BABYLON.Scene, options: ${materialOptionsName} = {}): ${materialHandlesName} {`);
-  tsLines.push('  const passIndex = options.passIndex ?? 0;');
-  tsLines.push(`  if (passIndex < 0 || passIndex >= ${passCount}) {`);
-  tsLines.push(`    throw new Error(\`Invalid passIndex \${passIndex} for ${shaderPrefix}. Expected 0 <= passIndex < ${passCount}.\`);`);
-  tsLines.push('  }');
-  tsLines.push(`  const baseName = options.name ?? '${shaderPrefix}Material';`);
-  tsLines.push('  const shaderName = `${baseName}_pass${passIndex}`;');
-  tsLines.push('  // Register shaders in the WGSL store to enable preprocessor');
-  tsLines.push('  const vertexShaderName = `${shaderName}VertexShader`;');
-  tsLines.push('  const fragmentShaderName = `${shaderName}FragmentShader`;');
-  tsLines.push('  ');
-  tsLines.push(`  BABYLON.ShaderStore.ShadersStoreWGSL[vertexShaderName] = ${shaderPrefix}VertexSource;`);
-  tsLines.push(`  BABYLON.ShaderStore.ShadersStoreWGSL[fragmentShaderName] = ${shaderPrefix}FragmentSources[passIndex];`);
-  tsLines.push('  ');
-  tsLines.push('  const material = new BABYLON.ShaderMaterial(shaderName, scene, {');
-  tsLines.push('    vertex: shaderName,');
-  tsLines.push('    fragment: shaderName,');
-  tsLines.push('  }, {');
-  tsLines.push(`    attributes: ['position', 'uv'],`);
-  tsLines.push(`    uniforms: ${uniformsArrayLiteral},`);
-  tsLines.push(`    samplers: ${textureNamesArrayLiteral},`);
-  tsLines.push(`    samplerObjects: ${samplerObjectsArrayLiteral},`);
-  tsLines.push('    shaderLanguage: BABYLON.ShaderLanguage.WGSL,');
-  tsLines.push('  });');
-  tsLines.push('');
-  tsLines.push(`  const samplerLookup = ${samplerLookupLiteral};`);
-  tsLines.push('');
-  tsLines.push(`  const handles: ${materialHandlesName} = {`);
-  tsLines.push('    material,');
-  tsLines.push('    setTexture: (name, texture) => material.setTexture(name, texture),');
-  tsLines.push('    setTextureSampler: (name, sampler) => material.setTextureSampler(samplerLookup[name], sampler),');
-  if (setUniformsFunctionName) {
-    tsLines.push(`    setUniforms: (values) => ${setUniformsFunctionName}(material, values),`);
-  } else {
-    tsLines.push('    setUniforms: () => {},');
-  }
-  tsLines.push('  };');
-  tsLines.push('');
-  tsLines.push('  return handles;');
-  tsLines.push('}');
-  tsLines.push('');
+    const textureParams = Array.from(textureParamMap.values());
+    const inputTextureParams = baseTextureParams;
 
-  const effectLines: string[] = [];
-  effectLines.push(`export class ${effectClassName} extends CustomShaderEffect<${uniformInterfaceName}, ${inputsTypeName}> {`);
-  effectLines.push(`  effectName = '${shaderPrefix}'`);
-  effectLines.push('');
-  effectLines.push(`  constructor(engine: BABYLON.WebGPUEngine, inputs: ${inputsTypeName}, width = 1280, height = 720, sampleMode: 'nearest' | 'linear' = 'linear', precision: RenderPrecision = 'half_float') {`);
-  effectLines.push('    super(engine, inputs, {');
-  effectLines.push(`      factory: (sceneRef, options) => create${shaderPrefix}Material(sceneRef, options),`);
-  effectLines.push(`      textureInputKeys: ${inputTextureNamesArrayLiteral},`);
-  effectLines.push(`      textureBindingKeys: ${textureNamesArrayLiteral},`);
-  effectLines.push(`      passTextureSources: ${shaderPrefix}PassTextureSources,`);
-  effectLines.push(`      passCount: ${passCount},`);
-  effectLines.push(`      primaryTextureKey: '${primaryTextureName}',`);
-  effectLines.push('      width,');
-  effectLines.push('      height,');
-  effectLines.push(`      materialName: '${shaderPrefix}Material',`);
-  effectLines.push('      sampleMode,');
-  effectLines.push('      precision,');
-  effectLines.push('    })');
-  const fieldsWithDefaults = uniformFields.filter((field) => field.defaultExpression);
-  if (fieldsWithDefaults.length > 0) {
-    effectLines.push('    this.setUniforms({');
-    fieldsWithDefaults.forEach((field) => {
-      effectLines.push(`      ${field.name}: ${field.defaultExpression},`);
-    });
-    effectLines.push('    });');
-  } else {
-    const uniformNames = new Set(uniformFields.map((field) => field.name));
-    const hasTransformDefaults = ['rotate', 'anchor', 'translate', 'scale'].every((name) => uniformNames.has(name));
-    if (hasTransformDefaults) {
-      effectLines.push('    this.setUniforms({ rotate: 0, anchor: [0.5, 0.5], translate: [0, 0], scale: [1, 1] });');
+    const primaryTextureName = inputTextureParams[0]?.textureName;
+    if (!primaryTextureName) {
+      throw new Error('At least one texture argument is required for a pass.');
     }
-  }
-  effectLines.push('  }');
 
-  effectLines.push('');
-  effectLines.push(`  override setSrcs(inputs: Partial<${inputsTypeName}>): void {`);
-  effectLines.push('    super.setSrcs(inputs);');
-  effectLines.push('  }');
+    const shaderPrefix = toPascalCase(shaderBaseName);
+    const shaderFxImportPath = (() => {
+      const shaderFxAbsolute = path.join(options.projectRoot, 'src/rendering/shaderFXBabylon.ts');
+      let relative = path.relative(shaderDirectory, shaderFxAbsolute).replace(/\\/g, '/');
+      if (!relative.startsWith('.')) {
+        relative = `./${relative}`;
+      }
+      return relative.replace(/\.ts$/, '');
+    })();
+    const shaderFxImports = ['CustomShaderEffect', 'type ShaderSource', 'type RenderPrecision'];
+    if (uniformFields.length > 0) {
+      shaderFxImports.push('type ShaderUniforms', 'type Dynamic');
+    }
 
-  if (uniformFields.length > 0) {
-    const uniformParams = uniformFields
-      .map((field) => {
+    const uniformLoaderFn = uniformStruct ? generateUniformStructConstruction(uniformStruct, uniformFields) : '';
+    const uniformDeclarations = uniformFields.map((field) => `uniform ${field.bindingName}: ${field.wgslType};`);
+
+    const varyingName = 'vUV';
+    
+    // Vertex shader declarations (includes attributes)
+    const vertexDeclarations: string[] = [
+      'attribute position: vec3<f32>;',
+      'attribute uv: vec2<f32>;',
+      `varying ${varyingName}: vec2<f32>;`
+    ];
+    if (uniformDeclarations.length > 0) {
+      vertexDeclarations.push(...uniformDeclarations);
+    }
+    textureParams.forEach((param) => {
+      vertexDeclarations.push(`var ${param.textureName}: texture_2d<f32>;`);
+      vertexDeclarations.push(`var ${param.samplerName}: sampler;`);
+    });
+
+    // Fragment shader declarations (no attributes, only varyings and resources)
+    const fragmentDeclarations: string[] = [
+      `varying ${varyingName}: vec2<f32>;`
+    ];
+    if (uniformDeclarations.length > 0) {
+      fragmentDeclarations.push(...uniformDeclarations);
+    }
+    textureParams.forEach((param) => {
+      fragmentDeclarations.push(`var ${param.textureName}: texture_2d<f32>;`);
+      fragmentDeclarations.push(`var ${param.samplerName}: sampler;`);
+    });
+
+    const vertexSource = buildVertexSource(vertexDeclarations, varyingName);
+    const fragmentSources = orderedPassFunctions.map((passFn) => buildFragmentSource(
+      shaderCode,
+      fragmentDeclarations,
+      uniformStruct,
+      uniformLoaderFn,
+      passFn.name,
+      uvArg.name,
+      uniformArgName,
+      passFn.arguments,
+      resourceStartIndex,
+      varyingName,
+    ));
+
+    const uniformInterfaceName = uniformStruct
+      ? (uniformStruct.name.startsWith(shaderPrefix) ? uniformStruct.name : `${shaderPrefix}${uniformStruct.name}`)
+      : defaultUniformInterfaceName;
+
+    const helperNames = new Set<string>();
+    const uniformInterfaceLines: string[] = [];
+    const uniformSetterLines: string[] = [];
+
+    if (uniformStruct && uniformFields.length > 0) {
+      uniformInterfaceLines.push(`export interface ${uniformInterfaceName} {`);
+      for (const field of uniformFields) {
         const meta = UNIFORM_TYPE_MAP[field.wgslType];
-        return `${field.name}?: Dynamic<${meta.tsType}>`;
-      })
-      .join(', ');
-    effectLines.push('');
-    effectLines.push(`  override setUniforms(uniforms: { ${uniformParams} }): void {`);
-    effectLines.push('    const record: ShaderUniforms = {};');
-    uniformFields.forEach((field) => {
-      effectLines.push(`    if (uniforms.${field.name} !== undefined) {`);
-      effectLines.push(`      record['${field.name}'] = uniforms.${field.name};`);
-      effectLines.push('    }');
-    });
-    effectLines.push('    super.setUniforms(record);');
-    effectLines.push('  }');
-  }
+        if (!meta) {
+          throw new Error(`Unsupported uniform field type ${field.wgslType}.`);
+        }
+        uniformInterfaceLines.push(`  ${field.name}: ${meta.tsType};`);
+        if (meta.helper) {
+          helperNames.add(meta.helper);
+        }
+      }
+      uniformInterfaceLines.push('}');
 
-  effectLines.push('}');
-  effectLines.push('');
-  tsLines.push(...effectLines);
-
-  const typesSource = `${tsLines.join('\n')}\n`;
-
-  const typesUpdated = await writeFileIfChanged(typesPath, typesSource);
-
-  if (logger) {
-    const relativeTypes = path.relative(projectRoot, typesPath);
-    if (typesUpdated) {
-      logger(`Updated ${relativeTypes}`);
+      uniformSetterLines.push(`export function set${uniformInterfaceName}(material: BABYLON.ShaderMaterial, uniforms: Partial<${uniformInterfaceName}>): void {`);
+      uniformSetterLines.push('  if (!uniforms) {');
+      uniformSetterLines.push('    return;');
+      uniformSetterLines.push('  }');
+      for (const field of uniformFields) {
+        const meta = expectMeta(field.wgslType);
+        uniformSetterLines.push(`  if (uniforms.${field.name} !== undefined) {`);
+        uniformSetterLines.push(`    material.${meta.setter}('${field.bindingName}', ${meta.expression(`uniforms.${field.name}`)});`);
+        uniformSetterLines.push('  }');
+      }
+      uniformSetterLines.push('}');
     }
-  }
 
-  return {
-    sourcePath: absoluteSource,
-    typesPath,
-    updated: typesUpdated,
-  };
+    const helperBlocks = Array.from(helperNames).map((name) => HELPER_SNIPPETS[name]);
+
+    const uniformsArrayLiteral = uniformFields.length
+      ? `[${uniformFields.map((field) => `'${field.bindingName}'`).join(', ')}]`
+      : '[]';
+
+    const textureNamesArrayLiteral = `[${textureParams.map((param) => `'${param.textureName}'`).join(', ')}]`;
+    const samplerObjectsArrayLiteral = `[${textureParams.map((param) => `'${param.samplerName}'`).join(', ')}]`;
+    const samplerLookupLiteral = `{ ${textureParams
+      .map((param) => `'${param.textureName}': '${param.samplerName}'`)
+      .join(', ')} } as const`;
+    const inputTextureNamesArrayLiteral = `[${inputTextureParams.map((param) => `'${param.textureName}'`).join(', ')}]`;
+
+    const materialHandlesName = `${shaderPrefix}MaterialHandles`;
+    const materialOptionsName = `${shaderPrefix}MaterialOptions`;
+    const setUniformsFunctionName = uniformStruct && uniformFields.length > 0 ? `set${uniformInterfaceName}` : null;
+
+    const tsLines: string[] = [];
+    tsLines.push(HEADER_COMMENT);
+    tsLines.push(`import * as BABYLON from 'babylonjs';`);
+    tsLines.push(`import { ${shaderFxImports.join(', ')} } from '${shaderFxImportPath}';`);
+    tsLines.push(`export const ${shaderPrefix}VertexSource = ${escapeTemplateLiteral(vertexSource)};`);
+    tsLines.push(`export const ${shaderPrefix}FragmentSources = [`);
+    fragmentSources.forEach((source, index) => {
+      tsLines.push(`  ${escapeTemplateLiteral(source)}, // pass${index}`);
+    });
+    tsLines.push(`] as const;`);
+    tsLines.push(`export const ${shaderPrefix}PassCount = ${passCount} as const;`);
+    tsLines.push(`export const ${shaderPrefix}PrimaryTextureName = '${primaryTextureName}' as const;`);
+    tsLines.push('');
+
+    const passTextureSourceLines: string[] = [];
+    passTextureSourceLines.push(`export const ${shaderPrefix}PassTextureSources = [`);
+    passTextureBindings.forEach((bindings) => {
+      passTextureSourceLines.push('  [');
+      bindings.forEach((binding) => {
+        if (binding.source === 'input') {
+          passTextureSourceLines.push(
+            `    { binding: '${binding.textureName}', source: { kind: 'input', key: '${binding.textureName}' } },`,
+          );
+        } else {
+          passTextureSourceLines.push(
+            `    { binding: '${binding.textureName}', source: { kind: 'pass', passIndex: ${binding.passIndex} } },`,
+          );
+        }
+      });
+      passTextureSourceLines.push('  ],');
+    });
+    passTextureSourceLines.push(`] as const;`);
+    passTextureSourceLines.push('');
+    tsLines.push(...passTextureSourceLines);
+
+    if (helperBlocks.length > 0) {
+      tsLines.push(...helperBlocks);
+      tsLines.push('');
+    }
+    if (uniformStruct && uniformFields.length > 0) {
+      tsLines.push(...uniformInterfaceLines);
+      tsLines.push('');
+      tsLines.push(...uniformSetterLines);
+      tsLines.push('');
+    } else {
+      tsLines.push(`export type ${uniformInterfaceName} = Record<string, never>;`);
+      tsLines.push(`export function set${uniformInterfaceName}(_material: BABYLON.ShaderMaterial, _uniforms: Partial<${uniformInterfaceName}>): void {}`);
+      tsLines.push('');
+    }
+    const textureNameUnion = textureParams.map((param) => `'${param.textureName}'`).join(' | ');
+    const inputsTypeName = `${shaderPrefix}Inputs`;
+    tsLines.push(`export type ${shaderPrefix}TextureName = ${textureNameUnion};`);
+    tsLines.push(`export interface ${inputsTypeName} {`);
+    inputTextureParams.forEach((param) => {
+      tsLines.push(`  ${param.textureName}: ShaderSource;`);
+    });
+    tsLines.push('}');
+    tsLines.push('');
+    tsLines.push(`export interface ${materialHandlesName} {`);
+    tsLines.push('  material: BABYLON.ShaderMaterial;');
+    tsLines.push(`  setTexture(name: ${shaderPrefix}TextureName, texture: BABYLON.BaseTexture): void;`);
+    tsLines.push(`  setTextureSampler(name: ${shaderPrefix}TextureName, sampler: BABYLON.TextureSampler): void;`);
+    tsLines.push(`  setUniforms(uniforms: Partial<${uniformInterfaceName}>): void;`);
+    tsLines.push('}');
+    tsLines.push('');
+    tsLines.push(`export interface ${materialOptionsName} {`);
+    tsLines.push('  name?: string;');
+    tsLines.push('  passIndex?: number;');
+    tsLines.push('}');
+    tsLines.push('');
+    tsLines.push(`export function create${shaderPrefix}Material(scene: BABYLON.Scene, options: ${materialOptionsName} = {}): ${materialHandlesName} {`);
+    tsLines.push('  const passIndex = options.passIndex ?? 0;');
+    tsLines.push(`  if (passIndex < 0 || passIndex >= ${passCount}) {`);
+    tsLines.push(`    throw new Error(\`Invalid passIndex \${passIndex} for ${shaderPrefix}. Expected 0 <= passIndex < ${passCount}.\`);`);
+    tsLines.push('  }');
+    tsLines.push(`  const baseName = options.name ?? '${shaderPrefix}Material';`);
+    tsLines.push('  const shaderName = `${baseName}_pass${passIndex}`;');
+    tsLines.push('  // Register shaders in the WGSL store to enable preprocessor');
+    tsLines.push('  const vertexShaderName = `${shaderName}VertexShader`;');
+    tsLines.push('  const fragmentShaderName = `${shaderName}FragmentShader`;');
+    tsLines.push('  ');
+    tsLines.push(`  BABYLON.ShaderStore.ShadersStoreWGSL[vertexShaderName] = ${shaderPrefix}VertexSource;`);
+    tsLines.push(`  BABYLON.ShaderStore.ShadersStoreWGSL[fragmentShaderName] = ${shaderPrefix}FragmentSources[passIndex];`);
+    tsLines.push('  ');
+    tsLines.push('  const material = new BABYLON.ShaderMaterial(shaderName, scene, {');
+    tsLines.push('    vertex: shaderName,');
+    tsLines.push('    fragment: shaderName,');
+    tsLines.push('  }, {');
+    tsLines.push(`    attributes: ['position', 'uv'],`);
+    tsLines.push(`    uniforms: ${uniformsArrayLiteral},`);
+    tsLines.push(`    samplers: ${textureNamesArrayLiteral},`);
+    tsLines.push(`    samplerObjects: ${samplerObjectsArrayLiteral},`);
+    tsLines.push('    shaderLanguage: BABYLON.ShaderLanguage.WGSL,');
+    tsLines.push('  });');
+    tsLines.push('');
+    tsLines.push(`  const samplerLookup = ${samplerLookupLiteral};`);
+    tsLines.push('');
+    tsLines.push(`  const handles: ${materialHandlesName} = {`);
+    tsLines.push('    material,');
+    tsLines.push('    setTexture: (name, texture) => material.setTexture(name, texture),');
+    tsLines.push('    setTextureSampler: (name, sampler) => material.setTextureSampler(samplerLookup[name], sampler),');
+    if (setUniformsFunctionName) {
+      tsLines.push(`    setUniforms: (values) => ${setUniformsFunctionName}(material, values),`);
+    } else {
+      tsLines.push('    setUniforms: () => {},');
+    }
+    tsLines.push('  };');
+    tsLines.push('');
+    tsLines.push('  return handles;');
+    tsLines.push('}');
+    tsLines.push('');
+
+    const effectLines: string[] = [];
+    effectLines.push(`export class ${effectClassName} extends CustomShaderEffect<${uniformInterfaceName}, ${inputsTypeName}> {`);
+    effectLines.push(`  effectName = '${shaderPrefix}'`);
+    effectLines.push('');
+    effectLines.push(`  constructor(engine: BABYLON.WebGPUEngine, inputs: ${inputsTypeName}, width = 1280, height = 720, sampleMode: 'nearest' | 'linear' = 'linear', precision: RenderPrecision = 'half_float') {`);
+    effectLines.push('    super(engine, inputs, {');
+    effectLines.push(`      factory: (sceneRef, options) => create${shaderPrefix}Material(sceneRef, options),`);
+    effectLines.push(`      textureInputKeys: ${inputTextureNamesArrayLiteral},`);
+    effectLines.push(`      textureBindingKeys: ${textureNamesArrayLiteral},`);
+    effectLines.push(`      passTextureSources: ${shaderPrefix}PassTextureSources,`);
+    effectLines.push(`      passCount: ${passCount},`);
+    effectLines.push(`      primaryTextureKey: '${primaryTextureName}',`);
+    effectLines.push('      width,');
+    effectLines.push('      height,');
+    effectLines.push(`      materialName: '${shaderPrefix}Material',`);
+    effectLines.push('      sampleMode,');
+    effectLines.push('      precision,');
+    effectLines.push('    })');
+    const fieldsWithDefaults = uniformFields.filter((field) => field.defaultExpression);
+    if (fieldsWithDefaults.length > 0) {
+      effectLines.push('    this.setUniforms({');
+      fieldsWithDefaults.forEach((field) => {
+        effectLines.push(`      ${field.name}: ${field.defaultExpression},`);
+      });
+      effectLines.push('    });');
+    } else {
+      const uniformNames = new Set(uniformFields.map((field) => field.name));
+      const hasTransformDefaults = ['rotate', 'anchor', 'translate', 'scale'].every((name) => uniformNames.has(name));
+      if (hasTransformDefaults) {
+        effectLines.push('    this.setUniforms({ rotate: 0, anchor: [0.5, 0.5], translate: [0, 0], scale: [1, 1] });');
+      }
+    }
+    effectLines.push('  }');
+
+    effectLines.push('');
+    effectLines.push(`  override setSrcs(inputs: Partial<${inputsTypeName}>): void {`);
+    effectLines.push('    super.setSrcs(inputs);');
+    effectLines.push('  }');
+
+    if (uniformFields.length > 0) {
+      const uniformParams = uniformFields
+        .map((field) => {
+          const meta = UNIFORM_TYPE_MAP[field.wgslType];
+          return `${field.name}?: Dynamic<${meta.tsType}>`;
+        })
+        .join(', ');
+      effectLines.push('');
+      effectLines.push(`  override setUniforms(uniforms: { ${uniformParams} }): void {`);
+      effectLines.push('    const record: ShaderUniforms = {};');
+      uniformFields.forEach((field) => {
+        effectLines.push(`    if (uniforms.${field.name} !== undefined) {`);
+        effectLines.push(`      record['${field.name}'] = uniforms.${field.name};`);
+        effectLines.push('    }');
+      });
+      effectLines.push('    super.setUniforms(record);');
+      effectLines.push('  }');
+    }
+
+    effectLines.push('}');
+    effectLines.push('');
+    tsLines.push(...effectLines);
+
+    const typesSource = `${tsLines.join('\n')}\n`;
+
+    const typesUpdated = await writeFileIfChanged(typesPath, typesSource);
+
+    if (logger) {
+      const relativeTypes = path.relative(projectRoot, typesPath);
+      if (typesUpdated) {
+        logger(`Updated ${relativeTypes}`);
+      }
+    }
+
+    return {
+      sourcePath: absoluteSource,
+      typesPath,
+      updated: typesUpdated,
+    };
   } catch (error: any) {
     const message = error instanceof Error ? error.message : String(error);
     const errorUpdated = await writeErrorArtifact({
@@ -928,3 +928,12 @@ async function writeErrorArtifact(options: ErrorArtifactOptions): Promise<boolea
   lines.push('');
   return writeFileIfChanged(typesPath, `${lines.join('\n')}\n`);
 }
+
+/*
+TODO_SHADER_GRAPH
+- don't need to put all uniforms in shader
+- don't need to include all inputs in each pass
+- separate parse/validation/structured-output logic and fragment string construction into separate functions
+
+
+*/
