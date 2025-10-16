@@ -36,6 +36,11 @@ interface TextureParam {
   samplerName: string;
 }
 
+interface PassTextureBinding extends TextureParam {
+  source: 'input' | 'pass';
+  passIndex?: number;
+}
+
 interface UniformTypeMetadata {
   tsType: string;
   setter: string;
@@ -284,7 +289,8 @@ function buildFragmentSource(
   functionName: string,
   uvArgName: string,
   uniformArgName: string | null,
-  textureParams: TextureParam[],
+  passArgs: ArgumentInfo[],
+  resourceStartIndex: number,
   varyingName: string,
 ): string {
   const lines: string[] = [];
@@ -308,13 +314,13 @@ function buildFragmentSource(
     lines.push(`  let ${uniformArgName}_value = load_${uniformStruct.name}();`);
   }
   lines.push(`  let ${uvArgName}_local = fragmentInputs.${varyingName};`);
+  const resourceArgNames = passArgs.slice(resourceStartIndex).map((argument) => argument.name);
   const args: string[] = [`${uvArgName}_local`];
   if (uniformStruct) {
     args.push(`${uniformArgName}_value`);
   }
-  textureParams.forEach((param) => {
-    args.push(param.textureName);
-    args.push(param.samplerName);
+  resourceArgNames.forEach((name) => {
+    args.push(name);
   });
   lines.push(`  let color = ${functionName}(${args.join(', ')});`);
   lines.push('  fragmentOutputs.color = color;');
@@ -406,10 +412,13 @@ export async function generateFragmentShaderArtifacts(
 
   orderedPassFunctions.slice(1).forEach((passFn) => {
     const passArgs = passFn.arguments;
-    if (passArgs.length !== args.length) {
-      throw new Error(`Pass ${passFn.name} must have ${args.length} arguments to match pass0. Received ${passArgs.length}.`);
+    if (passArgs.length < args.length) {
+      throw new Error(
+        `Pass ${passFn.name} must have at least ${args.length} arguments to match pass0. Received ${passArgs.length}.`,
+      );
     }
-    passArgs.forEach((argument, index) => {
+    for (let index = 0; index < args.length; index++) {
+      const argument = passArgs[index];
       const expectedType = baseArgumentTypes[index];
       const actualType = argument.type.getTypeName();
       if (actualType !== expectedType) {
@@ -419,7 +428,7 @@ export async function generateFragmentShaderArtifacts(
       if (argument.name !== expectedName) {
         throw new Error(`Argument ${index} of ${passFn.name} must be named ${expectedName}. Received ${argument.name}.`);
       }
-    });
+    }
   });
 
   let uniformStruct: StructInfo | null = null;
@@ -443,7 +452,7 @@ export async function generateFragmentShaderArtifacts(
     throw new Error('Fragment function must end with pairs of (texture_2d<f32>, sampler).');
   }
 
-  const textureParams: TextureParam[] = [];
+  const baseTextureParams: TextureParam[] = [];
   for (let i = resourceStartIndex; i < args.length; i += 2) {
     const textureArg = args[i];
     const samplerArg = args[i + 1];
@@ -456,10 +465,102 @@ export async function generateFragmentShaderArtifacts(
     if (samplerArg.name !== expectedSamplerName) {
       throw new Error(`Sampler parameter must be named ${expectedSamplerName} to match the texture parameter ${textureArg.name}.`);
     }
-    textureParams.push({ textureName: textureArg.name, samplerName: samplerArg.name });
+    baseTextureParams.push({ textureName: textureArg.name, samplerName: samplerArg.name });
   }
 
-  const primaryTextureName = textureParams[0]?.textureName;
+  const baseArgumentCount = args.length;
+
+  const passTextureBindings: PassTextureBinding[][] = orderedPassFunctions.map((passFn, passIndex) => {
+    const passArgs = passFn.arguments;
+
+    if (passIndex === 0 && passArgs.length !== baseArgumentCount) {
+      throw new Error('pass0 cannot declare dependencies on earlier passes.');
+    }
+
+    const bindings: PassTextureBinding[] = baseTextureParams.map((param) => ({
+      textureName: param.textureName,
+      samplerName: param.samplerName,
+      source: 'input',
+    }));
+
+    const extraCount = passArgs.length - baseArgumentCount;
+    if (passIndex === 0) {
+      if (extraCount !== 0) {
+        throw new Error('pass0 cannot declare dependencies on earlier passes.');
+      }
+      return bindings;
+    }
+
+    if (extraCount < 0 || extraCount % 2 !== 0) {
+      throw new Error(`Additional arguments for ${passFn.name} must be provided in texture/sampler pairs.`);
+    }
+
+    const seenPassDependencies = new Set<number>();
+    for (let offset = 0; offset < extraCount; offset += 2) {
+      const argumentIndex = baseArgumentCount + offset;
+      const textureArg = passArgs[argumentIndex];
+      const samplerArg = passArgs[argumentIndex + 1];
+      if (!samplerArg) {
+        throw new Error('Texture parameter must be followed by a sampler parameter.');
+      }
+      validateTextureArgument(textureArg);
+      validateSamplerArgument(samplerArg);
+
+      const match = /^pass(\d+)Texture$/.exec(textureArg.name);
+      if (!match) {
+        throw new Error(
+          `Additional texture arguments in ${passFn.name} must be named passNTexture (e.g. pass0Texture). Received ${textureArg.name}.`,
+        );
+      }
+      const dependencyIndex = Number(match[1]);
+      if (!Number.isInteger(dependencyIndex)) {
+        throw new Error(`Invalid pass dependency ${textureArg.name} in ${passFn.name}.`);
+      }
+      if (dependencyIndex < 0 || dependencyIndex >= passIndex) {
+        throw new Error(
+          `Pass ${passFn.name} can only depend on earlier passes. Received dependency on pass${dependencyIndex}.`,
+        );
+      }
+      if (seenPassDependencies.has(dependencyIndex)) {
+        throw new Error(`Duplicate dependency on pass${dependencyIndex} detected in ${passFn.name}.`);
+      }
+      seenPassDependencies.add(dependencyIndex);
+
+      const expectedSamplerName = `pass${dependencyIndex}Sampler`;
+      if (samplerArg.name !== expectedSamplerName) {
+        throw new Error(
+          `Sampler parameter for dependency ${textureArg.name} must be named ${expectedSamplerName}. Received ${samplerArg.name}.`,
+        );
+      }
+
+      bindings.push({
+        textureName: textureArg.name,
+        samplerName: samplerArg.name,
+        source: 'pass',
+        passIndex: dependencyIndex,
+      });
+    }
+
+    return bindings;
+  });
+
+  const textureParamMap = new Map<string, TextureParam>();
+  baseTextureParams.forEach((param) => textureParamMap.set(param.textureName, param));
+  passTextureBindings.forEach((bindings) => {
+    bindings.forEach((binding) => {
+      if (!textureParamMap.has(binding.textureName)) {
+        textureParamMap.set(binding.textureName, {
+          textureName: binding.textureName,
+          samplerName: binding.samplerName,
+        });
+      }
+    });
+  });
+
+  const textureParams = Array.from(textureParamMap.values());
+  const inputTextureParams = baseTextureParams;
+
+  const primaryTextureName = inputTextureParams[0]?.textureName;
   if (!primaryTextureName) {
     throw new Error('At least one texture argument is required for a pass.');
   }
@@ -518,7 +619,8 @@ export async function generateFragmentShaderArtifacts(
     passFn.name,
     uvArg.name,
     uniformArgName,
-    textureParams,
+    passFn.arguments,
+    resourceStartIndex,
     varyingName,
   ));
 
@@ -568,6 +670,7 @@ export async function generateFragmentShaderArtifacts(
   const samplerLookupLiteral = `{ ${textureParams
     .map((param) => `'${param.textureName}': '${param.samplerName}'`)
     .join(', ')} } as const`;
+  const inputTextureNamesArrayLiteral = `[${inputTextureParams.map((param) => `'${param.textureName}'`).join(', ')}]`;
 
   const materialHandlesName = `${shaderPrefix}MaterialHandles`;
   const materialOptionsName = `${shaderPrefix}MaterialOptions`;
@@ -586,6 +689,28 @@ export async function generateFragmentShaderArtifacts(
   tsLines.push(`export const ${shaderPrefix}PassCount = ${passCount} as const;`);
   tsLines.push(`export const ${shaderPrefix}PrimaryTextureName = '${primaryTextureName}' as const;`);
   tsLines.push('');
+
+  const passTextureSourceLines: string[] = [];
+  passTextureSourceLines.push(`export const ${shaderPrefix}PassTextureSources = [`);
+  passTextureBindings.forEach((bindings) => {
+    passTextureSourceLines.push('  [');
+    bindings.forEach((binding) => {
+      if (binding.source === 'input') {
+        passTextureSourceLines.push(
+          `    { binding: '${binding.textureName}', source: { kind: 'input', key: '${binding.textureName}' } },`,
+        );
+      } else {
+        passTextureSourceLines.push(
+          `    { binding: '${binding.textureName}', source: { kind: 'pass', passIndex: ${binding.passIndex} } },`,
+        );
+      }
+    });
+    passTextureSourceLines.push('  ],');
+  });
+  passTextureSourceLines.push(`] as const;`);
+  passTextureSourceLines.push('');
+  tsLines.push(...passTextureSourceLines);
+
   if (helperBlocks.length > 0) {
     tsLines.push(...helperBlocks);
     tsLines.push('');
@@ -604,7 +729,7 @@ export async function generateFragmentShaderArtifacts(
   const inputsTypeName = `${shaderPrefix}Inputs`;
   tsLines.push(`export type ${shaderPrefix}TextureName = ${textureNameUnion};`);
   tsLines.push(`export interface ${inputsTypeName} {`);
-  textureParams.forEach((param) => {
+  inputTextureParams.forEach((param) => {
     tsLines.push(`  ${param.textureName}: ShaderSource;`);
   });
   tsLines.push('}');
@@ -670,7 +795,9 @@ export async function generateFragmentShaderArtifacts(
   effectLines.push(`  constructor(engine: BABYLON.WebGPUEngine, inputs: ${inputsTypeName}, width = 1280, height = 720, sampleMode: 'nearest' | 'linear' = 'linear', precision: RenderPrecision = 'half_float') {`);
   effectLines.push('    super(engine, inputs, {');
   effectLines.push(`      factory: (sceneRef, options) => create${shaderPrefix}Material(sceneRef, options),`);
-  effectLines.push(`      textureInputKeys: ${textureNamesArrayLiteral},`);
+  effectLines.push(`      textureInputKeys: ${inputTextureNamesArrayLiteral},`);
+  effectLines.push(`      textureBindingKeys: ${textureNamesArrayLiteral},`);
+  effectLines.push(`      passTextureSources: ${shaderPrefix}PassTextureSources,`);
   effectLines.push(`      passCount: ${passCount},`);
   effectLines.push(`      primaryTextureKey: '${primaryTextureName}',`);
   effectLines.push('      width,');

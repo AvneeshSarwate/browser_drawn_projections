@@ -190,6 +190,12 @@ fn main(input: FragmentInputs) -> FragmentOutputs {
 export const LevelPassCount = 1 as const;
 export const LevelPrimaryTextureName = 'src' as const;
 
+export const LevelPassTextureSources = [
+  [
+    { binding: 'src', source: { kind: 'input', key: 'src' } },
+  ],
+] as const;
+
 function ensureVector4(value: BABYLON.Vector4 | readonly [number, number, number, number]): BABYLON.Vector4 {
   return value instanceof BABYLON.Vector4 ? value : BABYLON.Vector4.FromArray(value as readonly [number, number, number, number]);
 }
@@ -352,6 +358,8 @@ export class LevelEffect extends CustomShaderEffect<LevelUniforms, LevelInputs> 
     super(engine, inputs, {
       factory: (sceneRef, options) => createLevelMaterial(sceneRef, options),
       textureInputKeys: ['src'],
+      textureBindingKeys: ['src'],
+      passTextureSources: LevelPassTextureSources,
       passCount: 1,
       primaryTextureKey: 'src',
       width,

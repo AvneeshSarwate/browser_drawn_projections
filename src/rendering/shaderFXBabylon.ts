@@ -15,6 +15,7 @@ export type ShaderUniforms = {
   [key: string]: Dynamic<ShaderUniform>
 }
 
+
 function extract<T>(value: Dynamic<T>): T {
   return value instanceof Function ? value() : value
 }
@@ -96,6 +97,16 @@ function createCanvasPaintMaterial(scene: BABYLON.Scene, name = 'CanvasPaintMate
 
 type ShaderInputShape<I> = { [K in keyof I]: ShaderSource }
 
+export type TextureInputKey<I extends ShaderInputShape<I>> = keyof I & string
+
+export type PassTextureSourceSpec<I extends ShaderInputShape<I>> =
+  | { binding: string; source: { kind: 'input'; key: TextureInputKey<I> } }
+  | { binding: string; source: { kind: 'pass'; passIndex: number } }
+
+type RuntimePassTextureSource<I extends ShaderInputShape<I>> =
+  | { binding: string; kind: 'input'; key: TextureInputKey<I> }
+  | { binding: string; kind: 'pass'; passIndex: number }
+
 export abstract class ShaderEffect<I extends ShaderInputShape<I> = ShaderInputs> {
   abstract setSrcs(fx: Partial<I>): void
   abstract render(engine: BABYLON.Engine): void
@@ -140,8 +151,10 @@ interface MaterialHandles<U, TName extends string = string> {
 export type ShaderMaterialFactory<U, TName extends string = string> = (scene: BABYLON.Scene, options?: { name?: string; passIndex?: number }) => MaterialHandles<U, TName>
 
 export interface CustomShaderEffectOptions<U, I extends ShaderInputShape<I> = ShaderInputs> {
-  factory: ShaderMaterialFactory<U, keyof I & string>
-  textureInputKeys: Array<keyof I & string>
+  factory: ShaderMaterialFactory<U, string>
+  textureInputKeys: Array<TextureInputKey<I>>
+  textureBindingKeys?: string[]
+  passTextureSources?: readonly (readonly PassTextureSourceSpec<I>[])[]
   passCount?: number
   primaryTextureKey?: keyof I & string
   width?: number
@@ -158,8 +171,9 @@ export class CustomShaderEffect<U extends object, I extends ShaderInputShape<I> 
   readonly output: BABYLON.RenderTargetTexture
   protected readonly quad: BABYLON.Mesh
   protected readonly camera: BABYLON.FreeCamera
-  protected readonly passHandles: Array<MaterialHandles<U, keyof I & string>>
-  protected readonly textureKeys: Array<keyof I & string>
+  protected readonly passHandles: Array<MaterialHandles<U, string>>
+  protected readonly textureBindingNames: string[]
+  protected readonly inputTextureKeys: Array<TextureInputKey<I>>
   protected readonly passCount: number
   protected readonly primaryTextureKey: keyof I & string
   protected readonly defaultSampler: BABYLON.TextureSampler
@@ -168,7 +182,8 @@ export class CustomShaderEffect<U extends object, I extends ShaderInputShape<I> 
   protected readonly samplerState: Array<Record<string, BABYLON.TextureSampler | undefined>>
   protected readonly samplingMode: number
   protected readonly textureType: number
-  protected pingPongTarget?: BABYLON.RenderTargetTexture
+  protected readonly passTextureSources: RuntimePassTextureSource<I>[][]
+  protected readonly passTargets: Array<BABYLON.RenderTargetTexture | undefined>
 
   get material(): BABYLON.ShaderMaterial {
     return this.passHandles[0].material
@@ -183,11 +198,17 @@ export class CustomShaderEffect<U extends object, I extends ShaderInputShape<I> 
     const samplingConstant = sampleMode === 'nearest' ? BABYLON.Texture.NEAREST_SAMPLINGMODE : BABYLON.Texture.BILINEAR_SAMPLINGMODE
     this.samplingMode = samplingConstant
 
-    const textureKeys = [...options.textureInputKeys]
-    if (textureKeys.length === 0) {
+    const textureInputKeys = [...options.textureInputKeys]
+    if (textureInputKeys.length === 0) {
       throw new Error('CustomShaderEffect requires at least one textureInputKey')
     }
-    this.textureKeys = textureKeys
+    this.inputTextureKeys = textureInputKeys
+
+    const textureBindingKeys = options.textureBindingKeys ? [...options.textureBindingKeys] : [...textureInputKeys]
+    if (textureBindingKeys.length === 0) {
+      throw new Error('CustomShaderEffect requires at least one texture binding key')
+    }
+    this.textureBindingNames = textureBindingKeys
 
     this.scene = new BABYLON.Scene(engine)
     this.scene.autoClear = false
@@ -209,11 +230,11 @@ export class CustomShaderEffect<U extends object, I extends ShaderInputShape<I> 
     const materialName = options.materialName ?? 'ShaderFXMaterial'
     const passCount = Math.max(1, options.passCount ?? 1)
     this.passCount = passCount
-    const primaryTextureKey = options.primaryTextureKey ?? textureKeys[0]
+    const primaryTextureKey = options.primaryTextureKey ?? textureInputKeys[0]
     if (!primaryTextureKey) {
       throw new Error('CustomShaderEffect requires a primaryTextureKey to manage multi-pass routing')
     }
-    if (!textureKeys.includes(primaryTextureKey)) {
+    if (!textureInputKeys.includes(primaryTextureKey)) {
       throw new Error(`Primary texture key ${primaryTextureKey} must be one of the textureInputKeys`)
     }
     this.primaryTextureKey = primaryTextureKey
@@ -228,6 +249,9 @@ export class CustomShaderEffect<U extends object, I extends ShaderInputShape<I> 
       samplerState.push({})
     }
     this.samplerState = samplerState
+
+    this.passTextureSources = this.initializePassTextureSources(options.passTextureSources, passCount)
+    this.passTargets = new Array(Math.max(0, passCount - 1)).fill(undefined)
 
     this.quad = BABYLON.MeshBuilder.CreatePlane('shaderFXQuad', { size: 2 }, this.scene)
     this.quad.isVisible = false
@@ -289,32 +313,99 @@ export class CustomShaderEffect<U extends object, I extends ShaderInputShape<I> 
 
   setTextureSampler(sampler: BABYLON.TextureSampler): void {
     this.sampler = sampler
-    for (const key of this.textureKeys) {
-      this.applySampler(key, sampler)
+    for (const binding of this.textureBindingNames) {
+      this.applySampler(binding, sampler)
     }
   }
 
-  protected applySampler(key: keyof I & string, sampler: BABYLON.TextureSampler): void {
+  protected applySampler(binding: string, sampler: BABYLON.TextureSampler): void {
     for (let passIndex = 0; passIndex < this.passCount; passIndex++) {
-      this.applySamplerForPass(passIndex, key, sampler)
+      this.applySamplerForPass(passIndex, binding, sampler)
     }
   }
 
-  protected applySamplerForPass(passIndex: number, key: keyof I & string, sampler: BABYLON.TextureSampler): void {
+  protected applySamplerForPass(passIndex: number, binding: string, sampler: BABYLON.TextureSampler): void {
     const state = this.samplerState[passIndex]
-    const current = state[key]
+    const current = state[binding]
     if (current === sampler) {
       return
     }
-    this.passHandles[passIndex].setTextureSampler(key, sampler)
-    state[key] = sampler
+    this.passHandles[passIndex].setTextureSampler(binding, sampler)
+    state[binding] = sampler
   }
 
   protected applyDefaultSamplers(): void {
     const sampler = this.sampler ?? this.defaultSampler
-    for (const key of this.textureKeys) {
-      this.applySampler(key, sampler)
+    for (const binding of this.textureBindingNames) {
+      this.applySampler(binding, sampler)
     }
+  }
+
+  protected initializePassTextureSources(
+    sources: readonly (readonly PassTextureSourceSpec<I>[])[] | undefined,
+    passCount: number,
+  ): RuntimePassTextureSource<I>[][] {
+    if (sources && sources.length > 0) {
+      return this.normalizePassTextureSources(sources, passCount)
+    }
+    return this.buildDefaultPassTextureSources(passCount)
+  }
+
+  protected normalizePassTextureSources(
+    sources: readonly (readonly PassTextureSourceSpec<I>[])[],
+    passCount: number,
+  ): RuntimePassTextureSource<I>[][] {
+    const normalized: RuntimePassTextureSource<I>[][] = []
+    for (let passIndex = 0; passIndex < passCount; passIndex++) {
+      const entries = sources[passIndex] ?? []
+      const normalizedEntries: RuntimePassTextureSource<I>[] = []
+      for (const entry of entries) {
+        if (entry.source.kind === 'input') {
+          const key = entry.source.key
+          if (!this.inputTextureKeys.includes(key)) {
+            throw new Error(`Invalid texture input key ${key} referenced by pass ${passIndex}.`)
+          }
+          normalizedEntries.push({ binding: entry.binding, kind: 'input', key })
+        } else {
+          const dependency = entry.source.passIndex
+          if (dependency < 0 || dependency >= passIndex) {
+            throw new Error(`Pass ${passIndex} can only depend on earlier passes. Received dependency on pass${dependency}.`)
+          }
+          normalizedEntries.push({ binding: entry.binding, kind: 'pass', passIndex: dependency })
+        }
+      }
+      const seenBindings = new Set(normalizedEntries.map((entry) => entry.binding))
+      for (const binding of this.textureBindingNames) {
+        if (seenBindings.has(binding)) {
+          continue
+        }
+        const candidateKey = binding as TextureInputKey<I>
+        if (this.inputTextureKeys.includes(candidateKey)) {
+          normalizedEntries.push({ binding, kind: 'input', key: candidateKey })
+        }
+      }
+      normalized.push(normalizedEntries)
+    }
+    return normalized
+  }
+
+  protected buildDefaultPassTextureSources(passCount: number): RuntimePassTextureSource<I>[][] {
+    const sources: RuntimePassTextureSource<I>[][] = []
+    for (let passIndex = 0; passIndex < passCount; passIndex++) {
+      const entries: RuntimePassTextureSource<I>[] = []
+      for (const binding of this.textureBindingNames) {
+        if (binding === this.primaryTextureKey && passIndex > 0) {
+          entries.push({ binding, kind: 'pass', passIndex: passIndex - 1 })
+          continue
+        }
+        const candidateKey = binding as TextureInputKey<I>
+        if (this.inputTextureKeys.includes(candidateKey)) {
+          entries.push({ binding, kind: 'input', key: candidateKey })
+        }
+      }
+      sources.push(entries)
+    }
+    return sources
   }
 
   setSrcs(fx: Partial<I>): void {
@@ -344,9 +435,9 @@ export class CustomShaderEffect<U extends object, I extends ShaderInputShape<I> 
     }
   }
 
-  protected resolveInputTextures(): Partial<Record<keyof I & string, BABYLON.BaseTexture>> {
-    const resolved: Partial<Record<keyof I & string, BABYLON.BaseTexture>> = {}
-    for (const key of this.textureKeys) {
+  protected resolveInputTextures(): Partial<Record<TextureInputKey<I>, BABYLON.BaseTexture>> {
+    const resolved: Partial<Record<TextureInputKey<I>, BABYLON.BaseTexture>> = {}
+    for (const key of this.inputTextureKeys) {
       const source = this.inputs[key]
       if (!source) {
         continue
@@ -359,7 +450,7 @@ export class CustomShaderEffect<U extends object, I extends ShaderInputShape<I> 
     return resolved
   }
 
-  protected resolveSourceTexture(key: keyof I & string, source: ShaderSource): BABYLON.BaseTexture | undefined {
+  protected resolveSourceTexture(key: TextureInputKey<I>, source: ShaderSource): BABYLON.BaseTexture | undefined {
     const resolved = resolveTexture(this.engine, this.scene, source)
     if (resolved instanceof BABYLON.BaseTexture) {
       return resolved
@@ -407,35 +498,52 @@ export class CustomShaderEffect<U extends object, I extends ShaderInputShape<I> 
 
   protected applySourcesForPass(
     passIndex: number,
-    resolvedTextures: Partial<Record<keyof I & string, BABYLON.BaseTexture>>,
-    primaryOverride?: BABYLON.BaseTexture,
+    resolvedTextures: Partial<Record<TextureInputKey<I>, BABYLON.BaseTexture>>,
+    passOutputs: Array<BABYLON.RenderTargetTexture | undefined> = [],
+    calledFromInputSet: boolean = false
   ): void {
     const handles = this.passHandles[passIndex]
-    for (const key of this.textureKeys) {
-      let texture = resolvedTextures[key]
-      if (key === this.primaryTextureKey && primaryOverride) {
-        texture = primaryOverride
+    const sampler = this.sampler ?? this.defaultSampler
+    const bindings = this.passTextureSources[passIndex] ?? []
+    if(!calledFromInputSet) {
+      console.log(this.effectName, passIndex, 'bindingcheck',  bindings)
+    }
+    for (const binding of bindings) {
+      let texture: BABYLON.BaseTexture | undefined
+      if (binding.kind === 'input') {
+        texture = resolvedTextures[binding.key]
+      } else {
+        const dependencyTexture = passOutputs[binding.passIndex]
+        if (dependencyTexture) {
+          texture = dependencyTexture
+        } else {
+          console.log(this.effectName, binding.binding, passIndex, "no dependency texture", passOutputs)
+        }
       }
       if (!texture) {
+        // console.log(" no texture", this.effectName, binding, passIndex)
         continue
       }
-      handles.setTexture(key, texture)
-      this.applySamplerForPass(passIndex, key, this.sampler ?? this.defaultSampler)
+      // console.log(this.effectName, binding, passIndex, texture.name)
+      handles.setTexture(binding.binding, texture)
+      this.applySamplerForPass(passIndex, binding.binding, sampler)
     }
   }
 
-  protected applySourcesToAllPasses(resolvedTextures: Partial<Record<keyof I & string, BABYLON.BaseTexture>>): void {
+  protected applySourcesToAllPasses(resolvedTextures: Partial<Record<TextureInputKey<I>, BABYLON.BaseTexture>>): void {
+    const passOutputs: Array<BABYLON.RenderTargetTexture | undefined> = []
     for (let passIndex = 0; passIndex < this.passCount; passIndex++) {
-      this.applySourcesForPass(passIndex, resolvedTextures)
+      this.applySourcesForPass(passIndex, resolvedTextures, passOutputs, true)
     }
   }
 
-  protected ensurePingPongTarget(): BABYLON.RenderTargetTexture {
-    if (this.pingPongTarget) {
-      return this.pingPongTarget
+  protected ensurePassTarget(passIndex: number): BABYLON.RenderTargetTexture {
+    let target = this.passTargets[passIndex]
+    if (target) {
+      return target
     }
-    const target = new BABYLON.RenderTargetTexture(
-      'shaderFXPingPong',
+    const createdTarget = new BABYLON.RenderTargetTexture(
+      `shaderFXPass${passIndex}`,
       { width: this.width, height: this.height },
       this.scene,
       false,
@@ -445,33 +553,26 @@ export class CustomShaderEffect<U extends object, I extends ShaderInputShape<I> 
       this.samplingMode,
       false,
     )
-    target.activeCamera = this.camera
-    target.ignoreCameraViewport = true
-    target.clearColor = new BABYLON.Color4(0, 0, 0, 0)
-    target.renderList = [this.quad]
-    this.pingPongTarget = target
-    return target
+    createdTarget.activeCamera = this.camera
+    createdTarget.ignoreCameraViewport = true
+    createdTarget.clearColor = new BABYLON.Color4(0, 0, 0, 0)
+    createdTarget.renderList = [this.quad]
+    this.passTargets[passIndex] = createdTarget
+    return createdTarget
   }
 
   render(_engine: BABYLON.Engine): void {
     const resolvedInputs = this.resolveInputTextures()
     this.updateUniforms()
 
-    let previousOutput: BABYLON.RenderTargetTexture | undefined
-    let pingTarget: BABYLON.RenderTargetTexture | undefined
-    if (this.passCount > 1) {
-      pingTarget = this.ensurePingPongTarget()
-    }
-    let writeTarget = this.passCount > 1
-      ? (this.passCount % 2 === 0 ? pingTarget! : this.output)
-      : this.output
+    const passOutputs: Array<BABYLON.RenderTargetTexture | undefined> = []
 
     for (let passIndex = 0; passIndex < this.passCount; passIndex++) {
       const isFinalPass = passIndex === this.passCount - 1
-      const target = isFinalPass ? this.output : writeTarget
+      const target = isFinalPass ? this.output : this.ensurePassTarget(passIndex)
 
-      const primaryOverride = passIndex === 0 ? undefined : (previousOutput as BABYLON.BaseTexture | undefined)
-      this.applySourcesForPass(passIndex, resolvedInputs, primaryOverride)
+      console.log(this.effectName, passIndex, "passInputCheck", passOutputs)
+      this.applySourcesForPass(passIndex, resolvedInputs, passOutputs)
 
       this.quad.material = this.passHandles[passIndex].material
       this.quad.isVisible = true
@@ -481,16 +582,15 @@ export class CustomShaderEffect<U extends object, I extends ShaderInputShape<I> 
         this.quad.isVisible = false
       }
 
-      previousOutput = target
-      if (!isFinalPass && pingTarget) {
-        writeTarget = target === pingTarget ? this.output : pingTarget
-      }
+      passOutputs[passIndex] = target
     }
   }
 
   dispose(): void {
     this.output.dispose()
-    this.pingPongTarget?.dispose()
+    this.passTargets.forEach((target) => {
+      target?.dispose()
+    })
     this.quad.dispose(false, false)
     this.camera.dispose()
     this.passHandles.forEach((handles) => {

@@ -44,6 +44,7 @@ export const sketchNames = [
   'draw_to_piano_roll',
   'polygonFill',
   'handwriting_animator',
+  'fluidReactionSim',
   'vuePianoRoll'
 ]
 

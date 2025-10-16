@@ -76,6 +76,12 @@ fn main(input: FragmentInputs) -> FragmentOutputs {
 export const MathOpPassCount = 1 as const;
 export const MathOpPrimaryTextureName = 'src' as const;
 
+export const MathOpPassTextureSources = [
+  [
+    { binding: 'src', source: { kind: 'input', key: 'src' } },
+  ],
+] as const;
+
 export interface MathOpUniforms {
   preAdd: number;
   postAdd: number;
@@ -162,6 +168,8 @@ export class MathOpEffect extends CustomShaderEffect<MathOpUniforms, MathOpInput
     super(engine, inputs, {
       factory: (sceneRef, options) => createMathOpMaterial(sceneRef, options),
       textureInputKeys: ['src'],
+      textureBindingKeys: ['src'],
+      passTextureSources: MathOpPassTextureSources,
       passCount: 1,
       primaryTextureKey: 'src',
       width,

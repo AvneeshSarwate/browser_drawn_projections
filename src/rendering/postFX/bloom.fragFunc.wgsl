@@ -56,11 +56,20 @@ fn pass0(uv: vec2f, uniforms: BloomUniforms, src: texture_2d<f32>, srcSampler: s
   return vec4f(processed, alpha);
 }
 
-fn pass1(uv: vec2f, uniforms: BloomUniforms, src: texture_2d<f32>, srcSampler: sampler, base: texture_2d<f32>, baseSampler: sampler) -> vec4f {
+fn pass1(
+  uv: vec2f,
+  uniforms: BloomUniforms,
+  src: texture_2d<f32>,
+  srcSampler: sampler,
+  base: texture_2d<f32>,
+  baseSampler: sampler,
+  pass0Texture: texture_2d<f32>,
+  pass0Sampler: sampler,
+) -> vec4f {
   let baseColor = textureSample(base, baseSampler, uv);
-  let preColor = textureSample(src, srcSampler, uv).rgb;
+  let preColor = textureSample(pass0Texture, pass0Sampler, uv).rgb;
 
-  let dims = textureDimensions(src);
+  let dims = textureDimensions(pass0Texture);
   let texelSize = vec2f(
     select(1.0 / f32(dims.x), 0.0, dims.x == 0u),
     select(1.0 / f32(dims.y), 0.0, dims.y == 0u),
@@ -104,7 +113,7 @@ fn pass1(uv: vec2f, uniforms: BloomUniforms, src: texture_2d<f32>, srcSampler: s
         }
       }
       let offsetUV = uv + direction * offsetScale;
-      let sampleColor = textureSample(src, srcSampler, offsetUV).rgb;
+      let sampleColor = textureSample(pass0Texture, pass0Sampler, offsetUV).rgb;
       accum = accum + sampleColor * weightBase;
       totalWeight = totalWeight + weightBase;
     }

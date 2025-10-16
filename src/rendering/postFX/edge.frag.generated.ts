@@ -232,6 +232,12 @@ fn main(input: FragmentInputs) -> FragmentOutputs {
 export const EdgePassCount = 1 as const;
 export const EdgePrimaryTextureName = 'src' as const;
 
+export const EdgePassTextureSources = [
+  [
+    { binding: 'src', source: { kind: 'input', key: 'src' } },
+  ],
+] as const;
+
 function ensureVector2(value: BABYLON.Vector2 | readonly [number, number]): BABYLON.Vector2 {
   return value instanceof BABYLON.Vector2 ? value : BABYLON.Vector2.FromArray(value as readonly [number, number]);
 }
@@ -341,6 +347,8 @@ export class EdgeEffect extends CustomShaderEffect<EdgeUniforms, EdgeInputs> {
     super(engine, inputs, {
       factory: (sceneRef, options) => createEdgeMaterial(sceneRef, options),
       textureInputKeys: ['src'],
+      textureBindingKeys: ['src'],
+      passTextureSources: EdgePassTextureSources,
       passCount: 1,
       primaryTextureKey: 'src',
       width,

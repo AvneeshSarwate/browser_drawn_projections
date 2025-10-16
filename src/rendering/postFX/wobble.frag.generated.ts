@@ -70,6 +70,12 @@ fn main(input: FragmentInputs) -> FragmentOutputs {
 export const WobblePassCount = 1 as const;
 export const WobblePrimaryTextureName = 'src' as const;
 
+export const WobblePassTextureSources = [
+  [
+    { binding: 'src', source: { kind: 'input', key: 'src' } },
+  ],
+] as const;
+
 export interface WobbleUniforms {
   xStrength: number;
   yStrength: number;
@@ -152,6 +158,8 @@ export class WobbleEffect extends CustomShaderEffect<WobbleUniforms, WobbleInput
     super(engine, inputs, {
       factory: (sceneRef, options) => createWobbleMaterial(sceneRef, options),
       textureInputKeys: ['src'],
+      textureBindingKeys: ['src'],
+      passTextureSources: WobblePassTextureSources,
       passCount: 1,
       primaryTextureKey: 'src',
       width,

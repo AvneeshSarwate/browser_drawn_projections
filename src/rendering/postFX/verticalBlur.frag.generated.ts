@@ -75,6 +75,12 @@ fn main(input: FragmentInputs) -> FragmentOutputs {
 export const VerticalBlurPassCount = 1 as const;
 export const VerticalBlurPrimaryTextureName = 'src' as const;
 
+export const VerticalBlurPassTextureSources = [
+  [
+    { binding: 'src', source: { kind: 'input', key: 'src' } },
+  ],
+] as const;
+
 export interface VerticalBlurUniforms {
   pixels: number;
   resolution: number;
@@ -153,6 +159,8 @@ export class VerticalBlurEffect extends CustomShaderEffect<VerticalBlurUniforms,
     super(engine, inputs, {
       factory: (sceneRef, options) => createVerticalBlurMaterial(sceneRef, options),
       textureInputKeys: ['src'],
+      textureBindingKeys: ['src'],
+      passTextureSources: VerticalBlurPassTextureSources,
       passCount: 1,
       primaryTextureKey: 'src',
       width,

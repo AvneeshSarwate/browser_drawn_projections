@@ -75,6 +75,12 @@ fn main(input: FragmentInputs) -> FragmentOutputs {
 export const HorizontalBlurPassCount = 1 as const;
 export const HorizontalBlurPrimaryTextureName = 'src' as const;
 
+export const HorizontalBlurPassTextureSources = [
+  [
+    { binding: 'src', source: { kind: 'input', key: 'src' } },
+  ],
+] as const;
+
 export interface HorizontalBlurUniforms {
   pixels: number;
   resolution: number;
@@ -153,6 +159,8 @@ export class HorizontalBlurEffect extends CustomShaderEffect<HorizontalBlurUnifo
     super(engine, inputs, {
       factory: (sceneRef, options) => createHorizontalBlurMaterial(sceneRef, options),
       textureInputKeys: ['src'],
+      textureBindingKeys: ['src'],
+      passTextureSources: HorizontalBlurPassTextureSources,
       passCount: 1,
       primaryTextureKey: 'src',
       width,

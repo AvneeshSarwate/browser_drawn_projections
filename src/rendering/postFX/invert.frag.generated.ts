@@ -59,6 +59,12 @@ fn main(input: FragmentInputs) -> FragmentOutputs {
 export const InvertPassCount = 1 as const;
 export const InvertPrimaryTextureName = 'src' as const;
 
+export const InvertPassTextureSources = [
+  [
+    { binding: 'src', source: { kind: 'input', key: 'src' } },
+  ],
+] as const;
+
 export interface InvertUniforms {
   strength: number;
 }
@@ -133,6 +139,8 @@ export class InvertEffect extends CustomShaderEffect<InvertUniforms, InvertInput
     super(engine, inputs, {
       factory: (sceneRef, options) => createInvertMaterial(sceneRef, options),
       textureInputKeys: ['src'],
+      textureBindingKeys: ['src'],
+      passTextureSources: InvertPassTextureSources,
       passCount: 1,
       primaryTextureKey: 'src',
       width,

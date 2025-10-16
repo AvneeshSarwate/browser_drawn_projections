@@ -159,10 +159,11 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
         const horBlur = new HorizontalBlurEffect(engine, { src: vertBlur }, width, height)
         const transform = new TransformEffect(engine, { src: horBlur }, width, height)
         const layerOverlay = new LayerBlendEffect(engine, { src1: p5Passthru, src2: transform }, width, height)
-        const bloom = new BloomEffect(engine, { src: layerOverlay, base: layerOverlay }, width, height)
-        chainEnd = bloom
+        feedback.setFeedbackSrc(layerOverlay)
 
-        feedback.setFeedbackSrc(bloom)
+        const bloom = new BloomEffect(engine, { src: layerOverlay, base: layerOverlay }, width, height)
+        // bloom.effectName = "BLOOOOOM"
+        chainEnd = bloom
       
         transform.setUniforms({ rotate: 0, anchor: [0.5, 0.5], translate: [0, 0], scale: [0.995, 0.995] })
         vertBlur.setUniforms({ pixels: 2, resolution: height })

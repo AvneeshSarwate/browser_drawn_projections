@@ -51,6 +51,13 @@ fn main(input: FragmentInputs) -> FragmentOutputs {
 export const LayerBlendPassCount = 1 as const;
 export const LayerBlendPrimaryTextureName = 'src1' as const;
 
+export const LayerBlendPassTextureSources = [
+  [
+    { binding: 'src1', source: { kind: 'input', key: 'src1' } },
+    { binding: 'src2', source: { kind: 'input', key: 'src2' } },
+  ],
+] as const;
+
 export type LayerBlendUniforms = Record<string, never>;
 export function setLayerBlendUniforms(_material: BABYLON.ShaderMaterial, _uniforms: Partial<LayerBlendUniforms>): void {}
 
@@ -116,6 +123,8 @@ export class LayerBlendEffect extends CustomShaderEffect<LayerBlendUniforms, Lay
     super(engine, inputs, {
       factory: (sceneRef, options) => createLayerBlendMaterial(sceneRef, options),
       textureInputKeys: ['src1', 'src2'],
+      textureBindingKeys: ['src1', 'src2'],
+      passTextureSources: LayerBlendPassTextureSources,
       passCount: 1,
       primaryTextureKey: 'src1',
       width,
