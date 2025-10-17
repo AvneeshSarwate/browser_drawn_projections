@@ -49,7 +49,7 @@ fn computeRadiusUv(radiusNorm: f32, fill: f32, texelSize: vec2f) -> vec2f {
   return radiusPixels * texelSize;
 }
 
-fn pass0(uv: vec2f, uniforms: BloomUniforms, src: texture_2d<f32>, srcSampler: sampler, base: texture_2d<f32>, baseSampler: sampler) -> vec4f {
+fn pass0(uv: vec2f, uniforms: BloomUniforms, src: texture_2d<f32>, srcSampler: sampler) -> vec4f {
   let baseColor = textureSample(src, srcSampler, uv);
   let processed = applyPreprocess(baseColor.rgb, uniforms);
   let alpha = max(max(processed.r, processed.g), processed.b);
@@ -61,12 +61,10 @@ fn pass1(
   uniforms: BloomUniforms,
   src: texture_2d<f32>,
   srcSampler: sampler,
-  base: texture_2d<f32>,
-  baseSampler: sampler,
   pass0Texture: texture_2d<f32>,
   pass0Sampler: sampler,
 ) -> vec4f {
-  let baseColor = textureSample(base, baseSampler, uv);
+  let baseColor = textureSample(src, srcSampler, uv);
   let preColor = textureSample(pass0Texture, pass0Sampler, uv).rgb;
 
   let dims = textureDimensions(pass0Texture);

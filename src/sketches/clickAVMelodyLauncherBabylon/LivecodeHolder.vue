@@ -161,7 +161,7 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
         const layerOverlay = new LayerBlendEffect(engine, { src1: p5Passthru, src2: transform }, width, height)
         feedback.setFeedbackSrc(layerOverlay)
 
-        const bloom = new BloomEffect(engine, { src: layerOverlay, base: layerOverlay }, width, height)
+        const bloom = new BloomEffect(engine, { src: layerOverlay }, width, height)
         // bloom.effectName = "BLOOOOOM"
         chainEnd = bloom
       

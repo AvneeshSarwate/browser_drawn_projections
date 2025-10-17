@@ -32,8 +32,6 @@ uniform uniforms_outputMode: u32;
 uniform uniforms_inputImage: f32;
 var src: texture_2d<f32>;
 var srcSampler: sampler;
-var base: texture_2d<f32>;
-var baseSampler: sampler;
 
 // Source fragment function
 struct BloomUniforms {
@@ -87,7 +85,7 @@ fn computeRadiusUv(radiusNorm: f32, fill: f32, texelSize: vec2f) -> vec2f {
   return radiusPixels * texelSize;
 }
 
-fn pass0(uv: vec2f, uniforms: BloomUniforms, src: texture_2d<f32>, srcSampler: sampler, base: texture_2d<f32>, baseSampler: sampler) -> vec4f {
+fn pass0(uv: vec2f, uniforms: BloomUniforms, src: texture_2d<f32>, srcSampler: sampler) -> vec4f {
   let baseColor = textureSample(src, srcSampler, uv);
   let processed = applyPreprocess(baseColor.rgb, uniforms);
   let alpha = max(max(processed.r, processed.g), processed.b);
@@ -99,12 +97,10 @@ fn pass1(
   uniforms: BloomUniforms,
   src: texture_2d<f32>,
   srcSampler: sampler,
-  base: texture_2d<f32>,
-  baseSampler: sampler,
   pass0Texture: texture_2d<f32>,
   pass0Sampler: sampler,
 ) -> vec4f {
-  let baseColor = textureSample(base, baseSampler, uv);
+  let baseColor = textureSample(src, srcSampler, uv);
   let preColor = textureSample(pass0Texture, pass0Sampler, uv).rgb;
 
   let dims = textureDimensions(pass0Texture);
@@ -218,7 +214,7 @@ fn main(input: FragmentInputs) -> FragmentOutputs {
 #define CUSTOM_FRAGMENT_MAIN_BEGIN
   let uniforms_value = load_BloomUniforms();
   let uv_local = fragmentInputs.vUV;
-  let color = pass0(uv_local, uniforms_value, src, srcSampler, base, baseSampler);
+  let color = pass0(uv_local, uniforms_value, src, srcSampler);
   fragmentOutputs.color = color;
 #define CUSTOM_FRAGMENT_MAIN_END
 }
@@ -239,8 +235,6 @@ uniform uniforms_outputMode: u32;
 uniform uniforms_inputImage: f32;
 var src: texture_2d<f32>;
 var srcSampler: sampler;
-var base: texture_2d<f32>;
-var baseSampler: sampler;
 var pass0Texture: texture_2d<f32>;
 var pass0Sampler: sampler;
 
@@ -296,7 +290,7 @@ fn computeRadiusUv(radiusNorm: f32, fill: f32, texelSize: vec2f) -> vec2f {
   return radiusPixels * texelSize;
 }
 
-fn pass0(uv: vec2f, uniforms: BloomUniforms, src: texture_2d<f32>, srcSampler: sampler, base: texture_2d<f32>, baseSampler: sampler) -> vec4f {
+fn pass0(uv: vec2f, uniforms: BloomUniforms, src: texture_2d<f32>, srcSampler: sampler) -> vec4f {
   let baseColor = textureSample(src, srcSampler, uv);
   let processed = applyPreprocess(baseColor.rgb, uniforms);
   let alpha = max(max(processed.r, processed.g), processed.b);
@@ -308,12 +302,10 @@ fn pass1(
   uniforms: BloomUniforms,
   src: texture_2d<f32>,
   srcSampler: sampler,
-  base: texture_2d<f32>,
-  baseSampler: sampler,
   pass0Texture: texture_2d<f32>,
   pass0Sampler: sampler,
 ) -> vec4f {
-  let baseColor = textureSample(base, baseSampler, uv);
+  let baseColor = textureSample(src, srcSampler, uv);
   let preColor = textureSample(pass0Texture, pass0Sampler, uv).rgb;
 
   let dims = textureDimensions(pass0Texture);
@@ -427,7 +419,7 @@ fn main(input: FragmentInputs) -> FragmentOutputs {
 #define CUSTOM_FRAGMENT_MAIN_BEGIN
   let uniforms_value = load_BloomUniforms();
   let uv_local = fragmentInputs.vUV;
-  let color = pass1(uv_local, uniforms_value, src, srcSampler, base, baseSampler, pass0Texture, pass0Sampler);
+  let color = pass1(uv_local, uniforms_value, src, srcSampler, pass0Texture, pass0Sampler);
   fragmentOutputs.color = color;
 #define CUSTOM_FRAGMENT_MAIN_END
 }
@@ -440,11 +432,9 @@ export const BloomPrimaryTextureName = 'src' as const;
 export const BloomPassTextureSources = [
   [
     { binding: 'src', source: { kind: 'input', key: 'src' } },
-    { binding: 'base', source: { kind: 'input', key: 'base' } },
   ],
   [
     { binding: 'src', source: { kind: 'input', key: 'src' } },
-    { binding: 'base', source: { kind: 'input', key: 'base' } },
     { binding: 'pass0Texture', source: { kind: 'pass', passIndex: 0 } },
   ],
 ] as const;
@@ -502,10 +492,9 @@ export function setBloomUniforms(material: BABYLON.ShaderMaterial, uniforms: Par
   }
 }
 
-export type BloomTextureName = 'src' | 'base' | 'pass0Texture';
+export type BloomTextureName = 'src' | 'pass0Texture';
 export interface BloomInputs {
   src: ShaderSource;
-  base: ShaderSource;
 }
 
 export interface BloomMaterialHandles {
@@ -540,12 +529,12 @@ export function createBloomMaterial(scene: BABYLON.Scene, options: BloomMaterial
   }, {
     attributes: ['position', 'uv'],
     uniforms: ['uniforms_preBlackLevel', 'uniforms_preGamma', 'uniforms_preBrightness', 'uniforms_minBloomRadius', 'uniforms_maxBloomRadius', 'uniforms_bloomThreshold', 'uniforms_bloomSCurve', 'uniforms_bloomFill', 'uniforms_bloomIntensity', 'uniforms_outputMode', 'uniforms_inputImage'],
-    samplers: ['src', 'base', 'pass0Texture'],
-    samplerObjects: ['srcSampler', 'baseSampler', 'pass0Sampler'],
+    samplers: ['src', 'pass0Texture'],
+    samplerObjects: ['srcSampler', 'pass0Sampler'],
     shaderLanguage: BABYLON.ShaderLanguage.WGSL,
   });
 
-  const samplerLookup = { 'src': 'srcSampler', 'base': 'baseSampler', 'pass0Texture': 'pass0Sampler' } as const;
+  const samplerLookup = { 'src': 'srcSampler', 'pass0Texture': 'pass0Sampler' } as const;
 
   const handles: BloomMaterialHandles = {
     material,
@@ -563,8 +552,8 @@ export class BloomEffect extends CustomShaderEffect<BloomUniforms, BloomInputs> 
   constructor(engine: BABYLON.WebGPUEngine, inputs: BloomInputs, width = 1280, height = 720, sampleMode: 'nearest' | 'linear' = 'linear', precision: RenderPrecision = 'half_float') {
     super(engine, inputs, {
       factory: (sceneRef, options) => createBloomMaterial(sceneRef, options),
-      textureInputKeys: ['src', 'base'],
-      textureBindingKeys: ['src', 'base', 'pass0Texture'],
+      textureInputKeys: ['src'],
+      textureBindingKeys: ['src', 'pass0Texture'],
       passTextureSources: BloomPassTextureSources,
       passCount: 2,
       primaryTextureKey: 'src',
