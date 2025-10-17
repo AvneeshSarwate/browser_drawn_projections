@@ -17,7 +17,7 @@ fn pass0(
   let curlIntensity = abs(sample.w);
   let swirlColor = vec3f(velocity.x, velocity.y, curlIntensity) * uniforms.velocityScale + vec3f(0.5);
   let densityColor = uniforms.tint * density;
-  let color = mix(swirlColor, densityColor, density);
+  var color = mix(swirlColor, densityColor, density);
   color = mix(uniforms.background, color, clamp(density + curlIntensity * 0.25, 0.0, 1.0));
   return vec4f(color, 1.0);
 }

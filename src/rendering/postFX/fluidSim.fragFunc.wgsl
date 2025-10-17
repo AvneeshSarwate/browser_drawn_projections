@@ -130,7 +130,7 @@ fn pass1(
   let current = safeSample(pass0Texture, pass0Sampler, uv);
   let divergence = length(current.xy - velocity);
 
-  return vec4f(velocity, density, divergence, current.w);
+  return vec4f(velocity, density, divergence);
 }
 
 fn pass2(
@@ -149,8 +149,8 @@ fn pass2(
   let relaxed = safeSample(pass1Texture, pass1Sampler, uv);
   var velocity = mix(advected.xy, relaxed.xy, 0.55);
   var density = mix(advected.z, relaxed.z, 0.4);
-  let divergence = relaxed.z;
+  let divergence = relaxed.w;
   let curl = advected.w;
   let alpha = clamp(density + divergence * 0.1 + abs(curl) * 0.05, 0.0, 1.0);
-  return vec4f(velocity.x, velocity.y, density, alpha);
+  return vec4f(velocity, density, alpha);
 }
