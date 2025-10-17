@@ -538,7 +538,7 @@ export class CustomShaderEffect<U extends object, I extends ShaderInputShape<I> 
   }
 
   protected ensurePassTarget(passIndex: number): BABYLON.RenderTargetTexture {
-    let target = this.passTargets[passIndex]
+    const target = this.passTargets[passIndex]
     if (target) {
       return target
     }
@@ -626,7 +626,7 @@ export class CanvasPaint extends CustomShaderEffect<Record<string, never>, Canva
         return {
           material,
           setTexture: (name, texture) => material.setTexture(name, texture),
-          setTextureSampler: (name, sampler) => material.setTextureSampler(samplerLookup[name], sampler),
+          setTextureSampler: (name, sampler) => material.setTextureSampler(samplerLookup.src, sampler),
           setUniforms: () => {},
         }
       },
