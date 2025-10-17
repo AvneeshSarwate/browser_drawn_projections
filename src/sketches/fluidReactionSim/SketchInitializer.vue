@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import * as BABYLON from 'babylonjs'
 import { inject, onMounted, onUnmounted } from 'vue'
-import { appStateName, type FluidReactionAppState } from './appState'
+import { appStateName, engineRef, type FluidReactionAppState } from './appState'
 
 const state = inject<FluidReactionAppState>(appStateName)!!
 let resizeHandler: (() => void) | undefined
@@ -18,6 +18,7 @@ onMounted(async () => {
   resizeHandler = () => engine.resize()
   window.addEventListener('resize', resizeHandler)
   state.engine = engine
+  engineRef.value = engine
 })
 
 onUnmounted(() => {
@@ -27,6 +28,7 @@ onUnmounted(() => {
   }
   state.engine?.dispose()
   state.engine = undefined
+  engineRef.value = undefined
 })
 </script>
 

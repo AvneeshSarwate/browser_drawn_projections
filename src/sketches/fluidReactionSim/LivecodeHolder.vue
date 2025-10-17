@@ -1,14 +1,14 @@
 <script setup lang="ts">
-import { inject, onMounted, onUnmounted, watch } from 'vue'
+import { inject, onMounted, onUnmounted, watch, type WatchStopHandle } from 'vue'
 import type * as BABYLON from 'babylonjs'
-import { appStateName, type FluidReactionAppState } from './appState'
+import { appStateName, engineRef, type FluidReactionAppState } from './appState'
 import { CanvasPaint, FeedbackNode, PassthruEffect, type ShaderEffect } from '@/rendering/shaderFXBabylon'
 import { FluidSimEffect } from '@/rendering/postFX/fluidSim.frag.generated'
 import { FluidVisualizeEffect } from '@/rendering/postFX/fluidVisualize.frag.generated'
 import { ReactionDiffusionEffect } from '@/rendering/postFX/reactionDiffusion.frag.generated'
 import { ReactionVisualizeEffect } from '@/rendering/postFX/reactionVisualize.frag.generated'
 import { DualViewEffect } from '@/rendering/postFX/dualView.frag.generated'
-import { singleKeydownEvent, clearListeners } from '@/io/keyboardAndMouse'
+import { clearListeners, pointerdownEvent, pointermoveEvent, pointerupEvent, singleKeydownEvent } from '@/io/keyboardAndMouse'
 
 const state = inject<FluidReactionAppState>(appStateName)!!
 
@@ -46,15 +46,10 @@ let forceCtx: CanvasRenderingContext2D | null = null
 let reactionSeedCanvas: HTMLCanvasElement | undefined
 let reactionSeedCtx: CanvasRenderingContext2D | null = null
 
-const pointerListeners: Array<{ type: string; listener: EventListenerOrEventListenerObject }> = []
-
-function detachPointerHandlers(): void {
-  const canvas = document.getElementById('simulationCanvas') as HTMLCanvasElement | null
-  if (canvas) {
-    pointerListeners.forEach(({ type, listener }) => canvas.removeEventListener(type, listener))
-  }
-  pointerListeners.length = 0
-}
+let pointerCanvas: HTMLCanvasElement | undefined
+let pointerCancelListener: ((event: PointerEvent) => void) | undefined
+let pointerLeaveListener: ((event: PointerEvent) => void) | undefined
+let engineWatcher: WatchStopHandle | undefined
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value))
@@ -63,7 +58,7 @@ function clamp(value: number, min: number, max: number): number {
 function disposeGraph(): void {
   animationHandle && cancelAnimationFrame(animationHandle)
   animationHandle = undefined
-  detachPointerHandlers()
+  releasePointerHandlers()
   shaderGraph?.disposeAll()
   shaderGraph = undefined
   canvasPaint = undefined
@@ -86,7 +81,26 @@ function disposeGraph(): void {
   reactionSeedCanvas = undefined
 }
 
+function releasePointerHandlers(): void {
+  if (!pointerCanvas) {
+    return
+  }
+  if (pointerCancelListener) {
+    pointerCanvas.removeEventListener('pointercancel', pointerCancelListener)
+    pointerCancelListener = undefined
+  }
+  if (pointerLeaveListener) {
+    pointerCanvas.removeEventListener('pointerleave', pointerLeaveListener)
+    pointerLeaveListener = undefined
+  }
+  pointerCanvas = undefined
+}
+
 function attachPointerHandlers(canvas: HTMLCanvasElement): void {
+  if (pointerCanvas === canvas) {
+    return
+  }
+
   const updateFromEvent = (event: PointerEvent) => {
     const rect = canvas.getBoundingClientRect()
     const nx = clamp((event.clientX - rect.left) / rect.width, 0, 1)
@@ -116,23 +130,24 @@ function attachPointerHandlers(canvas: HTMLCanvasElement): void {
     }
     updateFromEvent(event)
   }
-  const handleLeave = () => {
+  const handleLeave = (_event: PointerEvent) => {
     pointer.down = false
     pointer.vx = 0
     pointer.vy = 0
   }
 
-  canvas.addEventListener('pointermove', handleMove)
-  canvas.addEventListener('pointerdown', handleDown)
-  canvas.addEventListener('pointerup', handleUp)
-  canvas.addEventListener('pointercancel', handleUp)
-  canvas.addEventListener('pointerleave', handleLeave)
+  pointermoveEvent(handleMove, canvas)
+  pointerdownEvent(handleDown, canvas)
+  pointerupEvent(handleUp, canvas)
 
-  pointerListeners.push({ type: 'pointermove', listener: handleMove })
-  pointerListeners.push({ type: 'pointerdown', listener: handleDown })
-  pointerListeners.push({ type: 'pointerup', listener: handleUp })
-  pointerListeners.push({ type: 'pointercancel', listener: handleUp })
-  pointerListeners.push({ type: 'pointerleave', listener: handleLeave })
+  pointerCancelListener = (event: PointerEvent) => {
+    handleUp(event)
+  }
+  pointerLeaveListener = handleLeave
+  canvas.addEventListener('pointercancel', pointerCancelListener)
+  canvas.addEventListener('pointerleave', pointerLeaveListener)
+
+  pointerCanvas = canvas
 }
 
 function createFluidInitialCanvas(width: number, height: number): HTMLCanvasElement {
@@ -230,7 +245,14 @@ function updateReactionSeed(): void {
 
 function startLoop(engine: BABYLON.WebGPUEngine): void {
   const render = () => {
-    if (!engine || engine.isDisposed()) {
+    if (!engine) {
+      animationHandle = undefined
+      return
+    }
+    const disposedAccessor = (engine as any).isDisposed
+    const disposed =
+      typeof disposedAccessor === 'function' ? disposedAccessor.call(engine) : Boolean(disposedAccessor)
+    if (disposed) {
       animationHandle = undefined
       return
     }
@@ -251,6 +273,10 @@ function startLoop(engine: BABYLON.WebGPUEngine): void {
 
 function setupEngine(engine: BABYLON.WebGPUEngine): void {
   disposeGraph()
+  clearListeners()
+  singleKeydownEvent('p', () => {
+    state.paused = !state.paused
+  })
   const { width, height } = state
   forceCanvas = document.createElement('canvas')
   forceCanvas.width = width
@@ -319,27 +345,34 @@ function setupEngine(engine: BABYLON.WebGPUEngine): void {
 }
 
 onMounted(() => {
-  singleKeydownEvent('p', () => {
-    state.paused = !state.paused
-  })
+  const handleEngineChange = (engine: BABYLON.WebGPUEngine | undefined) => {
+    if (engine) {
+      setupEngine(engine)
+    } else {
+      disposeGraph()
+      clearListeners()
+    }
+  }
 
-  watch(
-    () => state.engine,
-    (engine) => {
-      if (engine) {
-        setupEngine(engine)
-      } else {
-        disposeGraph()
+  handleEngineChange(engineRef.value)
+
+  engineWatcher = watch(
+    engineRef,
+    (engineValue, previousValue) => {
+      if (engineValue === previousValue) {
+        return
       }
+      handleEngineChange(engineValue)
     },
-    { immediate: true },
+    { immediate: false },
   )
 })
 
 onUnmounted(() => {
-  detachPointerHandlers()
-  clearListeners()
+  engineWatcher?.()
+  engineWatcher = undefined
   disposeGraph()
+  clearListeners()
 })
 </script>
 

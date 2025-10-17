@@ -1,4 +1,5 @@
 import type * as BABYLON from 'babylonjs'
+import { shallowRef } from 'vue'
 
 export interface FluidReactionAppState {
   engine?: BABYLON.WebGPUEngine
@@ -17,3 +18,5 @@ export const appState: FluidReactionAppState = {
 }
 
 export const appStateName = 'fluidReactionAppState'
+
+export const engineRef = shallowRef<BABYLON.WebGPUEngine | undefined>(undefined)

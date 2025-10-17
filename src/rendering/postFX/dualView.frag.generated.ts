@@ -33,12 +33,13 @@ fn pass0(
   rightSampler: sampler,
 ) -> vec4f {
   let halfSplit = 0.5;
-  if (uv.x < halfSplit) {
-    let localUv = vec2f(uv.x / halfSplit, uv.y);
-    return textureSample(left, leftSampler, localUv);
-  }
-  let localUv = vec2f((uv.x - halfSplit) / (1.0 - halfSplit), uv.y);
-  return textureSample(right, rightSampler, localUv);
+  let leftUv = vec2f(uv.x / halfSplit, uv.y);
+  let rightUv = vec2f((uv.x - halfSplit) / (1.0 - halfSplit), uv.y);
+  
+  let leftSample = textureSample(left, leftSampler, leftUv);
+  let rightSample = textureSample(right, rightSampler, rightUv);
+  
+  return select(rightSample, leftSample, uv.x < halfSplit);
 }
 
 #define CUSTOM_FRAGMENT_DEFINITIONS

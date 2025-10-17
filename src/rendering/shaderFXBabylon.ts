@@ -506,7 +506,7 @@ export class CustomShaderEffect<U extends object, I extends ShaderInputShape<I> 
     const sampler = this.sampler ?? this.defaultSampler
     const bindings = this.passTextureSources[passIndex] ?? []
     if(!calledFromInputSet) {
-      console.log(this.effectName, passIndex, 'bindingcheck',  bindings)
+      // console.log(this.effectName, passIndex, 'bindingcheck',  bindings)
     }
     for (const binding of bindings) {
       let texture: BABYLON.BaseTexture | undefined
@@ -517,7 +517,7 @@ export class CustomShaderEffect<U extends object, I extends ShaderInputShape<I> 
         if (dependencyTexture) {
           texture = dependencyTexture
         } else {
-          console.log(this.effectName, binding.binding, passIndex, "no dependency texture", passOutputs)
+          // console.log(this.effectName, binding.binding, passIndex, "no dependency texture", passOutputs)
         }
       }
       if (!texture) {
@@ -571,7 +571,7 @@ export class CustomShaderEffect<U extends object, I extends ShaderInputShape<I> 
       const isFinalPass = passIndex === this.passCount - 1
       const target = isFinalPass ? this.output : this.ensurePassTarget(passIndex)
 
-      console.log(this.effectName, passIndex, "passInputCheck", passOutputs)
+      // console.log(this.effectName, passIndex, "passInputCheck", passOutputs)
       this.applySourcesForPass(passIndex, resolvedInputs, passOutputs)
 
       this.quad.material = this.passHandles[passIndex].material
