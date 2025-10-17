@@ -7,18 +7,33 @@ const state = inject<FluidReactionAppState>(appStateName)!!
 let resizeHandler: (() => void) | undefined
 
 onMounted(async () => {
-  const canvas = document.getElementById('simulationCanvas') as HTMLCanvasElement | null
-  if (!canvas) {
-    console.warn('simulation canvas missing')
+  const fluidCanvas = document.getElementById('fluidCanvas') as HTMLCanvasElement | null
+  const reactionCanvas = document.getElementById('reactionCanvas') as HTMLCanvasElement | null
+  if (!fluidCanvas) {
+    console.warn('fluid canvas missing')
     return
   }
-  const engine = new BABYLON.WebGPUEngine(canvas, { antialias: true })
-  await engine.initAsync()
-  engine.resize()
-  resizeHandler = () => engine.resize()
+  if (!reactionCanvas) {
+    console.warn('reaction canvas missing')
+    return
+  }
+  
+  const fluidEngine = new BABYLON.WebGPUEngine(fluidCanvas, { antialias: true })
+  await fluidEngine.initAsync()
+  fluidEngine.resize()
+  
+  const reactionEngine = new BABYLON.WebGPUEngine(reactionCanvas, { antialias: true })
+  await reactionEngine.initAsync()
+  reactionEngine.resize()
+  
+  resizeHandler = () => {
+    fluidEngine.resize()
+    reactionEngine.resize()
+  }
   window.addEventListener('resize', resizeHandler)
-  state.engine = engine
-  engineRef.value = engine
+  state.fluidEngine = fluidEngine
+  state.reactionEngine = reactionEngine
+  engineRef.value = { fluid: fluidEngine, reaction: reactionEngine }
 })
 
 onUnmounted(() => {
@@ -26,8 +41,10 @@ onUnmounted(() => {
     window.removeEventListener('resize', resizeHandler)
     resizeHandler = undefined
   }
-  state.engine?.dispose()
-  state.engine = undefined
+  state.fluidEngine?.dispose()
+  state.reactionEngine?.dispose()
+  state.fluidEngine = undefined
+  state.reactionEngine = undefined
   engineRef.value = undefined
 })
 </script>

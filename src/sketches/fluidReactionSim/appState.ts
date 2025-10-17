@@ -2,7 +2,8 @@ import type * as BABYLON from 'babylonjs'
 import { shallowRef } from 'vue'
 
 export interface FluidReactionAppState {
-  engine?: BABYLON.WebGPUEngine
+  fluidEngine?: BABYLON.WebGPUEngine
+  reactionEngine?: BABYLON.WebGPUEngine
   shaderDrawFunc?: () => void
   paused: boolean
   width: number
@@ -10,7 +11,8 @@ export interface FluidReactionAppState {
 }
 
 export const appState: FluidReactionAppState = {
-  engine: undefined,
+  fluidEngine: undefined,
+  reactionEngine: undefined,
   shaderDrawFunc: undefined,
   paused: false,
   width: 1024,
@@ -19,4 +21,4 @@ export const appState: FluidReactionAppState = {
 
 export const appStateName = 'fluidReactionAppState'
 
-export const engineRef = shallowRef<BABYLON.WebGPUEngine | undefined>(undefined)
+export const engineRef = shallowRef<{ fluid?: BABYLON.WebGPUEngine; reaction?: BABYLON.WebGPUEngine } | undefined>(undefined)

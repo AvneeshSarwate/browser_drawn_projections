@@ -79,10 +79,10 @@ function createCanvasPaintMaterial(scene: BABYLON.Scene, name = 'CanvasPaintMate
   // Register shaders in the WGSL store to enable preprocessor
   const vertexShaderName = `${name}VertexShader`;
   const fragmentShaderName = `${name}FragmentShader`;
-  
+
   BABYLON.ShaderStore.ShadersStoreWGSL[vertexShaderName] = CANVAS_PAINT_VERTEX_SOURCE;
   BABYLON.ShaderStore.ShadersStoreWGSL[fragmentShaderName] = CANVAS_PAINT_FRAGMENT_SOURCE;
-  
+
   return new BABYLON.ShaderMaterial(name, scene, {
     vertex: name,
     fragment: name,
@@ -213,12 +213,12 @@ export class CustomShaderEffect<U extends object, I extends ShaderInputShape<I> 
     this.scene = new BABYLON.Scene(engine)
     this.scene.autoClear = false
     this.scene.autoClearDepthAndStencil = false
-    
+
     // Disable Babylon's default preventDefault behavior to allow mouse events
     this.scene.preventDefaultOnPointerDown = false
     this.scene.preventDefaultOnPointerUp = false
     this.scene.doNotHandleCursors = true
-    
+
     const inputElement = engine.getInputElement()
     if (inputElement) {
       this.scene.detachControl()
@@ -505,7 +505,7 @@ export class CustomShaderEffect<U extends object, I extends ShaderInputShape<I> 
     const handles = this.passHandles[passIndex]
     const sampler = this.sampler ?? this.defaultSampler
     const bindings = this.passTextureSources[passIndex] ?? []
-    if(!calledFromInputSet) {
+    if (!calledFromInputSet) {
       // console.log(this.effectName, passIndex, 'bindingcheck',  bindings)
     }
     for (const binding of bindings) {
@@ -610,6 +610,7 @@ export interface CanvasPaintInputs {
 
 export class CanvasPaint extends CustomShaderEffect<Record<string, never>, CanvasPaintInputs> {
   effectName = 'CanvasPaint'
+  private targetCanvas?: HTMLCanvasElement
 
   constructor(
     engine: BABYLON.WebGPUEngine,
@@ -618,6 +619,7 @@ export class CanvasPaint extends CustomShaderEffect<Record<string, never>, Canva
     height = 720,
     sampleMode: 'nearest' | 'linear' = 'linear',
     precision: RenderPrecision = 'half_float',
+    targetCanvas?: HTMLCanvasElement,
   ) {
     super(engine, inputs, {
       factory: (sceneRef, options) => {
@@ -627,7 +629,7 @@ export class CanvasPaint extends CustomShaderEffect<Record<string, never>, Canva
           material,
           setTexture: (name, texture) => material.setTexture(name, texture),
           setTextureSampler: (name, sampler) => material.setTextureSampler(samplerLookup.src, sampler),
-          setUniforms: () => {},
+          setUniforms: () => { },
         }
       },
       textureInputKeys: ['src'],
@@ -637,13 +639,26 @@ export class CanvasPaint extends CustomShaderEffect<Record<string, never>, Canva
       sampleMode,
       precision,
     })
+    this.targetCanvas = targetCanvas
   }
 
   override render(engine: BABYLON.Engine): void {
     const resolved = this.resolveInputTextures()
     this.applySourcesForPass(0, resolved)
     this.updateUniforms()
-    engine.restoreDefaultFramebuffer()
+
+    const activeView = (engine as any).activeView
+    if (activeView) {
+      // Babylon is managing multi-view rendering
+      if (this.targetCanvas && activeView.target !== this.targetCanvas) {
+        return
+      }
+      // Babylon already bound the correct view FBO
+    } else {
+      // No multi-view in progress; render to the default framebuffer
+      engine.restoreDefaultFramebuffer()
+    }
+
     this.quad.material = this.passHandles[0].material
     this.quad.isVisible = true
     try {
@@ -698,7 +713,7 @@ fn main(input: FragmentInputs) -> FragmentOutputs {
 `;
 
 export type PassthruUniforms = Record<string, never>;
-export function setPassthruUniforms(_material: BABYLON.ShaderMaterial, _uniforms: Partial<PassthruUniforms>): void {}
+export function setPassthruUniforms(_material: BABYLON.ShaderMaterial, _uniforms: Partial<PassthruUniforms>): void { }
 
 export type PassthruTextureName = 'src';
 export interface PassthruInputs {
@@ -720,10 +735,10 @@ export function createPassthruMaterial(scene: BABYLON.Scene, options: PassthruMa
   // Register shaders in the WGSL store to enable preprocessor
   const vertexShaderName = `${name}VertexShader`;
   const fragmentShaderName = `${name}FragmentShader`;
-  
+
   BABYLON.ShaderStore.ShadersStoreWGSL[vertexShaderName] = PassthruVertexSource;
   BABYLON.ShaderStore.ShadersStoreWGSL[fragmentShaderName] = PassthruFragmentSource;
-  
+
   const material = new BABYLON.ShaderMaterial(name, scene, {
     vertex: name,
     fragment: name,
@@ -741,7 +756,7 @@ export function createPassthruMaterial(scene: BABYLON.Scene, options: PassthruMa
     material,
     setTexture: (name, texture) => material.setTexture(name, texture),
     setTextureSampler: (name, sampler) => material.setTextureSampler(samplerLookup[name], sampler),
-    setUniforms: () => {},
+    setUniforms: () => { },
   };
 
   return handles;
@@ -813,9 +828,9 @@ export class FeedbackNode extends ShaderEffect<FeedbackInputs> {
     this.firstRender = true
   }
 
-  setUniforms(_uniforms: ShaderUniforms): void {}
+  setUniforms(_uniforms: ShaderUniforms): void { }
 
-  updateUniforms(): void {}
+  updateUniforms(): void { }
 
   render(engine: BABYLON.Engine): void {
     this.passthrough.render(engine)

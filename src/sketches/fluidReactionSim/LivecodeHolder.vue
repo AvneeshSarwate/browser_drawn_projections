@@ -7,7 +7,6 @@ import { FluidSimEffect } from '@/rendering/postFX/fluidSim.frag.generated'
 import { FluidVisualizeEffect } from '@/rendering/postFX/fluidVisualize.frag.generated'
 import { ReactionDiffusionEffect } from '@/rendering/postFX/reactionDiffusion.frag.generated'
 import { ReactionVisualizeEffect } from '@/rendering/postFX/reactionVisualize.frag.generated'
-import { DualViewEffect } from '@/rendering/postFX/dualView.frag.generated'
 import { clearListeners, pointerdownEvent, pointermoveEvent, pointerupEvent, singleKeydownEvent } from '@/io/keyboardAndMouse'
 
 const state = inject<FluidReactionAppState>(appStateName)!!
@@ -20,7 +19,15 @@ interface PointerState {
   down: boolean
 }
 
-const pointer: PointerState = {
+const fluidPointer: PointerState = {
+  x: 0.5,
+  y: 0.5,
+  vx: 0,
+  vy: 0,
+  down: false,
+}
+
+const reactionPointer: PointerState = {
   x: 0.5,
   y: 0.5,
   vx: 0,
@@ -38,17 +45,15 @@ let reactionSim: ReactionDiffusionEffect | undefined
 let reactionVisual: ReactionVisualizeEffect | undefined
 let reactionFeedback: FeedbackNode | undefined
 let reactionInitial: PassthruEffect | undefined
-let dualView: DualViewEffect | undefined
-let canvasPaint: CanvasPaint | undefined
+let fluidCanvasPaint: CanvasPaint | undefined
+let reactionCanvasPaint: CanvasPaint | undefined
 
 let forceCanvas: HTMLCanvasElement | undefined
 let forceCtx: CanvasRenderingContext2D | null = null
 let reactionSeedCanvas: HTMLCanvasElement | undefined
 let reactionSeedCtx: CanvasRenderingContext2D | null = null
 
-let pointerCanvas: HTMLCanvasElement | undefined
-let pointerCancelListener: ((event: PointerEvent) => void) | undefined
-let pointerLeaveListener: ((event: PointerEvent) => void) | undefined
+const pointerBindings = new Map<HTMLCanvasElement, { cancel: (e: PointerEvent) => void; leave: (e: PointerEvent) => void }>()
 let engineWatcher: WatchStopHandle | undefined
 
 function clamp(value: number, min: number, max: number): number {
@@ -61,8 +66,8 @@ function disposeGraph(): void {
   releasePointerHandlers()
   shaderGraph?.disposeAll()
   shaderGraph = undefined
-  canvasPaint = undefined
-  dualView = undefined
+  fluidCanvasPaint = undefined
+  reactionCanvasPaint = undefined
   fluidVisual = undefined
   fluidSim = undefined
   fluidFeedback?.dispose()
@@ -82,72 +87,58 @@ function disposeGraph(): void {
 }
 
 function releasePointerHandlers(): void {
-  if (!pointerCanvas) {
-    return
+  for (const [canvas, { cancel, leave }] of pointerBindings) {
+    canvas.removeEventListener('pointercancel', cancel)
+    canvas.removeEventListener('pointerleave', leave)
   }
-  if (pointerCancelListener) {
-    pointerCanvas.removeEventListener('pointercancel', pointerCancelListener)
-    pointerCancelListener = undefined
-  }
-  if (pointerLeaveListener) {
-    pointerCanvas.removeEventListener('pointerleave', pointerLeaveListener)
-    pointerLeaveListener = undefined
-  }
-  pointerCanvas = undefined
+  pointerBindings.clear()
 }
 
-function attachPointerHandlers(canvas: HTMLCanvasElement): void {
-  if (pointerCanvas === canvas) {
-    return
-  }
-
+function attachPointerHandlers(canvas: HTMLCanvasElement, pointerState: PointerState): void {
   const updateFromEvent = (event: PointerEvent) => {
     const rect = canvas.getBoundingClientRect()
     const nx = clamp((event.clientX - rect.left) / rect.width, 0, 1)
     const ny = clamp((event.clientY - rect.top) / rect.height, 0, 1)
-    const lastX = pointer.x
-    const lastY = pointer.y
-    pointer.x = nx
-    pointer.y = ny
-    pointer.vx = clamp((nx - lastX) * 20.0, -1, 1)
-    pointer.vy = clamp((ny - lastY) * 20.0, -1, 1)
+    const lastX = pointerState.x
+    const lastY = pointerState.y
+    pointerState.x = nx
+    pointerState.y = ny
+    pointerState.vx = clamp((nx - lastX) * 20.0, -1, 1)
+    pointerState.vy = clamp((ny - lastY) * 20.0, -1, 1)
   }
 
   const handleMove = (event: PointerEvent) => {
     updateFromEvent(event)
   }
   const handleDown = (event: PointerEvent) => {
-    pointer.down = true
+    pointerState.down = true
     canvas.setPointerCapture(event.pointerId)
     updateFromEvent(event)
   }
   const handleUp = (event: PointerEvent) => {
-    pointer.down = false
-    pointer.vx = 0
-    pointer.vy = 0
+    pointerState.down = false
+    pointerState.vx = 0
+    pointerState.vy = 0
     if (canvas.hasPointerCapture(event.pointerId)) {
       canvas.releasePointerCapture(event.pointerId)
     }
     updateFromEvent(event)
   }
-  const handleLeave = (_event: PointerEvent) => {
-    pointer.down = false
-    pointer.vx = 0
-    pointer.vy = 0
+  const handleLeave = () => {
+    pointerState.down = false
+    pointerState.vx = 0
+    pointerState.vy = 0
   }
 
   pointermoveEvent(handleMove, canvas)
   pointerdownEvent(handleDown, canvas)
   pointerupEvent(handleUp, canvas)
 
-  pointerCancelListener = (event: PointerEvent) => {
-    handleUp(event)
-  }
-  pointerLeaveListener = handleLeave
-  canvas.addEventListener('pointercancel', pointerCancelListener)
-  canvas.addEventListener('pointerleave', pointerLeaveListener)
-
-  pointerCanvas = canvas
+  const cancelHandler = (event: PointerEvent) => { handleUp(event) }
+  const leaveHandler = handleLeave
+  canvas.addEventListener('pointercancel', cancelHandler)
+  canvas.addEventListener('pointerleave', leaveHandler)
+  pointerBindings.set(canvas, { cancel: cancelHandler, leave: leaveHandler })
 }
 
 function createFluidInitialCanvas(width: number, height: number): HTMLCanvasElement {
@@ -208,14 +199,12 @@ function updateForceField(): void {
   }
   forceCtx.fillStyle = 'rgba(0, 0, 0, 0.08)'
   forceCtx.fillRect(0, 0, forceCanvas.width, forceCanvas.height)
-  if (!pointer.down) {
-    return
-  }
-  const px = pointer.x * forceCanvas.width
-  const py = pointer.y * forceCanvas.height
+  if (!fluidPointer.down) return
+  const px = fluidPointer.x * forceCanvas.width
+  const py = (1.0 - fluidPointer.y) * forceCanvas.height
   const radius = Math.max(forceCanvas.width, forceCanvas.height) * 0.05
-  const vx = clamp(pointer.vx * 0.5 + 0.5, 0, 1)
-  const vy = clamp(pointer.vy * 0.5 + 0.5, 0, 1)
+  const vx = clamp(fluidPointer.vx * 0.5 + 0.5, 0, 1)
+  const vy = clamp(fluidPointer.vy * 0.5 + 0.5, 0, 1)
   forceCtx.fillStyle = `rgba(${Math.floor(vx * 255)}, ${Math.floor(vy * 255)}, 210, 0.85)`
   forceCtx.beginPath()
   forceCtx.arc(px, py, radius, 0, Math.PI * 2)
@@ -228,11 +217,9 @@ function updateReactionSeed(): void {
   }
   reactionSeedCtx.fillStyle = 'rgba(0, 0, 0, 0.015)'
   reactionSeedCtx.fillRect(0, 0, reactionSeedCanvas.width, reactionSeedCanvas.height)
-  if (!pointer.down) {
-    return
-  }
-  const px = pointer.x * reactionSeedCanvas.width
-  const py = pointer.y * reactionSeedCanvas.height
+  if (!reactionPointer.down) return
+  const px = reactionPointer.x * reactionSeedCanvas.width
+  const py = (1.0 - reactionPointer.y) * reactionSeedCanvas.height
   const radius = Math.max(reactionSeedCanvas.width, reactionSeedCanvas.height) * 0.04
   const gradient = reactionSeedCtx.createRadialGradient(px, py, 0, px, py, radius)
   gradient.addColorStop(0, 'rgba(255, 140, 40, 0.65)')
@@ -243,27 +230,37 @@ function updateReactionSeed(): void {
   reactionSeedCtx.fill()
 }
 
-function startLoop(engine: BABYLON.WebGPUEngine): void {
+function startLoop(fluidEngine: BABYLON.WebGPUEngine, reactionEngine: BABYLON.WebGPUEngine): void {
   const render = () => {
-    if (!engine) {
+    if (!fluidEngine || !reactionEngine) {
       animationHandle = undefined
       return
     }
-    const disposedAccessor = (engine as any).isDisposed
-    const disposed =
-      typeof disposedAccessor === 'function' ? disposedAccessor.call(engine) : Boolean(disposedAccessor)
-    if (disposed) {
+    const fluidDisposedAccessor = (fluidEngine as any).isDisposed
+    const fluidDisposed =
+      typeof fluidDisposedAccessor === 'function' ? fluidDisposedAccessor.call(fluidEngine) : Boolean(fluidDisposedAccessor)
+    const reactionDisposedAccessor = (reactionEngine as any).isDisposed
+    const reactionDisposed =
+      typeof reactionDisposedAccessor === 'function' ? reactionDisposedAccessor.call(reactionEngine) : Boolean(reactionDisposedAccessor)
+    if (fluidDisposed || reactionDisposed) {
       animationHandle = undefined
       return
     }
     updateForceField()
     updateReactionSeed()
     if (!state.paused) {
-      engine.beginFrame()
+      fluidEngine.beginFrame()
       try {
-        shaderGraph?.renderAll(engine)
+        fluidCanvasPaint?.renderAll(fluidEngine as unknown as BABYLON.Engine)
       } finally {
-        engine.endFrame()
+        fluidEngine.endFrame()
+      }
+      
+      reactionEngine.beginFrame()
+      try {
+        reactionCanvasPaint?.renderAll(reactionEngine as unknown as BABYLON.Engine)
+      } finally {
+        reactionEngine.endFrame()
       }
     }
     animationHandle = requestAnimationFrame(render)
@@ -271,14 +268,20 @@ function startLoop(engine: BABYLON.WebGPUEngine): void {
   animationHandle = requestAnimationFrame(render)
 }
 
-function setupEngine(engine: BABYLON.WebGPUEngine): void {
+function setupEngine(fluidEngine: BABYLON.WebGPUEngine, reactionEngine: BABYLON.WebGPUEngine): void {
   disposeGraph()
   clearListeners()
   singleKeydownEvent('p', () => {
     state.paused = !state.paused
   })
   const { width, height } = state
-  forceCanvas = document.createElement('canvas')
+  
+  const forceCanvasEl = document.getElementById('forceCanvas') as HTMLCanvasElement | null
+  if (!forceCanvasEl) {
+    console.warn('forceCanvas not found')
+    return
+  }
+  forceCanvas = forceCanvasEl
   forceCanvas.width = width
   forceCanvas.height = height
   forceCtx = forceCanvas.getContext('2d')
@@ -287,7 +290,12 @@ function setupEngine(engine: BABYLON.WebGPUEngine): void {
     forceCtx.fillRect(0, 0, width, height)
   }
 
-  reactionSeedCanvas = document.createElement('canvas')
+  const reactionSeedCanvasEl = document.getElementById('reactionSeedCanvas') as HTMLCanvasElement | null
+  if (!reactionSeedCanvasEl) {
+    console.warn('reactionSeedCanvas not found')
+    return
+  }
+  reactionSeedCanvas = reactionSeedCanvasEl
   reactionSeedCanvas.width = width
   reactionSeedCanvas.height = height
   reactionSeedCtx = reactionSeedCanvas.getContext('2d')
@@ -299,9 +307,12 @@ function setupEngine(engine: BABYLON.WebGPUEngine): void {
   const fluidInitialCanvas = createFluidInitialCanvas(width, height)
   const reactionInitialCanvas = createReactionInitialCanvas(width, height)
 
-  fluidInitial = new PassthruEffect(engine, { src: fluidInitialCanvas }, width, height, 'linear', 'half_float')
-  fluidFeedback = new FeedbackNode(engine, fluidInitial, width, height, 'linear', 'half_float')
-  fluidSim = new FluidSimEffect(engine, { state: fluidFeedback, forces: forceCanvas! }, width, height, 'linear', 'half_float')
+  const fluidCanvas = document.getElementById('fluidCanvas') as HTMLCanvasElement | null
+  const reactionCanvas = document.getElementById('reactionCanvas') as HTMLCanvasElement | null
+
+  fluidInitial = new PassthruEffect(fluidEngine, { src: fluidInitialCanvas }, width, height, 'linear', 'half_float')
+  fluidFeedback = new FeedbackNode(fluidEngine, fluidInitial, width, height, 'linear', 'half_float')
+  fluidSim = new FluidSimEffect(fluidEngine, { state: fluidFeedback, forces: forceCanvas! }, width, height, 'linear', 'half_float')
   fluidSim.setUniforms({
     timeStep: 0.016,
     velocityDissipation: 0.985,
@@ -311,14 +322,14 @@ function setupEngine(engine: BABYLON.WebGPUEngine): void {
     forceRadius: 0.12,
     forceStrength: 18,
     attraction: 0.35,
-    forcePosition: () => [pointer.x, pointer.y],
+    forcePosition: () => [fluidPointer.x, 1.0 - fluidPointer.y],
   })
   fluidFeedback.setFeedbackSrc(fluidSim)
-  fluidVisual = new FluidVisualizeEffect(engine, { state: fluidSim }, width, height, 'linear')
+  fluidVisual = new FluidVisualizeEffect(fluidEngine, { state: fluidSim }, width, height, 'linear')
 
-  reactionInitial = new PassthruEffect(engine, { src: reactionInitialCanvas }, width, height, 'linear', 'half_float')
-  reactionFeedback = new FeedbackNode(engine, reactionInitial, width, height, 'linear', 'half_float')
-  reactionSim = new ReactionDiffusionEffect(engine, { state: reactionFeedback, seed: reactionSeedCanvas! }, width, height, 'linear', 'half_float')
+  reactionInitial = new PassthruEffect(reactionEngine, { src: reactionInitialCanvas }, width, height, 'linear', 'half_float')
+  reactionFeedback = new FeedbackNode(reactionEngine, reactionInitial, width, height, 'linear', 'half_float')
+  reactionSim = new ReactionDiffusionEffect(reactionEngine, { state: reactionFeedback, seed: reactionSeedCanvas! }, width, height, 'linear', 'half_float')
   reactionSim.setUniforms({
     feed: 0.055,
     kill: 0.062,
@@ -328,26 +339,39 @@ function setupEngine(engine: BABYLON.WebGPUEngine): void {
     brushRadius: 0.035,
     brushStrength: 0.85,
     noiseAmount: 0.015,
-    brushPosition: () => [pointer.x, pointer.y],
+    brushPosition: () => [reactionPointer.x, 1.0 - reactionPointer.y],
   })
   reactionFeedback.setFeedbackSrc(reactionSim)
-  reactionVisual = new ReactionVisualizeEffect(engine, { state: reactionSim }, width, height, 'linear')
+  reactionVisual = new ReactionVisualizeEffect(reactionEngine, { state: reactionSim }, width, height, 'linear')
 
-  dualView = new DualViewEffect(engine, { left: fluidVisual, right: reactionVisual }, width, height, 'linear')
-  canvasPaint = new CanvasPaint(engine, { src: dualView }, width, height, 'linear', 'half_float')
-  shaderGraph = canvasPaint
-
-  const canvas = document.getElementById('simulationCanvas') as HTMLCanvasElement | null
-  if (canvas) {
-    attachPointerHandlers(canvas)
+  if (fluidCanvas) {
+    fluidCanvas.style.pointerEvents = 'none'
+    fluidCanvasPaint = new CanvasPaint(fluidEngine, { src: fluidVisual }, width, height, 'linear', 'half_float')
   }
-  startLoop(engine)
+
+  if (reactionCanvas) {
+    reactionCanvas.style.pointerEvents = 'none'
+    reactionCanvasPaint = new CanvasPaint(reactionEngine, { src: reactionVisual }, width, height, 'linear', 'half_float')
+  }
+  
+  if (forceCanvas) {
+    attachPointerHandlers(forceCanvas, fluidPointer)
+  }
+  
+  if (reactionSeedCanvas) {
+    attachPointerHandlers(reactionSeedCanvas, reactionPointer)
+  }
+
+  if (fluidCanvasPaint) {
+    shaderGraph = fluidCanvasPaint
+  }
+  startLoop(fluidEngine, reactionEngine)
 }
 
 onMounted(() => {
-  const handleEngineChange = (engine: BABYLON.WebGPUEngine | undefined) => {
-    if (engine) {
-      setupEngine(engine)
+  const handleEngineChange = (engines: { fluid?: BABYLON.WebGPUEngine; reaction?: BABYLON.WebGPUEngine } | undefined) => {
+    if (engines?.fluid && engines?.reaction) {
+      setupEngine(engines.fluid, engines.reaction)
     } else {
       disposeGraph()
       clearListeners()
@@ -375,7 +399,3 @@ onUnmounted(() => {
   clearListeners()
 })
 </script>
-
-<template>
-  <div />
-</template>
