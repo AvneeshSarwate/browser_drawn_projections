@@ -201,7 +201,7 @@ function updateForceField(): void {
   forceCtx.fillRect(0, 0, forceCanvas.width, forceCanvas.height)
   if (!fluidPointer.down) return
   const px = fluidPointer.x * forceCanvas.width
-  const py = (1.0 - fluidPointer.y) * forceCanvas.height
+  const py = fluidPointer.y * forceCanvas.height
   const radius = Math.max(forceCanvas.width, forceCanvas.height) * 0.05
   const vx = clamp(fluidPointer.vx * 0.5 + 0.5, 0, 1)
   const vy = clamp(fluidPointer.vy * 0.5 + 0.5, 0, 1)
@@ -219,7 +219,7 @@ function updateReactionSeed(): void {
   reactionSeedCtx.fillRect(0, 0, reactionSeedCanvas.width, reactionSeedCanvas.height)
   if (!reactionPointer.down) return
   const px = reactionPointer.x * reactionSeedCanvas.width
-  const py = (1.0 - reactionPointer.y) * reactionSeedCanvas.height
+  const py = reactionPointer.y * reactionSeedCanvas.height
   const radius = Math.max(reactionSeedCanvas.width, reactionSeedCanvas.height) * 0.04
   const gradient = reactionSeedCtx.createRadialGradient(px, py, 0, px, py, radius)
   gradient.addColorStop(0, 'rgba(255, 140, 40, 0.65)')
@@ -313,15 +313,16 @@ function setupEngine(fluidEngine: BABYLON.WebGPUEngine, reactionEngine: BABYLON.
   fluidInitial = new PassthruEffect(fluidEngine, { src: fluidInitialCanvas }, width, height, 'linear', 'half_float')
   fluidFeedback = new FeedbackNode(fluidEngine, fluidInitial, width, height, 'linear', 'half_float')
   fluidSim = new FluidSimEffect(fluidEngine, { state: fluidFeedback, forces: forceCanvas! }, width, height, 'linear', 'half_float')
+  const getFluidParam = (name: string) => state.fluidParams?.find(p => p.name === name)?.value.value ?? 0
   fluidSim.setUniforms({
     timeStep: 0.016,
-    velocityDissipation: 0.985,
-    densityDissipation: 0.995,
-    swirlStrength: 2.5,
-    turbulence: 0.18,
-    forceRadius: 0.12,
-    forceStrength: 18,
-    attraction: 0.35,
+    velocityDissipation: () => getFluidParam('velocityDissipation'),
+    densityDissipation: () => getFluidParam('densityDissipation'),
+    swirlStrength: () => getFluidParam('swirlStrength'),
+    turbulence: () => getFluidParam('turbulence'),
+    forceRadius: () => getFluidParam('forceRadius'),
+    forceStrength: () => getFluidParam('forceStrength'),
+    attraction: () => getFluidParam('attraction'),
     forcePosition: () => [fluidPointer.x, 1.0 - fluidPointer.y],
   })
   fluidFeedback.setFeedbackSrc(fluidSim)
@@ -330,14 +331,15 @@ function setupEngine(fluidEngine: BABYLON.WebGPUEngine, reactionEngine: BABYLON.
   reactionInitial = new PassthruEffect(reactionEngine, { src: reactionInitialCanvas }, width, height, 'linear', 'half_float')
   reactionFeedback = new FeedbackNode(reactionEngine, reactionInitial, width, height, 'linear', 'half_float')
   reactionSim = new ReactionDiffusionEffect(reactionEngine, { state: reactionFeedback, seed: reactionSeedCanvas! }, width, height, 'linear', 'half_float')
+  const getReactionParam = (name: string) => state.reactionParams?.find(p => p.name === name)?.value.value ?? 0
   reactionSim.setUniforms({
-    feed: 0.055,
-    kill: 0.062,
-    diffRateA: 1.0,
-    diffRateB: 0.5,
-    deltaT: 1.0,
+    feed: () => getReactionParam('feed'),
+    kill: () => getReactionParam('kill'),
+    diffRateA: () => getReactionParam('diffRateA'),
+    diffRateB: () => getReactionParam('diffRateB'),
+    deltaT: () => getReactionParam('deltaT'),
     brushRadius: 0.035,
-    brushStrength: 0.85,
+    brushStrength: () => reactionPointer.down ? 0.85 : 0,
     noiseAmount: 0.015,
     brushPosition: () => [reactionPointer.x, 1.0 - reactionPointer.y],
   })

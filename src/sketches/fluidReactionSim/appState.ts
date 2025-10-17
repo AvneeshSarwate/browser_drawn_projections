@@ -1,5 +1,14 @@
 import type * as BABYLON from 'babylonjs'
-import { shallowRef } from 'vue'
+import { shallowRef, type Ref } from 'vue'
+
+export interface ParamDef {
+  name: string
+  label: string
+  min: number
+  max: number
+  step: number
+  value: Ref<number>
+}
 
 export interface FluidReactionAppState {
   fluidEngine?: BABYLON.WebGPUEngine
@@ -8,6 +17,8 @@ export interface FluidReactionAppState {
   paused: boolean
   width: number
   height: number
+  fluidParams?: ParamDef[]
+  reactionParams?: ParamDef[]
 }
 
 export const appState: FluidReactionAppState = {

@@ -3,25 +3,73 @@
     <div class="columns-wrapper">
       <div class="column">
         <div class="label">Fluid Simulation</div>
-        <div class="canvas-group">
-          <div class="canvas-label">Input (Force Field)</div>
-          <canvas id="forceCanvas" :width="width" :height="height"></canvas>
-        </div>
-        <div class="canvas-group">
-          <div class="canvas-label">Simulation Output</div>
-          <canvas id="fluidCanvas" :width="width" :height="height"></canvas>
+        <div class="canvas-controls-wrapper">
+          <div class="controls">
+            <div class="control-group" v-for="param in fluidParams" :key="param.name">
+              <label>{{ param.label }}</label>
+              <input 
+                type="range" 
+                :min="param.min" 
+                :max="param.max" 
+                :step="param.step"
+                v-model.number="param.value.value"
+              />
+              <input 
+                type="number" 
+                :min="param.min" 
+                :max="param.max" 
+                :step="param.step"
+                v-model.number="param.value.value"
+                class="value-input"
+              />
+            </div>
+          </div>
+          <div class="canvas-column">
+            <div class="canvas-group">
+              <div class="canvas-label">Input (Force Field)</div>
+              <canvas id="forceCanvas" :width="width" :height="height"></canvas>
+            </div>
+            <div class="canvas-group">
+              <div class="canvas-label">Simulation Output</div>
+              <canvas id="fluidCanvas" :width="width" :height="height"></canvas>
+            </div>
+          </div>
         </div>
       </div>
       
       <div class="column">
         <div class="label">Reaction Diffusion</div>
-        <div class="canvas-group">
-          <div class="canvas-label">Input (Seed)</div>
-          <canvas id="reactionSeedCanvas" :width="width" :height="height"></canvas>
-        </div>
-        <div class="canvas-group">
-          <div class="canvas-label">Simulation Output</div>
-          <canvas id="reactionCanvas" :width="width" :height="height"></canvas>
+        <div class="canvas-controls-wrapper">
+          <div class="controls">
+            <div class="control-group" v-for="param in reactionParams" :key="param.name">
+              <label>{{ param.label }}</label>
+              <input 
+                type="range" 
+                :min="param.min" 
+                :max="param.max" 
+                :step="param.step"
+                v-model.number="param.value.value"
+              />
+              <input 
+                type="number" 
+                :min="param.min" 
+                :max="param.max" 
+                :step="param.step"
+                v-model.number="param.value.value"
+                class="value-input"
+              />
+            </div>
+          </div>
+          <div class="canvas-column">
+            <div class="canvas-group">
+              <div class="canvas-label">Input (Seed)</div>
+              <canvas id="reactionSeedCanvas" :width="width" :height="height"></canvas>
+            </div>
+            <div class="canvas-group">
+              <div class="canvas-label">Simulation Output</div>
+              <canvas id="reactionCanvas" :width="width" :height="height"></canvas>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -35,12 +83,34 @@
 </template>
 
 <script setup lang="ts">
-import { inject, computed } from 'vue'
+import { inject, computed, ref } from 'vue'
 import { appStateName, type FluidReactionAppState } from './appState'
 
 const state = inject<FluidReactionAppState>(appStateName)!!
 const width = computed(() => state.width)
 const height = computed(() => state.height)
+
+const fluidParams = [
+  { name: 'velocityDissipation', label: 'Velocity Dissipation', min: 0.9, max: 1.0, step: 0.001, value: ref(0.985) },
+  { name: 'densityDissipation', label: 'Density Dissipation', min: 0.9, max: 1.0, step: 0.001, value: ref(0.995) },
+  { name: 'swirlStrength', label: 'Swirl Strength', min: 0, max: 5, step: 0.1, value: ref(2.5) },
+  { name: 'turbulence', label: 'Turbulence', min: 0, max: 1, step: 0.01, value: ref(0.18) },
+  { name: 'forceRadius', label: 'Force Radius', min: 0.01, max: 0.3, step: 0.01, value: ref(0.12) },
+  { name: 'forceStrength', label: 'Force Strength', min: 0, max: 50, step: 1, value: ref(18) },
+  { name: 'attraction', label: 'Attraction', min: 0, max: 1, step: 0.01, value: ref(0.35) },
+]
+
+const reactionParams = [
+  { name: 'feed', label: 'Feed Rate', min: 0.01, max: 0.1, step: 0.001, value: ref(0.055) },
+  { name: 'kill', label: 'Kill Rate', min: 0.01, max: 0.1, step: 0.001, value: ref(0.062) },
+  { name: 'diffRateA', label: 'Diffusion A', min: 0.1, max: 2, step: 0.1, value: ref(1.0) },
+  { name: 'diffRateB', label: 'Diffusion B', min: 0.1, max: 2, step: 0.1, value: ref(0.5) },
+  { name: 'deltaT', label: 'Time Step', min: 0.1, max: 2, step: 0.1, value: ref(1.0) },
+]
+
+// Export params so LivecodeHolder can access them
+state.fluidParams = fluidParams
+state.reactionParams = reactionParams
 </script>
 
 <style scoped>
@@ -103,5 +173,75 @@ canvas {
 .instructions h2 {
   margin: 0 0 10px 0;
   font-size: 1.3rem;
+}
+
+.canvas-controls-wrapper {
+  display: flex;
+  gap: 15px;
+  align-items: flex-start;
+}
+
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  min-width: 200px;
+}
+
+.control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.control-group label {
+  font-size: 0.85rem;
+  color: #aaa;
+}
+
+.control-group input[type="range"] {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+  outline: none;
+  -webkit-appearance: none;
+}
+
+.control-group input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  background: #667aff;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.control-group input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  background: #667aff;
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+}
+
+.value-input {
+  width: 100%;
+  padding: 4px 6px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  color: #dde0ff;
+  font-size: 0.85rem;
+}
+
+.canvas-column {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
 }
 </style>
