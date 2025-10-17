@@ -91,13 +91,13 @@ const width = computed(() => state.width)
 const height = computed(() => state.height)
 
 const fluidParams = [
-  { name: 'velocityDissipation', label: 'Velocity Dissipation', min: 0.9, max: 1.0, step: 0.001, value: ref(0.985) },
-  { name: 'densityDissipation', label: 'Density Dissipation', min: 0.9, max: 1.0, step: 0.001, value: ref(0.995) },
-  { name: 'swirlStrength', label: 'Swirl Strength', min: 0, max: 5, step: 0.1, value: ref(2.5) },
-  { name: 'turbulence', label: 'Turbulence', min: 0, max: 1, step: 0.01, value: ref(0.18) },
-  { name: 'forceRadius', label: 'Force Radius', min: 0.01, max: 0.3, step: 0.01, value: ref(0.12) },
-  { name: 'forceStrength', label: 'Force Strength', min: 0, max: 50, step: 1, value: ref(18) },
-  { name: 'attraction', label: 'Attraction', min: 0, max: 1, step: 0.01, value: ref(0.35) },
+  { name: 'velocityDissipation', label: 'Velocity Dissipation', min: 0.5, max: 1.0, step: 0.01, value: ref(0.83) },
+  { name: 'densityDissipation', label: 'Density Dissipation', min: 0.5, max: 1.0, step: 0.01, value: ref(0.98) },
+  { name: 'swirlStrength', label: 'Swirl Strength', min: 0, max: 50, step: 0.5, value: ref(30) },
+  { name: 'turbulence', label: 'Turbulence', min: 0, max: 1, step: 0.01, value: ref(0) },
+  { name: 'forceRadius', label: 'Force Radius', min: 0.01, max: 0.5, step: 0.01, value: ref(0.25) },
+  { name: 'forceStrength', label: 'Force Strength', min: 0, max: 10000, step: 100, value: ref(6000) },
+  { name: 'attraction', label: 'Attraction', min: 0, max: 1, step: 0.01, value: ref(0) },
 ]
 
 const reactionParams = [

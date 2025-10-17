@@ -141,7 +141,7 @@ export abstract class ShaderEffect<I extends ShaderInputShape<I> = ShaderInputs>
   }
 }
 
-interface MaterialHandles<U, TName extends string = string> {
+export interface MaterialHandles<U, TName extends string = string> {
   material: BABYLON.ShaderMaterial
   setTexture(name: TName, texture: BABYLON.BaseTexture): void
   setTextureSampler(name: TName, sampler: BABYLON.TextureSampler): void
@@ -846,3 +846,7 @@ export class FeedbackNode extends ShaderEffect<FeedbackInputs> {
     this.passthrough.dispose()
   }
 }
+
+// PressureIterator and FluidSimulationEffect have been moved to:
+// src/rendering/fluidSimulation/
+// Import from there: import { PressureIterator, FluidSimulationEffect } from '@/rendering/fluidSimulation';

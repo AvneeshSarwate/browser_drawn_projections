@@ -61,19 +61,16 @@ fn texelSize(textureRef: texture_2d<f32>) -> vec2f {
 
 fn laplacian(textureRef: texture_2d<f32>, samplerRef: sampler, uv: vec2f, texel: vec2f) -> vec4f {
   let center = safeSample(textureRef, samplerRef, uv);
-  var accum = vec2f(-center.xy * 1.0);
+  var accum = -center.xy * 1.0;
   
-  let right = safeSample(textureRef, samplerRef, uv + vec2f(texel.x, 0.0));
-  accum = accum + right.xy * 0.25;
-  
-  let left = safeSample(textureRef, samplerRef, uv + vec2f(-texel.x, 0.0));
-  accum = accum + left.xy * 0.25;
-  
-  let up = safeSample(textureRef, samplerRef, uv + vec2f(0.0, texel.y));
-  accum = accum + up.xy * 0.25;
-  
-  let down = safeSample(textureRef, samplerRef, uv + vec2f(0.0, -texel.y));
-  accum = accum + down.xy * 0.25;
+  accum += safeSample(textureRef, samplerRef, uv + vec2f(texel.x, 0.0)).xy * 0.2;
+  accum += safeSample(textureRef, samplerRef, uv + vec2f(-texel.x, 0.0)).xy * 0.2;
+  accum += safeSample(textureRef, samplerRef, uv + vec2f(0.0, texel.y)).xy * 0.2;
+  accum += safeSample(textureRef, samplerRef, uv + vec2f(0.0, -texel.y)).xy * 0.2;
+  accum += safeSample(textureRef, samplerRef, uv + vec2f(texel.x, texel.y)).xy * 0.05;
+  accum += safeSample(textureRef, samplerRef, uv + vec2f(-texel.x, texel.y)).xy * 0.05;
+  accum += safeSample(textureRef, samplerRef, uv + vec2f(texel.x, -texel.y)).xy * 0.05;
+  accum += safeSample(textureRef, samplerRef, uv + vec2f(-texel.x, -texel.y)).xy * 0.05;
   
   return vec4f(accum, center.xy);
 }
@@ -232,19 +229,16 @@ fn texelSize(textureRef: texture_2d<f32>) -> vec2f {
 
 fn laplacian(textureRef: texture_2d<f32>, samplerRef: sampler, uv: vec2f, texel: vec2f) -> vec4f {
   let center = safeSample(textureRef, samplerRef, uv);
-  var accum = vec2f(-center.xy * 1.0);
+  var accum = -center.xy * 1.0;
   
-  let right = safeSample(textureRef, samplerRef, uv + vec2f(texel.x, 0.0));
-  accum = accum + right.xy * 0.25;
-  
-  let left = safeSample(textureRef, samplerRef, uv + vec2f(-texel.x, 0.0));
-  accum = accum + left.xy * 0.25;
-  
-  let up = safeSample(textureRef, samplerRef, uv + vec2f(0.0, texel.y));
-  accum = accum + up.xy * 0.25;
-  
-  let down = safeSample(textureRef, samplerRef, uv + vec2f(0.0, -texel.y));
-  accum = accum + down.xy * 0.25;
+  accum += safeSample(textureRef, samplerRef, uv + vec2f(texel.x, 0.0)).xy * 0.2;
+  accum += safeSample(textureRef, samplerRef, uv + vec2f(-texel.x, 0.0)).xy * 0.2;
+  accum += safeSample(textureRef, samplerRef, uv + vec2f(0.0, texel.y)).xy * 0.2;
+  accum += safeSample(textureRef, samplerRef, uv + vec2f(0.0, -texel.y)).xy * 0.2;
+  accum += safeSample(textureRef, samplerRef, uv + vec2f(texel.x, texel.y)).xy * 0.05;
+  accum += safeSample(textureRef, samplerRef, uv + vec2f(-texel.x, texel.y)).xy * 0.05;
+  accum += safeSample(textureRef, samplerRef, uv + vec2f(texel.x, -texel.y)).xy * 0.05;
+  accum += safeSample(textureRef, samplerRef, uv + vec2f(-texel.x, -texel.y)).xy * 0.05;
   
   return vec4f(accum, center.xy);
 }
@@ -405,19 +399,16 @@ fn texelSize(textureRef: texture_2d<f32>) -> vec2f {
 
 fn laplacian(textureRef: texture_2d<f32>, samplerRef: sampler, uv: vec2f, texel: vec2f) -> vec4f {
   let center = safeSample(textureRef, samplerRef, uv);
-  var accum = vec2f(-center.xy * 1.0);
+  var accum = -center.xy * 1.0;
   
-  let right = safeSample(textureRef, samplerRef, uv + vec2f(texel.x, 0.0));
-  accum = accum + right.xy * 0.25;
-  
-  let left = safeSample(textureRef, samplerRef, uv + vec2f(-texel.x, 0.0));
-  accum = accum + left.xy * 0.25;
-  
-  let up = safeSample(textureRef, samplerRef, uv + vec2f(0.0, texel.y));
-  accum = accum + up.xy * 0.25;
-  
-  let down = safeSample(textureRef, samplerRef, uv + vec2f(0.0, -texel.y));
-  accum = accum + down.xy * 0.25;
+  accum += safeSample(textureRef, samplerRef, uv + vec2f(texel.x, 0.0)).xy * 0.2;
+  accum += safeSample(textureRef, samplerRef, uv + vec2f(-texel.x, 0.0)).xy * 0.2;
+  accum += safeSample(textureRef, samplerRef, uv + vec2f(0.0, texel.y)).xy * 0.2;
+  accum += safeSample(textureRef, samplerRef, uv + vec2f(0.0, -texel.y)).xy * 0.2;
+  accum += safeSample(textureRef, samplerRef, uv + vec2f(texel.x, texel.y)).xy * 0.05;
+  accum += safeSample(textureRef, samplerRef, uv + vec2f(-texel.x, texel.y)).xy * 0.05;
+  accum += safeSample(textureRef, samplerRef, uv + vec2f(texel.x, -texel.y)).xy * 0.05;
+  accum += safeSample(textureRef, samplerRef, uv + vec2f(-texel.x, -texel.y)).xy * 0.05;
   
   return vec4f(accum, center.xy);
 }

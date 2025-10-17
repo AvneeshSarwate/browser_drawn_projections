@@ -65,13 +65,26 @@ fn applyForceField(
   let turbulenceForce = vec2f(-curl, curl) * uniforms.turbulence;
   velocity = velocity + turbulenceForce;
 
-  let encodedForce = forces.xy * 2.0 - vec2f(1.0);
-  velocity = velocity + encodedForce * uniforms.forceStrength * forces.a;
-  density = density + forces.z * (uniforms.forceStrength * 0.1) * forces.a;
+  let a = max(forces.a, 1e-4);
+  let dir01 = forces.xy / a;
+  let encodedForce = dir01 * 2.0 - vec2f(1.0);
+  velocity = velocity + encodedForce * uniforms.forceStrength * a;
+  density = density + (forces.z / a) * (uniforms.forceStrength * 0.1) * a;
 
   return vec4f(velocity, density, 1.0);
 }
 
+// PASS 0: ADVECTION + FORCES + DISSIPATION
+// This pass performs semi-Lagrangian advection, applies external forces,
+// and computes curl for vorticity effects.
+// 
+// ARCHITECTURE ISSUE: This combines what should be 3-4 separate stages in Pavel's implementation:
+// 1. Advection (backtracing velocity field)
+// 2. Force application (adding external inputs)
+// 3. Curl computation (for vorticity confinement)
+// 4. Dissipation
+//
+// State encoding: xy = velocity, z = density, w = curl
 fn pass0(
   uv: vec2f,
   uniforms: FluidSimUniforms,
@@ -82,22 +95,47 @@ fn pass0(
 ) -> vec4f {
   let currentState = safeSample(state, stateSampler, uv);
   let texel = texelSize(state);
+  
+  // Semi-Lagrangian advection: trace particle backward in time
   let advectedUv = advectUv(uv, currentState.xy, uniforms.timeStep);
   let advectedState = safeSample(state, stateSampler, advectedUv);
+  
+  // Compute curl (rotation) of velocity field
   let curl = computeCurl(state, stateSampler, uv, texel);
-  let forceSample = safeSample(forces, forcesSampler, uv);
+  
+  // Sample force texture (Y-flipped to match DOM coordinates)
+  let forceSample = safeSample(forces, forcesSampler, vec2f(uv.x, 1.0 - uv.y));
 
+  // Blend advected with current for stability (acts as implicit diffusion)
   let blendedVelocity = mix(advectedState.xy, currentState.xy, 0.25);
   let blendedDensity = mix(advectedState.z, currentState.z, 0.35);
 
+  // Apply external forces and curl-based effects
   let forced = applyForceField(uv, uniforms, blendedVelocity, blendedDensity, forceSample, curl);
 
+  // Apply dissipation (energy loss)
   var velocity = forced.xy * uniforms.velocityDissipation;
   var density = forced.z * uniforms.densityDissipation;
 
   return vec4f(velocity, density, curl);
 }
 
+// PASS 1: SPATIAL BLUR (PSEUDO-DIFFUSION)
+// This pass performs a 3×3 weighted box blur on velocity and density,
+// then computes a pseudo-divergence metric.
+//
+// CRITICAL ARCHITECTURE FLAW: This is NOT equivalent to Pavel's pressure projection!
+// Pavel's implementation:
+// 1. Computes true divergence: ∇·v = (vR.x - vL.x + vT.y - vB.y) * 0.5
+// 2. Solves Poisson equation ∇²p = ∇·v via Jacobi iterations (20+ iterations)
+// 3. Projects velocity to divergence-free: v' = v - ∇p
+//
+// This pass instead:
+// - Uses blur as implicit diffusion
+// - Computes length(current - blurred) as "divergence" (not physically meaningful)
+// - Cannot enforce incompressibility without proper pressure solve
+//
+// Result: Fluid appears compressible, doesn't match Pavel's behavior
 fn pass1(
   uv: vec2f,
   uniforms: FluidSimUniforms,
@@ -109,6 +147,8 @@ fn pass1(
   pass0Sampler: sampler,
 ) -> vec4f {
   let texel = texelSize(pass0Texture);
+  
+  // 3×3 weighted box blur (center weight = 2, neighbors = 1)
   var accumVelocity = vec2f(0.0);
   var accumDensity = 0.0;
   var weightSum = 0.0;
@@ -128,11 +168,24 @@ fn pass1(
   let density = accumDensity / max(weightSum, 1e-4);
 
   let current = safeSample(pass0Texture, pass0Sampler, uv);
+  
+  // Pseudo-divergence: magnitude of difference between current and blurred velocity
+  // NOTE: This is NOT the true divergence operator!
   let divergence = length(current.xy - velocity);
 
   return vec4f(velocity, density, divergence);
 }
 
+// PASS 2: BLEND AND OUTPUT
+// This pass blends the advected (pass0) and blurred (pass1) results,
+// and computes an alpha channel for visualization.
+//
+// Purpose:
+// - Combines advected (sharp, but potentially unstable) with blurred (stable, but diffusive)
+// - Creates alpha from density + pseudo-divergence + curl magnitude
+// - Outputs final state to feed back into next frame
+//
+// State encoding: xy = velocity, z = density, w = alpha (for visualization)
 fn pass2(
   uv: vec2f,
   uniforms: FluidSimUniforms,
@@ -147,10 +200,16 @@ fn pass2(
 ) -> vec4f {
   let advected = safeSample(pass0Texture, pass0Sampler, uv);
   let relaxed = safeSample(pass1Texture, pass1Sampler, uv);
+  
+  // Blend advected (sharp) with relaxed (blurred) for stability
   var velocity = mix(advected.xy, relaxed.xy, 0.55);
   var density = mix(advected.z, relaxed.z, 0.4);
+  
   let divergence = relaxed.w;
   let curl = advected.w;
+  
+  // Compute alpha for visualization (higher where there's more activity)
   let alpha = clamp(density + divergence * 0.1 + abs(curl) * 0.05, 0.0, 1.0);
+  
   return vec4f(velocity, density, alpha);
 }

@@ -3,8 +3,7 @@ import { inject, onMounted, onUnmounted, watch, type WatchStopHandle } from 'vue
 import type * as BABYLON from 'babylonjs'
 import { appStateName, engineRef, type FluidReactionAppState } from './appState'
 import { CanvasPaint, FeedbackNode, PassthruEffect, type ShaderEffect } from '@/rendering/shaderFXBabylon'
-import { FluidSimEffect } from '@/rendering/postFX/fluidSim.frag.generated'
-import { FluidVisualizeEffect } from '@/rendering/postFX/fluidVisualize.frag.generated'
+import { FluidSimulationEffect } from '@/rendering/fluidSimulation'
 import { ReactionDiffusionEffect } from '@/rendering/postFX/reactionDiffusion.frag.generated'
 import { ReactionVisualizeEffect } from '@/rendering/postFX/reactionVisualize.frag.generated'
 import { clearListeners, pointerdownEvent, pointermoveEvent, pointerupEvent, singleKeydownEvent } from '@/io/keyboardAndMouse'
@@ -37,10 +36,7 @@ const reactionPointer: PointerState = {
 
 let animationHandle: number | undefined
 let shaderGraph: ShaderEffect | undefined
-let fluidSim: FluidSimEffect | undefined
-let fluidVisual: FluidVisualizeEffect | undefined
-let fluidFeedback: FeedbackNode | undefined
-let fluidInitial: PassthruEffect | undefined
+let fluidSim: FluidSimulationEffect | undefined
 let reactionSim: ReactionDiffusionEffect | undefined
 let reactionVisual: ReactionVisualizeEffect | undefined
 let reactionFeedback: FeedbackNode | undefined
@@ -68,12 +64,8 @@ function disposeGraph(): void {
   shaderGraph = undefined
   fluidCanvasPaint = undefined
   reactionCanvasPaint = undefined
-  fluidVisual = undefined
+  fluidSim?.dispose()
   fluidSim = undefined
-  fluidFeedback?.dispose()
-  fluidFeedback = undefined
-  fluidInitial?.dispose()
-  fluidInitial = undefined
   reactionVisual = undefined
   reactionSim = undefined
   reactionFeedback?.dispose()
@@ -197,8 +189,11 @@ function updateForceField(): void {
   if (!forceCtx || !forceCanvas) {
     return
   }
+  forceCtx.save()
+  forceCtx.globalCompositeOperation = 'destination-out'
   forceCtx.fillStyle = 'rgba(0, 0, 0, 0.08)'
   forceCtx.fillRect(0, 0, forceCanvas.width, forceCanvas.height)
+  forceCtx.restore()
   if (!fluidPointer.down) return
   const px = fluidPointer.x * forceCanvas.width
   const py = fluidPointer.y * forceCanvas.height
@@ -286,8 +281,7 @@ function setupEngine(fluidEngine: BABYLON.WebGPUEngine, reactionEngine: BABYLON.
   forceCanvas.height = height
   forceCtx = forceCanvas.getContext('2d')
   if (forceCtx) {
-    forceCtx.fillStyle = 'rgba(0, 0, 0, 1)'
-    forceCtx.fillRect(0, 0, width, height)
+    forceCtx.clearRect(0, 0, width, height)
   }
 
   const reactionSeedCanvasEl = document.getElementById('reactionSeedCanvas') as HTMLCanvasElement | null
@@ -304,29 +298,25 @@ function setupEngine(fluidEngine: BABYLON.WebGPUEngine, reactionEngine: BABYLON.
     reactionSeedCtx.fillRect(0, 0, width, height)
   }
 
-  const fluidInitialCanvas = createFluidInitialCanvas(width, height)
   const reactionInitialCanvas = createReactionInitialCanvas(width, height)
 
   const fluidCanvas = document.getElementById('fluidCanvas') as HTMLCanvasElement | null
   const reactionCanvas = document.getElementById('reactionCanvas') as HTMLCanvasElement | null
 
-  fluidInitial = new PassthruEffect(fluidEngine, { src: fluidInitialCanvas }, width, height, 'linear', 'half_float')
-  fluidFeedback = new FeedbackNode(fluidEngine, fluidInitial, width, height, 'linear', 'half_float')
-  fluidSim = new FluidSimEffect(fluidEngine, { state: fluidFeedback, forces: forceCanvas! }, width, height, 'linear', 'half_float')
   const getFluidParam = (name: string) => state.fluidParams?.find(p => p.name === name)?.value.value ?? 0
-  fluidSim.setUniforms({
-    timeStep: 0.016,
-    velocityDissipation: () => getFluidParam('velocityDissipation'),
-    densityDissipation: () => getFluidParam('densityDissipation'),
-    swirlStrength: () => getFluidParam('swirlStrength'),
-    turbulence: () => getFluidParam('turbulence'),
-    forceRadius: () => getFluidParam('forceRadius'),
-    forceStrength: () => getFluidParam('forceStrength'),
-    attraction: () => getFluidParam('attraction'),
-    forcePosition: () => [fluidPointer.x, 1.0 - fluidPointer.y],
-  })
-  fluidFeedback.setFeedbackSrc(fluidSim)
-  fluidVisual = new FluidVisualizeEffect(fluidEngine, { state: fluidSim }, width, height, 'linear')
+  fluidSim = new FluidSimulationEffect(
+    fluidEngine,
+    { forces: forceCanvas! },
+    {
+      simWidth: width,
+      simHeight: height,
+      pressureIterations: 20,
+      velocityDissipation: getFluidParam('velocityDissipation') || 0.98,
+      dyeDissipation: getFluidParam('densityDissipation') || 0.995,
+      forceStrength: getFluidParam('forceStrength') || 6000,
+      timeStep: 0.016,
+    }
+  )
 
   reactionInitial = new PassthruEffect(reactionEngine, { src: reactionInitialCanvas }, width, height, 'linear', 'half_float')
   reactionFeedback = new FeedbackNode(reactionEngine, reactionInitial, width, height, 'linear', 'half_float')
@@ -348,7 +338,7 @@ function setupEngine(fluidEngine: BABYLON.WebGPUEngine, reactionEngine: BABYLON.
 
   if (fluidCanvas) {
     fluidCanvas.style.pointerEvents = 'none'
-    fluidCanvasPaint = new CanvasPaint(fluidEngine, { src: fluidVisual }, width, height, 'linear', 'half_float')
+    fluidCanvasPaint = new CanvasPaint(fluidEngine, { src: fluidSim.dye }, width, height, 'linear', 'half_float')
   }
 
   if (reactionCanvas) {
