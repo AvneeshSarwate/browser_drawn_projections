@@ -41,6 +41,31 @@ interface PassTextureBinding extends TextureParam {
   passIndex?: number;
 }
 
+interface PassAnalysis {
+  index: number;
+  name: string;
+  args: ArgumentInfo[];
+  resourceBindings: PassTextureBinding[];
+}
+
+interface ShaderAnalysis {
+  shaderCode: string;
+  shaderBaseName: string;
+  shaderPrefix: string;
+  effectClassName: string;
+  uvArgName: string;
+  uniformStruct: StructInfo | null;
+  uniformFields: UniformField[];
+  uniformArgName: string | null;
+  resourceStartIndex: number;
+  baseTextureParams: TextureParam[];
+  passAnalyses: PassAnalysis[];
+  passTextureBindings: PassTextureBinding[][];
+  textureParams: TextureParam[];
+  inputTextureParams: TextureParam[];
+  passCount: number;
+}
+
 interface UniformTypeMetadata {
   tsType: string;
   setter: string;
@@ -330,6 +355,264 @@ function buildFragmentSource(
   return `${lines.join('\n')}\n`;
 }
 
+function analyzeShaderSource(
+  shaderCode: string,
+  reflect: WgslReflect,
+  shaderBaseName: string,
+): ShaderAnalysis {
+  const shaderPrefix = toPascalCase(shaderBaseName);
+  const effectClassName = `${shaderPrefix}Effect`;
+
+  const freeFunctions = reflect.functions.filter((fn) => !fn.stage);
+  const passFunctions = freeFunctions.filter((fn) => /^pass\d+$/.test(fn.name));
+
+  if (passFunctions.length === 0) {
+    const helperNames = freeFunctions.map((fn) => fn.name).join(', ');
+    const suffix = helperNames ? ` Found helper functions: ${helperNames}` : '';
+    throw new Error(`No pass functions found. Expected one or more functions named pass0, pass1, ... in fragment shader.${suffix}`);
+  }
+
+  const indexedPasses = passFunctions
+    .map((fn) => {
+      const index = Number(fn.name.replace('pass', ''));
+      if (!Number.isInteger(index)) {
+        throw new Error(`Pass function ${fn.name} uses an invalid index.`);
+      }
+      return { fn, index };
+    })
+    .sort((a, b) => a.index - b.index);
+
+  const seenIndexes = new Set<number>();
+  indexedPasses.forEach(({ index }) => {
+    if (seenIndexes.has(index)) {
+      throw new Error(`Duplicate pass index detected for pass${index}.`);
+    }
+    seenIndexes.add(index);
+  });
+
+  indexedPasses.forEach(({ index }) => {
+    if (index < 0) {
+      throw new Error(`Pass indexes must start at 0. Received pass${index}.`);
+    }
+  });
+
+  indexedPasses.forEach(({ index }, position) => {
+    if (index !== position) {
+      throw new Error(`Missing pass${position}. Pass functions must form a contiguous sequence starting at pass0.`);
+    }
+  });
+
+  const orderedPassFunctions = indexedPasses.map(({ fn }) => fn);
+  const passCount = orderedPassFunctions.length;
+
+  orderedPassFunctions.forEach((fn) => {
+    const returnType = fn.returnType?.getTypeName();
+    if (returnType !== 'vec4f') {
+      throw new Error(`Fragment pass ${fn.name} must return vec4f. Received ${returnType ?? 'void'}.`);
+    }
+  });
+
+  const primaryPass = orderedPassFunctions[0];
+  const primaryArgs = primaryPass.arguments;
+  if (primaryArgs.length < 3) {
+    throw new Error('Fragment function must include uv followed by at least one texture/sampler pair.');
+  }
+
+  const uvArg = primaryArgs[0];
+  validateUvArgument(uvArg);
+  const uvArgName = uvArg.name;
+
+  let uniformStruct: StructInfo | null = null;
+  let uniformFields: UniformField[] = [];
+  let uniformArgName: string | null = null;
+  let resourceStartIndex = 1;
+
+  if (primaryArgs.length >= 4) {
+    const potentialUniform = primaryArgs[1];
+    const structInfo = reflect.structs.find((entry) => entry.name === potentialUniform.type.getTypeName());
+    if (structInfo) {
+      uniformStruct = structInfo;
+      uniformArgName = potentialUniform.name;
+      uniformFields = collectUniformFields(structInfo, uniformArgName, shaderCode);
+      resourceStartIndex = 2;
+    }
+  }
+
+  const baseArgumentNames = primaryArgs.slice(0, resourceStartIndex).map((argument) => argument.name);
+  const baseArgumentTypes = primaryArgs.slice(0, resourceStartIndex).map((argument) => argument.type.getTypeName());
+
+  const passAnalyses: PassAnalysis[] = [];
+  const passTextureBindings: PassTextureBinding[][] = [];
+  const baseTextureParams: TextureParam[] = [];
+  const baseTextureLookup = new Map<string, TextureParam>();
+  const textureParamMap = new Map<string, TextureParam>();
+
+  const analyzePassResources = (
+    passFn: typeof primaryPass,
+    passIndex: number,
+  ): PassTextureBinding[] => {
+    const passArgs = passFn.arguments;
+    if (passArgs.length < resourceStartIndex) {
+      throw new Error(
+        `${passFn.name} must declare at least ${resourceStartIndex} arguments (uv${uniformStruct ? ', uniforms' : ''}).`,
+      );
+    }
+
+    for (let index = 0; index < resourceStartIndex; index++) {
+      const expectedName = baseArgumentNames[index];
+      const expectedType = baseArgumentTypes[index];
+      const argument = passArgs[index];
+      if (!argument) {
+        throw new Error(`Argument ${index} of ${passFn.name} must be ${expectedType} named ${expectedName}.`);
+      }
+      const actualType = argument.type.getTypeName();
+      if (actualType !== expectedType) {
+        throw new Error(`Argument ${index} of ${passFn.name} must be ${expectedType}. Received ${actualType}.`);
+      }
+      if (argument.name !== expectedName) {
+        throw new Error(`Argument ${index} of ${passFn.name} must be named ${expectedName}. Received ${argument.name}.`);
+      }
+    }
+
+    const bindings: PassTextureBinding[] = [];
+    const seenPassDependencies = new Set<number>();
+    const seenTextureNames = new Set<string>();
+    const extraCount = passArgs.length - resourceStartIndex;
+    if (extraCount < 0 || extraCount % 2 !== 0) {
+      throw new Error(`Additional arguments for ${passFn.name} must be provided in texture/sampler pairs.`);
+    }
+
+    for (let offset = 0; offset < extraCount; offset += 2) {
+      const argumentIndex = resourceStartIndex + offset;
+      const textureArg = passArgs[argumentIndex];
+      const samplerArg = passArgs[argumentIndex + 1];
+      if (!samplerArg) {
+        throw new Error('Texture parameter must be followed by a sampler parameter.');
+      }
+      validateTextureArgument(textureArg);
+      validateSamplerArgument(samplerArg);
+      if (seenTextureNames.has(textureArg.name)) {
+        throw new Error(`Duplicate texture parameter ${textureArg.name} detected in ${passFn.name}.`);
+      }
+      seenTextureNames.add(textureArg.name);
+
+      const passDependencyMatch = /^pass(\d+)Texture$/.exec(textureArg.name);
+      if (passDependencyMatch) {
+        const dependencyIndex = Number(passDependencyMatch[1]);
+        if (!Number.isInteger(dependencyIndex)) {
+          throw new Error(`Invalid pass dependency ${textureArg.name} in ${passFn.name}.`);
+        }
+        if (dependencyIndex < 0 || dependencyIndex >= passIndex) {
+          throw new Error(
+            `Pass ${passFn.name} can only depend on earlier passes. Received dependency on pass${dependencyIndex}.`,
+          );
+        }
+        if (seenPassDependencies.has(dependencyIndex)) {
+          throw new Error(`Duplicate dependency on pass${dependencyIndex} detected in ${passFn.name}.`);
+        }
+        seenPassDependencies.add(dependencyIndex);
+        const expectedSamplerName = `pass${dependencyIndex}Sampler`;
+        if (samplerArg.name !== expectedSamplerName) {
+          throw new Error(
+            `Sampler parameter for dependency ${textureArg.name} must be named ${expectedSamplerName}. Received ${samplerArg.name}.`,
+          );
+        }
+        bindings.push({
+          textureName: textureArg.name,
+          samplerName: samplerArg.name,
+          source: 'pass',
+          passIndex: dependencyIndex,
+        });
+        if (!textureParamMap.has(textureArg.name)) {
+          textureParamMap.set(textureArg.name, {
+            textureName: textureArg.name,
+            samplerName: samplerArg.name,
+          });
+        }
+        continue;
+      }
+
+      const baseTexture = baseTextureLookup.get(textureArg.name);
+      if (!baseTexture) {
+        if (passIndex === 0) {
+          const expectedSamplerName = `${textureArg.name}Sampler`;
+          if (samplerArg.name !== expectedSamplerName) {
+            throw new Error(
+              `Sampler parameter must be named ${expectedSamplerName} to match the texture parameter ${textureArg.name}.`,
+            );
+          }
+          const param: TextureParam = {
+            textureName: textureArg.name,
+            samplerName: samplerArg.name,
+          };
+          baseTextureParams.push(param);
+          baseTextureLookup.set(textureArg.name, param);
+          textureParamMap.set(textureArg.name, param);
+          bindings.push({
+            textureName: textureArg.name,
+            samplerName: samplerArg.name,
+            source: 'input',
+          });
+        } else {
+          throw new Error(
+            `Pass ${passFn.name} references unknown texture ${textureArg.name}. Base textures must be declared in pass0.`,
+          );
+        }
+        continue;
+      }
+
+      const expectedSamplerName = baseTexture.samplerName;
+      if (samplerArg.name !== expectedSamplerName) {
+        throw new Error(
+          `Sampler parameter must be named ${expectedSamplerName} to match the texture parameter ${textureArg.name}.`,
+        );
+      }
+      bindings.push({
+        textureName: textureArg.name,
+        samplerName: samplerArg.name,
+        source: 'input',
+      });
+    }
+
+    return bindings;
+  };
+
+  orderedPassFunctions.forEach((passFn, passIndex) => {
+    const bindings = analyzePassResources(passFn, passIndex);
+    passAnalyses.push({
+      index: passIndex,
+      name: passFn.name,
+      args: passFn.arguments,
+      resourceBindings: bindings,
+    });
+    passTextureBindings.push(bindings);
+  });
+
+  if (baseTextureParams.length === 0) {
+    throw new Error('At least one texture argument is required for a pass.');
+  }
+
+  const textureParams = Array.from(textureParamMap.values());
+
+  return {
+    shaderCode,
+    shaderBaseName,
+    shaderPrefix,
+    effectClassName,
+    uvArgName,
+    uniformStruct,
+    uniformFields,
+    uniformArgName,
+    resourceStartIndex,
+    baseTextureParams,
+    passAnalyses,
+    passTextureBindings,
+    textureParams,
+    inputTextureParams: baseTextureParams,
+    passCount,
+  };
+}
+
 export async function generateFragmentShaderArtifacts(
   sourcePath: string,
   options: GenerateFragmentShaderOptions,
@@ -350,222 +633,26 @@ export async function generateFragmentShaderArtifacts(
   try {
     const shaderCode = await fs.readFile(absoluteSource, 'utf8');
     const reflect = new WgslReflect(shaderCode);
-
-    const freeFunctions = reflect.functions.filter((fn) => !fn.stage);
-    const passFunctions = freeFunctions.filter((fn) => /^pass\d+$/.test(fn.name));
-
-    if (passFunctions.length === 0) {
-      const helperNames = freeFunctions.map((fn) => fn.name).join(', ');
-      const suffix = helperNames ? ` Found helper functions: ${helperNames}` : '';
-      throw new Error(`No pass functions found. Expected one or more functions named pass0, pass1, ... in fragment shader.${suffix}`);
-    }
-
-    const indexedPasses = passFunctions.map((fn) => {
-      const index = Number(fn.name.replace('pass', ''));
-      if (!Number.isInteger(index)) {
-        throw new Error(`Pass function ${fn.name} uses an invalid index.`);
-      }
-      return { fn, index };
-    }).sort((a, b) => a.index - b.index);
-
-    const seenIndexes = new Set<number>();
-    indexedPasses.forEach(({ index }) => {
-      if (seenIndexes.has(index)) {
-        throw new Error(`Duplicate pass index detected for pass${index}.`);
-      }
-      seenIndexes.add(index);
-    });
-
-    indexedPasses.forEach(({ index }) => {
-      if (index < 0) {
-        throw new Error(`Pass indexes must start at 0. Received pass${index}.`);
-      }
-    });
-
-    indexedPasses.forEach(({ index }, position) => {
-      if (index !== position) {
-        throw new Error(`Missing pass${position}. Pass functions must form a contiguous sequence starting at pass0.`);
-      }
-    });
-
-    const orderedPassFunctions = indexedPasses.map(({ fn }) => fn);
-    const passCount = orderedPassFunctions.length;
-
-    orderedPassFunctions.forEach((fn) => {
-      const returnType = fn.returnType?.getTypeName();
-      if (returnType !== 'vec4f') {
-        throw new Error(`Fragment pass ${fn.name} must return vec4f. Received ${returnType ?? 'void'}.`);
-      }
-    });
-
-    const targetFunction = orderedPassFunctions[0];
-    const args = targetFunction.arguments;
-    if (args.length < 3) {
-      throw new Error('Fragment function must include uv followed by at least one texture/sampler pair.');
-    }
-
-    const uvArg = args[0];
-    validateUvArgument(uvArg);
-
-    const baseArgumentTypes = args.map((argument) => argument.type.getTypeName());
-    const baseArgumentNames = args.map((argument) => argument.name);
-
-    orderedPassFunctions.slice(1).forEach((passFn) => {
-      const passArgs = passFn.arguments;
-      if (passArgs.length < args.length) {
-        throw new Error(
-          `Pass ${passFn.name} must have at least ${args.length} arguments to match pass0. Received ${passArgs.length}.`,
-        );
-      }
-      for (let index = 0; index < args.length; index++) {
-        const argument = passArgs[index];
-        const expectedType = baseArgumentTypes[index];
-        const actualType = argument.type.getTypeName();
-        if (actualType !== expectedType) {
-          throw new Error(`Argument ${index} of ${passFn.name} must be ${expectedType}. Received ${actualType}.`);
-        }
-        const expectedName = baseArgumentNames[index];
-        if (argument.name !== expectedName) {
-          throw new Error(`Argument ${index} of ${passFn.name} must be named ${expectedName}. Received ${argument.name}.`);
-        }
-      }
-    });
-
-    let uniformStruct: StructInfo | null = null;
-    let uniformFields: UniformField[] = [];
-    let uniformArgName: string | null = null;
-    let resourceStartIndex = 1;
-
-    if (args.length >= 4) {
-      const potentialUniform = args[1];
-      const structInfo = reflect.structs.find((entry) => entry.name === potentialUniform.type.getTypeName());
-      if (structInfo) {
-        uniformStruct = structInfo;
-        uniformArgName = potentialUniform.name;
-        uniformFields = collectUniformFields(structInfo, uniformArgName, shaderCode);
-        resourceStartIndex = 2;
-      }
-    }
-
-    const resourceArgsCount = args.length - resourceStartIndex;
-    if (resourceArgsCount <= 0 || resourceArgsCount % 2 !== 0) {
-      throw new Error('Fragment function must end with pairs of (texture_2d<f32>, sampler).');
-    }
-
-    const baseTextureParams: TextureParam[] = [];
-    for (let i = resourceStartIndex; i < args.length; i += 2) {
-      const textureArg = args[i];
-      const samplerArg = args[i + 1];
-      if (!samplerArg) {
-        throw new Error('Texture parameter must be followed by a sampler parameter.');
-      }
-      validateTextureArgument(textureArg);
-      validateSamplerArgument(samplerArg);
-      const expectedSamplerName = `${textureArg.name}Sampler`;
-      if (samplerArg.name !== expectedSamplerName) {
-        throw new Error(`Sampler parameter must be named ${expectedSamplerName} to match the texture parameter ${textureArg.name}.`);
-      }
-      baseTextureParams.push({ textureName: textureArg.name, samplerName: samplerArg.name });
-    }
-
-    const baseArgumentCount = args.length;
-
-    const passTextureBindings: PassTextureBinding[][] = orderedPassFunctions.map((passFn, passIndex) => {
-      const passArgs = passFn.arguments;
-
-      if (passIndex === 0 && passArgs.length !== baseArgumentCount) {
-        throw new Error('pass0 cannot declare dependencies on earlier passes.');
-      }
-
-      const bindings: PassTextureBinding[] = baseTextureParams.map((param) => ({
-        textureName: param.textureName,
-        samplerName: param.samplerName,
-        source: 'input',
-      }));
-
-      const extraCount = passArgs.length - baseArgumentCount;
-      if (passIndex === 0) {
-        if (extraCount !== 0) {
-          throw new Error('pass0 cannot declare dependencies on earlier passes.');
-        }
-        return bindings;
-      }
-
-      if (extraCount < 0 || extraCount % 2 !== 0) {
-        throw new Error(`Additional arguments for ${passFn.name} must be provided in texture/sampler pairs.`);
-      }
-
-      const seenPassDependencies = new Set<number>();
-      for (let offset = 0; offset < extraCount; offset += 2) {
-        const argumentIndex = baseArgumentCount + offset;
-        const textureArg = passArgs[argumentIndex];
-        const samplerArg = passArgs[argumentIndex + 1];
-        if (!samplerArg) {
-          throw new Error('Texture parameter must be followed by a sampler parameter.');
-        }
-        validateTextureArgument(textureArg);
-        validateSamplerArgument(samplerArg);
-
-        const match = /^pass(\d+)Texture$/.exec(textureArg.name);
-        if (!match) {
-          throw new Error(
-            `Additional texture arguments in ${passFn.name} must be named passNTexture (e.g. pass0Texture). Received ${textureArg.name}.`,
-          );
-        }
-        const dependencyIndex = Number(match[1]);
-        if (!Number.isInteger(dependencyIndex)) {
-          throw new Error(`Invalid pass dependency ${textureArg.name} in ${passFn.name}.`);
-        }
-        if (dependencyIndex < 0 || dependencyIndex >= passIndex) {
-          throw new Error(
-            `Pass ${passFn.name} can only depend on earlier passes. Received dependency on pass${dependencyIndex}.`,
-          );
-        }
-        if (seenPassDependencies.has(dependencyIndex)) {
-          throw new Error(`Duplicate dependency on pass${dependencyIndex} detected in ${passFn.name}.`);
-        }
-        seenPassDependencies.add(dependencyIndex);
-
-        const expectedSamplerName = `pass${dependencyIndex}Sampler`;
-        if (samplerArg.name !== expectedSamplerName) {
-          throw new Error(
-            `Sampler parameter for dependency ${textureArg.name} must be named ${expectedSamplerName}. Received ${samplerArg.name}.`,
-          );
-        }
-
-        bindings.push({
-          textureName: textureArg.name,
-          samplerName: samplerArg.name,
-          source: 'pass',
-          passIndex: dependencyIndex,
-        });
-      }
-
-      return bindings;
-    });
-
-    const textureParamMap = new Map<string, TextureParam>();
-    baseTextureParams.forEach((param) => textureParamMap.set(param.textureName, param));
-    passTextureBindings.forEach((bindings) => {
-      bindings.forEach((binding) => {
-        if (!textureParamMap.has(binding.textureName)) {
-          textureParamMap.set(binding.textureName, {
-            textureName: binding.textureName,
-            samplerName: binding.samplerName,
-          });
-        }
-      });
-    });
-
-    const textureParams = Array.from(textureParamMap.values());
-    const inputTextureParams = baseTextureParams;
+    const analysis = analyzeShaderSource(shaderCode, reflect, shaderBaseName);
+    const {
+      uvArgName,
+      uniformStruct,
+      uniformFields,
+      uniformArgName,
+      resourceStartIndex,
+      baseTextureParams,
+      passAnalyses,
+      passTextureBindings,
+      textureParams,
+      inputTextureParams,
+      passCount,
+    } = analysis;
 
     const primaryTextureName = inputTextureParams[0]?.textureName;
     if (!primaryTextureName) {
       throw new Error('At least one texture argument is required for a pass.');
     }
 
-    const shaderPrefix = toPascalCase(shaderBaseName);
     const shaderFxImportPath = (() => {
       const shaderFxAbsolute = path.join(options.projectRoot, 'src/rendering/shaderFXBabylon.ts');
       let relative = path.relative(shaderDirectory, shaderFxAbsolute).replace(/\\/g, '/');
@@ -583,46 +670,49 @@ export async function generateFragmentShaderArtifacts(
     const uniformDeclarations = uniformFields.map((field) => `uniform ${field.bindingName}: ${field.wgslType};`);
 
     const varyingName = 'vUV';
-    
-    // Vertex shader declarations (includes attributes)
+
     const vertexDeclarations: string[] = [
       'attribute position: vec3<f32>;',
       'attribute uv: vec2<f32>;',
-      `varying ${varyingName}: vec2<f32>;`
+      `varying ${varyingName}: vec2<f32>;`,
     ];
-    if (uniformDeclarations.length > 0) {
-      vertexDeclarations.push(...uniformDeclarations);
-    }
-    textureParams.forEach((param) => {
-      vertexDeclarations.push(`var ${param.textureName}: texture_2d<f32>;`);
-      vertexDeclarations.push(`var ${param.samplerName}: sampler;`);
-    });
-
-    // Fragment shader declarations (no attributes, only varyings and resources)
-    const fragmentDeclarations: string[] = [
-      `varying ${varyingName}: vec2<f32>;`
-    ];
-    if (uniformDeclarations.length > 0) {
-      fragmentDeclarations.push(...uniformDeclarations);
-    }
-    textureParams.forEach((param) => {
-      fragmentDeclarations.push(`var ${param.textureName}: texture_2d<f32>;`);
-      fragmentDeclarations.push(`var ${param.samplerName}: sampler;`);
-    });
 
     const vertexSource = buildVertexSource(vertexDeclarations, varyingName);
-    const fragmentSources = orderedPassFunctions.map((passFn) => buildFragmentSource(
-      shaderCode,
-      fragmentDeclarations,
-      uniformStruct,
-      uniformLoaderFn,
-      passFn.name,
-      uvArg.name,
-      uniformArgName,
-      passFn.arguments,
-      resourceStartIndex,
-      varyingName,
-    ));
+    const fragmentSources = passAnalyses.map((passInfo) => {
+      const fragmentDeclarations: string[] = [`varying ${varyingName}: vec2<f32>;`];
+      if (uniformDeclarations.length > 0) {
+        fragmentDeclarations.push(...uniformDeclarations);
+      }
+      const declared = new Set<string>();
+      for (let argumentIndex = resourceStartIndex; argumentIndex < passInfo.args.length; argumentIndex += 2) {
+        const textureArg = passInfo.args[argumentIndex];
+        const samplerArg = passInfo.args[argumentIndex + 1];
+        if (!textureArg || !samplerArg) {
+          throw new Error(`Texture parameters in ${passInfo.name} must be provided in texture/sampler pairs.`);
+        }
+        if (!declared.has(textureArg.name)) {
+          fragmentDeclarations.push(`var ${textureArg.name}: texture_2d<f32>;`);
+          declared.add(textureArg.name);
+        }
+        if (!declared.has(samplerArg.name)) {
+          fragmentDeclarations.push(`var ${samplerArg.name}: sampler;`);
+          declared.add(samplerArg.name);
+        }
+      }
+
+      return buildFragmentSource(
+        shaderCode,
+        fragmentDeclarations,
+        uniformStruct,
+        uniformLoaderFn,
+        passInfo.name,
+        uvArgName,
+        uniformArgName,
+        passInfo.args,
+        resourceStartIndex,
+        varyingName,
+      );
+    });
 
     const uniformInterfaceName = uniformStruct
       ? (uniformStruct.name.startsWith(shaderPrefix) ? uniformStruct.name : `${shaderPrefix}${uniformStruct.name}`)
@@ -928,12 +1018,3 @@ async function writeErrorArtifact(options: ErrorArtifactOptions): Promise<boolea
   lines.push('');
   return writeFileIfChanged(typesPath, `${lines.join('\n')}\n`);
 }
-
-/*
-TODO_SHADER_GRAPH
-- don't need to put all uniforms in shader
-- don't need to include all inputs in each pass
-- separate parse/validation/structured-output logic and fragment string construction into separate functions
-
-
-*/

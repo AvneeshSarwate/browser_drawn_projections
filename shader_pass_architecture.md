@@ -18,10 +18,10 @@ Every pass function must follow strict argument naming and ordering conventions 
 
 1. **UV coordinate.** The first argument must be named `uv` and typed `vec2f`.
 2. **Uniform struct (optional).** If the effect uses uniforms, the second argument must be the struct type declared above and is typically named `uniforms`. All subsequent passes must repeat this parameter with the same name and type.
-3. **Input textures.** After the optional uniforms, list the effect's external texture inputs as *texture/sampler pairs*. Each texture argument must be typed `texture_2d<f32>` and its paired sampler must be typed `sampler` with the name `<textureName>Sampler`. These base input pairs establish the texture bindings that the runtime exposes to callers. Every pass must include the same pairs in the same order.
+3. **Input textures.** After the optional uniforms, list the effect's external texture inputs as *texture/sampler pairs*. Each texture argument must be typed `texture_2d<f32>` and its paired sampler must be typed `sampler` with the name `<textureName>Sampler`. `pass0` defines this set of base inputs for the entire effect. Later passes may omit any base inputs they do not sample, but when they do include one the texture/sampler names must exactly match those declared in `pass0`.
 4. **Pass dependencies (pass1 and later only).** Pass functions beyond `pass0` can append additional texture/sampler pairs that request the output of earlier passes. Use the naming pattern `pass<N>Texture` and `pass<N>Sampler`, where `<N>` is the index of the dependency (e.g. `pass0Texture`, `pass0Sampler`). A pass may list multiple dependencies but only on strictly earlier passes; duplicate or forward references are rejected by the generator.
 
-The generator enforces all of these rules and will throw if a pass violates them (for example, if `pass1` omits the base texture inputs, renames a sampler, or references `pass3Texture` before `pass3` exists).
+The generator enforces all of these rules and will throw if a pass violates them (for example, if `pass1` renames a sampler, references `pass3Texture` before `pass3` exists, or introduces a new base input that `pass0` never declared).
 
 ## Generated Bindings
 

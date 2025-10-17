@@ -51,9 +51,6 @@ var src: texture_2d<f32>;
 var srcSampler: sampler;
 var base: texture_2d<f32>;
 var baseSampler: sampler;
-// TODO_SHADER_GRAPH - passN frag source shouldn't include passNTexture/passNSampler
-// var pass0Texture: texture_2d<f32>;
-// var pass0Sampler: sampler;
 
 // Source fragment function
 struct BloomUniforms {
@@ -651,4 +648,3 @@ export class BloomEffect extends CustomShaderEffect<BloomUniforms, BloomInputs> 
     super.setUniforms(record);
   }
 }
-
