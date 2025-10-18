@@ -54,6 +54,11 @@
 - Sampling modes: the port still uses linear sampling for velocity/dye paths and nearest for scalar passes (curl, divergence, pressure) just like the WebGL version when linear filtering is available, so no immediate mismatch there.
 - Force and dye canvases fade via `destination-out` each frame, so any remaining steady force likely comes from the simulation stages rather than stale canvas data.
 
+## Debug Tools
+- Press `1`–`4` to choose what the main fluid canvas draws: `1` dye (default), `2` velocity (direction encoded in RGB), `3` divergence, `4` pressure. Use `[` / `]` to cycle if that’s easier during live exploration.
+- Divergence and pressure visuals remap the scalar fields to grayscale (0.5 ≈ zero) so you can spot persistent sources or sinks immediately. Velocity debug mode encodes X in red, Y in green, magnitude in blue.
+- All debug effects share the same render loop, so captures reflect the current frame without pausing the simulation.
+
 ## Next Steps
 - Re-test the sim to confirm the constant bias is gone and the dye field dissipates to black after interaction stops.
 - If residual flow remains, instrument the velocity magnitude/pressure fields to see whether the pressure projection converges (a diverging pressure would hint at remaining boundary issues).

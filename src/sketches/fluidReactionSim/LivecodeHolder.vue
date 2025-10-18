@@ -3,7 +3,11 @@ import { inject, onMounted, onUnmounted, watch, type WatchStopHandle } from 'vue
 import type * as BABYLON from 'babylonjs'
 import { appStateName, engineRef, type FluidReactionAppState } from './appState'
 import { CanvasPaint, FeedbackNode, PassthruEffect, type ShaderEffect } from '@/rendering/shaderFXBabylon'
-import { FluidSimulationEffect } from '@/rendering/fluidSimulation'
+import {
+  FluidSimulationEffect,
+  ScalarFieldDebugEffect,
+  VelocityFieldDebugEffect,
+} from '@/rendering/fluidSimulation'
 import { ReactionDiffusionEffect } from '@/rendering/postFX/reactionDiffusion.frag.generated'
 import { ReactionVisualizeEffect } from '@/rendering/postFX/reactionVisualize.frag.generated'
 import { clearListeners, pointerdownEvent, pointermoveEvent, pointerupEvent, singleKeydownEvent } from '@/io/keyboardAndMouse'
@@ -43,12 +47,18 @@ const reactionPointer: PointerState = {
 let animationHandle: number | undefined
 let shaderGraph: ShaderEffect | undefined
 let fluidSim: FluidSimulationEffect | undefined
+type FluidDebugMode = 'dye' | 'velocity' | 'divergence' | 'pressure'
+const fluidDebugModes: FluidDebugMode[] = ['dye', 'velocity', 'divergence', 'pressure']
+let fluidDebugMode: FluidDebugMode = 'pressure'
 let reactionSim: ReactionDiffusionEffect | undefined
 let reactionVisual: ReactionVisualizeEffect | undefined
 let reactionFeedback: FeedbackNode | undefined
 let reactionInitial: PassthruEffect | undefined
 let fluidCanvasPaint: CanvasPaint | undefined
 let reactionCanvasPaint: CanvasPaint | undefined
+let velocityDebugEffect: VelocityFieldDebugEffect | undefined
+let divergenceDebugEffect: ScalarFieldDebugEffect | undefined
+let pressureDebugEffect: ScalarFieldDebugEffect | undefined
 
 let forceCanvas: HTMLCanvasElement | undefined
 let forceCtx: CanvasRenderingContext2D | null = null
@@ -76,6 +86,13 @@ function disposeGraph(): void {
   reactionCanvasPaint = undefined
   fluidSim?.dispose()
   fluidSim = undefined
+  velocityDebugEffect?.dispose()
+  velocityDebugEffect = undefined
+  divergenceDebugEffect?.dispose()
+  divergenceDebugEffect = undefined
+  pressureDebugEffect?.dispose()
+  pressureDebugEffect = undefined
+  fluidDebugMode = 'dye'
   reactionVisual = undefined
   reactionSim = undefined
   reactionFeedback?.dispose()
@@ -187,6 +204,59 @@ function generatePointerColor(): { r: number; g: number; b: number } {
     g: Math.floor(hsv.g * 255 * scale),
     b: Math.floor(hsv.b * 255 * scale),
   }
+}
+
+function updateFluidDisplaySource(): void {
+  if (!fluidCanvasPaint || !fluidSim) {
+    return
+  }
+  switch (fluidDebugMode) {
+    case 'dye':
+      fluidCanvasPaint.setSrcs({ src: fluidSim.dye })
+      break
+    case 'velocity':
+      if (velocityDebugEffect) {
+        velocityDebugEffect.setSrcs({ src: fluidSim.velocity })
+        fluidCanvasPaint.setSrcs({ src: velocityDebugEffect })
+      } else {
+        fluidCanvasPaint.setSrcs({ src: fluidSim.dye })
+      }
+      break
+    case 'divergence':
+      if (divergenceDebugEffect) {
+        divergenceDebugEffect.setSrcs({ src: fluidSim.divergence })
+        fluidCanvasPaint.setSrcs({ src: divergenceDebugEffect })
+      } else {
+        fluidCanvasPaint.setSrcs({ src: fluidSim.dye })
+      }
+      break
+    case 'pressure':
+      if (pressureDebugEffect) {
+        pressureDebugEffect.setSrcs({ src: fluidSim.pressure })
+        fluidCanvasPaint.setSrcs({ src: pressureDebugEffect })
+      } else {
+        fluidCanvasPaint.setSrcs({ src: fluidSim.dye })
+      }
+      break
+    default:
+      fluidCanvasPaint.setSrcs({ src: fluidSim.dye })
+      break
+  }
+}
+
+function setFluidDebugMode(mode: FluidDebugMode): void {
+  if (fluidDebugMode === mode) {
+    return
+  }
+  fluidDebugMode = mode
+  updateFluidDisplaySource()
+  console.info(`[fluid] display mode: ${mode}`)
+}
+
+function cycleFluidDebugMode(direction: number): void {
+  const currentIndex = fluidDebugModes.indexOf(fluidDebugMode)
+  const nextIndex = (currentIndex + direction + fluidDebugModes.length) % fluidDebugModes.length
+  setFluidDebugMode(fluidDebugModes[nextIndex])
 }
 
 function computeNormalizedSplatRadius(canvas: HTMLCanvasElement): number {
@@ -479,6 +549,12 @@ function setupEngine(fluidEngine: BABYLON.WebGPUEngine, reactionEngine: BABYLON.
   singleKeydownEvent('p', () => {
     state.paused = !state.paused
   })
+  singleKeydownEvent('1', () => setFluidDebugMode('dye'))
+  singleKeydownEvent('2', () => setFluidDebugMode('velocity'))
+  singleKeydownEvent('3', () => setFluidDebugMode('divergence'))
+  singleKeydownEvent('4', () => setFluidDebugMode('pressure'))
+  singleKeydownEvent('[', () => cycleFluidDebugMode(-1))
+  singleKeydownEvent(']', () => cycleFluidDebugMode(1))
   const { width, height } = state
   fluidPointer.color = generatePointerColor()
   
@@ -542,6 +618,43 @@ function setupEngine(fluidEngine: BABYLON.WebGPUEngine, reactionEngine: BABYLON.
       dyeInjectionStrength: 0.65,
     }
   )
+  fluidDebugMode = 'dye'
+  velocityDebugEffect = new VelocityFieldDebugEffect(
+    fluidEngine,
+    { src: fluidSim.velocity },
+    width,
+    height,
+    'linear',
+    'half_float'
+  )
+  velocityDebugEffect.setUniforms({
+    vectorScale: 0.05,
+    magnitudeScale: 0.01,
+  })
+  divergenceDebugEffect = new ScalarFieldDebugEffect(
+    fluidEngine,
+    { src: fluidSim.divergence },
+    width,
+    height,
+    'linear',
+    'half_float'
+  )
+  divergenceDebugEffect.setUniforms({
+    scale: 4.0,
+    offset: 0.0,
+  })
+  pressureDebugEffect = new ScalarFieldDebugEffect(
+    fluidEngine,
+    { src: fluidSim.pressure },
+    width,
+    height,
+    'linear',
+    'half_float'
+  )
+  pressureDebugEffect.setUniforms({
+    scale: 0.5,
+    offset: 0.0,
+  })
   registerFluidParamWatchers()
 
   reactionInitial = new PassthruEffect(reactionEngine, { src: reactionInitialCanvas }, width, height, 'linear', 'half_float')
@@ -565,6 +678,7 @@ function setupEngine(fluidEngine: BABYLON.WebGPUEngine, reactionEngine: BABYLON.
   if (fluidCanvas) {
     fluidCanvas.style.pointerEvents = 'none'
     fluidCanvasPaint = new CanvasPaint(fluidEngine, { src: fluidSim.dye }, width, height, 'linear', 'half_float')
+    updateFluidDisplaySource()
   }
 
   if (reactionCanvas) {

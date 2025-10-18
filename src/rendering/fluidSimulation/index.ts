@@ -41,3 +41,9 @@ export {
   type FluidSimulationInputs,
   type FluidSimulationConfig,
 } from './FluidSimulationEffect';
+export {
+  ScalarFieldDebugEffect,
+  VelocityFieldDebugEffect,
+  type ScalarFieldDebugUniforms,
+  type VelocityFieldDebugUniforms,
+} from './debugVisualization';
