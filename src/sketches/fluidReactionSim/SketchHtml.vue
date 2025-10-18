@@ -98,6 +98,7 @@ const fluidParams = [
   { name: 'curl', label: 'Vorticity', min: 0, max: 60, step: 1, value: ref(30) },
   { name: 'splatRadius', label: 'Splat Radius', min: 0.01, max: 1.0, step: 0.01, value: ref(0.25) },
   { name: 'forceStrength', label: 'Splat Force', min: 0, max: 20000, step: 100, value: ref(6000) },
+  { name: 'dyeInjectionStrength', label: 'Dye Injection', min: 0.0, max: 2.0, step: 0.01, value: ref(0.65) },
 ]
 
 const reactionParams = [

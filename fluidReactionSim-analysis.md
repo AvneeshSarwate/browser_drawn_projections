@@ -48,6 +48,7 @@
 - Updated `forceApplication` and `dyeForceApplication` shaders to sample the force canvas directly in WebGPU orientation and clamp UVs instead of flipping Y.
 - Re-aligned vertical neighbor sampling across divergence, pressure Jacobi, gradient subtraction, curl, and vorticity confinement shaders so “top” uses `uv - texel.y` and “bottom” uses `uv + texel.y`, matching the top-left origin.
 - Synchronized the generated TypeScript shader wrappers with the WGSL changes so runtime code reflects the corrected math.
+- Replaced the CPU-drawn force canvas with true shader-based splats. Pointer impulses now go straight into the velocity/dye buffers via a Gaussian splat pass, mirroring Pavel’s WebGL pipeline and eliminating 8-bit quantisation noise.
 
 ## Additional Investigation
 - Residual down-left drift persists even after the above orientation fixes. Inspection showed that the WebGPU shaders applied extra boundary overrides (e.g. zeroing curl samples or forcing pressure neighbors to the center value) that Pavel’s GLSL never used; these injected asymmetric forces near the borders. Those overrides have been removed so the clamped sampling behaviour now mirrors the original WebGL implementation.
@@ -55,9 +56,10 @@
 - Force and dye canvases fade via `destination-out` each frame, so any remaining steady force likely comes from the simulation stages rather than stale canvas data.
 
 ## Debug Tools
-- Press `1`–`4` to choose what the main fluid canvas draws: `1` dye (default), `2` velocity (direction encoded in RGB), `3` divergence, `4` pressure. Use `[` / `]` to cycle if that’s easier during live exploration.
+- Press `1`–`5` to choose what the main fluid canvas draws: `1` dye (default), `2` velocity (direction encoded in RGB), `3` divergence, `4` pressure, `5` the most recent velocity splat. Use `[` / `]` to cycle if that’s easier during live exploration.
 - Divergence and pressure visuals remap the scalar fields to grayscale (0.5 ≈ zero) so you can spot persistent sources or sinks immediately. Velocity debug mode encodes X in red, Y in green, magnitude in blue.
 - All debug effects share the same render loop, so captures reflect the current frame without pausing the simulation.
+- Tweaking the new `Splat Force` and `Dye Injection` sliders adjusts the GPU splat amplitude so you can match Pavel’s feel or exaggerate inputs while inspecting the debugging overlays.
 
 ## Next Steps
 - Re-test the sim to confirm the constant bias is gone and the dye field dissipates to black after interaction stops.

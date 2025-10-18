@@ -47,9 +47,9 @@ const reactionPointer: PointerState = {
 let animationHandle: number | undefined
 let shaderGraph: ShaderEffect | undefined
 let fluidSim: FluidSimulationEffect | undefined
-type FluidDebugMode = 'dye' | 'velocity' | 'divergence' | 'pressure'
-const fluidDebugModes: FluidDebugMode[] = ['dye', 'velocity', 'divergence', 'pressure']
-let fluidDebugMode: FluidDebugMode = 'pressure'
+type FluidDebugMode = 'dye' | 'velocity' | 'divergence' | 'pressure' | 'splat'
+const fluidDebugModes: FluidDebugMode[] = ['dye', 'velocity', 'divergence', 'pressure', 'splat']
+let fluidDebugMode: FluidDebugMode = 'dye'
 let reactionSim: ReactionDiffusionEffect | undefined
 let reactionVisual: ReactionVisualizeEffect | undefined
 let reactionFeedback: FeedbackNode | undefined
@@ -59,14 +59,20 @@ let reactionCanvasPaint: CanvasPaint | undefined
 let velocityDebugEffect: VelocityFieldDebugEffect | undefined
 let divergenceDebugEffect: ScalarFieldDebugEffect | undefined
 let pressureDebugEffect: ScalarFieldDebugEffect | undefined
+let splatDebugEffect: VelocityFieldDebugEffect | undefined
 
 let forceCanvas: HTMLCanvasElement | undefined
-let forceCtx: CanvasRenderingContext2D | null = null
-let dyeForceCanvas: HTMLCanvasElement | undefined
-let dyeForceCtx: CanvasRenderingContext2D | null = null
 let reactionSeedCanvas: HTMLCanvasElement | undefined
 let reactionSeedCtx: CanvasRenderingContext2D | null = null
 let currentSplatRadius = 0.25
+let currentForceStrength = 6000
+let currentDyeInjectionStrength = 0.65
+const pendingSplats: Array<{
+  point: [number, number]
+  velocity: [number, number]
+  dye: [number, number, number]
+  radius: number
+}> = []
 
 const pointerBindings = new Map<HTMLCanvasElement, { cancel: (e: PointerEvent) => void; leave: (e: PointerEvent) => void }>()
 let engineWatcher: WatchStopHandle | undefined
@@ -92,17 +98,17 @@ function disposeGraph(): void {
   divergenceDebugEffect = undefined
   pressureDebugEffect?.dispose()
   pressureDebugEffect = undefined
+  splatDebugEffect?.dispose()
+  splatDebugEffect = undefined
   fluidDebugMode = 'dye'
+  pendingSplats.length = 0
   reactionVisual = undefined
   reactionSim = undefined
   reactionFeedback?.dispose()
   reactionFeedback = undefined
   reactionInitial?.dispose()
   reactionInitial = undefined
-  forceCtx = null
   forceCanvas = undefined
-  dyeForceCtx = null
-  dyeForceCanvas = undefined
   reactionSeedCtx = null
   reactionSeedCanvas = undefined
   fluidParamWatchers.forEach(stop => stop())
@@ -238,6 +244,14 @@ function updateFluidDisplaySource(): void {
         fluidCanvasPaint.setSrcs({ src: fluidSim.dye })
       }
       break
+    case 'splat':
+      if (splatDebugEffect) {
+        splatDebugEffect.setSrcs({ src: fluidSim.splat })
+        fluidCanvasPaint.setSrcs({ src: splatDebugEffect })
+      } else {
+        fluidCanvasPaint.setSrcs({ src: fluidSim.dye })
+      }
+      break
     default:
       fluidCanvasPaint.setSrcs({ src: fluidSim.dye })
       break
@@ -299,10 +313,15 @@ function registerFluidParamWatchers(): void {
             fluidSim.setUniforms({ vorticityStrength: newValue })
             break
           case 'forceStrength':
+            currentForceStrength = newValue
             fluidSim.setUniforms({ forceStrength: newValue })
             break
           case 'splatRadius':
             // already handled above
+            break
+          case 'dyeInjectionStrength':
+            currentDyeInjectionStrength = newValue
+            fluidSim.setUniforms({ dyeInjectionStrength: newValue })
             break
           default:
             break
@@ -366,26 +385,15 @@ function createReactionInitialCanvas(width: number, height: number): HTMLCanvasE
   return canvas
 }
 
-function updateForceField(): void {
-  if (!forceCtx || !forceCanvas) {
+function queuePointerSplat(): void {
+  if (!forceCanvas) {
     return
   }
-  forceCtx.save()
-  forceCtx.globalCompositeOperation = 'destination-out'
-  forceCtx.fillStyle = 'rgba(0, 0, 0, 0.08)'
-  forceCtx.fillRect(0, 0, forceCanvas.width, forceCanvas.height)
-  forceCtx.restore()
-  const hasDyeForces = Boolean(dyeForceCtx && dyeForceCanvas)
-  if (hasDyeForces) {
-    dyeForceCtx!.save()
-    dyeForceCtx!.globalCompositeOperation = 'destination-out'
-    dyeForceCtx!.fillStyle = 'rgba(0, 0, 0, 0.12)'
-    dyeForceCtx!.fillRect(0, 0, dyeForceCanvas!.width, dyeForceCanvas!.height)
-    dyeForceCtx!.restore()
+  if (!fluidPointer.down || !fluidPointer.moved) {
+    return
   }
 
-  if (!fluidPointer.down || !fluidPointer.moved) return
-
+  const radius = computeNormalizedSplatRadius(forceCanvas)
   const velX = fluidPointer.vx
   const velY = fluidPointer.vy
   const speed = Math.sqrt(velX * velX + velY * velY)
@@ -395,88 +403,44 @@ function updateForceField(): void {
     fluidPointer.vy = 0
     return
   }
-
-  const width = forceCanvas.width
-  const height = forceCanvas.height
-  const pointerU = fluidPointer.x
-  const pointerV = fluidPointer.y
-  const aspect = width / height
-  const baseRadius = Math.max(0.0002, currentSplatRadius / 100)
-  const radius = aspect > 1 ? baseRadius * aspect : baseRadius
-  const influenceRadius = baseRadius * 3
-
-  const minU = Math.max(0, pointerU - influenceRadius)
-  const maxU = Math.min(1, pointerU + influenceRadius)
-  const minV = Math.max(0, pointerV - influenceRadius)
-  const maxV = Math.min(1, pointerV + influenceRadius)
-
-  const startX = Math.max(0, Math.floor(minU * width))
-  const startY = Math.max(0, Math.floor(minV * height))
-  const endX = Math.min(width, Math.ceil(maxU * width))
-  const endY = Math.min(height, Math.ceil(maxV * height))
-  const regionWidth = Math.max(1, endX - startX)
-  const regionHeight = Math.max(1, endY - startY)
-
-  const forceImage = forceCtx.getImageData(startX, startY, regionWidth, regionHeight)
-  const forceData = forceImage.data
-
-  let dyeImage: ImageData | undefined
-  let dyeData: Uint8ClampedArray | undefined
-  if (hasDyeForces) {
-    dyeImage = dyeForceCtx!.getImageData(startX, startY, regionWidth, regionHeight)
-    dyeData = dyeImage.data
-  }
-
   const dirX = velX / speed
   const dirY = -velY / speed
-  const dir01X = clamp(dirX * 0.5 + 0.5, 0, 1)
-  const dir01Y = clamp(dirY * 0.5 + 0.5, 0, 1)
+  const velocity: [number, number] = [dirX * speed, dirY * speed]
+  const dyeScale = currentDyeInjectionStrength * speed
+  const dye: [number, number, number] = [
+    (fluidPointer.color.r / 255) * dyeScale,
+    (fluidPointer.color.g / 255) * dyeScale,
+    (fluidPointer.color.b / 255) * dyeScale,
+  ]
 
-  for (let y = 0; y < regionHeight; y++) {
-    const pixelY = startY + y
-    const v = (pixelY + 0.5) / height
-    const dy = v - pointerV
-    for (let x = 0; x < regionWidth; x++) {
-      const pixelX = startX + x
-      const u = (pixelX + 0.5) / width
-      const dx = u - pointerU
-      const scaledDx = dx * aspect
-      const distSq = scaledDx * scaledDx + dy * dy
-      const weight = Math.exp(-distSq / Math.max(1e-6, radius))
-      const amplitude = weight * speed
-      if (amplitude < 1e-5 && (!dyeData || weight < 1e-5)) {
-        continue
-      }
-      const alpha = Math.min(1, amplitude)
-      const idx = (y * regionWidth + x) * 4
-      if (amplitude >= 1e-5) {
-        forceData[idx + 0] = Math.round(clamp(dir01X * alpha, 0, 1) * 255)
-        forceData[idx + 1] = Math.round(clamp(dir01Y * alpha, 0, 1) * 255)
-        forceData[idx + 2] = 0
-        forceData[idx + 3] = Math.round(alpha * 255)
-      }
-
-      if (dyeData) {
-        const dyeScale = weight
-        if (dyeScale > 1e-5) {
-          dyeData[idx + 0] = Math.min(255, dyeData[idx + 0] + Math.round(fluidPointer.color.r * dyeScale))
-          dyeData[idx + 1] = Math.min(255, dyeData[idx + 1] + Math.round(fluidPointer.color.g * dyeScale))
-          dyeData[idx + 2] = Math.min(255, dyeData[idx + 2] + Math.round(fluidPointer.color.b * dyeScale))
-          const existingAlpha = dyeData[idx + 3]
-          dyeData[idx + 3] = Math.min(255, Math.max(existingAlpha, Math.round(dyeScale * 255)))
-        }
-      }
-    }
-  }
-
-  forceCtx.putImageData(forceImage, startX, startY)
-  if (hasDyeForces && dyeImage) {
-    dyeForceCtx!.putImageData(dyeImage, startX, startY)
-  }
+  pendingSplats.push({
+    point: [fluidPointer.x, 1 - fluidPointer.y],
+    velocity,
+    dye,
+    radius,
+  })
 
   fluidPointer.moved = false
   fluidPointer.vx = 0
   fluidPointer.vy = 0
+}
+
+function flushPendingSplats(): void {
+  if (!fluidSim || pendingSplats.length === 0) {
+    return
+  }
+  for (const splat of pendingSplats) {
+    fluidSim.applySplat({
+      point: splat.point,
+      velocityDelta: splat.velocity,
+      dyeColor: splat.dye,
+      radius: splat.radius,
+    })
+  }
+  pendingSplats.length = 0
+  if (fluidDebugMode === 'splat') {
+    updateFluidDisplaySource()
+  }
 }
 
 function updateReactionSeed(): void {
@@ -515,21 +479,26 @@ function startLoop(fluidEngine: BABYLON.WebGPUEngine, reactionEngine: BABYLON.We
       animationHandle = undefined
       return
     }
-    updateForceField()
+    queuePointerSplat()
     updateReactionSeed()
-    if (!state.paused) {
+    const shouldRenderFluid = !state.paused || pendingSplats.length > 0
+    if (shouldRenderFluid) {
       const now = performance.now()
       const dt = lastFrameTime !== undefined ? Math.min((now - lastFrameTime) / 1000, 1 / 30) : 1 / 60
       lastFrameTime = now
-      fluidSim?.updateForFrame(dt)
+      if (!state.paused) {
+        fluidSim?.updateForFrame(dt)
+      }
       fluidEngine.beginFrame()
       try {
+        flushPendingSplats()
         fluidSim?.renderAll(fluidEngine as unknown as BABYLON.Engine)
         fluidCanvasPaint?.renderAll(fluidEngine as unknown as BABYLON.Engine)
       } finally {
         fluidEngine.endFrame()
       }
-      
+    }
+    if (!state.paused) {
       reactionEngine.beginFrame()
       try {
         reactionCanvasPaint?.renderAll(reactionEngine as unknown as BABYLON.Engine)
@@ -553,6 +522,7 @@ function setupEngine(fluidEngine: BABYLON.WebGPUEngine, reactionEngine: BABYLON.
   singleKeydownEvent('2', () => setFluidDebugMode('velocity'))
   singleKeydownEvent('3', () => setFluidDebugMode('divergence'))
   singleKeydownEvent('4', () => setFluidDebugMode('pressure'))
+  singleKeydownEvent('5', () => setFluidDebugMode('splat'))
   singleKeydownEvent('[', () => cycleFluidDebugMode(-1))
   singleKeydownEvent(']', () => cycleFluidDebugMode(1))
   const { width, height } = state
@@ -566,19 +536,6 @@ function setupEngine(fluidEngine: BABYLON.WebGPUEngine, reactionEngine: BABYLON.
   forceCanvas = forceCanvasEl
   forceCanvas.width = width
   forceCanvas.height = height
-  forceCtx = forceCanvas.getContext('2d')
-  if (forceCtx) {
-    forceCtx.clearRect(0, 0, width, height)
-  }
-
-  dyeForceCanvas = document.createElement('canvas')
-  dyeForceCanvas.width = width
-  dyeForceCanvas.height = height
-  dyeForceCtx = dyeForceCanvas.getContext('2d')
-  if (dyeForceCtx) {
-    dyeForceCtx.fillStyle = 'rgba(0, 0, 0, 1)'
-    dyeForceCtx.fillRect(0, 0, width, height)
-  }
 
   const reactionSeedCanvasEl = document.getElementById('reactionSeedCanvas') as HTMLCanvasElement | null
   if (!reactionSeedCanvasEl) {
@@ -601,9 +558,11 @@ function setupEngine(fluidEngine: BABYLON.WebGPUEngine, reactionEngine: BABYLON.
 
   const getFluidParam = (name: string) => state.fluidParams?.find(p => p.name === name)?.value.value ?? 0
   currentSplatRadius = getFluidParam('splatRadius') || 0.25
+  currentForceStrength = getFluidParam('forceStrength') || 6000
+  currentDyeInjectionStrength = state.fluidParams?.find(p => p.name === 'dyeInjectionStrength')?.value.value ?? 0.65
   fluidSim = new FluidSimulationEffect(
     fluidEngine,
-    { forces: forceCanvas!, dyeForces: dyeForceCanvas },
+    undefined,
     {
       simWidth: width,
       simHeight: height,
@@ -611,11 +570,11 @@ function setupEngine(fluidEngine: BABYLON.WebGPUEngine, reactionEngine: BABYLON.
       pressure: getFluidParam('pressure') || 0.8,
       velocityDissipation: getFluidParam('velocityDissipation') || 0.2,
       dyeDissipation: getFluidParam('densityDissipation') || 1.0,
-      forceStrength: getFluidParam('forceStrength') || 6000,
+      forceStrength: currentForceStrength,
       timeStep: 1 / 60,
       enableVorticity: true,
       vorticityStrength: getFluidParam('curl') || 30,
-      dyeInjectionStrength: 0.65,
+      dyeInjectionStrength: currentDyeInjectionStrength,
     }
   )
   fluidDebugMode = 'dye'
@@ -654,6 +613,18 @@ function setupEngine(fluidEngine: BABYLON.WebGPUEngine, reactionEngine: BABYLON.
   pressureDebugEffect.setUniforms({
     scale: 0.5,
     offset: 0.0,
+  })
+  splatDebugEffect = new VelocityFieldDebugEffect(
+    fluidEngine,
+    { src: fluidSim.splat },
+    width,
+    height,
+    'linear',
+    'half_float'
+  )
+  splatDebugEffect.setUniforms({
+    vectorScale: 1.0,
+    magnitudeScale: 10.0,
   })
   registerFluidParamWatchers()
 
