@@ -9,13 +9,33 @@ fn pass0(
   velocitySampler: sampler,
 ) -> vec4f {
   let texel = texelSize(velocity);
+  let center = textureSample(velocity, velocitySampler, clamp(uv, vec2f(0.0), vec2f(1.0))).xy;
   
-  let vL = textureSample(velocity, velocitySampler, uv - vec2f(texel.x, 0.0)).x;
-  let vR = textureSample(velocity, velocitySampler, uv + vec2f(texel.x, 0.0)).x;
-  let vB = textureSample(velocity, velocitySampler, uv - vec2f(0.0, texel.y)).y;
-  let vT = textureSample(velocity, velocitySampler, uv + vec2f(0.0, texel.y)).y;
+  let leftUv = uv - vec2f(texel.x, 0.0);
+  var left = textureSample(velocity, velocitySampler, clamp(leftUv, vec2f(0.0), vec2f(1.0))).xy;
+  if (leftUv.x < 0.0) {
+    left.x = -center.x;
+  }
   
-  let div = 0.5 * (vR - vL + vT - vB);
+  let rightUv = uv + vec2f(texel.x, 0.0);
+  var right = textureSample(velocity, velocitySampler, clamp(rightUv, vec2f(0.0), vec2f(1.0))).xy;
+  if (rightUv.x > 1.0) {
+    right.x = -center.x;
+  }
+  
+  let bottomUv = uv - vec2f(0.0, texel.y);
+  var bottom = textureSample(velocity, velocitySampler, clamp(bottomUv, vec2f(0.0), vec2f(1.0))).xy;
+  if (bottomUv.y < 0.0) {
+    bottom.y = -center.y;
+  }
+  
+  let topUv = uv + vec2f(0.0, texel.y);
+  var top = textureSample(velocity, velocitySampler, clamp(topUv, vec2f(0.0), vec2f(1.0))).xy;
+  if (topUv.y > 1.0) {
+    top.y = -center.y;
+  }
+  
+  let div = 0.5 * ((right.x - left.x) + (top.y - bottom.y));
   
   return vec4f(div, 0.0, 0.0, 1.0);
 }

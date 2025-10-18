@@ -41,7 +41,12 @@ fn pass0(
   velocitySampler: sampler,
 ) -> vec4f {
   let vel = textureSample(velocity, velocitySampler, uv).xy;
-  let prevUv = uv - vel * uniforms.timeStep;
+  let dims = textureDimensions(velocity);
+  let texel = vec2f(
+    select(1.0 / f32(dims.x), 0.0, dims.x == 0u),
+    select(1.0 / f32(dims.y), 0.0, dims.y == 0u),
+  );
+  let prevUv = clamp(uv - vel * uniforms.timeStep * texel, vec2f(0.0), vec2f(1.0));
   
   let advectedDye = textureSample(dye, dyeSampler, prevUv).xyz;
   

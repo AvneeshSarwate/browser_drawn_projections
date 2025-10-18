@@ -36,7 +36,6 @@ export class PressureIterator extends CustomShaderEffect<
   private pressureRT1!: BABYLON.RenderTargetTexture;
   private jacobiMaterial: MaterialHandles<Record<string, never>, string>;
   private copyMaterial: MaterialHandles<Record<string, never>, string>;
-
   constructor(
     engine: BABYLON.WebGPUEngine,
     inputs: PressureIteratorInputs,
@@ -123,6 +122,17 @@ export class PressureIterator extends CustomShaderEffect<
     target.renderList = null;
   }
 
+  private clearTarget(target: BABYLON.RenderTargetTexture, value: number): void {
+    const previousRenderList = target.renderList;
+    const previousClearColor = target.clearColor ? target.clearColor.clone() : undefined;
+    const clearColor = new BABYLON.Color4(value, value, value, 1);
+    target.clearColor = clearColor;
+    target.renderList = null;
+    target.render(true);
+    target.renderList = previousRenderList;
+    target.clearColor = previousClearColor ?? new BABYLON.Color4(0, 0, 0, 0);
+  }
+
   private resolveTextureSource(source: ShaderSource): BABYLON.BaseTexture | undefined {
     // Only handle BaseTexture directly for initial pressure seeding
     // Canvas sources are not supported for initial pressure (pressure starts at 0 by default)
@@ -142,6 +152,9 @@ export class PressureIterator extends CustomShaderEffect<
     
     let readBuffer = this.pressureRT0;
     let writeBuffer = this.pressureRT1;
+    
+    this.clearTarget(readBuffer, 0.0);
+    this.clearTarget(writeBuffer, 0.0);
     
     // Optional: seed with initial pressure
     if (this.inputs.initialPressure) {

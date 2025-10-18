@@ -16,6 +16,7 @@ interface PointerState {
   vx: number
   vy: number
   down: boolean
+  color: { r: number; g: number; b: number }
 }
 
 const fluidPointer: PointerState = {
@@ -24,6 +25,7 @@ const fluidPointer: PointerState = {
   vx: 0,
   vy: 0,
   down: false,
+  color: { r: 120, g: 60, b: 220 },
 }
 
 const reactionPointer: PointerState = {
@@ -32,6 +34,7 @@ const reactionPointer: PointerState = {
   vx: 0,
   vy: 0,
   down: false,
+  color: { r: 255, g: 140, b: 40 },
 }
 
 let animationHandle: number | undefined
@@ -46,6 +49,8 @@ let reactionCanvasPaint: CanvasPaint | undefined
 
 let forceCanvas: HTMLCanvasElement | undefined
 let forceCtx: CanvasRenderingContext2D | null = null
+let dyeForceCanvas: HTMLCanvasElement | undefined
+let dyeForceCtx: CanvasRenderingContext2D | null = null
 let reactionSeedCanvas: HTMLCanvasElement | undefined
 let reactionSeedCtx: CanvasRenderingContext2D | null = null
 
@@ -74,6 +79,8 @@ function disposeGraph(): void {
   reactionInitial = undefined
   forceCtx = null
   forceCanvas = undefined
+  dyeForceCtx = null
+  dyeForceCanvas = undefined
   reactionSeedCtx = null
   reactionSeedCanvas = undefined
 }
@@ -106,6 +113,7 @@ function attachPointerHandlers(canvas: HTMLCanvasElement, pointerState: PointerS
     pointerState.down = true
     canvas.setPointerCapture(event.pointerId)
     updateFromEvent(event)
+    pointerState.color = generatePointerColor()
   }
   const handleUp = (event: PointerEvent) => {
     pointerState.down = false
@@ -131,6 +139,32 @@ function attachPointerHandlers(canvas: HTMLCanvasElement, pointerState: PointerS
   canvas.addEventListener('pointercancel', cancelHandler)
   canvas.addEventListener('pointerleave', leaveHandler)
   pointerBindings.set(canvas, { cancel: cancelHandler, leave: leaveHandler })
+}
+
+function hsvToRgb(h: number, s: number, v: number): { r: number; g: number; b: number } {
+  const i = Math.floor(h * 6)
+  const f = h * 6 - i
+  const p = v * (1 - s)
+  const q = v * (1 - f * s)
+  const t = v * (1 - (1 - f) * s)
+
+  switch (i % 6) {
+    case 0: return { r: v, g: t, b: p }
+    case 1: return { r: q, g: v, b: p }
+    case 2: return { r: p, g: v, b: t }
+    case 3: return { r: p, g: q, b: v }
+    case 4: return { r: t, g: p, b: v }
+    default: return { r: v, g: p, b: q }
+  }
+}
+
+function generatePointerColor(): { r: number; g: number; b: number } {
+  const hsv = hsvToRgb(Math.random(), 1.0, 1.0)
+  return {
+    r: Math.floor(hsv.r * 255 * 0.9),
+    g: Math.floor(hsv.g * 255 * 0.85),
+    b: Math.floor(hsv.b * 255 * 0.8),
+  }
 }
 
 function createFluidInitialCanvas(width: number, height: number): HTMLCanvasElement {
@@ -194,7 +228,17 @@ function updateForceField(): void {
   forceCtx.fillStyle = 'rgba(0, 0, 0, 0.08)'
   forceCtx.fillRect(0, 0, forceCanvas.width, forceCanvas.height)
   forceCtx.restore()
+  const hasDyeForces = Boolean(dyeForceCtx && dyeForceCanvas)
+  if (hasDyeForces) {
+    dyeForceCtx!.save()
+    dyeForceCtx!.globalCompositeOperation = 'destination-out'
+    dyeForceCtx!.fillStyle = 'rgba(0, 0, 0, 0.12)'
+    dyeForceCtx!.fillRect(0, 0, dyeForceCanvas!.width, dyeForceCanvas!.height)
+    dyeForceCtx!.restore()
+  }
+
   if (!fluidPointer.down) return
+
   const px = fluidPointer.x * forceCanvas.width
   const py = fluidPointer.y * forceCanvas.height
   const radius = Math.max(forceCanvas.width, forceCanvas.height) * 0.05
@@ -204,6 +248,17 @@ function updateForceField(): void {
   forceCtx.beginPath()
   forceCtx.arc(px, py, radius, 0, Math.PI * 2)
   forceCtx.fill()
+
+  if (hasDyeForces) {
+    const dyeRadius = Math.max(dyeForceCanvas!.width, dyeForceCanvas!.height) * 0.06
+    const gradient = dyeForceCtx!.createRadialGradient(px, py, 0, px, py, dyeRadius)
+    gradient.addColorStop(0, `rgba(${fluidPointer.color.r}, ${fluidPointer.color.g}, ${fluidPointer.color.b}, 0.9)`)
+    gradient.addColorStop(1, 'rgba(0, 0, 0, 0)')
+    dyeForceCtx!.fillStyle = gradient
+    dyeForceCtx!.beginPath()
+    dyeForceCtx!.arc(px, py, dyeRadius, 0, Math.PI * 2)
+    dyeForceCtx!.fill()
+  }
 }
 
 function updateReactionSeed(): void {
@@ -246,6 +301,7 @@ function startLoop(fluidEngine: BABYLON.WebGPUEngine, reactionEngine: BABYLON.We
     if (!state.paused) {
       fluidEngine.beginFrame()
       try {
+        fluidSim?.renderAll(fluidEngine as unknown as BABYLON.Engine)
         fluidCanvasPaint?.renderAll(fluidEngine as unknown as BABYLON.Engine)
       } finally {
         fluidEngine.endFrame()
@@ -284,6 +340,15 @@ function setupEngine(fluidEngine: BABYLON.WebGPUEngine, reactionEngine: BABYLON.
     forceCtx.clearRect(0, 0, width, height)
   }
 
+  dyeForceCanvas = document.createElement('canvas')
+  dyeForceCanvas.width = width
+  dyeForceCanvas.height = height
+  dyeForceCtx = dyeForceCanvas.getContext('2d')
+  if (dyeForceCtx) {
+    dyeForceCtx.fillStyle = 'rgba(0, 0, 0, 1)'
+    dyeForceCtx.fillRect(0, 0, width, height)
+  }
+
   const reactionSeedCanvasEl = document.getElementById('reactionSeedCanvas') as HTMLCanvasElement | null
   if (!reactionSeedCanvasEl) {
     console.warn('reactionSeedCanvas not found')
@@ -306,7 +371,7 @@ function setupEngine(fluidEngine: BABYLON.WebGPUEngine, reactionEngine: BABYLON.
   const getFluidParam = (name: string) => state.fluidParams?.find(p => p.name === name)?.value.value ?? 0
   fluidSim = new FluidSimulationEffect(
     fluidEngine,
-    { forces: forceCanvas! },
+    { forces: forceCanvas!, dyeForces: dyeForceCanvas },
     {
       simWidth: width,
       simHeight: height,
@@ -315,6 +380,9 @@ function setupEngine(fluidEngine: BABYLON.WebGPUEngine, reactionEngine: BABYLON.
       dyeDissipation: getFluidParam('densityDissipation') || 0.995,
       forceStrength: getFluidParam('forceStrength') || 6000,
       timeStep: 0.016,
+      enableVorticity: true,
+      vorticityStrength: getFluidParam('vorticityStrength') || 30,
+      dyeInjectionStrength: 0.65,
     }
   )
 

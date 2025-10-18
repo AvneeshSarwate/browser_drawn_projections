@@ -7,8 +7,11 @@ import {
 } from '../shaderFXBabylon';
 import { VelocityAdvectionEffect } from './velocityAdvection.frag.generated';
 import { ForceApplicationEffect } from './forceApplication.frag.generated';
+import { CurlEffect } from './curl.frag.generated';
+import { VorticityConfinementEffect } from './vorticityConfinement.frag.generated';
 import { DivergenceEffect } from './divergence.frag.generated';
 import { GradientSubtractionEffect } from './gradientSubtraction.frag.generated';
+import { DyeForceApplicationEffect } from './dyeForceApplication.frag.generated';
 import { DyeAdvectionEffect } from './dyeAdvection.frag.generated';
 import { PressureIterator } from './PressureIterator';
 
@@ -29,6 +32,7 @@ export interface FluidSimulationConfig {
   timeStep: number;
   enableVorticity?: boolean;
   vorticityStrength?: number;
+  dyeInjectionStrength?: number;
 }
 
 /**
@@ -60,12 +64,15 @@ export class FluidSimulationEffect {
   private velocityFeedback: FeedbackNode;
   private velocityAdvection: VelocityAdvectionEffect;
   private forceApplication: ForceApplicationEffect;
+  private curlEffect: CurlEffect;
+  private vorticityEffect: VorticityConfinementEffect;
   private divergenceEffect: DivergenceEffect;
   private pressureIterator: PressureIterator;
   private projection: GradientSubtractionEffect;
   
   // Dye pipeline components
   private dyeFeedback: FeedbackNode;
+  private dyeForceApplication: DyeForceApplicationEffect;
   private dyeAdvection: DyeAdvectionEffect;
   
   /** Projected velocity field (divergence-free) */
@@ -95,6 +102,15 @@ export class FluidSimulationEffect {
   ) {
     this.engine = engine;
     this.config = config;
+    if (this.config.enableVorticity === undefined) {
+      this.config.enableVorticity = true;
+    }
+    if (this.config.vorticityStrength === undefined) {
+      this.config.vorticityStrength = 30;
+    }
+    if (this.config.dyeInjectionStrength === undefined) {
+      this.config.dyeInjectionStrength = 0.65;
+    }
     
     const { simWidth, simHeight } = config;
     const sampleMode: 'nearest' | 'linear' = 'linear';
@@ -151,7 +167,32 @@ export class FluidSimulationEffect {
       forceStrength: config.forceStrength,
     });
     
-    const velocityWithVorticity = this.forceApplication.output;
+    // 3b. Curl + vorticity confinement to reinforce swirling motion
+    this.curlEffect = new CurlEffect(
+      engine,
+      { velocity: this.forceApplication },
+      simWidth,
+      simHeight,
+      'nearest',
+      precision
+    );
+    this.vorticityEffect = new VorticityConfinementEffect(
+      engine,
+      {
+        velocity: this.forceApplication,
+        curl: this.curlEffect,
+      },
+      simWidth,
+      simHeight,
+      sampleMode,
+      precision
+    );
+    this.vorticityEffect.setUniforms({
+      curlStrength: this.config.enableVorticity ? (this.config.vorticityStrength ?? 0) : 0,
+      timeStep: this.config.timeStep,
+    });
+    
+    const velocityWithVorticity = this.vorticityEffect;
     
     // 4. Compute velocity divergence
     this.divergenceEffect = new DivergenceEffect(
@@ -211,11 +252,26 @@ export class FluidSimulationEffect {
       precision
     );
     
+    this.dyeForceApplication = new DyeForceApplicationEffect(
+      engine,
+      {
+        dye: this.dyeFeedback,
+        forces: inputs.dyeForces ?? inputs.forces,
+      },
+      simWidth,
+      simHeight,
+      sampleMode,
+      precision
+    );
+    this.dyeForceApplication.setUniforms({
+      injectionStrength: this.config.dyeInjectionStrength ?? 0,
+    });
+
     // 8. Advect dye using projected velocity field
     this.dyeAdvection = new DyeAdvectionEffect(
       engine,
       {
-        dye: this.dyeFeedback,
+        dye: this.dyeForceApplication,
         velocity: this.projection,
       },
       simWidth,
@@ -279,8 +335,13 @@ export class FluidSimulationEffect {
   setSrcs(inputs: Partial<FluidSimulationInputs>): void {
     if (inputs.forces !== undefined) {
       this.forceApplication.setSrcs({ forces: inputs.forces });
+      if (inputs.dyeForces === undefined) {
+        this.dyeForceApplication.setSrcs({ forces: inputs.forces });
+      }
     }
-    // TODO: Add dye forces when implemented
+    if (inputs.dyeForces !== undefined) {
+      this.dyeForceApplication.setSrcs({ forces: inputs.dyeForces });
+    }
   }
   
   /**
@@ -294,6 +355,7 @@ export class FluidSimulationEffect {
     if (uniforms.timeStep !== undefined) {
       this.velocityAdvection.setUniforms({ timeStep: uniforms.timeStep });
       this.dyeAdvection.setUniforms({ timeStep: uniforms.timeStep });
+      this.vorticityEffect.setUniforms({ timeStep: uniforms.timeStep });
       this.config.timeStep = uniforms.timeStep;
     }
     if (uniforms.forceStrength !== undefined) {
@@ -308,6 +370,22 @@ export class FluidSimulationEffect {
       this.dyeAdvection.setUniforms({ dissipation: uniforms.dyeDissipation });
       this.config.dyeDissipation = uniforms.dyeDissipation;
     }
+    if (uniforms.vorticityStrength !== undefined) {
+      this.config.vorticityStrength = uniforms.vorticityStrength;
+      this.vorticityEffect.setUniforms({
+        curlStrength: (this.config.enableVorticity ?? true) ? uniforms.vorticityStrength : 0,
+      });
+    }
+    if (uniforms.enableVorticity !== undefined) {
+      this.config.enableVorticity = uniforms.enableVorticity;
+      this.vorticityEffect.setUniforms({
+        curlStrength: uniforms.enableVorticity ? (this.config.vorticityStrength ?? 0) : 0,
+      });
+    }
+    if (uniforms.dyeInjectionStrength !== undefined) {
+      this.config.dyeInjectionStrength = uniforms.dyeInjectionStrength;
+      this.dyeForceApplication.setUniforms({ injectionStrength: uniforms.dyeInjectionStrength });
+    }
   }
   
   /**
@@ -316,9 +394,11 @@ export class FluidSimulationEffect {
   renderAll(engine: BABYLON.Engine): void {
     // Rendering dyeAdvection triggers all upstream dependencies:
     // dyeAdvection depends on projection
-    // projection depends on pressureIterator, forceApplication
+    // projection depends on pressureIterator and vorticityEffect
+    // vorticityEffect depends on forceApplication and curlEffect
+    // curlEffect depends on forceApplication
     // pressureIterator depends on divergence
-    // divergence depends on forceApplication
+    // divergence depends on vorticityEffect
     // forceApplication depends on velocityAdvection
     // velocityAdvection depends on velocityFeedback
     this.dyeAdvection.renderAll(engine);
@@ -330,11 +410,14 @@ export class FluidSimulationEffect {
   dispose(): void {
     this.velocityAdvection.dispose();
     this.forceApplication.dispose();
+    this.curlEffect.dispose();
+    this.vorticityEffect.dispose();
     this.divergenceEffect.dispose();
     this.pressureIterator.dispose();
     this.projection.dispose();
     this.dyeAdvection.dispose();
     this.velocityFeedback.dispose();
     this.dyeFeedback.dispose();
+    this.dyeForceApplication.dispose();
   }
 }
