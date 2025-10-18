@@ -37,26 +37,26 @@ fn pass0(
   let center = textureSample(velocity, velocitySampler, clamp(uv, vec2f(0.0), vec2f(1.0))).xy;
   
   let leftUv = uv - vec2f(texel.x, 0.0);
-  var left = textureSample(velocity, velocitySampler, clamp(leftUv, vec2f(0.0), vec2f(1.0))).xy;
+  var left = textureSample(velocity, velocitySampler, leftUv).xy;
   if (leftUv.x < 0.0) {
     left.x = -center.x;
   }
   
   let rightUv = uv + vec2f(texel.x, 0.0);
-  var right = textureSample(velocity, velocitySampler, clamp(rightUv, vec2f(0.0), vec2f(1.0))).xy;
+  var right = textureSample(velocity, velocitySampler, rightUv).xy;
   if (rightUv.x > 1.0) {
     right.x = -center.x;
   }
   
-  let bottomUv = uv - vec2f(0.0, texel.y);
-  var bottom = textureSample(velocity, velocitySampler, clamp(bottomUv, vec2f(0.0), vec2f(1.0))).xy;
-  if (bottomUv.y < 0.0) {
+  let bottomUv = uv + vec2f(0.0, texel.y);
+  var bottom = textureSample(velocity, velocitySampler, bottomUv).xy;
+  if (bottomUv.y > 1.0) {
     bottom.y = -center.y;
   }
   
-  let topUv = uv + vec2f(0.0, texel.y);
-  var top = textureSample(velocity, velocitySampler, clamp(topUv, vec2f(0.0), vec2f(1.0))).xy;
-  if (topUv.y > 1.0) {
+  let topUv = uv - vec2f(0.0, texel.y);
+  var top = textureSample(velocity, velocitySampler, topUv).xy;
+  if (topUv.y < 0.0) {
     top.y = -center.y;
   }
   

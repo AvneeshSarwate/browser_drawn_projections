@@ -15,7 +15,7 @@ fn pass0(
   forcesSampler: sampler,
 ) -> vec4f {
   let base = textureSample(dye, dyeSampler, clampUv(uv)).xyz;
-  let forceSample = textureSample(forces, forcesSampler, vec2f(uv.x, 1.0 - uv.y));
+  let forceSample = textureSample(forces, forcesSampler, clampUv(uv));
   let intensity = clamp(forceSample.a, 0.0, 1.0);
   let injected = forceSample.rgb * (uniforms.injectionStrength * intensity);
   let result = min(base + injected, vec3f(1.0));

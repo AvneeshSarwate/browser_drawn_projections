@@ -17,6 +17,7 @@ interface PointerState {
   vy: number
   down: boolean
   color: { r: number; g: number; b: number }
+  moved: boolean
 }
 
 const fluidPointer: PointerState = {
@@ -25,7 +26,8 @@ const fluidPointer: PointerState = {
   vx: 0,
   vy: 0,
   down: false,
-  color: { r: 120, g: 60, b: 220 },
+  color: { r: 38, g: 38, b: 38 },
+  moved: false,
 }
 
 const reactionPointer: PointerState = {
@@ -35,6 +37,7 @@ const reactionPointer: PointerState = {
   vy: 0,
   down: false,
   color: { r: 255, g: 140, b: 40 },
+  moved: false,
 }
 
 let animationHandle: number | undefined
@@ -53,9 +56,11 @@ let dyeForceCanvas: HTMLCanvasElement | undefined
 let dyeForceCtx: CanvasRenderingContext2D | null = null
 let reactionSeedCanvas: HTMLCanvasElement | undefined
 let reactionSeedCtx: CanvasRenderingContext2D | null = null
+let currentSplatRadius = 0.25
 
 const pointerBindings = new Map<HTMLCanvasElement, { cancel: (e: PointerEvent) => void; leave: (e: PointerEvent) => void }>()
 let engineWatcher: WatchStopHandle | undefined
+let fluidParamWatchers: WatchStopHandle[] = []
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value))
@@ -83,6 +88,8 @@ function disposeGraph(): void {
   dyeForceCanvas = undefined
   reactionSeedCtx = null
   reactionSeedCanvas = undefined
+  fluidParamWatchers.forEach(stop => stop())
+  fluidParamWatchers = []
 }
 
 function releasePointerHandlers(): void {
@@ -102,8 +109,20 @@ function attachPointerHandlers(canvas: HTMLCanvasElement, pointerState: PointerS
     const lastY = pointerState.y
     pointerState.x = nx
     pointerState.y = ny
-    pointerState.vx = clamp((nx - lastX) * 20.0, -1, 1)
-    pointerState.vy = clamp((ny - lastY) * 20.0, -1, 1)
+    const aspect = canvas.width / canvas.height
+    let deltaX = nx - lastX
+    let deltaY = ny - lastY
+    if (aspect < 1) {
+      deltaX *= aspect
+    }
+    if (aspect > 1) {
+      deltaY /= aspect
+    }
+    const clampedDx = clamp(deltaX, -1, 1)
+    const clampedDy = clamp(deltaY, -1, 1)
+    pointerState.vx = clampedDx
+    pointerState.vy = clampedDy
+    pointerState.moved = pointerState.moved || Math.abs(clampedDx) > 1e-5 || Math.abs(clampedDy) > 1e-5
   }
 
   const handleMove = (event: PointerEvent) => {
@@ -114,11 +133,13 @@ function attachPointerHandlers(canvas: HTMLCanvasElement, pointerState: PointerS
     canvas.setPointerCapture(event.pointerId)
     updateFromEvent(event)
     pointerState.color = generatePointerColor()
+    pointerState.moved = true
   }
   const handleUp = (event: PointerEvent) => {
     pointerState.down = false
     pointerState.vx = 0
     pointerState.vy = 0
+    pointerState.moved = false
     if (canvas.hasPointerCapture(event.pointerId)) {
       canvas.releasePointerCapture(event.pointerId)
     }
@@ -160,10 +181,66 @@ function hsvToRgb(h: number, s: number, v: number): { r: number; g: number; b: n
 
 function generatePointerColor(): { r: number; g: number; b: number } {
   const hsv = hsvToRgb(Math.random(), 1.0, 1.0)
+  const scale = 0.15
   return {
-    r: Math.floor(hsv.r * 255 * 0.9),
-    g: Math.floor(hsv.g * 255 * 0.85),
-    b: Math.floor(hsv.b * 255 * 0.8),
+    r: Math.floor(hsv.r * 255 * scale),
+    g: Math.floor(hsv.g * 255 * scale),
+    b: Math.floor(hsv.b * 255 * scale),
+  }
+}
+
+function computeNormalizedSplatRadius(canvas: HTMLCanvasElement): number {
+  const base = Math.max(0.001, currentSplatRadius / 100)
+  const aspect = canvas.width / canvas.height
+  return aspect > 1 ? base * aspect : base
+}
+
+function registerFluidParamWatchers(): void {
+  fluidParamWatchers.forEach(stop => stop())
+  fluidParamWatchers = []
+  const params = state.fluidParams
+  if (!params) {
+    return
+  }
+  for (const param of params) {
+    const stop = watch(
+      () => param.value.value,
+      (newValue) => {
+        if (param.name === 'splatRadius') {
+          currentSplatRadius = newValue
+        }
+        if (!fluidSim) {
+          return
+        }
+        switch (param.name) {
+          case 'densityDissipation':
+            fluidSim.setUniforms({ dyeDissipation: newValue })
+            break
+          case 'velocityDissipation':
+            fluidSim.setUniforms({ velocityDissipation: newValue })
+            break
+          case 'pressure':
+            fluidSim.setUniforms({ pressure: newValue })
+            break
+          case 'pressureIterations':
+            fluidSim.setUniforms({ pressureIterations: Math.max(1, Math.round(newValue)) })
+            break
+          case 'curl':
+            fluidSim.setUniforms({ vorticityStrength: newValue })
+            break
+          case 'forceStrength':
+            fluidSim.setUniforms({ forceStrength: newValue })
+            break
+          case 'splatRadius':
+            // already handled above
+            break
+          default:
+            break
+        }
+      },
+      { immediate: true }
+    )
+    fluidParamWatchers.push(stop)
   }
 }
 
@@ -237,28 +314,99 @@ function updateForceField(): void {
     dyeForceCtx!.restore()
   }
 
-  if (!fluidPointer.down) return
+  if (!fluidPointer.down || !fluidPointer.moved) return
 
-  const px = fluidPointer.x * forceCanvas.width
-  const py = fluidPointer.y * forceCanvas.height
-  const radius = Math.max(forceCanvas.width, forceCanvas.height) * 0.05
-  const vx = clamp(fluidPointer.vx * 0.5 + 0.5, 0, 1)
-  const vy = clamp(fluidPointer.vy * 0.5 + 0.5, 0, 1)
-  forceCtx.fillStyle = `rgba(${Math.floor(vx * 255)}, ${Math.floor(vy * 255)}, 210, 0.85)`
-  forceCtx.beginPath()
-  forceCtx.arc(px, py, radius, 0, Math.PI * 2)
-  forceCtx.fill()
-
-  if (hasDyeForces) {
-    const dyeRadius = Math.max(dyeForceCanvas!.width, dyeForceCanvas!.height) * 0.06
-    const gradient = dyeForceCtx!.createRadialGradient(px, py, 0, px, py, dyeRadius)
-    gradient.addColorStop(0, `rgba(${fluidPointer.color.r}, ${fluidPointer.color.g}, ${fluidPointer.color.b}, 0.9)`)
-    gradient.addColorStop(1, 'rgba(0, 0, 0, 0)')
-    dyeForceCtx!.fillStyle = gradient
-    dyeForceCtx!.beginPath()
-    dyeForceCtx!.arc(px, py, dyeRadius, 0, Math.PI * 2)
-    dyeForceCtx!.fill()
+  const velX = fluidPointer.vx
+  const velY = fluidPointer.vy
+  const speed = Math.sqrt(velX * velX + velY * velY)
+  if (speed < 1e-6) {
+    fluidPointer.moved = false
+    fluidPointer.vx = 0
+    fluidPointer.vy = 0
+    return
   }
+
+  const width = forceCanvas.width
+  const height = forceCanvas.height
+  const pointerU = fluidPointer.x
+  const pointerV = fluidPointer.y
+  const aspect = width / height
+  const baseRadius = Math.max(0.0002, currentSplatRadius / 100)
+  const radius = aspect > 1 ? baseRadius * aspect : baseRadius
+  const influenceRadius = baseRadius * 3
+
+  const minU = Math.max(0, pointerU - influenceRadius)
+  const maxU = Math.min(1, pointerU + influenceRadius)
+  const minV = Math.max(0, pointerV - influenceRadius)
+  const maxV = Math.min(1, pointerV + influenceRadius)
+
+  const startX = Math.max(0, Math.floor(minU * width))
+  const startY = Math.max(0, Math.floor(minV * height))
+  const endX = Math.min(width, Math.ceil(maxU * width))
+  const endY = Math.min(height, Math.ceil(maxV * height))
+  const regionWidth = Math.max(1, endX - startX)
+  const regionHeight = Math.max(1, endY - startY)
+
+  const forceImage = forceCtx.getImageData(startX, startY, regionWidth, regionHeight)
+  const forceData = forceImage.data
+
+  let dyeImage: ImageData | undefined
+  let dyeData: Uint8ClampedArray | undefined
+  if (hasDyeForces) {
+    dyeImage = dyeForceCtx!.getImageData(startX, startY, regionWidth, regionHeight)
+    dyeData = dyeImage.data
+  }
+
+  const dirX = velX / speed
+  const dirY = -velY / speed
+  const dir01X = clamp(dirX * 0.5 + 0.5, 0, 1)
+  const dir01Y = clamp(dirY * 0.5 + 0.5, 0, 1)
+
+  for (let y = 0; y < regionHeight; y++) {
+    const pixelY = startY + y
+    const v = (pixelY + 0.5) / height
+    const dy = v - pointerV
+    for (let x = 0; x < regionWidth; x++) {
+      const pixelX = startX + x
+      const u = (pixelX + 0.5) / width
+      const dx = u - pointerU
+      const scaledDx = dx * aspect
+      const distSq = scaledDx * scaledDx + dy * dy
+      const weight = Math.exp(-distSq / Math.max(1e-6, radius))
+      const amplitude = weight * speed
+      if (amplitude < 1e-5 && (!dyeData || weight < 1e-5)) {
+        continue
+      }
+      const alpha = Math.min(1, amplitude)
+      const idx = (y * regionWidth + x) * 4
+      if (amplitude >= 1e-5) {
+        forceData[idx + 0] = Math.round(clamp(dir01X * alpha, 0, 1) * 255)
+        forceData[idx + 1] = Math.round(clamp(dir01Y * alpha, 0, 1) * 255)
+        forceData[idx + 2] = 0
+        forceData[idx + 3] = Math.round(alpha * 255)
+      }
+
+      if (dyeData) {
+        const dyeScale = weight
+        if (dyeScale > 1e-5) {
+          dyeData[idx + 0] = Math.min(255, dyeData[idx + 0] + Math.round(fluidPointer.color.r * dyeScale))
+          dyeData[idx + 1] = Math.min(255, dyeData[idx + 1] + Math.round(fluidPointer.color.g * dyeScale))
+          dyeData[idx + 2] = Math.min(255, dyeData[idx + 2] + Math.round(fluidPointer.color.b * dyeScale))
+          const existingAlpha = dyeData[idx + 3]
+          dyeData[idx + 3] = Math.min(255, Math.max(existingAlpha, Math.round(dyeScale * 255)))
+        }
+      }
+    }
+  }
+
+  forceCtx.putImageData(forceImage, startX, startY)
+  if (hasDyeForces && dyeImage) {
+    dyeForceCtx!.putImageData(dyeImage, startX, startY)
+  }
+
+  fluidPointer.moved = false
+  fluidPointer.vx = 0
+  fluidPointer.vy = 0
 }
 
 function updateReactionSeed(): void {
@@ -281,6 +429,7 @@ function updateReactionSeed(): void {
 }
 
 function startLoop(fluidEngine: BABYLON.WebGPUEngine, reactionEngine: BABYLON.WebGPUEngine): void {
+  let lastFrameTime: number | undefined
   const render = () => {
     if (!fluidEngine || !reactionEngine) {
       animationHandle = undefined
@@ -299,6 +448,10 @@ function startLoop(fluidEngine: BABYLON.WebGPUEngine, reactionEngine: BABYLON.We
     updateForceField()
     updateReactionSeed()
     if (!state.paused) {
+      const now = performance.now()
+      const dt = lastFrameTime !== undefined ? Math.min((now - lastFrameTime) / 1000, 1 / 30) : 1 / 60
+      lastFrameTime = now
+      fluidSim?.updateForFrame(dt)
       fluidEngine.beginFrame()
       try {
         fluidSim?.renderAll(fluidEngine as unknown as BABYLON.Engine)
@@ -316,6 +469,7 @@ function startLoop(fluidEngine: BABYLON.WebGPUEngine, reactionEngine: BABYLON.We
     }
     animationHandle = requestAnimationFrame(render)
   }
+  lastFrameTime = performance.now()
   animationHandle = requestAnimationFrame(render)
 }
 
@@ -326,6 +480,7 @@ function setupEngine(fluidEngine: BABYLON.WebGPUEngine, reactionEngine: BABYLON.
     state.paused = !state.paused
   })
   const { width, height } = state
+  fluidPointer.color = generatePointerColor()
   
   const forceCanvasEl = document.getElementById('forceCanvas') as HTMLCanvasElement | null
   if (!forceCanvasEl) {
@@ -369,22 +524,25 @@ function setupEngine(fluidEngine: BABYLON.WebGPUEngine, reactionEngine: BABYLON.
   const reactionCanvas = document.getElementById('reactionCanvas') as HTMLCanvasElement | null
 
   const getFluidParam = (name: string) => state.fluidParams?.find(p => p.name === name)?.value.value ?? 0
+  currentSplatRadius = getFluidParam('splatRadius') || 0.25
   fluidSim = new FluidSimulationEffect(
     fluidEngine,
     { forces: forceCanvas!, dyeForces: dyeForceCanvas },
     {
       simWidth: width,
       simHeight: height,
-      pressureIterations: 20,
-      velocityDissipation: getFluidParam('velocityDissipation') || 0.98,
-      dyeDissipation: getFluidParam('densityDissipation') || 0.995,
+      pressureIterations: getFluidParam('pressureIterations') || 20,
+      pressure: getFluidParam('pressure') || 0.8,
+      velocityDissipation: getFluidParam('velocityDissipation') || 0.2,
+      dyeDissipation: getFluidParam('densityDissipation') || 1.0,
       forceStrength: getFluidParam('forceStrength') || 6000,
-      timeStep: 0.016,
+      timeStep: 1 / 60,
       enableVorticity: true,
-      vorticityStrength: getFluidParam('vorticityStrength') || 30,
+      vorticityStrength: getFluidParam('curl') || 30,
       dyeInjectionStrength: 0.65,
     }
   )
+  registerFluidParamWatchers()
 
   reactionInitial = new PassthruEffect(reactionEngine, { src: reactionInitialCanvas }, width, height, 'linear', 'half_float')
   reactionFeedback = new FeedbackNode(reactionEngine, reactionInitial, width, height, 'linear', 'half_float')

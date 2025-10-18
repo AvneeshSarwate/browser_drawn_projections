@@ -91,13 +91,13 @@ const width = computed(() => state.width)
 const height = computed(() => state.height)
 
 const fluidParams = [
-  { name: 'velocityDissipation', label: 'Velocity Dissipation', min: 0.5, max: 1.0, step: 0.01, value: ref(0.83) },
-  { name: 'densityDissipation', label: 'Density Dissipation', min: 0.5, max: 1.0, step: 0.01, value: ref(0.98) },
-  { name: 'swirlStrength', label: 'Swirl Strength', min: 0, max: 50, step: 0.5, value: ref(30) },
-  { name: 'turbulence', label: 'Turbulence', min: 0, max: 1, step: 0.01, value: ref(0) },
-  { name: 'forceRadius', label: 'Force Radius', min: 0.01, max: 0.5, step: 0.01, value: ref(0.25) },
-  { name: 'forceStrength', label: 'Force Strength', min: 0, max: 10000, step: 100, value: ref(6000) },
-  { name: 'attraction', label: 'Attraction', min: 0, max: 1, step: 0.01, value: ref(0) },
+  { name: 'densityDissipation', label: 'Density Dissipation', min: 0.0, max: 1.0, step: 0.01, value: ref(1.0) },
+  { name: 'velocityDissipation', label: 'Velocity Dissipation', min: 0.0, max: 4.0, step: 0.05, value: ref(0.2) },
+  { name: 'pressure', label: 'Pressure Damping', min: 0.0, max: 1.0, step: 0.01, value: ref(0.8) },
+  { name: 'pressureIterations', label: 'Pressure Iterations', min: 1, max: 80, step: 1, value: ref(20) },
+  { name: 'curl', label: 'Vorticity', min: 0, max: 60, step: 1, value: ref(30) },
+  { name: 'splatRadius', label: 'Splat Radius', min: 0.01, max: 1.0, step: 0.01, value: ref(0.25) },
+  { name: 'forceStrength', label: 'Splat Force', min: 0, max: 20000, step: 100, value: ref(6000) },
 ]
 
 const reactionParams = [

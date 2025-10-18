@@ -12,7 +12,8 @@ fn pass0(
 ) -> vec4f {
   let vel = textureSample(velocity, velocitySampler, uv).xy;
   
-  let forceSample = textureSample(forces, forcesSampler, vec2f(uv.x, 1.0 - uv.y));
+  let clampedUv = clamp(uv, vec2f(0.0), vec2f(1.0));
+  let forceSample = textureSample(forces, forcesSampler, clampedUv);
   let intensity = clamp(forceSample.a, 0.0, 1.0);
   let encodedForce = forceSample.xy * 2.0 - vec2f(1.0);
   

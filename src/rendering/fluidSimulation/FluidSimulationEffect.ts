@@ -26,6 +26,7 @@ export interface FluidSimulationConfig {
   displayWidth?: number;
   displayHeight?: number;
   pressureIterations: number;
+  pressure: number;
   velocityDissipation: number;
   dyeDissipation: number;
   forceStrength: number;
@@ -74,6 +75,7 @@ export class FluidSimulationEffect {
   private dyeFeedback: FeedbackNode;
   private dyeForceApplication: DyeForceApplicationEffect;
   private dyeAdvection: DyeAdvectionEffect;
+  private currentTimeStep: number;
   
   /** Projected velocity field (divergence-free) */
   public get velocity(): BABYLON.RenderTargetTexture {
@@ -111,6 +113,10 @@ export class FluidSimulationEffect {
     if (this.config.dyeInjectionStrength === undefined) {
       this.config.dyeInjectionStrength = 0.65;
     }
+    if (this.config.pressure === undefined) {
+      this.config.pressure = 0.8;
+    }
+    this.currentTimeStep = config.timeStep;
     
     const { simWidth, simHeight } = config;
     const sampleMode: 'nearest' | 'linear' = 'linear';
@@ -148,7 +154,7 @@ export class FluidSimulationEffect {
     );
     this.velocityAdvection.setUniforms({
       timeStep: config.timeStep,
-      dissipation: config.velocityDissipation,
+      dissipation: 1.0,
     });
     
     // 3. Apply external forces from mouse/canvas
@@ -214,6 +220,7 @@ export class FluidSimulationEffect {
       precision,
       config.pressureIterations
     );
+    this.pressureIterator.setDamping(this.config.pressure);
     
     // 6. Subtract pressure gradient (projection to divergence-free)
     this.projection = new GradientSubtractionEffect(
@@ -281,11 +288,24 @@ export class FluidSimulationEffect {
     );
     this.dyeAdvection.setUniforms({
       timeStep: config.timeStep,
-      dissipation: config.dyeDissipation,
+      dissipation: 1.0,
     });
     
     // Close dye feedback loop
     this.dyeFeedback.setFeedbackSrc(this.dyeAdvection);
+    this.updateForFrame(this.currentTimeStep);
+  }
+
+  updateForFrame(dt: number): void {
+    const clampedDt = Math.max(1e-4, dt);
+    this.currentTimeStep = clampedDt;
+    this.config.timeStep = clampedDt;
+    const velocityDecay = 1 / (1 + this.config.velocityDissipation * clampedDt);
+    const dyeDecay = 1 / (1 + this.config.dyeDissipation * clampedDt);
+    this.velocityAdvection.setUniforms({ timeStep: clampedDt, dissipation: velocityDecay });
+    this.dyeAdvection.setUniforms({ timeStep: clampedDt, dissipation: dyeDecay });
+    const curlStrength = (this.config.enableVorticity ?? true) ? (this.config.vorticityStrength ?? 0) : 0;
+    this.vorticityEffect.setUniforms({ curlStrength, timeStep: clampedDt });
   }
   
   private createBlackTexture(width: number, height: number): HTMLCanvasElement {
@@ -348,15 +368,14 @@ export class FluidSimulationEffect {
    * Update simulation parameters at runtime
    */
   setUniforms(uniforms: Partial<FluidSimulationConfig>): void {
+    let refreshFrameState = false;
     if (uniforms.velocityDissipation !== undefined) {
-      this.velocityAdvection.setUniforms({ dissipation: uniforms.velocityDissipation });
       this.config.velocityDissipation = uniforms.velocityDissipation;
+      refreshFrameState = true;
     }
     if (uniforms.timeStep !== undefined) {
-      this.velocityAdvection.setUniforms({ timeStep: uniforms.timeStep });
-      this.dyeAdvection.setUniforms({ timeStep: uniforms.timeStep });
-      this.vorticityEffect.setUniforms({ timeStep: uniforms.timeStep });
       this.config.timeStep = uniforms.timeStep;
+      this.updateForFrame(uniforms.timeStep);
     }
     if (uniforms.forceStrength !== undefined) {
       this.forceApplication.setUniforms({ forceStrength: uniforms.forceStrength });
@@ -367,24 +386,33 @@ export class FluidSimulationEffect {
       this.config.pressureIterations = uniforms.pressureIterations;
     }
     if (uniforms.dyeDissipation !== undefined) {
-      this.dyeAdvection.setUniforms({ dissipation: uniforms.dyeDissipation });
       this.config.dyeDissipation = uniforms.dyeDissipation;
+      refreshFrameState = true;
+    }
+    if (uniforms.pressure !== undefined) {
+      this.config.pressure = uniforms.pressure;
+      this.pressureIterator.setDamping(uniforms.pressure);
     }
     if (uniforms.vorticityStrength !== undefined) {
       this.config.vorticityStrength = uniforms.vorticityStrength;
       this.vorticityEffect.setUniforms({
         curlStrength: (this.config.enableVorticity ?? true) ? uniforms.vorticityStrength : 0,
+        timeStep: this.currentTimeStep,
       });
     }
     if (uniforms.enableVorticity !== undefined) {
       this.config.enableVorticity = uniforms.enableVorticity;
       this.vorticityEffect.setUniforms({
         curlStrength: uniforms.enableVorticity ? (this.config.vorticityStrength ?? 0) : 0,
+        timeStep: this.currentTimeStep,
       });
     }
     if (uniforms.dyeInjectionStrength !== undefined) {
       this.config.dyeInjectionStrength = uniforms.dyeInjectionStrength;
       this.dyeForceApplication.setUniforms({ injectionStrength: uniforms.dyeInjectionStrength });
+    }
+    if (refreshFrameState) {
+      this.updateForFrame(this.currentTimeStep);
     }
   }
   

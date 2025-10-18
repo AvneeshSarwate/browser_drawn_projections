@@ -1,8 +1,3 @@
-fn safeSample(tex: texture_2d<f32>, samp: sampler, uv: vec2f) -> f32 {
-  let clampedUv = clamp(uv, vec2f(0.0), vec2f(1.0));
-  return textureSample(tex, samp, clampedUv).x;
-}
-
 fn texelSize(tex: texture_2d<f32>) -> vec2f {
   let dims = textureDimensions(tex);
   return vec2f(
@@ -19,14 +14,22 @@ fn pass0(
   divergenceSampler: sampler,
 ) -> vec4f {
   let texel = texelSize(pressure);
-  
-  let pL = safeSample(pressure, pressureSampler, uv - vec2f(texel.x, 0.0));
-  let pR = safeSample(pressure, pressureSampler, uv + vec2f(texel.x, 0.0));
-  let pB = safeSample(pressure, pressureSampler, uv - vec2f(0.0, texel.y));
-  let pT = safeSample(pressure, pressureSampler, uv + vec2f(0.0, texel.y));
-  
-  let div = safeSample(divergence, divergenceSampler, uv);
-  
+  let center = textureSample(pressure, pressureSampler, uv).x;
+
+  let leftUv = uv - vec2f(texel.x, 0.0);
+  var pL = textureSample(pressure, pressureSampler, leftUv).x;
+
+  let rightUv = uv + vec2f(texel.x, 0.0);
+  var pR = textureSample(pressure, pressureSampler, rightUv).x;
+
+  let bottomUv = uv + vec2f(0.0, texel.y);
+  var pB = textureSample(pressure, pressureSampler, bottomUv).x;
+
+  let topUv = uv - vec2f(0.0, texel.y);
+  var pT = textureSample(pressure, pressureSampler, topUv).x;
+
+  let div = textureSample(divergence, divergenceSampler, uv).x;
+
   let p = 0.25 * (pL + pR + pB + pT - div);
   
   return vec4f(p, 0.0, 0.0, 1.0);

@@ -7,6 +7,7 @@ import {
   createPassthruMaterial,
 } from '../shaderFXBabylon';
 import { createPressureJacobiMaterial } from './pressureJacobi.frag.generated';
+import { createPressureDampMaterial, type PressureDampUniforms } from './pressureDamp.frag.generated';
 
 export interface PressureIteratorInputs {
   divergence: ShaderSource;
@@ -36,6 +37,9 @@ export class PressureIterator extends CustomShaderEffect<
   private pressureRT1!: BABYLON.RenderTargetTexture;
   private jacobiMaterial: MaterialHandles<Record<string, never>, string>;
   private copyMaterial: MaterialHandles<Record<string, never>, string>;
+  private dampMaterial: MaterialHandles<PressureDampUniforms, string>;
+  private pressureDamping = 0.8;
+  private hasPreviousPressure = false;
   constructor(
     engine: BABYLON.WebGPUEngine,
     inputs: PressureIteratorInputs,
@@ -64,6 +68,8 @@ export class PressureIterator extends CustomShaderEffect<
     this.copyMaterial = createPassthruMaterial(this.scene, { 
       name: 'PressureCopyMaterial' 
     });
+    this.dampMaterial = createPressureDampMaterial(this.scene, { name: 'PressureDampMaterial' });
+    this.dampMaterial.setUniforms({ scale: this.pressureDamping });
     
     this.allocatePingPongBuffers();
   }
@@ -99,6 +105,7 @@ export class PressureIterator extends CustomShaderEffect<
     
     this.pressureRT0 = makeRTT('pressureRT0');
     this.pressureRT1 = makeRTT('pressureRT1');
+    this.hasPreviousPressure = false;
   }
 
   private ensureSizeMatch(): void {
@@ -153,7 +160,14 @@ export class PressureIterator extends CustomShaderEffect<
     let readBuffer = this.pressureRT0;
     let writeBuffer = this.pressureRT1;
     
-    this.clearTarget(readBuffer, 0.0);
+    if (this.hasPreviousPressure && this.pressureDamping > 0) {
+      this.dampMaterial.setUniforms({ scale: this.pressureDamping });
+      this.dampMaterial.setTexture('src', this.output);
+      this.dampMaterial.setTextureSampler('src', sampler);
+      this.renderToTarget(readBuffer, this.dampMaterial);
+    } else {
+      this.clearTarget(readBuffer, 0.0);
+    }
     this.clearTarget(writeBuffer, 0.0);
     
     // Optional: seed with initial pressure
@@ -189,12 +203,19 @@ export class PressureIterator extends CustomShaderEffect<
     this.copyMaterial.setTexture('src', readBuffer);
     this.copyMaterial.setTextureSampler('src', sampler);
     this.renderToTarget(this.output, this.copyMaterial);
+    this.hasPreviousPressure = true;
   }
 
   override dispose(): void {
     this.pressureRT0?.dispose();
     this.pressureRT1?.dispose();
+    this.dampMaterial.material.dispose(true, false);
     super.dispose();
+  }
+
+  setDamping(value: number): void {
+    this.pressureDamping = Math.min(Math.max(value, 0), 1);
+    this.dampMaterial.setUniforms({ scale: this.pressureDamping });
   }
 
   override setSrcs(inputs: Partial<PressureIteratorInputs>): void {

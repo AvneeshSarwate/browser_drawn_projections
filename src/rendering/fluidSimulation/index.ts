@@ -16,6 +16,7 @@
  *   simWidth: 512,
  *   simHeight: 512,
  *   pressureIterations: 20,
+ *   pressure: 0.8,
  *   velocityDissipation: 0.98,
  *   dyeDissipation: 0.995,
  *   forceStrength: 6000,
