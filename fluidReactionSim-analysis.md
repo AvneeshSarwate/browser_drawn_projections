@@ -49,6 +49,7 @@
 - Re-aligned vertical neighbor sampling across divergence, pressure Jacobi, gradient subtraction, curl, and vorticity confinement shaders so “top” uses `uv - texel.y` and “bottom” uses `uv + texel.y`, matching the top-left origin.
 - Synchronized the generated TypeScript shader wrappers with the WGSL changes so runtime code reflects the corrected math.
 - Replaced the CPU-drawn force canvas with true shader-based splats. Pointer impulses now go straight into the velocity/dye buffers via a Gaussian splat pass, mirroring Pavel’s WebGL pipeline and eliminating 8-bit quantisation noise.
+- Added an additive blend stage so the splat delta is accumulated onto the existing velocity and dye render targets before the rest of the pipeline runs.
 
 ## Additional Investigation
 - Residual down-left drift persists even after the above orientation fixes. Inspection showed that the WebGPU shaders applied extra boundary overrides (e.g. zeroing curl samples or forcing pressure neighbors to the center value) that Pavel’s GLSL never used; these injected asymmetric forces near the borders. Those overrides have been removed so the clamped sampling behaviour now mirrors the original WebGL implementation.

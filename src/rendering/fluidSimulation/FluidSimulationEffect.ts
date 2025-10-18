@@ -12,6 +12,7 @@ import { GradientSubtractionEffect } from './gradientSubtraction.frag.generated'
 import { DyeAdvectionEffect } from './dyeAdvection.frag.generated';
 import { PressureIterator } from './PressureIterator';
 import { SplatEffect } from './splat.frag.generated';
+import { AddEffect } from './add.frag.generated';
 
 export interface FluidSimulationInputs {}
 
@@ -65,11 +66,13 @@ export class FluidSimulationEffect {
   private pressureIterator: PressureIterator;
   private projection: GradientSubtractionEffect;
   private velocitySplat: SplatEffect;
+  private velocityAdd: AddEffect;
   
   // Dye pipeline components
   private dyeFeedback: FeedbackNode;
   private dyeAdvection: DyeAdvectionEffect;
   private dyeSplat: SplatEffect;
+  private dyeAdd: AddEffect;
   private currentTimeStep: number;
   private readonly aspectRatio: number;
   
@@ -247,7 +250,18 @@ export class FluidSimulationEffect {
 
     this.velocitySplat = new SplatEffect(
       engine,
-      { splatTarget: this.velocityFeedback },
+      { splatTarget: this.velocityFeedback.output },
+      simWidth,
+      simHeight,
+      sampleMode,
+      precision
+    );
+    this.velocityAdd = new AddEffect(
+      engine,
+      {
+        base: this.velocityFeedback.output,
+        delta: this.velocitySplat.output,
+      },
       simWidth,
       simHeight,
       sampleMode,
@@ -255,7 +269,18 @@ export class FluidSimulationEffect {
     );
     this.dyeSplat = new SplatEffect(
       engine,
-      { splatTarget: this.dyeFeedback },
+      { splatTarget: this.dyeFeedback.output },
+      simWidth,
+      simHeight,
+      sampleMode,
+      precision
+    );
+    this.dyeAdd = new AddEffect(
+      engine,
+      {
+        base: this.dyeFeedback.output,
+        delta: this.dyeSplat.output,
+      },
       simWidth,
       simHeight,
       sampleMode,
@@ -353,7 +378,6 @@ export class FluidSimulationEffect {
     const aspect = this.aspectRatio;
 
     if (this.velocitySplat) {
-      this.velocitySplat.setSrcs({ splatTarget: this.velocityFeedback.output });
       this.velocitySplat.setUniforms({
         point: [px, py],
         color: scaledVelocity,
@@ -361,11 +385,13 @@ export class FluidSimulationEffect {
         aspectRatio: aspect,
       });
       this.velocitySplat.renderAll(this.engine);
-      this.velocityFeedback.setSrcs({ initialState: this.velocitySplat });
+      if (this.velocityAdd) {
+        this.velocityAdd.renderAll(this.engine);
+        this.velocityFeedback.setSrcs({ initialState: this.velocityAdd });
+      }
     }
 
     if (this.dyeSplat) {
-      this.dyeSplat.setSrcs({ splatTarget: this.dyeFeedback.output });
       this.dyeSplat.setUniforms({
         point: [px, py],
         color: scaledColor,
@@ -373,7 +399,10 @@ export class FluidSimulationEffect {
         aspectRatio: aspect,
       });
       this.dyeSplat.renderAll(this.engine);
-      this.dyeFeedback.setSrcs({ initialState: this.dyeSplat });
+      if (this.dyeAdd) {
+        this.dyeAdd.renderAll(this.engine);
+        this.dyeFeedback.setSrcs({ initialState: this.dyeAdd });
+      }
     }
   }
   
@@ -463,5 +492,7 @@ export class FluidSimulationEffect {
     this.dyeFeedback.dispose();
     this.velocitySplat.dispose();
     this.dyeSplat.dispose();
+    this.velocityAdd.dispose();
+    this.dyeAdd.dispose();
   }
 }

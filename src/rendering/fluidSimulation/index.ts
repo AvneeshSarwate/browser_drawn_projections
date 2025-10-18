@@ -48,3 +48,4 @@ export {
   type VelocityFieldDebugUniforms,
 } from './debugVisualization';
 export { SplatEffect, type SplatUniforms, type SplatInputs } from './splat.frag.generated';
+export { AddEffect, type AddInputs } from './add.frag.generated';
