@@ -67,12 +67,6 @@ let reactionSeedCtx: CanvasRenderingContext2D | null = null
 let currentSplatRadius = 0.25
 let currentForceStrength = 6000
 let currentDyeInjectionStrength = 0.65
-const pendingSplats: Array<{
-  point: [number, number]
-  velocity: [number, number]
-  dye: [number, number, number]
-  radius: number
-}> = []
 
 const pointerBindings = new Map<HTMLCanvasElement, { cancel: (e: PointerEvent) => void; leave: (e: PointerEvent) => void }>()
 let engineWatcher: WatchStopHandle | undefined
@@ -101,7 +95,6 @@ function disposeGraph(): void {
   splatDebugEffect?.dispose()
   splatDebugEffect = undefined
   fluidDebugMode = 'dye'
-  pendingSplats.length = 0
   reactionVisual = undefined
   reactionSim = undefined
   reactionFeedback?.dispose()
@@ -385,63 +378,7 @@ function createReactionInitialCanvas(width: number, height: number): HTMLCanvasE
   return canvas
 }
 
-function queuePointerSplat(): void {
-  if (!forceCanvas) {
-    return
-  }
-  if (!fluidPointer.down || !fluidPointer.moved) {
-    return
-  }
 
-  const radius = computeNormalizedSplatRadius(forceCanvas)
-  const velX = fluidPointer.vx
-  const velY = fluidPointer.vy
-  const speed = Math.sqrt(velX * velX + velY * velY)
-  if (speed < 1e-6) {
-    fluidPointer.moved = false
-    fluidPointer.vx = 0
-    fluidPointer.vy = 0
-    return
-  }
-  const dirX = velX / speed
-  const dirY = -velY / speed
-  const velocity: [number, number] = [dirX * speed, dirY * speed]
-  const dyeScale = currentDyeInjectionStrength * speed
-  const dye: [number, number, number] = [
-    (fluidPointer.color.r / 255) * dyeScale,
-    (fluidPointer.color.g / 255) * dyeScale,
-    (fluidPointer.color.b / 255) * dyeScale,
-  ]
-
-  pendingSplats.push({
-    point: [fluidPointer.x, 1 - fluidPointer.y],
-    velocity,
-    dye,
-    radius,
-  })
-
-  fluidPointer.moved = false
-  fluidPointer.vx = 0
-  fluidPointer.vy = 0
-}
-
-function flushPendingSplats(): void {
-  if (!fluidSim || pendingSplats.length === 0) {
-    return
-  }
-  for (const splat of pendingSplats) {
-    fluidSim.applySplat({
-      point: splat.point,
-      velocityDelta: splat.velocity,
-      dyeColor: splat.dye,
-      radius: splat.radius,
-    })
-  }
-  pendingSplats.length = 0
-  if (fluidDebugMode === 'splat') {
-    updateFluidDisplaySource()
-  }
-}
 
 function updateReactionSeed(): void {
   if (!reactionSeedCtx || !reactionSeedCanvas) {
@@ -479,9 +416,44 @@ function startLoop(fluidEngine: BABYLON.WebGPUEngine, reactionEngine: BABYLON.We
       animationHandle = undefined
       return
     }
-    queuePointerSplat()
+    
+    // Apply direct pointer splat if needed
+    if (fluidPointer.down && fluidPointer.moved && fluidSim && forceCanvas) {
+      const radius = computeNormalizedSplatRadius(forceCanvas)
+      const velX = fluidPointer.vx
+      const velY = fluidPointer.vy
+      const speed = Math.sqrt(velX * velX + velY * velY)
+      
+      if (speed >= 1e-6) {
+        const dirX = velX / speed
+        const dirY = -velY / speed
+        const velocity: [number, number] = [dirX * speed, dirY * speed]
+        // Dye color is NOT scaled by speed (unlike velocity), just by injection strength
+        const dye: [number, number, number] = [
+          (fluidPointer.color.r / 255) * currentDyeInjectionStrength,
+          (fluidPointer.color.g / 255) * currentDyeInjectionStrength,
+          (fluidPointer.color.b / 255) * currentDyeInjectionStrength,
+        ]
+        
+        fluidSim.applySplat({
+          point: [fluidPointer.x, 1 - fluidPointer.y],
+          velocityDelta: velocity,
+          dyeColor: dye,
+          radius,
+        })
+        
+        if (fluidDebugMode === 'splat') {
+          updateFluidDisplaySource()
+        }
+      }
+      
+      fluidPointer.moved = false
+      fluidPointer.vx = 0
+      fluidPointer.vy = 0
+    }
+    
     updateReactionSeed()
-    const shouldRenderFluid = !state.paused || pendingSplats.length > 0
+    const shouldRenderFluid = !state.paused || (fluidPointer.down && fluidPointer.moved)
     if (shouldRenderFluid) {
       const now = performance.now()
       const dt = lastFrameTime !== undefined ? Math.min((now - lastFrameTime) / 1000, 1 / 30) : 1 / 60
@@ -491,7 +463,6 @@ function startLoop(fluidEngine: BABYLON.WebGPUEngine, reactionEngine: BABYLON.We
       }
       fluidEngine.beginFrame()
       try {
-        flushPendingSplats()
         fluidSim?.renderAll(fluidEngine as unknown as BABYLON.Engine)
         fluidCanvasPaint?.renderAll(fluidEngine as unknown as BABYLON.Engine)
       } finally {
@@ -668,6 +639,18 @@ function setupEngine(fluidEngine: BABYLON.WebGPUEngine, reactionEngine: BABYLON.
   if (fluidCanvasPaint) {
     shaderGraph = fluidCanvasPaint
   }
+  
+  // Prime the fluid simulation with one initial render to show the initial dye blob
+  if (fluidSim) {
+    fluidEngine.beginFrame()
+    try {
+      fluidSim.renderAll(fluidEngine as unknown as BABYLON.Engine)
+      fluidCanvasPaint?.renderAll(fluidEngine as unknown as BABYLON.Engine)
+    } finally {
+      fluidEngine.endFrame()
+    }
+  }
+  
   startLoop(fluidEngine, reactionEngine)
 }
 

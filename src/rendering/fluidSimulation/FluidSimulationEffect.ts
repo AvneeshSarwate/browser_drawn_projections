@@ -11,8 +11,7 @@ import { DivergenceEffect } from './divergence.frag.generated';
 import { GradientSubtractionEffect } from './gradientSubtraction.frag.generated';
 import { DyeAdvectionEffect } from './dyeAdvection.frag.generated';
 import { PressureIterator } from './PressureIterator';
-import { SplatEffect } from './splat.frag.generated';
-import { AddEffect } from './add.frag.generated';
+import { SplatUnifiedEffect } from './splat_unified.frag.generated';
 
 export interface FluidSimulationInputs {}
 
@@ -65,14 +64,12 @@ export class FluidSimulationEffect {
   private divergenceEffect: DivergenceEffect;
   private pressureIterator: PressureIterator;
   private projection: GradientSubtractionEffect;
-  private velocitySplat: SplatEffect;
-  private velocityAdd: AddEffect;
+  private velocitySplatUnified: SplatUnifiedEffect;
   
   // Dye pipeline components
   private dyeFeedback: FeedbackNode;
   private dyeAdvection: DyeAdvectionEffect;
-  private dyeSplat: SplatEffect;
-  private dyeAdd: AddEffect;
+  private dyeSplatUnified: SplatUnifiedEffect;
   private currentTimeStep: number;
   private readonly aspectRatio: number;
   
@@ -98,7 +95,17 @@ export class FluidSimulationEffect {
 
   /** Latest velocity splat contribution (for debugging) */
   public get splat(): BABYLON.RenderTargetTexture {
-    return this.velocitySplat.output;
+    return this.velocitySplatUnified.output;
+  }
+
+  /** Debug: Dye feedback output */
+  public get dyeFeedbackDebug(): BABYLON.RenderTargetTexture {
+    return this.dyeFeedback.output;
+  }
+
+  /** Debug: Dye splat output */
+  public get dyeSplatDebug(): BABYLON.RenderTargetTexture {
+    return this.dyeSplatUnified.output;
   }
 
   constructor(
@@ -148,10 +155,28 @@ export class FluidSimulationEffect {
       precision
     );
     
+    // Unified splat nodes - support passthrough and additive modes
+    this.velocitySplatUnified = new SplatUnifiedEffect(
+      engine,
+      { base: this.velocityFeedback },
+      simWidth,
+      simHeight,
+      sampleMode,
+      precision
+    );
+    this.velocitySplatUnified.setUniforms({
+      mode: 0,
+      strength: 1.0,
+      point: [0.5, 0.5],
+      color: [0, 0, 0],
+      radius: 0.01,
+      aspectRatio: this.aspectRatio,
+    });
+    
     // 2. Velocity advection (semi-Lagrangian backtrace)
     this.velocityAdvection = new VelocityAdvectionEffect(
       engine,
-      { velocity: this.velocityFeedback },
+      { velocity: this.velocitySplatUnified },
       simWidth,
       simHeight,
       sampleMode,
@@ -248,50 +273,28 @@ export class FluidSimulationEffect {
       precision
     );
 
-    this.velocitySplat = new SplatEffect(
+    this.dyeSplatUnified = new SplatUnifiedEffect(
       engine,
-      { splatTarget: this.velocityFeedback.output },
+      { base: this.dyeFeedback },
       simWidth,
       simHeight,
       sampleMode,
       precision
     );
-    this.velocityAdd = new AddEffect(
-      engine,
-      {
-        base: this.velocityFeedback.output,
-        delta: this.velocitySplat.output,
-      },
-      simWidth,
-      simHeight,
-      sampleMode,
-      precision
-    );
-    this.dyeSplat = new SplatEffect(
-      engine,
-      { splatTarget: this.dyeFeedback.output },
-      simWidth,
-      simHeight,
-      sampleMode,
-      precision
-    );
-    this.dyeAdd = new AddEffect(
-      engine,
-      {
-        base: this.dyeFeedback.output,
-        delta: this.dyeSplat.output,
-      },
-      simWidth,
-      simHeight,
-      sampleMode,
-      precision
-    );
+    this.dyeSplatUnified.setUniforms({
+      mode: 0,
+      strength: 1.0,
+      point: [0.5, 0.5],
+      color: [0, 0, 0],
+      radius: 0.01,
+      aspectRatio: this.aspectRatio,
+    });
     
     // 8. Advect dye using projected velocity field
     this.dyeAdvection = new DyeAdvectionEffect(
       engine,
       {
-        dye: this.dyeFeedback,
+        dye: this.dyeSplatUnified,
         velocity: this.projection,
       },
       simWidth,
@@ -313,6 +316,7 @@ export class FluidSimulationEffect {
     const clampedDt = Math.max(1e-4, dt);
     this.currentTimeStep = clampedDt;
     this.config.timeStep = clampedDt;
+    
     const velocityDecay = 1 / (1 + this.config.velocityDissipation * clampedDt);
     const dyeDecay = 1 / (1 + this.config.dyeDissipation * clampedDt);
     this.velocityAdvection.setUniforms({ timeStep: clampedDt, dissipation: velocityDecay });
@@ -377,33 +381,22 @@ export class FluidSimulationEffect {
     const radius = Math.max(1e-5, params.radius);
     const aspect = this.aspectRatio;
 
-    if (this.velocitySplat) {
-      this.velocitySplat.setUniforms({
-        point: [px, py],
-        color: scaledVelocity,
-        radius,
-        aspectRatio: aspect,
-      });
-      this.velocitySplat.renderAll(this.engine);
-      if (this.velocityAdd) {
-        this.velocityAdd.renderAll(this.engine);
-        this.velocityFeedback.setSrcs({ initialState: this.velocityAdd });
-      }
-    }
-
-    if (this.dyeSplat) {
-      this.dyeSplat.setUniforms({
-        point: [px, py],
-        color: scaledColor,
-        radius,
-        aspectRatio: aspect,
-      });
-      this.dyeSplat.renderAll(this.engine);
-      if (this.dyeAdd) {
-        this.dyeAdd.renderAll(this.engine);
-        this.dyeFeedback.setSrcs({ initialState: this.dyeAdd });
-      }
-    }
+    // Set unified splat uniforms to additive mode (mode=1)
+    this.velocitySplatUnified.setUniforms({
+      mode: 1,
+      point: [px, py],
+      color: scaledVelocity,
+      radius,
+      aspectRatio: aspect,
+    });
+    
+    this.dyeSplatUnified.setUniforms({
+      mode: 1,
+      point: [px, py],
+      color: scaledColor,
+      radius,
+      aspectRatio: aspect,
+    });
   }
   
   /**
@@ -475,6 +468,10 @@ export class FluidSimulationEffect {
     // divergence depends on vorticityEffect
     // velocityAdvection depends on velocityFeedback
     this.dyeAdvection.renderAll(engine);
+    
+    // Reset splat mode to passthrough after rendering
+    this.velocitySplatUnified.setUniforms({ mode: 0 });
+    this.dyeSplatUnified.setUniforms({ mode: 0 });
   }
   
   /**
@@ -490,9 +487,7 @@ export class FluidSimulationEffect {
     this.dyeAdvection.dispose();
     this.velocityFeedback.dispose();
     this.dyeFeedback.dispose();
-    this.velocitySplat.dispose();
-    this.dyeSplat.dispose();
-    this.velocityAdd.dispose();
-    this.dyeAdd.dispose();
+    this.velocitySplatUnified.dispose();
+    this.dyeSplatUnified.dispose();
   }
 }
