@@ -15,6 +15,20 @@ export type ShaderUniforms = {
   [key: string]: Dynamic<ShaderUniform>
 }
 
+let shaderEffectIdCounter = 0
+function generateShaderEffectId(): string {
+  const cryptoRef = typeof globalThis !== 'undefined' ? (globalThis as any).crypto : undefined
+  if (cryptoRef && typeof cryptoRef.randomUUID === 'function') {
+    try {
+      return cryptoRef.randomUUID()
+    } catch {
+      // fall back to counter-based id
+    }
+  }
+  shaderEffectIdCounter += 1
+  return `shaderEffect-${shaderEffectIdCounter}`
+}
+
 
 function extract<T>(value: Dynamic<T>): T {
   return value instanceof Function ? value() : value
@@ -108,6 +122,7 @@ type RuntimePassTextureSource<I extends ShaderInputShape<I>> =
   | { binding: string; kind: 'pass'; passIndex: number }
 
 export abstract class ShaderEffect<I extends ShaderInputShape<I> = ShaderInputs> {
+  readonly id: string
   abstract setSrcs(fx: Partial<I>): void
   abstract render(engine: BABYLON.Engine): void
   abstract setUniforms(uniforms: ShaderUniforms): void
@@ -119,6 +134,10 @@ export abstract class ShaderEffect<I extends ShaderInputShape<I> = ShaderInputs>
   height = 720
   inputs: Partial<I> = {}
   uniforms: ShaderUniforms = {}
+
+  protected constructor() {
+    this.id = generateShaderEffectId()
+  }
 
   abstract dispose(): void
 
@@ -132,12 +151,33 @@ export abstract class ShaderEffect<I extends ShaderInputShape<I> = ShaderInputs>
   }
 
   renderAll(engine: BABYLON.Engine): void {
-    for (const input of Object.values(this.inputs)) {
-      if (input instanceof ShaderEffect) {
-        input.renderAll(engine)
+    const ordered: ShaderEffect[] = [] //topological sort order
+    const visited = new Set<string>()
+    const visiting = new Set<string>()
+
+    const visit = (effect: ShaderEffect): void => {
+      if (visited.has(effect.id)) {
+        return
       }
+      if (visiting.has(effect.id)) {
+        throw new Error(`Cycle detected in shader graph at ${effect.effectName}`)
+      }
+      visiting.add(effect.id)
+      for (const input of Object.values(effect.inputs)) {
+        if (input instanceof ShaderEffect) {
+          visit(input)
+        }
+      }
+      visiting.delete(effect.id)
+      visited.add(effect.id)
+      ordered.push(effect)
     }
-    this.render(engine)
+
+    visit(this)
+
+    for (const effect of ordered) {
+      effect.render(engine)
+    }
   }
 }
 
