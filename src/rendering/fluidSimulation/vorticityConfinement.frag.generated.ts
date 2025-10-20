@@ -61,11 +61,11 @@ fn pass0(
   let rightUv = uv + vec2f(texel.x, 0.0);
   var curlR = textureSample(curl, curlSampler, clampUv(rightUv)).x;
 
-  let bottomUv = uv + vec2f(0.0, texel.y);
-  var curlB = textureSample(curl, curlSampler, clampUv(bottomUv)).x;
-
-  let topUv = uv - vec2f(0.0, texel.y);
+  let topUv = uv + vec2f(0.0, texel.y);
   var curlT = textureSample(curl, curlSampler, clampUv(topUv)).x;
+
+  let bottomUv = uv - vec2f(0.0, texel.y);
+  var curlB = textureSample(curl, curlSampler, clampUv(bottomUv)).x;
 
   var force = 0.5 * vec2f(abs(curlT) - abs(curlB), abs(curlR) - abs(curlL));
   force = force * (1.0 / max(length(force), 1e-4));

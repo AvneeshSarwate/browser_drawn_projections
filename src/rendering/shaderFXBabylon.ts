@@ -229,6 +229,11 @@ export class CustomShaderEffect<U extends object, I extends ShaderInputShape<I> 
     return this.passHandles[0].material
   }
 
+  // Expose pass outputs for debugging
+  getPassOutput(passIndex: number): BABYLON.RenderTargetTexture | undefined {
+    return this.passTargets[passIndex]
+  }
+
   constructor(engine: BABYLON.WebGPUEngine, inputs: I, options: CustomShaderEffectOptions<U, I>) {
     super()
     this.engine = engine

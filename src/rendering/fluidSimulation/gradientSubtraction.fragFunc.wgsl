@@ -21,11 +21,11 @@ fn pass0(
   let rightUv = uv + vec2f(texel.x, 0.0);
   var pR = textureSample(pressure, pressureSampler, rightUv).x;
   
-  let bottomUv = uv + vec2f(0.0, texel.y);
-  var pB = textureSample(pressure, pressureSampler, bottomUv).x;
-  
-  let topUv = uv - vec2f(0.0, texel.y);
+  let topUv = uv + vec2f(0.0, texel.y);
   var pT = textureSample(pressure, pressureSampler, topUv).x;
+  
+  let bottomUv = uv - vec2f(0.0, texel.y);
+  var pB = textureSample(pressure, pressureSampler, bottomUv).x;
   
   let gradient = vec2f(pR - pL, pT - pB);
   

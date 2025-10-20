@@ -38,12 +38,15 @@ export interface FluidSimulationConfig {
  * architecture with proper pressure projection for incompressible flow.
  * 
  * Pipeline stages:
- * 1. Velocity advection (semi-Lagrangian)
- * 2. Force application (mouse input)
- * 3. Divergence computation
- * 4. Pressure solve (Jacobi iterations)
- * 5. Gradient subtraction (projection to divergence-free)
- * 6. Dye advection (for visualization)
+ * 1. Velocity feedback (last frame's advected velocity)
+ * 2. Force application (splat)
+ * 3. Curl computation
+ * 4. Vorticity confinement
+ * 5. Divergence computation
+ * 6. Pressure solve (Jacobi iterations)
+ * 7. Gradient subtraction (projection to divergence-free)
+ * 8. Velocity advection (semi-Lagrangian)
+ * 9. Dye advection (for visualization)
  * 
  * Public API:
  * - velocity, dye, pressure, divergence getters for output access
@@ -71,11 +74,13 @@ export class FluidSimulationEffect {
   private dyeAdvection: DyeAdvectionEffect;
   private dyeSplatUnified: SplatUnifiedEffect;
   private currentTimeStep: number;
-  private readonly aspectRatio: number;
+  private readonly aspectRatio: number;  // Canvas/sim aspect ratio
+  private readonly aspectRatioVelocity: number;  // Velocity field aspect
+  private readonly aspectRatioDye: number;  // Dye field aspect
   
-  /** Projected velocity field (divergence-free) */
+  /** Projected and advected velocity field (divergence-free) */
   public get velocity(): BABYLON.RenderTargetTexture {
-    return this.projection.output;
+    return this.velocityAdvection.output;
   }
   
   /** Advected dye field for visualization */
@@ -98,6 +103,11 @@ export class FluidSimulationEffect {
     return this.velocitySplatUnified.output;
   }
 
+  /** Raw velocity splat delta (Gaussian impulse, pass0 output) */
+  public get splatDelta(): BABYLON.RenderTargetTexture | undefined {
+    return this.velocitySplatUnified.getPassOutput(0);
+  }
+
   /** Debug: Dye feedback output */
   public get dyeFeedbackDebug(): BABYLON.RenderTargetTexture {
     return this.dyeFeedback.output;
@@ -108,6 +118,11 @@ export class FluidSimulationEffect {
     return this.dyeSplatUnified.output;
   }
 
+  /** Raw dye splat delta (Gaussian impulse, pass0 output) */
+  public get dyeSplatDelta(): BABYLON.RenderTargetTexture | undefined {
+    return this.dyeSplatUnified.getPassOutput(0);
+  }
+
   constructor(
     engine: BABYLON.WebGPUEngine,
     _inputs: FluidSimulationInputs | undefined,
@@ -115,6 +130,17 @@ export class FluidSimulationEffect {
   ) {
     this.engine = engine;
     this.config = config;
+    
+    const { simWidth, simHeight } = config;
+    // Use display resolution for dye if provided, otherwise use sim resolution
+    const dyeWidth = config.displayWidth ?? simWidth;
+    const dyeHeight = config.displayHeight ?? simHeight;
+    
+    // Compute aspect ratios for different fields
+    this.aspectRatio = simWidth / simHeight;
+    this.aspectRatioVelocity = simWidth / simHeight;
+    this.aspectRatioDye = dyeWidth / dyeHeight;
+    
     if (this.config.enableVorticity === undefined) {
       this.config.enableVorticity = true;
     }
@@ -128,10 +154,10 @@ export class FluidSimulationEffect {
       this.config.pressure = 0.8;
     }
     this.currentTimeStep = config.timeStep;
-    this.aspectRatio = config.simWidth / config.simHeight;
     
-    const { simWidth, simHeight } = config;
-    const sampleMode: 'nearest' | 'linear' = 'linear';
+    // Sampler modes: LINEAR for advection, NEAREST for scalar fields (pressure, curl, divergence)
+    const linearSample: 'nearest' | 'linear' = 'linear';
+    const nearestSample: 'nearest' | 'linear' = 'nearest';
     const precision: RenderPrecision = 'half_float';
     
     // ===== VELOCITY PIPELINE =====
@@ -142,7 +168,7 @@ export class FluidSimulationEffect {
       { src: this.createBlackTexture(simWidth, simHeight) },
       simWidth,
       simHeight,
-      sampleMode,
+      linearSample,
       precision
     );
     
@@ -151,7 +177,7 @@ export class FluidSimulationEffect {
       velocityInitial,
       simWidth,
       simHeight,
-      sampleMode,
+      linearSample,
       precision
     );
     
@@ -161,7 +187,7 @@ export class FluidSimulationEffect {
       { base: this.velocityFeedback },
       simWidth,
       simHeight,
-      sampleMode,
+      linearSample,
       precision
     );
     this.velocitySplatUnified.setUniforms({
@@ -170,41 +196,27 @@ export class FluidSimulationEffect {
       point: [0.5, 0.5],
       color: [0, 0, 0],
       radius: 0.01,
-      aspectRatio: this.aspectRatio,
+      aspectRatio: this.aspectRatioVelocity,
     });
     
-    // 2. Velocity advection (semi-Lagrangian backtrace)
-    this.velocityAdvection = new VelocityAdvectionEffect(
+    // 2. Curl + vorticity confinement to reinforce swirling motion
+    this.curlEffect = new CurlEffect(
       engine,
       { velocity: this.velocitySplatUnified },
       simWidth,
       simHeight,
-      sampleMode,
-      precision
-    );
-    this.velocityAdvection.setUniforms({
-      timeStep: config.timeStep,
-      dissipation: 1.0,
-    });
-    
-    // 3. Curl + vorticity confinement to reinforce swirling motion
-    this.curlEffect = new CurlEffect(
-      engine,
-      { velocity: this.velocityAdvection },
-      simWidth,
-      simHeight,
-      'nearest',
+      linearSample,
       precision
     );
     this.vorticityEffect = new VorticityConfinementEffect(
       engine,
       {
-        velocity: this.velocityAdvection,
+        velocity: this.velocitySplatUnified,
         curl: this.curlEffect,
       },
       simWidth,
       simHeight,
-      sampleMode,
+      linearSample,
       precision
     );
     this.vorticityEffect.setUniforms({
@@ -214,7 +226,7 @@ export class FluidSimulationEffect {
     
     const velocityWithVorticity = this.vorticityEffect;
     
-    // 4. Compute velocity divergence
+    // 3. Compute velocity divergence
     this.divergenceEffect = new DivergenceEffect(
       engine,
       { velocity: velocityWithVorticity },
@@ -224,7 +236,7 @@ export class FluidSimulationEffect {
       precision
     );
     
-    // 5. Solve for pressure using Jacobi iterations
+    // 4. Solve for pressure using Jacobi iterations
     this.pressureIterator = new PressureIterator(
       engine,
       { divergence: this.divergenceEffect },
@@ -236,7 +248,7 @@ export class FluidSimulationEffect {
     );
     this.pressureIterator.setDamping(this.config.pressure);
     
-    // 6. Subtract pressure gradient (projection to divergence-free)
+    // 5. Subtract pressure gradient (projection to divergence-free)
     this.projection = new GradientSubtractionEffect(
       engine,
       {
@@ -245,40 +257,54 @@ export class FluidSimulationEffect {
       },
       simWidth,
       simHeight,
-      sampleMode,
+      nearestSample,
       precision
     );
     
-    // Close velocity feedback loop with projected velocity
-    this.velocityFeedback.setFeedbackSrc(this.projection);
+    // 6. Velocity advection (semi-Lagrangian backtrace) - AFTER projection
+    this.velocityAdvection = new VelocityAdvectionEffect(
+      engine,
+      { velocity: this.projection },
+      simWidth,
+      simHeight,
+      linearSample,
+      precision
+    );
+    this.velocityAdvection.setUniforms({
+      timeStep: config.timeStep,
+      dissipation: 1.0,
+    });
+    
+    // Close velocity feedback loop with ADVECTED velocity (not projection)
+    this.velocityFeedback.setFeedbackSrc(this.velocityAdvection);
     
     // ===== DYE PIPELINE =====
     
-    // 7. Initialize dye feedback loop
+    // 7. Initialize dye feedback loop at higher resolution
     const dyeInitial = new PassthruEffect(
       engine,
-      { src: this.createInitialDye(simWidth, simHeight) },
-      simWidth,
-      simHeight,
-      sampleMode,
+      { src: this.createInitialDye(dyeWidth, dyeHeight) },
+      dyeWidth,
+      dyeHeight,
+      linearSample,
       precision
     );
     
     this.dyeFeedback = new FeedbackNode(
       engine,
       dyeInitial,
-      simWidth,
-      simHeight,
-      sampleMode,
+      dyeWidth,
+      dyeHeight,
+      linearSample,
       precision
     );
 
     this.dyeSplatUnified = new SplatUnifiedEffect(
       engine,
       { base: this.dyeFeedback },
-      simWidth,
-      simHeight,
-      sampleMode,
+      dyeWidth,
+      dyeHeight,
+      linearSample,
       precision
     );
     this.dyeSplatUnified.setUniforms({
@@ -287,19 +313,19 @@ export class FluidSimulationEffect {
       point: [0.5, 0.5],
       color: [0, 0, 0],
       radius: 0.01,
-      aspectRatio: this.aspectRatio,
+      aspectRatio: this.aspectRatioDye,
     });
     
-    // 8. Advect dye using projected velocity field
+    // 8. Advect dye using advected velocity field
     this.dyeAdvection = new DyeAdvectionEffect(
       engine,
       {
         dye: this.dyeSplatUnified,
-        velocity: this.projection,
+        velocity: this.velocityAdvection,  // Use advected velocity, not projection
       },
-      simWidth,
-      simHeight,
-      sampleMode,
+      dyeWidth,
+      dyeHeight,
+      linearSample,
       precision
     );
     this.dyeAdvection.setUniforms({
@@ -379,15 +405,15 @@ export class FluidSimulationEffect {
     const [dr, dg, db] = params.dyeColor;
     const scaledColor: [number, number, number] = [dr, dg, db];
     const radius = Math.max(1e-5, params.radius);
-    const aspect = this.aspectRatio;
 
     // Set unified splat uniforms to additive mode (mode=1)
+    // Use separate aspect ratios for velocity and dye fields
     this.velocitySplatUnified.setUniforms({
       mode: 1,
       point: [px, py],
       color: scaledVelocity,
       radius,
-      aspectRatio: aspect,
+      aspectRatio: this.aspectRatioVelocity,
     });
     
     this.dyeSplatUnified.setUniforms({
@@ -395,7 +421,7 @@ export class FluidSimulationEffect {
       point: [px, py],
       color: scaledColor,
       radius,
-      aspectRatio: aspect,
+      aspectRatio: this.aspectRatioDye,
     });
   }
   
@@ -460,13 +486,14 @@ export class FluidSimulationEffect {
    */
   renderAll(engine: BABYLON.Engine): void {
     // Rendering dyeAdvection triggers all upstream dependencies:
-    // dyeAdvection depends on projection
+    // dyeAdvection depends on velocityAdvection (for advecting dye)
+    // velocityAdvection depends on projection (for advecting velocity)
     // projection depends on pressureIterator and vorticityEffect
-    // vorticityEffect depends on velocityAdvection and curlEffect
-    // curlEffect depends on velocityAdvection
     // pressureIterator depends on divergence
     // divergence depends on vorticityEffect
-    // velocityAdvection depends on velocityFeedback
+    // vorticityEffect depends on curlEffect and velocitySplatUnified
+    // curlEffect depends on velocitySplatUnified
+    // velocitySplatUnified depends on velocityFeedback
     this.dyeAdvection.renderAll(engine);
     
     // Reset splat mode to passthrough after rendering

@@ -48,16 +48,16 @@ fn pass0(
     right.x = -center.x;
   }
   
-  let bottomUv = uv + vec2f(0.0, texel.y);
-  var bottom = textureSample(velocity, velocitySampler, bottomUv).xy;
-  if (bottomUv.y > 1.0) {
-    bottom.y = -center.y;
+  let topUv = uv + vec2f(0.0, texel.y);
+  var top = textureSample(velocity, velocitySampler, topUv).xy;
+  if (topUv.y > 1.0) {
+    top.y = -center.y;
   }
   
-  let topUv = uv - vec2f(0.0, texel.y);
-  var top = textureSample(velocity, velocitySampler, topUv).xy;
-  if (topUv.y < 0.0) {
-    top.y = -center.y;
+  let bottomUv = uv - vec2f(0.0, texel.y);
+  var bottom = textureSample(velocity, velocitySampler, bottomUv).xy;
+  if (bottomUv.y < 0.0) {
+    bottom.y = -center.y;
   }
   
   let div = 0.5 * ((right.x - left.x) + (top.y - bottom.y));

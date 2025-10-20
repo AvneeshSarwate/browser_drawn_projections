@@ -47,8 +47,8 @@ const reactionPointer: PointerState = {
 let animationHandle: number | undefined
 let shaderGraph: ShaderEffect | undefined
 let fluidSim: FluidSimulationEffect | undefined
-type FluidDebugMode = 'dye' | 'velocity' | 'divergence' | 'pressure' | 'splat'
-const fluidDebugModes: FluidDebugMode[] = ['dye', 'velocity', 'divergence', 'pressure', 'splat']
+type FluidDebugMode = 'dye' | 'velocity' | 'divergence' | 'pressure' | 'splat' | 'splatRaw'
+const fluidDebugModes: FluidDebugMode[] = ['dye', 'velocity', 'divergence', 'pressure', 'splat', 'splatRaw']
 let fluidDebugMode: FluidDebugMode = 'dye'
 let reactionSim: ReactionDiffusionEffect | undefined
 let reactionVisual: ReactionVisualizeEffect | undefined
@@ -245,6 +245,14 @@ function updateFluidDisplaySource(): void {
         fluidCanvasPaint.setSrcs({ src: fluidSim.dye })
       }
       break
+    case 'splatRaw':
+      if (splatDebugEffect && fluidSim.splatDelta) {
+        splatDebugEffect.setSrcs({ src: fluidSim.splatDelta })
+        fluidCanvasPaint.setSrcs({ src: splatDebugEffect })
+      } else {
+        fluidCanvasPaint.setSrcs({ src: fluidSim.dye })
+      }
+      break
     default:
       fluidCanvasPaint.setSrcs({ src: fluidSim.dye })
       break
@@ -267,9 +275,10 @@ function cycleFluidDebugMode(direction: number): void {
 }
 
 function computeNormalizedSplatRadius(canvas: HTMLCanvasElement): number {
-  const base = Math.max(0.001, currentSplatRadius / 100)
-  const aspect = canvas.width / canvas.height
-  return aspect > 1 ? base * aspect : base
+  // Pavel divides by 100 to normalize the slider value
+  // The aspect ratio correction happens in the shader via offset.x *= aspectRatio
+  // So we DON'T multiply by aspect here
+  return Math.max(0.001, currentSplatRadius / 100)
 }
 
 function registerFluidParamWatchers(): void {
@@ -494,6 +503,7 @@ function setupEngine(fluidEngine: BABYLON.WebGPUEngine, reactionEngine: BABYLON.
   singleKeydownEvent('3', () => setFluidDebugMode('divergence'))
   singleKeydownEvent('4', () => setFluidDebugMode('pressure'))
   singleKeydownEvent('5', () => setFluidDebugMode('splat'))
+  singleKeydownEvent('6', () => setFluidDebugMode('splatRaw'))
   singleKeydownEvent('[', () => cycleFluidDebugMode(-1))
   singleKeydownEvent(']', () => cycleFluidDebugMode(1))
   const { width, height } = state
@@ -531,12 +541,43 @@ function setupEngine(fluidEngine: BABYLON.WebGPUEngine, reactionEngine: BABYLON.
   currentSplatRadius = getFluidParam('splatRadius') || 0.25
   currentForceStrength = getFluidParam('forceStrength') || 6000
   currentDyeInjectionStrength = state.fluidParams?.find(p => p.name === 'dyeInjectionStrength')?.value.value ?? 0.65
+  
+  // Preserve exact aspect ratio like Pavel's getResolution()
+  function getResolution(resolution: number, canvasWidth: number, canvasHeight: number) {
+    let aspectRatio = canvasWidth / canvasHeight
+    if (aspectRatio < 1) aspectRatio = 1.0 / aspectRatio
+
+    const min = Math.round(resolution)
+    const max = Math.round(resolution * aspectRatio)
+
+    if (canvasWidth > canvasHeight)
+      return { width: max, height: min }
+    else
+      return { width: min, height: max }
+  }
+
+  // Split resolutions: low-res physics, higher-res dye visuals
+  const simRes = getResolution(128, width, height)  // Base 128 like Pavel
+  const dyeRes = getResolution(512, width, height)  // Base 512 (4x sim)
+  const simWidth = simRes.width
+  const simHeight = simRes.height
+  const dyeWidth = dyeRes.width
+  const dyeHeight = dyeRes.height
+  
+  console.log('Resolution debug:', {
+    canvas: { width, height, ar: width/height },
+    sim: { width: simWidth, height: simHeight, ar: simWidth/simHeight },
+    dye: { width: dyeWidth, height: dyeHeight, ar: dyeWidth/dyeHeight }
+  })
+  
   fluidSim = new FluidSimulationEffect(
     fluidEngine,
     undefined,
     {
-      simWidth: width,
-      simHeight: height,
+      simWidth,
+      simHeight,
+      displayWidth: dyeWidth,
+      displayHeight: dyeHeight,
       pressureIterations: getFluidParam('pressureIterations') || 20,
       pressure: getFluidParam('pressure') || 0.8,
       velocityDissipation: getFluidParam('velocityDissipation') || 0.2,

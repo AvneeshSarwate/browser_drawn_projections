@@ -44,11 +44,11 @@ fn pass0(
   let rightUv = uv + vec2f(texel.x, 0.0);
   var rightY = textureSample(velocity, velocitySampler, rightUv).y;
 
-  let bottomUv = uv + vec2f(0.0, texel.y);
-  var bottomX = textureSample(velocity, velocitySampler, bottomUv).x;
-
-  let topUv = uv - vec2f(0.0, texel.y);
+  let topUv = uv + vec2f(0.0, texel.y);
   var topX = textureSample(velocity, velocitySampler, topUv).x;
+
+  let bottomUv = uv - vec2f(0.0, texel.y);
+  var bottomX = textureSample(velocity, velocitySampler, bottomUv).x;
 
   let curl = (rightY - leftY) - (topX - bottomX);
   return vec4f(0.5 * curl, 0.0, 0.0, 1.0);
