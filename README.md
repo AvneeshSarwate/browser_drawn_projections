@@ -48,3 +48,9 @@ build fix todo:
 - tsconfig to get react types to work properly
 
 need to install deno plugin for vscode to get intellisense for use with deno jupyter kernel in vscode 
+
+
+
+### credits
+- fluid simulation ported from https://github.com/PavelDoGreat/WebGL-Fluid-Simulation
+- reaction diffusion simulation ported from https://github.com/piellardj/reaction-diffusion-webgl
