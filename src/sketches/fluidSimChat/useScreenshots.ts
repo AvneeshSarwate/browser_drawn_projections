@@ -1,10 +1,11 @@
 import { computed, inject, ref, type ComputedRef, type Ref } from 'vue'
-import type { FluidDebugMode } from './appState'
-import type { Screenshot, ScreenshotMediaType } from './types/screenshot'
+import type { FluidDebugMode, ParamDef } from './appState'
+import type { Screenshot, ScreenshotMediaType, ScreenshotParameter } from './types/screenshot'
 
 interface CreateScreenshotStoreOptions {
   getCanvas: () => HTMLCanvasElement | null | undefined
   getDebugMode: () => FluidDebugMode
+  getParameters?: () => ParamDef[]
   ensureFreshFrame?: () => void | Promise<void>
 }
 
@@ -179,6 +180,13 @@ export function createScreenshotStore(options: CreateScreenshotStoreOptions): Sc
       const now = Date.now()
       captureCount += 1
 
+      const parameters: ScreenshotParameter[] | undefined = options.getParameters?.()
+        ?.map(param => ({
+          name: param.name,
+          value: param.value.value,
+          label: param.label
+        }))
+
       const screenshot: Screenshot = {
         id: makeId(),
         label: `Shot ${captureCount}`,
@@ -189,7 +197,8 @@ export function createScreenshotStore(options: CreateScreenshotStoreOptions): Sc
         mediaType,
         base64,
         sizeBytes: blob.size,
-        blobUrl: URL.createObjectURL(blob)
+        blobUrl: URL.createObjectURL(blob),
+        parameters
       }
 
       screenshots.value = [screenshot, ...screenshots.value]

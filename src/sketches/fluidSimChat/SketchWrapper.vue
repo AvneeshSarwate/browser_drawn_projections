@@ -20,6 +20,7 @@ const screenshotStore = createScreenshotStore({
     return null
   },
   getDebugMode: () => appState.debugMode.value,
+  getParameters: () => appState.fluidParams || [],
   ensureFreshFrame: () => {
     if (appState.paused) {
       appState.shaderDrawFunc?.()

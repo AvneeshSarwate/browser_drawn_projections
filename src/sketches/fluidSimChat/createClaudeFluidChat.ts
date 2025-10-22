@@ -255,7 +255,16 @@ function buildUserText(prompt: string, attachments: Screenshot[]): string {
   const header = trimmed ? `${trimmed}\n\n` : ''
   const lines = attachments.map((shot, index) => {
     const captured = new Date(shot.createdAt).toLocaleString()
-    return `${index + 1}. ${shot.label} - mode: ${shot.debugMode} - captured ${captured} - ${shot.width}x${shot.height}`
+    let line = `${index + 1}. ${shot.label} - mode: ${shot.debugMode} - captured ${captured} - ${shot.width}x${shot.height}`
+    
+    if (shot.parameters && shot.parameters.length > 0) {
+      const paramStr = shot.parameters
+        .map(p => `${p.name}=${p.value}`)
+        .join(', ')
+      line += `\n   Parameters: ${paramStr}`
+    }
+    
+    return line
   })
 
   return `${header}Attached screenshots:\n${lines.join('\n')}`
