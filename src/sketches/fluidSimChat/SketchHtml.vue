@@ -17,20 +17,23 @@
       </div>
     </div>
 
-    <div class="instructions">
-      <h2>Fluid Simulation Playground</h2>
-      <p>Drag on the canvas to interact with the fluid.</p>
-      <p>Press <strong>P</strong> to pause/resume. Press <strong>1-6</strong> or <strong>[ ]</strong> to cycle debug
-        views.</p>
+    <div class="below-row">
+      <div class="instructions">
+        <h2>Fluid Simulation Playground</h2>
+        <p>Drag on the canvas to interact with the fluid.</p>
+        <p>Press <strong>P</strong> to pause/resume. Press <strong>1-6</strong> or <strong>[ ]</strong> to cycle debug
+          views.</p>
 
-      <div class="debug-info">
-        <h3>{{ currentDebugInfo.title }}</h3>
-        <p>{{ currentDebugInfo.description }}</p>
-      </div>
+        <div class="debug-info">
+          <h3>{{ currentDebugInfo.title }}</h3>
+          <p>{{ currentDebugInfo.description }}</p>
+        </div>
 
-      <div class="debug-shortcuts">
-        <strong>Quick Keys:</strong> 1-Dye | 2-Velocity | 3-Divergence | 4-Pressure | 5-Splat | 6-Splat Raw | [ ] Cycle
+        <div class="debug-shortcuts">
+          <strong>Quick Keys:</strong> 1-Dye | 2-Velocity | 3-Divergence | 4-Pressure | 5-Splat | 6-Splat Raw | [ ] Cycle
+        </div>
       </div>
+      <FluidChat />
     </div>
   </div>
 </template>
@@ -38,6 +41,7 @@
 <script setup lang="ts">
 import { inject, computed, ref } from 'vue'
 import { appStateName, type FluidReactionAppState, type FluidDebugMode } from './appState'
+import FluidChat from './FluidChat.vue'
 
 const state = inject<FluidReactionAppState>(appStateName)!!
 const width = computed(() => state.width)
@@ -101,6 +105,19 @@ const currentDebugInfo = computed(() => debugModeDescriptions[state.debugMode.va
 }
 
 
+
+.below-row {
+  display: flex;
+  gap: 15px;
+  align-items: flex-start;
+  width: 100%;
+  max-width: 1200px;
+}
+
+.below-row .instructions {
+  flex: 1;
+  text-align: left;
+}
 
 .canvas-group {
   display: flex;
