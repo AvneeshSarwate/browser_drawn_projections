@@ -46,7 +46,7 @@ export const sketchNames = [
   'handwriting_animator',
   'fluidReactionSim',
   'vuePianoRoll',
-  'fluidSimHack'
+  'fluidSimChat'
 ]
 
 const sketchRoutes = sketchNames.map(name => {

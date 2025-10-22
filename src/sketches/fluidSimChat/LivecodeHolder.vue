@@ -2,14 +2,12 @@
 import { inject, onMounted, onUnmounted, watch, type WatchStopHandle } from 'vue'
 import type * as BABYLON from 'babylonjs'
 import { appStateName, engineRef, type FluidReactionAppState } from './appState'
-import { CanvasPaint, FeedbackNode, PassthruEffect, type ShaderEffect } from '@/rendering/shaderFXBabylon'
+import { CanvasPaint, type ShaderEffect } from '@/rendering/shaderFXBabylon'
 import {
   FluidSimulationEffect,
   ScalarFieldDebugEffect,
   VelocityFieldDebugEffect,
 } from '@/rendering/fluidSimulationHack'
-import { ReactionDiffusionEffect } from '@/rendering/postFX/reactionDiffusion.frag.generated'
-import { ReactionVisualizeEffect } from '@/rendering/postFX/reactionVisualize.frag.generated'
 import { clearListeners, pointerdownEvent, pointermoveEvent, pointerupEvent, singleKeydownEvent } from '@/io/keyboardAndMouse'
 
 const state = inject<FluidReactionAppState>(appStateName)!!
@@ -34,36 +32,19 @@ const fluidPointer: PointerState = {
   moved: false,
 }
 
-const reactionPointer: PointerState = {
-  x: 0.5,
-  y: 0.5,
-  vx: 0,
-  vy: 0,
-  down: false,
-  color: { r: 255, g: 140, b: 40 },
-  moved: false,
-}
-
 let animationHandle: number | undefined
 let shaderGraph: ShaderEffect | undefined
 let fluidSim: FluidSimulationEffect | undefined
 type FluidDebugMode = 'dye' | 'velocity' | 'divergence' | 'pressure' | 'splat' | 'splatRaw'
 const fluidDebugModes: FluidDebugMode[] = ['dye', 'velocity', 'divergence', 'pressure', 'splat', 'splatRaw']
 let fluidDebugMode: FluidDebugMode = 'dye'
-let reactionSim: ReactionDiffusionEffect | undefined
-let reactionVisual: ReactionVisualizeEffect | undefined
-let reactionFeedback: FeedbackNode | undefined
-let reactionInitial: PassthruEffect | undefined
 let fluidCanvasPaint: CanvasPaint | undefined
-let reactionCanvasPaint: CanvasPaint | undefined
 let velocityDebugEffect: VelocityFieldDebugEffect | undefined
 let divergenceDebugEffect: ScalarFieldDebugEffect | undefined
 let pressureDebugEffect: ScalarFieldDebugEffect | undefined
 let splatDebugEffect: VelocityFieldDebugEffect | undefined
 
-let forceCanvas: HTMLCanvasElement | undefined
-let reactionSeedCanvas: HTMLCanvasElement | undefined
-let reactionSeedCtx: CanvasRenderingContext2D | null = null
+let fluidCanvas: HTMLCanvasElement | undefined
 let currentSplatRadius = 0.25
 let currentForceStrength = 6000
 let currentDyeInjectionStrength = 0.65
@@ -83,7 +64,6 @@ function disposeGraph(): void {
   shaderGraph?.disposeAll()
   shaderGraph = undefined
   fluidCanvasPaint = undefined
-  reactionCanvasPaint = undefined
   fluidSim?.dispose()
   fluidSim = undefined
   velocityDebugEffect?.dispose()
@@ -95,15 +75,7 @@ function disposeGraph(): void {
   splatDebugEffect?.dispose()
   splatDebugEffect = undefined
   fluidDebugMode = 'dye'
-  reactionVisual = undefined
-  reactionSim = undefined
-  reactionFeedback?.dispose()
-  reactionFeedback = undefined
-  reactionInitial?.dispose()
-  reactionInitial = undefined
-  forceCanvas = undefined
-  reactionSeedCtx = null
-  reactionSeedCanvas = undefined
+  fluidCanvas = undefined
   fluidParamWatchers.forEach(stop => stop())
   fluidParamWatchers = []
 }
@@ -274,7 +246,7 @@ function cycleFluidDebugMode(direction: number): void {
   setFluidDebugMode(fluidDebugModes[nextIndex])
 }
 
-function computeNormalizedSplatRadius(canvas: HTMLCanvasElement): number {
+function computeNormalizedSplatRadius(): number {
   // Pavel divides by 100 to normalize the slider value
   // The aspect ratio correction happens in the shader via offset.x *= aspectRatio
   // So we DON'T multiply by aspect here
@@ -335,104 +307,28 @@ function registerFluidParamWatchers(): void {
   }
 }
 
-function createFluidInitialCanvas(width: number, height: number): HTMLCanvasElement {
-  const canvas = document.createElement('canvas')
-  canvas.width = width
-  canvas.height = height
-  const ctx = canvas.getContext('2d')!
-  const image = ctx.createImageData(width, height)
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const index = (y * width + x) * 4
-      const dx = (x / width) - 0.5
-      const dy = (y / height) - 0.5
-      const radius = Math.sqrt(dx * dx + dy * dy)
-      const density = radius < 0.22 ? 90 : 0
-      image.data[index + 0] = 0
-      image.data[index + 1] = 0
-      image.data[index + 2] = density
-      image.data[index + 3] = 255
-    }
-  }
-  ctx.putImageData(image, 0, 0)
-  return canvas
-}
-
-function createReactionInitialCanvas(width: number, height: number): HTMLCanvasElement {
-  const canvas = document.createElement('canvas')
-  canvas.width = width
-  canvas.height = height
-  const ctx = canvas.getContext('2d')!
-  const image = ctx.createImageData(width, height)
-  const cx = width / 2
-  const cy = height / 2
-  const radius = Math.min(width, height) * 0.08
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const index = (y * width + x) * 4
-      const dx = x - cx
-      const dy = y - cy
-      const distSq = dx * dx + dy * dy
-      const inside = distSq < radius * radius
-      image.data[index + 0] = 255
-      image.data[index + 1] = inside ? 200 : 0
-      image.data[index + 2] = 0
-      image.data[index + 3] = 255
-      if (Math.random() < 0.002) {
-        image.data[index + 1] = 160
-      }
-    }
-  }
-  ctx.putImageData(image, 0, 0)
-  return canvas
-}
-
-
-
-function updateReactionSeed(): void {
-  if (!reactionSeedCtx || !reactionSeedCanvas) {
-    return
-  }
-  reactionSeedCtx.fillStyle = 'rgba(0, 0, 0, 0.015)'
-  reactionSeedCtx.fillRect(0, 0, reactionSeedCanvas.width, reactionSeedCanvas.height)
-  if (!reactionPointer.down) return
-  const px = reactionPointer.x * reactionSeedCanvas.width
-  const py = reactionPointer.y * reactionSeedCanvas.height
-  const radius = Math.max(reactionSeedCanvas.width, reactionSeedCanvas.height) * 0.04
-  const gradient = reactionSeedCtx.createRadialGradient(px, py, 0, px, py, radius)
-  gradient.addColorStop(0, 'rgba(255, 140, 40, 0.65)')
-  gradient.addColorStop(1, 'rgba(0, 0, 0, 0)')
-  reactionSeedCtx.fillStyle = gradient
-  reactionSeedCtx.beginPath()
-  reactionSeedCtx.arc(px, py, radius, 0, Math.PI * 2)
-  reactionSeedCtx.fill()
-}
-
-function startLoop(fluidEngine: BABYLON.WebGPUEngine, reactionEngine: BABYLON.WebGPUEngine): void {
+function startLoop(fluidEngine: BABYLON.WebGPUEngine): void {
   let lastFrameTime: number | undefined
   const render = () => {
-    if (!fluidEngine || !reactionEngine) {
+    if (!fluidEngine) {
       animationHandle = undefined
       return
     }
     const fluidDisposedAccessor = (fluidEngine as any).isDisposed
     const fluidDisposed =
       typeof fluidDisposedAccessor === 'function' ? fluidDisposedAccessor.call(fluidEngine) : Boolean(fluidDisposedAccessor)
-    const reactionDisposedAccessor = (reactionEngine as any).isDisposed
-    const reactionDisposed =
-      typeof reactionDisposedAccessor === 'function' ? reactionDisposedAccessor.call(reactionEngine) : Boolean(reactionDisposedAccessor)
-    if (fluidDisposed || reactionDisposed) {
+    if (fluidDisposed) {
       animationHandle = undefined
       return
     }
-    
+
     // Apply direct pointer splat if needed
-    if (fluidPointer.down && fluidPointer.moved && fluidSim && forceCanvas) {
-      const radius = computeNormalizedSplatRadius(forceCanvas)
+    if (fluidPointer.down && fluidPointer.moved && fluidSim) {
+      const radius = computeNormalizedSplatRadius()
       const velX = fluidPointer.vx
       const velY = fluidPointer.vy
       const speed = Math.sqrt(velX * velX + velY * velY)
-      
+
       if (speed >= 1e-6) {
         const dirX = velX / speed
         const dirY = -velY / speed
@@ -443,25 +339,24 @@ function startLoop(fluidEngine: BABYLON.WebGPUEngine, reactionEngine: BABYLON.We
           (fluidPointer.color.g / 255) * currentDyeInjectionStrength,
           (fluidPointer.color.b / 255) * currentDyeInjectionStrength,
         ]
-        
+
         fluidSim.applySplat({
           point: [fluidPointer.x, 1 - fluidPointer.y],
           velocityDelta: velocity,
           dyeColor: dye,
           radius,
         })
-        
+
         if (fluidDebugMode === 'splat') {
           updateFluidDisplaySource()
         }
       }
-      
+
       fluidPointer.moved = false
       fluidPointer.vx = 0
       fluidPointer.vy = 0
     }
-    
-    updateReactionSeed()
+
     const shouldRenderFluid = !state.paused || (fluidPointer.down && fluidPointer.moved)
     if (shouldRenderFluid) {
       const now = performance.now()
@@ -478,21 +373,13 @@ function startLoop(fluidEngine: BABYLON.WebGPUEngine, reactionEngine: BABYLON.We
         fluidEngine.endFrame()
       }
     }
-    if (!state.paused) {
-      reactionEngine.beginFrame()
-      try {
-        reactionCanvasPaint?.renderAll(reactionEngine as unknown as BABYLON.Engine)
-      } finally {
-        reactionEngine.endFrame()
-      }
-    }
     animationHandle = requestAnimationFrame(render)
   }
   lastFrameTime = performance.now()
   animationHandle = requestAnimationFrame(render)
 }
 
-function setupEngine(fluidEngine: BABYLON.WebGPUEngine, reactionEngine: BABYLON.WebGPUEngine): void {
+function setupEngine(fluidEngine: BABYLON.WebGPUEngine): void {
   disposeGraph()
   clearListeners()
   singleKeydownEvent('p', () => {
@@ -508,40 +395,21 @@ function setupEngine(fluidEngine: BABYLON.WebGPUEngine, reactionEngine: BABYLON.
   singleKeydownEvent(']', () => cycleFluidDebugMode(1))
   const { width, height } = state
   fluidPointer.color = generatePointerColor()
-  
-  const forceCanvasEl = document.getElementById('forceCanvas') as HTMLCanvasElement | null
-  if (!forceCanvasEl) {
-    console.warn('forceCanvas not found')
+
+  const fluidCanvasEl = document.getElementById('fluidCanvas') as HTMLCanvasElement | null
+  if (!fluidCanvasEl) {
+    console.warn('fluidCanvas not found')
     return
   }
-  forceCanvas = forceCanvasEl
-  forceCanvas.width = width
-  forceCanvas.height = height
-
-  const reactionSeedCanvasEl = document.getElementById('reactionSeedCanvas') as HTMLCanvasElement | null
-  if (!reactionSeedCanvasEl) {
-    console.warn('reactionSeedCanvas not found')
-    return
-  }
-  reactionSeedCanvas = reactionSeedCanvasEl
-  reactionSeedCanvas.width = width
-  reactionSeedCanvas.height = height
-  reactionSeedCtx = reactionSeedCanvas.getContext('2d')
-  if (reactionSeedCtx) {
-    reactionSeedCtx.fillStyle = 'rgba(0, 0, 0, 1)'
-    reactionSeedCtx.fillRect(0, 0, width, height)
-  }
-
-  const reactionInitialCanvas = createReactionInitialCanvas(width, height)
-
-  const fluidCanvas = document.getElementById('fluidCanvas') as HTMLCanvasElement | null
-  const reactionCanvas = document.getElementById('reactionCanvas') as HTMLCanvasElement | null
+  fluidCanvas = fluidCanvasEl
+  fluidCanvas.width = width
+  fluidCanvas.height = height
 
   const getFluidParam = (name: string) => state.fluidParams?.find(p => p.name === name)?.value.value ?? 0
   currentSplatRadius = getFluidParam('splatRadius') || 0.25
   currentForceStrength = getFluidParam('forceStrength') || 6000
   currentDyeInjectionStrength = state.fluidParams?.find(p => p.name === 'dyeInjectionStrength')?.value.value ?? 0.65
-  
+
   // Preserve exact aspect ratio like Pavel's getResolution()
   function getResolution(resolution: number, canvasWidth: number, canvasHeight: number) {
     let aspectRatio = canvasWidth / canvasHeight
@@ -563,13 +431,13 @@ function setupEngine(fluidEngine: BABYLON.WebGPUEngine, reactionEngine: BABYLON.
   const simHeight = simRes.height
   const dyeWidth = dyeRes.width
   const dyeHeight = dyeRes.height
-  
+
   console.log('Resolution debug:', {
-    canvas: { width, height, ar: width/height },
-    sim: { width: simWidth, height: simHeight, ar: simWidth/simHeight },
-    dye: { width: dyeWidth, height: dyeHeight, ar: dyeWidth/dyeHeight }
+    canvas: { width, height, ar: width / height },
+    sim: { width: simWidth, height: simHeight, ar: simWidth / simHeight },
+    dye: { width: dyeWidth, height: dyeHeight, ar: dyeWidth / dyeHeight }
   })
-  
+
   fluidSim = new FluidSimulationEffect(
     fluidEngine,
     undefined,
@@ -640,47 +508,16 @@ function setupEngine(fluidEngine: BABYLON.WebGPUEngine, reactionEngine: BABYLON.
   })
   registerFluidParamWatchers()
 
-  reactionInitial = new PassthruEffect(reactionEngine, { src: reactionInitialCanvas }, width, height, 'linear', 'half_float')
-  reactionFeedback = new FeedbackNode(reactionEngine, reactionInitial, width, height, 'linear', 'half_float')
-  reactionSim = new ReactionDiffusionEffect(reactionEngine, { state: reactionFeedback, seed: reactionSeedCanvas! }, width, height, 'linear', 'half_float')
-  const getReactionParam = (name: string) => state.reactionParams?.find(p => p.name === name)?.value.value ?? 0
-  reactionSim.setUniforms({
-    feed: () => getReactionParam('feed'),
-    kill: () => getReactionParam('kill'),
-    diffRateA: () => getReactionParam('diffRateA'),
-    diffRateB: () => getReactionParam('diffRateB'),
-    deltaT: () => getReactionParam('deltaT'),
-    brushRadius: 0.035,
-    brushStrength: () => reactionPointer.down ? 0.85 : 0,
-    noiseAmount: 0.015,
-    brushPosition: () => [reactionPointer.x, 1.0 - reactionPointer.y],
-  })
-  reactionFeedback.setFeedbackSrc(reactionSim)
-  reactionVisual = new ReactionVisualizeEffect(reactionEngine, { state: reactionSim }, width, height, 'linear')
-
   if (fluidCanvas) {
-    fluidCanvas.style.pointerEvents = 'none'
     fluidCanvasPaint = new CanvasPaint(fluidEngine, { src: fluidSim.dye }, width, height, 'linear', 'half_float')
     updateFluidDisplaySource()
-  }
-
-  if (reactionCanvas) {
-    reactionCanvas.style.pointerEvents = 'none'
-    reactionCanvasPaint = new CanvasPaint(reactionEngine, { src: reactionVisual }, width, height, 'linear', 'half_float')
-  }
-  
-  if (forceCanvas) {
-    attachPointerHandlers(forceCanvas, fluidPointer)
-  }
-  
-  if (reactionSeedCanvas) {
-    attachPointerHandlers(reactionSeedCanvas, reactionPointer)
+    attachPointerHandlers(fluidCanvas, fluidPointer)
   }
 
   if (fluidCanvasPaint) {
     shaderGraph = fluidCanvasPaint
   }
-  
+
   // Prime the fluid simulation with one initial render to show the initial dye blob
   if (fluidSim) {
     fluidEngine.beginFrame()
@@ -691,14 +528,14 @@ function setupEngine(fluidEngine: BABYLON.WebGPUEngine, reactionEngine: BABYLON.
       fluidEngine.endFrame()
     }
   }
-  
-  startLoop(fluidEngine, reactionEngine)
+
+  startLoop(fluidEngine)
 }
 
 onMounted(() => {
   const handleEngineChange = (engines: { fluid?: BABYLON.WebGPUEngine; reaction?: BABYLON.WebGPUEngine } | undefined) => {
-    if (engines?.fluid && engines?.reaction) {
-      setupEngine(engines.fluid, engines.reaction)
+    if (engines?.fluid) {
+      setupEngine(engines.fluid)
     } else {
       disposeGraph()
       clearListeners()
@@ -726,3 +563,7 @@ onUnmounted(() => {
   clearListeners()
 })
 </script>
+
+<template>
+  <div />
+</template>
