@@ -1,5 +1,5 @@
 import type * as BABYLON from 'babylonjs'
-import { shallowRef, type Ref } from 'vue'
+import { shallowRef, ref, type Ref } from 'vue'
 
 export interface ParamDef {
   name: string
@@ -10,6 +10,8 @@ export interface ParamDef {
   value: Ref<number>
 }
 
+export type FluidDebugMode = 'dye' | 'velocity' | 'divergence' | 'pressure' | 'splat' | 'splatRaw'
+
 export interface FluidReactionAppState {
   fluidEngine?: BABYLON.WebGPUEngine
   reactionEngine?: BABYLON.WebGPUEngine
@@ -19,6 +21,7 @@ export interface FluidReactionAppState {
   height: number
   fluidParams?: ParamDef[]
   reactionParams?: ParamDef[]
+  debugMode: Ref<FluidDebugMode>
 }
 
 export const appState: FluidReactionAppState = {
@@ -28,6 +31,7 @@ export const appState: FluidReactionAppState = {
   paused: false,
   width: 1024,
   height: 512,
+  debugMode: ref('dye'),
 }
 
 export const appStateName = 'fluidReactionAppState'

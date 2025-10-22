@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { inject, onMounted, onUnmounted, watch, type WatchStopHandle } from 'vue'
 import type * as BABYLON from 'babylonjs'
-import { appStateName, engineRef, type FluidReactionAppState } from './appState'
+import { appStateName, engineRef, type FluidReactionAppState, type FluidDebugMode } from './appState'
 import { CanvasPaint, type ShaderEffect } from '@/rendering/shaderFXBabylon'
 import {
   FluidSimulationEffect,
@@ -35,9 +35,7 @@ const fluidPointer: PointerState = {
 let animationHandle: number | undefined
 let shaderGraph: ShaderEffect | undefined
 let fluidSim: FluidSimulationEffect | undefined
-type FluidDebugMode = 'dye' | 'velocity' | 'divergence' | 'pressure' | 'splat' | 'splatRaw'
 const fluidDebugModes: FluidDebugMode[] = ['dye', 'velocity', 'divergence', 'pressure', 'splat', 'splatRaw']
-let fluidDebugMode: FluidDebugMode = 'dye'
 let fluidCanvasPaint: CanvasPaint | undefined
 let velocityDebugEffect: VelocityFieldDebugEffect | undefined
 let divergenceDebugEffect: ScalarFieldDebugEffect | undefined
@@ -74,7 +72,7 @@ function disposeGraph(): void {
   pressureDebugEffect = undefined
   splatDebugEffect?.dispose()
   splatDebugEffect = undefined
-  fluidDebugMode = 'dye'
+  state.debugMode.value = 'dye'
   fluidCanvas = undefined
   fluidParamWatchers.forEach(stop => stop())
   fluidParamWatchers = []
@@ -181,7 +179,7 @@ function updateFluidDisplaySource(): void {
   if (!fluidCanvasPaint || !fluidSim) {
     return
   }
-  switch (fluidDebugMode) {
+  switch (state.debugMode.value) {
     case 'dye':
       fluidCanvasPaint.setSrcs({ src: fluidSim.dye })
       break
@@ -232,16 +230,16 @@ function updateFluidDisplaySource(): void {
 }
 
 function setFluidDebugMode(mode: FluidDebugMode): void {
-  if (fluidDebugMode === mode) {
+  if (state.debugMode.value === mode) {
     return
   }
-  fluidDebugMode = mode
+  state.debugMode.value = mode
   updateFluidDisplaySource()
   console.info(`[fluid] display mode: ${mode}`)
 }
 
 function cycleFluidDebugMode(direction: number): void {
-  const currentIndex = fluidDebugModes.indexOf(fluidDebugMode)
+  const currentIndex = fluidDebugModes.indexOf(state.debugMode.value)
   const nextIndex = (currentIndex + direction + fluidDebugModes.length) % fluidDebugModes.length
   setFluidDebugMode(fluidDebugModes[nextIndex])
 }
@@ -347,7 +345,7 @@ function startLoop(fluidEngine: BABYLON.WebGPUEngine): void {
           radius,
         })
 
-        if (fluidDebugMode === 'splat') {
+        if (state.debugMode.value === 'splat') {
           updateFluidDisplaySource()
         }
       }
@@ -457,7 +455,7 @@ function setupEngine(fluidEngine: BABYLON.WebGPUEngine): void {
       dyeInjectionStrength: currentDyeInjectionStrength,
     }
   )
-  fluidDebugMode = 'dye'
+  state.debugMode.value = 'dye'
   velocityDebugEffect = new VelocityFieldDebugEffect(
     fluidEngine,
     { src: fluidSim.velocity },
