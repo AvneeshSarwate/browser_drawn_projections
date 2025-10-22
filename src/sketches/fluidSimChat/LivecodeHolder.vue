@@ -380,15 +380,36 @@ function startLoop(fluidEngine: BABYLON.WebGPUEngine): void {
 function setupEngine(fluidEngine: BABYLON.WebGPUEngine): void {
   disposeGraph()
   clearListeners()
+  const shouldBlockShortcut = (event: KeyboardEvent): boolean => {
+    const active = document.activeElement as HTMLElement | null
+    const target = (event.target as HTMLElement | null) ?? active
+    if (!target) {
+      return false
+    }
+    if (target.isContentEditable) {
+      return true
+    }
+    const tagName = target.tagName
+    return tagName === 'INPUT' || tagName === 'TEXTAREA'
+  }
+
+  const createNumberShortcutHandler = (mode: FluidDebugMode) => {
+    return (event: KeyboardEvent) => {
+      if (shouldBlockShortcut(event)) {
+        return
+      }
+      setFluidDebugMode(mode)
+    }
+  }
   // singleKeydownEvent('p', () => {
   //   state.paused = !state.paused
   // })
-  singleKeydownEvent('1', () => setFluidDebugMode('dye'))
-  singleKeydownEvent('2', () => setFluidDebugMode('velocity'))
-  singleKeydownEvent('3', () => setFluidDebugMode('divergence'))
-  singleKeydownEvent('4', () => setFluidDebugMode('pressure'))
-  singleKeydownEvent('5', () => setFluidDebugMode('splat'))
-  singleKeydownEvent('6', () => setFluidDebugMode('splatRaw'))
+  singleKeydownEvent('1', createNumberShortcutHandler('dye'))
+  singleKeydownEvent('2', createNumberShortcutHandler('velocity'))
+  singleKeydownEvent('3', createNumberShortcutHandler('divergence'))
+  singleKeydownEvent('4', createNumberShortcutHandler('pressure'))
+  singleKeydownEvent('5', createNumberShortcutHandler('splat'))
+  singleKeydownEvent('6', createNumberShortcutHandler('splatRaw'))
   singleKeydownEvent('[', () => cycleFluidDebugMode(-1))
   singleKeydownEvent(']', () => cycleFluidDebugMode(1))
   const { width, height } = state
