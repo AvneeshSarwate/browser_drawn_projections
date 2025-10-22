@@ -380,9 +380,9 @@ function startLoop(fluidEngine: BABYLON.WebGPUEngine): void {
 function setupEngine(fluidEngine: BABYLON.WebGPUEngine): void {
   disposeGraph()
   clearListeners()
-  singleKeydownEvent('p', () => {
-    state.paused = !state.paused
-  })
+  // singleKeydownEvent('p', () => {
+  //   state.paused = !state.paused
+  // })
   singleKeydownEvent('1', () => setFluidDebugMode('dye'))
   singleKeydownEvent('2', () => setFluidDebugMode('velocity'))
   singleKeydownEvent('3', () => setFluidDebugMode('divergence'))
