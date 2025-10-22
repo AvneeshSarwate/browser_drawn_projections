@@ -1,6 +1,7 @@
 import { ref, type Ref } from 'vue'
-import Anthropic from '@anthropic-ai/sdk'
+import Anthropic, { type ContentBlockParam, type ImageBlockParam } from '@anthropic-ai/sdk'
 import type { ParamDef } from './appState'
+import type { Screenshot, ScreenshotSummary } from './types/screenshot'
 
 export interface ToolCall {
   name: string
@@ -13,6 +14,7 @@ export interface ChatMessage {
   text: string
   timestamp: number
   toolCalls?: ToolCall[]
+  attachments?: ScreenshotSummary[]
 }
 
 export interface ClaudeFluidChat {
@@ -223,7 +225,53 @@ function buildTools(params: ParamDef[]) {
   }
 }
 
-export function createClaudeFluidChat(getFluidParams: () => ParamDef[] | undefined): ClaudeFluidChat {
+interface ClaudeFluidChatOptions {
+  getFluidParams: () => ParamDef[] | undefined
+  getAttachments?: () => Screenshot[]
+}
+
+function buildUserText(prompt: string, attachments: Screenshot[]): string {
+  const trimmed = prompt.trim()
+  if (attachments.length === 0) {
+    return trimmed
+  }
+
+  const header = trimmed ? `${trimmed}\n\n` : ''
+  const lines = attachments.map((shot, index) => {
+    const captured = new Date(shot.createdAt).toLocaleString()
+    return `${index + 1}. ${shot.label} - mode: ${shot.debugMode} - captured ${captured} - ${shot.width}x${shot.height}`
+  })
+
+  return `${header}Attached screenshots:\n${lines.join('\n')}`
+}
+
+function buildUserContentBlocks(prompt: string, attachments: Screenshot[]): ContentBlockParam[] {
+  const blocks: ContentBlockParam[] = []
+  const userText = buildUserText(prompt, attachments)
+
+  if (userText) {
+    blocks.push({
+      type: 'text',
+      text: userText
+    })
+  }
+
+  for (const shot of attachments) {
+    const imageBlock: ImageBlockParam = {
+      type: 'image',
+      source: {
+        type: 'base64',
+        media_type: shot.mediaType,
+        data: shot.base64
+      }
+    }
+    blocks.push(imageBlock)
+  }
+
+  return blocks
+}
+
+export function createClaudeFluidChat(options: ClaudeFluidChatOptions): ClaudeFluidChat {
   const messages = ref<ChatMessage[]>([])
   const isWaiting = ref(false)
   const error = ref<string | null>(null)
@@ -231,8 +279,9 @@ export function createClaudeFluidChat(getFluidParams: () => ParamDef[] | undefin
   async function send(apiKey: string, userText: string): Promise<void> {
     const prompt = userText.trim()
     const key = apiKey.trim()
+    const attachments = options.getAttachments?.() ?? []
 
-    if (!prompt) {
+    if (!prompt && attachments.length === 0) {
       return
     }
 
@@ -245,12 +294,24 @@ export function createClaudeFluidChat(getFluidParams: () => ParamDef[] | undefin
       return
     }
 
-    const params = getFluidParams() ?? []
+    const params = options.getFluidParams() ?? []
+    const attachmentSummaries: ScreenshotSummary[] = attachments.map((shot) => ({
+      id: shot.id,
+      label: shot.label,
+      debugMode: shot.debugMode,
+      mediaType: shot.mediaType,
+      blobUrl: shot.blobUrl,
+      sizeBytes: shot.sizeBytes,
+      createdAt: shot.createdAt,
+      width: shot.width,
+      height: shot.height
+    }))
 
     messages.value.push({
       role: 'user',
       text: prompt,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      attachments: attachmentSummaries.length > 0 ? attachmentSummaries : undefined
     })
 
     isWaiting.value = true
@@ -270,7 +331,7 @@ export function createClaudeFluidChat(getFluidParams: () => ParamDef[] | undefin
       ]
 
       const conversationMessages: Anthropic.MessageParam[] = [
-        { role: 'user', content: prompt }
+        { role: 'user', content: buildUserContentBlocks(prompt, attachments) }
       ]
 
       let response = await client.messages.create({

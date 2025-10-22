@@ -64,6 +64,7 @@ function disposeGraph(): void {
   fluidCanvasPaint = undefined
   fluidSim?.dispose()
   fluidSim = undefined
+  state.shaderDrawFunc = undefined
   velocityDebugEffect?.dispose()
   velocityDebugEffect = undefined
   divergenceDebugEffect?.dispose()
@@ -535,6 +536,19 @@ function setupEngine(fluidEngine: BABYLON.WebGPUEngine): void {
 
   if (fluidCanvasPaint) {
     shaderGraph = fluidCanvasPaint
+  }
+
+  state.shaderDrawFunc = () => {
+    if (!fluidEngine) {
+      return
+    }
+    fluidEngine.beginFrame()
+    try {
+      fluidSim?.renderAll(fluidEngine as unknown as BABYLON.Engine)
+      fluidCanvasPaint?.renderAll(fluidEngine as unknown as BABYLON.Engine)
+    } finally {
+      fluidEngine.endFrame()
+    }
   }
 
   // Prime the fluid simulation with one initial render to show the initial dye blob

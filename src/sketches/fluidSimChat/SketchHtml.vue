@@ -12,7 +12,44 @@
       <div class="canvas-column">
         <div class="canvas-group">
           <div class="canvas-label">Fluid Simulation</div>
-          <canvas id="fluidCanvas" :width="width" :height="height"></canvas>
+          <div class="canvas-wrapper">
+            <canvas id="fluidCanvas" :width="width" :height="height"></canvas>
+            <button
+              type="button"
+              class="capture-button"
+              :disabled="isCapturing"
+              :aria-busy="isCapturing ? 'true' : 'false'"
+              :title="isCapturing ? 'Capturing…' : 'Capture screenshot (shift-click for PNG)'"
+              @click="handleCapture($event)"
+            >
+              <span>{{ isCapturing ? 'Capturing…' : 'Capture' }}</span>
+            </button>
+          </div>
+          <div class="capture-hint">Shift-click the capture button for a lossless PNG capture.</div>
+          <div v-if="captureError" class="capture-error">{{ captureError }}</div>
+          <div class="screenshot-gallery">
+            <div class="gallery-header">
+              <span>Recent Captures</span>
+              <span class="gallery-count">{{ screenshots.length }} / {{ screenshotStore.maxItems }}</span>
+            </div>
+            <div v-if="screenshots.length" class="gallery-strip">
+              <button
+                v-for="shot in screenshots"
+                :key="shot.id"
+                type="button"
+                class="gallery-item"
+                :title="`${shot.label} • ${shot.width}x${shot.height}`"
+                @click="handlePreview(shot)"
+              >
+                <img :src="shot.blobUrl" alt="" />
+                <div class="gallery-item-label">
+                  <span>{{ shot.label }}</span>
+                  <span>{{ shot.debugMode }}</span>
+                </div>
+              </button>
+            </div>
+            <div v-else class="gallery-empty">Captured screenshots will appear here.</div>
+          </div>
         </div>
       </div>
     </div>
@@ -35,6 +72,17 @@
       </div>
       <FluidChat />
     </div>
+
+    <div v-if="previewShot" class="screenshot-preview-overlay" @click.self="closePreview">
+      <div class="screenshot-preview-card">
+        <button type="button" class="preview-close" @click="closePreview">×</button>
+        <div class="preview-meta">
+          <span class="preview-label">{{ previewShot.label }}</span>
+          <span class="preview-details">{{ previewShot.debugMode }} • {{ previewShot.width }}×{{ previewShot.height }}</span>
+        </div>
+        <img :src="previewShot.blobUrl" alt="" class="preview-image" />
+      </div>
+    </div>
   </div>
 </template>
 
@@ -42,10 +90,18 @@
 import { inject, computed, ref } from 'vue'
 import { appStateName, type FluidReactionAppState, type FluidDebugMode } from './appState'
 import FluidChat from './FluidChat.vue'
+import { useScreenshotStore } from './useScreenshots'
+import type { Screenshot } from './types/screenshot'
 
 const state = inject<FluidReactionAppState>(appStateName)!!
 const width = computed(() => state.width)
 const height = computed(() => state.height)
+
+const screenshotStore = useScreenshotStore()
+const isCapturing = computed(() => screenshotStore.isCapturing.value)
+const captureError = ref<string | null>(null)
+const screenshots = computed(() => screenshotStore.screenshots.value)
+const previewShot = ref<Screenshot | null>(null)
 
 const fluidParams = [
   { name: 'densityDissipation', label: 'Density Dissipation', min: 0.0, max: 1.0, step: 0.01, value: ref(1.0) },
@@ -90,6 +146,26 @@ const debugModeDescriptions: Record<FluidDebugMode, { title: string; description
 }
 
 const currentDebugInfo = computed(() => debugModeDescriptions[state.debugMode.value])
+
+async function handleCapture(event?: MouseEvent) {
+  captureError.value = null
+  const lossless = event?.shiftKey ?? false
+  try {
+    await screenshotStore.capture({ lossless })
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to capture screenshot'
+    captureError.value = message
+    console.error('[fluid] screenshot capture failed', err)
+  }
+}
+
+function handlePreview(shot: Screenshot) {
+  previewShot.value = shot
+}
+
+function closePreview() {
+  previewShot.value = null
+}
 </script>
 
 <style scoped>
@@ -129,6 +205,194 @@ const currentDebugInfo = computed(() => debugModeDescriptions[state.debugMode.va
   font-size: 0.9rem;
   color: #aaa;
   text-align: center;
+}
+
+.canvas-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.capture-button {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 4px;
+  color: #dde0ff;
+  font-size: 0.75rem;
+  padding: 4px 8px;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.capture-button:not(:disabled):hover {
+  background: rgba(102, 122, 255, 0.45);
+  transform: translateY(-1px);
+}
+
+.capture-button:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+.capture-hint {
+  margin-top: 6px;
+  font-size: 0.75rem;
+  color: rgba(221, 224, 255, 0.6);
+}
+
+.capture-error {
+  margin-top: 4px;
+  font-size: 0.75rem;
+  color: #ff9aa2;
+}
+
+.screenshot-gallery {
+  margin-top: 10px;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.gallery-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.78rem;
+  color: rgba(221, 224, 255, 0.75);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.gallery-count {
+  font-size: 0.72rem;
+  color: rgba(221, 224, 255, 0.6);
+}
+
+.gallery-strip {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.gallery-strip::-webkit-scrollbar {
+  height: 8px;
+}
+
+.gallery-strip::-webkit-scrollbar-thumb {
+  background: rgba(221, 224, 255, 0.2);
+  border-radius: 4px;
+}
+
+.gallery-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 120px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 6px;
+  cursor: pointer;
+  color: inherit;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.gallery-item:hover {
+  border-color: rgba(102, 122, 255, 0.6);
+  transform: translateY(-1px);
+}
+
+.gallery-item img {
+  width: 100%;
+  height: 70px;
+  object-fit: cover;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.gallery-item-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  color: rgba(221, 224, 255, 0.75);
+}
+
+.gallery-empty {
+  font-size: 0.75rem;
+  color: rgba(221, 224, 255, 0.55);
+}
+
+.screenshot-preview-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 6, 12, 0.82);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 1000;
+}
+
+.screenshot-preview-card {
+  position: relative;
+  max-width: min(90vw, 1100px);
+  max-height: min(90vh, 700px);
+  background: rgba(12, 14, 24, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  padding: 20px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4);
+}
+
+.preview-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  background: transparent;
+  border: none;
+  color: rgba(221, 224, 255, 0.75);
+  font-size: 1.4rem;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+
+.preview-close:hover {
+  color: #ffb3ba;
+}
+
+.preview-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: rgba(221, 224, 255, 0.85);
+}
+
+.preview-label {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.preview-details {
+  font-size: 0.85rem;
+  color: rgba(221, 224, 255, 0.65);
+}
+
+.preview-image {
+  width: 100%;
+  max-height: 520px;
+  object-fit: contain;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.55);
 }
 
 canvas {
