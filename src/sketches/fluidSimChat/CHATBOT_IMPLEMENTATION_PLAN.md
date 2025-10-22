@@ -7,8 +7,8 @@ Add a Claude-powered chatbot to explore the fluid simulation parameter space. Fu
 
 ### 1. Dependencies & Model
 - **SDK**: Reuse existing `@anthropic-ai/sdk` dependency
-- **Model**: `claude-3-7-sonnet` (supports web search)
-- **Pattern**: Follow `claudeChat.example.ts` approach
+- **Model**: `claude-4-5-sonnet` (supports web search)
+- **Pattern**: Use `claudeChat.example.ts` as example, but adapt as necessary - 
 
 ### 2. Core Components
 
@@ -23,6 +23,7 @@ Add a Claude-powered chatbot to explore the fluid simulation parameter space. Fu
 - Direct manipulation of Vue refs for immediate parameter updates
 
 **System Prompt Contents**:
+This is a skeleton of what needs to be in the system prompt - it should be formatted and expanded for maximum effectiveness
 ```
 - Introduction: Port of Pavel DoGreat's WebGL-Fluid-Simulation
 - References:
@@ -33,6 +34,8 @@ Add a Claude-powered chatbot to explore the fluid simulation parameter space. Fu
   * https://developer.nvidia.com/gpugems/gpugems/part-vi-beyond-triangles/chapter-38-fast-fluid-dynamics-simulation-gpu
 - Parameter descriptions with physical meaning
 - Tool usage rules (always read first, clamp to ranges, snap to steps)
+
+search the web and refer to the references if you think you need very specific information about fluid simulations
 ```
 
 **Tools**:
@@ -64,11 +67,19 @@ Add a Claude-powered chatbot to explore the fluid simulation parameter space. Fu
 │ Message History             │
 │ (max-height: 280px, scroll) │
 │                             │
-│ ┌─user bubble────┐          │
-│ └────────────────┘          │
-│          ┌─assistant─────┐  │
-│          └───────────────┘  │
-│          [tool chips]       │
+│   ┌───[user chip]───┐       │
+│   └─────────────────┘       │
+│                             │
+│ Assistant response flows    │
+│ like a document with        │
+│ natural line breaks         │
+│ [tool: readParams]          │
+│                             │
+│   ┌───[user chip]───┐       │
+│   └─────────────────┘       │
+│                             │
+│ Another assistant response  │
+│ [tool: setParams]           │
 ├─────────────────────────────┤
 │ Text Input | Send Button    │
 ├─────────────────────────────┤
@@ -76,15 +87,17 @@ Add a Claude-powered chatbot to explore the fluid simulation parameter space. Fu
 └─────────────────────────────��
 ```
 
-**Styling**:
+**Styling** (Claude-like, dense):
 - **Base**: `#08090f` background, `#dde0ff` text (match current page)
 - **Container**: 380px width, `rgba(255,255,255,0.05)` background, 8px border-radius
-- **User bubbles**: `rgba(102,122,255,0.2)` background, align-right
-- **Assistant bubbles**: `rgba(255,255,255,0.06)` background, align-left
-- **Tool chips**: Small pill-shaped tags showing tool calls
+- **User messages**: Darker chip/block style, `rgba(0,0,0,0.5)` background with `rgba(255,255,255,0.15)` border, compact padding (6px 10px), appears overlaid on conversation
+- **Assistant messages**: Flow naturally like document text, no background/border, just text in the conversation stream with line-height 1.4, compact vertical spacing
+- **Tool chips**: Small pill-shaped tags (0.7rem font, 2px 6px padding) below assistant messages showing tool calls
 - **Error**: `#ff9aa2` text, hidden by default, appears below composer on error
-- **Density**: Tight gaps (4-8px), compact padding, small fonts (0.85-0.9rem)
-- **Greyscale theme**: No color except simulation canvas and subtle accent on user bubbles
+- **Density**: Tight gaps (4-6px between messages), minimal padding, efficient fonts (0.85-0.9rem), information-dense not spacious
+- **Greyscale theme**: No color except simulation canvas, user messages darker for contrast
+- style vibe notes -  i don't want this to look like a bubbly saas doc - i want it to look like an efficient information interface - things should be clear but denser
+
 
 **Features**:
 - Password input for API key (stored only in component state)
