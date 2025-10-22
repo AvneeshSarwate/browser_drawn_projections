@@ -1,5 +1,5 @@
 import { ref, type Ref } from 'vue'
-import Anthropic, { type ContentBlockParam, type ImageBlockParam } from '@anthropic-ai/sdk'
+import Anthropic from '@anthropic-ai/sdk'
 import type { ParamDef } from './appState'
 import type { Screenshot, ScreenshotSummary } from './types/screenshot'
 
@@ -25,7 +25,7 @@ export interface ClaudeFluidChat {
   reset: () => void
 }
 
-const MODEL_NAME = 'claude-sonnet-4-5-20250929'
+const MODEL_NAME = 'claude-3-7-sonnet-latest'
 const MAX_TOOL_ITERATIONS = 6
 
 const PARAMETER_DESCRIPTIONS: Record<string, string> = {
@@ -225,6 +225,22 @@ function buildTools(params: ParamDef[]) {
   }
 }
 
+type Base64ImageBlock = {
+  type: 'image'
+  source: {
+    type: 'base64'
+    media_type: Screenshot['mediaType']
+    data: string
+  }
+}
+
+type TextContentBlock = {
+  type: 'text'
+  text: string
+}
+
+type UserContentBlock = TextContentBlock | Base64ImageBlock
+
 interface ClaudeFluidChatOptions {
   getFluidParams: () => ParamDef[] | undefined
   getAttachments?: () => Screenshot[]
@@ -245,8 +261,8 @@ function buildUserText(prompt: string, attachments: Screenshot[]): string {
   return `${header}Attached screenshots:\n${lines.join('\n')}`
 }
 
-function buildUserContentBlocks(prompt: string, attachments: Screenshot[]): ContentBlockParam[] {
-  const blocks: ContentBlockParam[] = []
+function buildUserContentBlocks(prompt: string, attachments: Screenshot[]): UserContentBlock[] {
+  const blocks: UserContentBlock[] = []
   const userText = buildUserText(prompt, attachments)
 
   if (userText) {
@@ -257,7 +273,7 @@ function buildUserContentBlocks(prompt: string, attachments: Screenshot[]): Cont
   }
 
   for (const shot of attachments) {
-    const imageBlock: ImageBlockParam = {
+    const imageBlock: Base64ImageBlock = {
       type: 'image',
       source: {
         type: 'base64',
@@ -324,14 +340,11 @@ export function createClaudeFluidChat(options: ClaudeFluidChatOptions): ClaudeFl
       })
 
       const { tools, handlers } = buildTools(params)
-      // Add Anthropic server web search tool (no domain filters)
-      const toolsWithSearch: Anthropic.Tool[] = [
-        ...tools,
-        { name: 'web_search', type: 'web_search_20250305' } as any,
-      ]
+      const toolsWithSearch = tools
 
+      const userContent = buildUserContentBlocks(prompt, attachments)
       const conversationMessages: Anthropic.MessageParam[] = [
-        { role: 'user', content: buildUserContentBlocks(prompt, attachments) }
+        { role: 'user', content: userContent as unknown as Anthropic.MessageParam['content'] }
       ]
 
       let response = await client.messages.create({
