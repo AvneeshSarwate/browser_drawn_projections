@@ -45,7 +45,8 @@ export const sketchNames = [
   'polygonFill',
   'handwriting_animator',
   'fluidReactionSim',
-  'vuePianoRoll'
+  'vuePianoRoll',
+  'fluidSimHack'
 ]
 
 const sketchRoutes = sketchNames.map(name => {
