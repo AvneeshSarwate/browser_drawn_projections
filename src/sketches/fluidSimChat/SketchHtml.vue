@@ -8,6 +8,21 @@
           <input type="number" :min="param.min" :max="param.max" :step="param.step" v-model.number="param.value.value"
             class="value-input" />
         </div>
+        <button
+          type="button"
+          class="programmatic-button-inline"
+          @pointerdown.prevent="handleProgrammaticPointerDown"
+          @pointerup="handleProgrammaticPointerUp"
+          @pointerleave="handleProgrammaticPointerCancel"
+          @pointercancel="handleProgrammaticPointerCancel"
+          @blur="handleProgrammaticPointerCancel"
+          @keydown.space.prevent="handleProgrammaticKeyDown"
+          @keyup.space.prevent="handleProgrammaticKeyUp"
+          @keydown.enter.prevent="handleProgrammaticKeyDown"
+          @keyup.enter.prevent="handleProgrammaticKeyUp"
+        >
+          Programmatic Splat
+        </button>
       </div>
       <div class="canvas-column">
         <div class="canvas-group">
@@ -69,29 +84,10 @@
         <div class="debug-shortcuts">
           <strong>Quick Keys:</strong> 1-Dye | 2-Velocity | 3-Divergence | 4-Pressure | 5-Splat | 6-Splat Raw | [ ] Cycle
         </div>
-
-        <div class="programmatic-controls">
-          <button
-            type="button"
-            class="programmatic-button"
-            @pointerdown.prevent="handleProgrammaticPointerDown"
-            @pointerup="handleProgrammaticPointerUp"
-            @pointerleave="handleProgrammaticPointerCancel"
-            @pointercancel="handleProgrammaticPointerCancel"
-            @blur="handleProgrammaticPointerCancel"
-            @keydown.space.prevent="handleProgrammaticKeyDown"
-            @keyup.space.prevent="handleProgrammaticKeyUp"
-            @keydown.enter.prevent="handleProgrammaticKeyDown"
-            @keyup.enter.prevent="handleProgrammaticKeyUp"
-          >
-            Hold for Programmatic Splat
-          </button>
-          <p class="programmatic-hint">
-            Hold the button (or press Space/Enter) to trigger a scripted splat animation. The timer resets with each new hold.
-          </p>
-        </div>
       </div>
-      <FluidChat />
+      <div class="chat-wrapper">
+        <FluidChat />
+      </div>
     </div>
 
     <div v-if="previewShot" class="screenshot-preview-overlay" @click.self="closePreview">
@@ -243,14 +239,21 @@ function handleProgrammaticKeyUp() {
 .below-row {
   display: flex;
   gap: 15px;
-  align-items: flex-start;
+  align-items: stretch;
   width: 100%;
   max-width: 1200px;
 }
 
 .below-row .instructions {
   flex: 1;
+  min-width: 0;
   text-align: left;
+}
+
+.chat-wrapper {
+  flex: 1;
+  min-width: 0;
+  display: flex;
 }
 
 .canvas-group {
@@ -502,48 +505,37 @@ canvas {
   border-radius: 4px;
 }
 
-.programmatic-controls {
-  margin-top: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.programmatic-button {
-  align-self: flex-start;
+.programmatic-button-inline {
+  width: 100%;
+  margin-top: 8px;
   background: linear-gradient(135deg, #667aff, #885cff);
   border: none;
   color: #f3f4ff;
-  padding: 8px 16px;
-  border-radius: 999px;
-  font-size: 0.9rem;
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
   transition: transform 0.1s ease, box-shadow 0.1s ease;
-  box-shadow: 0 4px 14px rgba(102, 122, 255, 0.25);
+  box-shadow: 0 2px 8px rgba(102, 122, 255, 0.25);
 }
 
-.programmatic-button:focus-visible {
+.programmatic-button-inline:focus-visible {
   outline: 2px solid rgba(255, 255, 255, 0.6);
   outline-offset: 2px;
 }
 
-.programmatic-button:active {
+.programmatic-button-inline:active {
   transform: translateY(1px);
-  box-shadow: 0 2px 8px rgba(102, 122, 255, 0.2);
-}
-
-.programmatic-hint {
-  font-size: 0.8rem;
-  color: #c3c7ff;
-  line-height: 1.4;
-  max-width: 320px;
+  box-shadow: 0 1px 4px rgba(102, 122, 255, 0.2);
 }
 
 .canvas-controls-wrapper {
   display: flex;
   gap: 15px;
   align-items: flex-start;
+  width: 100%;
+  max-width: 1200px;
 }
 
 .controls {

@@ -210,7 +210,7 @@ function updateProgrammaticSplat(elapsedSeconds: number): void {
   const halfHeight = 0.06
   const softness = 0.12
   const rotationSpeed = Math.PI * 0.75
-  const pulseAmount = 0.25
+  const pulseAmount = 0.01
   const pulseFrequency = 1.1
 
   // Drive a directional force from the shader by modulating a signed

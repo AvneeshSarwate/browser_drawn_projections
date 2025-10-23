@@ -1,7 +1,14 @@
 <template>
   <div class="fluid-chat">
-    <label class="api-label" for="fluid-chat-api-key">Anthropic API Key</label>
+    <div class="api-header" @click="toggleApiKeyExpanded">
+      <span class="api-caret" :class="{ expanded: apiKeyExpanded }">▼</span>
+      <label class="api-label">Anthropic API Key</label>
+      <span class="api-status" :class="{ 'has-key': hasApiKey }">
+        {{ hasApiKey ? '✓' : 'MISSING' }}
+      </span>
+    </div>
     <input
+      v-if="apiKeyExpanded"
       id="fluid-chat-api-key"
       v-model="apiKey"
       type="password"
@@ -160,6 +167,7 @@ const state = inject<FluidReactionAppState>(appStateName)!!
 const screenshotStore = useScreenshotStore()
 
 const apiKey = ref('')
+const apiKeyExpanded = ref(false)
 const userInput = ref('')
 const scrollContainer = ref<HTMLDivElement | null>(null)
 const localError = ref<string | null>(null)
@@ -176,6 +184,7 @@ const { messages, isWaiting, error, send } = createClaudeFluidChat({
   getAttachments: () => screenshotStore.getSelected()
 })
 
+const hasApiKey = computed(() => apiKey.value.trim().length > 0)
 const combinedError = computed(() => localError.value || error.value)
 const isSendDisabled = computed(() => {
   const hasPrompt = userInput.value.trim().length > 0
@@ -185,6 +194,10 @@ const isSendDisabled = computed(() => {
   }
   return isWaiting.value
 })
+
+function toggleApiKeyExpanded() {
+  apiKeyExpanded.value = !apiKeyExpanded.value
+}
 
 const debugModeLabels: Record<FluidDebugMode, string> = {
   dye: 'Dye',
@@ -330,7 +343,8 @@ watch(isWaiting, () => {
 
 <style scoped>
 .fluid-chat {
-  width: min(400px, 100%);
+  width: 100%;
+  height: 100%;
   background: rgba(255, 255, 255, 0.05);
   border-radius: 8px;
   padding: 14px 16px;
@@ -342,11 +356,42 @@ watch(isWaiting, () => {
   gap: 10px;
 }
 
+.api-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
 .api-label {
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: rgba(221, 224, 255, 0.7);
+}
+
+.api-status {
+  font-size: 0.7rem;
+  color: #ff9aa2;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.api-status.has-key {
+  color: #90ee90;
+  font-size: 0.85rem;
+}
+
+.api-caret {
+  font-size: 0.6rem;
+  color: rgba(221, 224, 255, 0.6);
+  transition: transform 0.2s ease;
+}
+
+.api-caret.expanded {
+  transform: rotate(-180deg);
 }
 
 .api-input {
@@ -364,11 +409,12 @@ watch(isWaiting, () => {
 }
 
 .history {
+  flex: 1;
   background: rgba(0, 0, 0, 0.35);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 6px;
   padding: 8px 10px;
-  max-height: 280px;
+  min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -462,7 +508,7 @@ watch(isWaiting, () => {
   padding: 6px 8px;
   color: #dde0ff;
   font-size: 0.85rem;
-  resize: vertical;
+  resize: none;
   min-height: 54px;
   max-height: 120px;
 }
