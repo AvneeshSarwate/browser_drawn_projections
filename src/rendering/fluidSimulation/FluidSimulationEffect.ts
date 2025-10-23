@@ -192,11 +192,15 @@ export class FluidSimulationEffect {
     );
     this.velocitySplatUnified.setUniforms({
       mode: 0,
+      splatType: 0,
       strength: 1.0,
       point: [0.5, 0.5],
       color: [0, 0, 0],
       radius: 0.01,
       aspectRatio: this.aspectRatioVelocity,
+      time: 0,
+      shapeParams0: [0, 0, 0, 0],
+      shapeParams1: [0, 0, 0, 0],
     });
     
     // 2. Curl + vorticity confinement to reinforce swirling motion
@@ -309,11 +313,15 @@ export class FluidSimulationEffect {
     );
     this.dyeSplatUnified.setUniforms({
       mode: 0,
+      splatType: 0,
       strength: 1.0,
       point: [0.5, 0.5],
       color: [0, 0, 0],
       radius: 0.01,
       aspectRatio: this.aspectRatioDye,
+      time: 0,
+      shapeParams0: [0, 0, 0, 0],
+      shapeParams1: [0, 0, 0, 0],
     });
     
     // 8. Advect dye using advected velocity field
@@ -397,6 +405,13 @@ export class FluidSimulationEffect {
     velocityDelta: [number, number];
     dyeColor: [number, number, number];
     radius: number;
+    time?: number;
+    mode?: number;
+    strength?: number;
+    splatType?: number;
+    shapeParams0?: [number, number, number, number];
+    shapeParams1?: [number, number, number, number];
+    proceduralVelocityScale?: number;
   }): void {
     const [px, py] = params.point;
     const [dvx, dvy] = params.velocityDelta;
@@ -405,23 +420,55 @@ export class FluidSimulationEffect {
     const [dr, dg, db] = params.dyeColor;
     const scaledColor: [number, number, number] = [dr, dg, db];
     const radius = Math.max(1e-5, params.radius);
+    const time = params.time ?? 0;
+    const mode = params.mode ?? 1;
+    const strength = params.strength ?? 1.0;
+    const splatType = params.splatType ?? 0;
+    const shapeParams0 = params.shapeParams0 ?? [0, 0, 0, 0];
+    const baseShapeParams1 = params.shapeParams1 ?? [0, 0, 0, 0];
+    const velocityShapeParams1: [number, number, number, number] = [
+      baseShapeParams1[0],
+      baseShapeParams1[1],
+      baseShapeParams1[2],
+      baseShapeParams1[3],
+    ];
+    const dyeShapeParams1: [number, number, number, number] = [
+      baseShapeParams1[0],
+      baseShapeParams1[1],
+      baseShapeParams1[2],
+      baseShapeParams1[3],
+    ];
+
+    if (params.proceduralVelocityScale !== undefined) {
+      velocityShapeParams1[3] = params.proceduralVelocityScale * forceScale;
+    }
 
     // Set unified splat uniforms to additive mode (mode=1)
     // Use separate aspect ratios for velocity and dye fields
     this.velocitySplatUnified.setUniforms({
-      mode: 1,
+      mode,
+      splatType,
       point: [px, py],
       color: scaledVelocity,
       radius,
       aspectRatio: this.aspectRatioVelocity,
+      strength,
+      time,
+      shapeParams0,
+      shapeParams1: velocityShapeParams1,
     });
-    
+
     this.dyeSplatUnified.setUniforms({
-      mode: 1,
+      mode,
+      splatType,
       point: [px, py],
       color: scaledColor,
       radius,
       aspectRatio: this.aspectRatioDye,
+      strength,
+      time,
+      shapeParams0,
+      shapeParams1: dyeShapeParams1,
     });
   }
   

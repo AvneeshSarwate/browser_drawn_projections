@@ -69,6 +69,27 @@
         <div class="debug-shortcuts">
           <strong>Quick Keys:</strong> 1-Dye | 2-Velocity | 3-Divergence | 4-Pressure | 5-Splat | 6-Splat Raw | [ ] Cycle
         </div>
+
+        <div class="programmatic-controls">
+          <button
+            type="button"
+            class="programmatic-button"
+            @pointerdown.prevent="handleProgrammaticPointerDown"
+            @pointerup="handleProgrammaticPointerUp"
+            @pointerleave="handleProgrammaticPointerCancel"
+            @pointercancel="handleProgrammaticPointerCancel"
+            @blur="handleProgrammaticPointerCancel"
+            @keydown.space.prevent="handleProgrammaticKeyDown"
+            @keyup.space.prevent="handleProgrammaticKeyUp"
+            @keydown.enter.prevent="handleProgrammaticKeyDown"
+            @keyup.enter.prevent="handleProgrammaticKeyUp"
+          >
+            Hold for Programmatic Splat
+          </button>
+          <p class="programmatic-hint">
+            Hold the button (or press Space/Enter) to trigger a scripted splat animation. The timer resets with each new hold.
+          </p>
+        </div>
       </div>
       <FluidChat />
     </div>
@@ -165,6 +186,43 @@ function handlePreview(shot: Screenshot) {
 
 function closePreview() {
   previewShot.value = null
+}
+
+const programmaticSplat = state.programmaticSplat
+const programmaticKeyActive = ref(false)
+
+function startProgrammaticSplat() {
+  programmaticSplat.restartToken.value += 1
+  programmaticSplat.active.value = true
+}
+
+function stopProgrammaticSplat() {
+  programmaticSplat.active.value = false
+  programmaticKeyActive.value = false
+}
+
+function handleProgrammaticPointerDown() {
+  startProgrammaticSplat()
+}
+
+function handleProgrammaticPointerUp() {
+  stopProgrammaticSplat()
+}
+
+function handleProgrammaticPointerCancel() {
+  stopProgrammaticSplat()
+}
+
+function handleProgrammaticKeyDown(event: KeyboardEvent) {
+  if (event.repeat || programmaticKeyActive.value) {
+    return
+  }
+  programmaticKeyActive.value = true
+  startProgrammaticSplat()
+}
+
+function handleProgrammaticKeyUp() {
+  stopProgrammaticSplat()
 }
 </script>
 
@@ -442,6 +500,44 @@ canvas {
   padding: 10px;
   background: rgba(255, 255, 255, 0.05);
   border-radius: 4px;
+}
+
+.programmatic-controls {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.programmatic-button {
+  align-self: flex-start;
+  background: linear-gradient(135deg, #667aff, #885cff);
+  border: none;
+  color: #f3f4ff;
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+  box-shadow: 0 4px 14px rgba(102, 122, 255, 0.25);
+}
+
+.programmatic-button:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.6);
+  outline-offset: 2px;
+}
+
+.programmatic-button:active {
+  transform: translateY(1px);
+  box-shadow: 0 2px 8px rgba(102, 122, 255, 0.2);
+}
+
+.programmatic-hint {
+  font-size: 0.8rem;
+  color: #c3c7ff;
+  line-height: 1.4;
+  max-width: 320px;
 }
 
 .canvas-controls-wrapper {

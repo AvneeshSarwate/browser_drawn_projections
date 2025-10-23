@@ -12,6 +12,11 @@ export interface ParamDef {
 
 export type FluidDebugMode = 'dye' | 'velocity' | 'divergence' | 'pressure' | 'splat' | 'splatRaw'
 
+export interface ProgrammaticSplatControl {
+  active: Ref<boolean>
+  restartToken: Ref<number>
+}
+
 export interface FluidReactionAppState {
   fluidEngine?: BABYLON.WebGPUEngine
   reactionEngine?: BABYLON.WebGPUEngine
@@ -22,6 +27,7 @@ export interface FluidReactionAppState {
   fluidParams?: ParamDef[]
   reactionParams?: ParamDef[]
   debugMode: Ref<FluidDebugMode>
+  programmaticSplat: ProgrammaticSplatControl
 }
 
 export const appState: FluidReactionAppState = {
@@ -32,6 +38,10 @@ export const appState: FluidReactionAppState = {
   width: 1024,
   height: 512,
   debugMode: ref('dye'),
+  programmaticSplat: {
+    active: ref(false),
+    restartToken: ref(0),
+  },
 }
 
 export const appStateName = 'fluidReactionAppState'

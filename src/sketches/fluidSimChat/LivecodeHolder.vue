@@ -46,6 +46,9 @@ let fluidCanvas: HTMLCanvasElement | undefined
 let currentSplatRadius = 0.25
 let currentForceStrength = 6000
 let currentDyeInjectionStrength = 0.65
+let programmaticSplatActive = false
+let programmaticSplatStartTime: number | undefined
+let programmaticColorPhase = 0
 
 const pointerBindings = new Map<HTMLCanvasElement, { cancel: (e: PointerEvent) => void; leave: (e: PointerEvent) => void }>()
 let engineWatcher: WatchStopHandle | undefined
@@ -53,6 +56,10 @@ let fluidParamWatchers: WatchStopHandle[] = []
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value))
+}
+
+function now(): number {
+  return typeof performance !== 'undefined' ? performance.now() : Date.now()
 }
 
 function disposeGraph(): void {
@@ -75,6 +82,10 @@ function disposeGraph(): void {
   splatDebugEffect = undefined
   state.debugMode.value = 'dye'
   fluidCanvas = undefined
+  programmaticSplatActive = false
+  programmaticSplatStartTime = undefined
+  programmaticColorPhase = 0
+  state.programmaticSplat.active.value = false
   fluidParamWatchers.forEach(stop => stop())
   fluidParamWatchers = []
 }
@@ -174,6 +185,53 @@ function generatePointerColor(): { r: number; g: number; b: number } {
     g: Math.floor(hsv.g * 255 * scale),
     b: Math.floor(hsv.b * 255 * scale),
   }
+}
+
+function beginProgrammaticSplat(): void {
+  programmaticSplatStartTime = now()
+  programmaticSplatActive = true
+  programmaticColorPhase = Math.random() * Math.PI * 2
+}
+
+function updateProgrammaticSplat(elapsedSeconds: number): void {
+  if (!fluidSim) {
+    return
+  }
+  const colorPhase = programmaticColorPhase + elapsedSeconds * 0.6
+  const dyeStrength = currentDyeInjectionStrength
+  const dyeColor = [
+    clamp(0.55 + 0.45 * Math.sin(colorPhase), 0, 1) * dyeStrength,
+    clamp(0.45 + 0.45 * Math.sin(colorPhase + 2.094395102), 0, 1) * dyeStrength,
+    clamp(0.6 + 0.4 * Math.sin(colorPhase + 4.188790205), 0, 1) * dyeStrength,
+  ] as [number, number, number]
+
+  const radius = Math.max(0.0025, computeNormalizedSplatRadius())
+  const halfWidth = 0.28
+  const halfHeight = 0.06
+  const softness = 0.12
+  const rotationSpeed = Math.PI * 0.75
+  const pulseAmount = 0.25
+  const pulseFrequency = 1.1
+
+  // Drive a directional force from the shader by modulating a signed
+  // procedural velocity scale. The WGSL splat computes the tangential
+  // push from this scalar so both sides of the rectangle impart equal
+  // and opposite momentum as it spins.
+  const wavePhase = Math.sin(elapsedSeconds * pulseFrequency + Math.PI * 0.5)
+  const velocityMagnitude = pulseAmount * wavePhase
+  const velocityDelta = [0, 0] as [number, number]
+
+  fluidSim.applySplat({
+    point: [0.5, 0.5],
+    velocityDelta,
+    dyeColor,
+    radius,
+    time: elapsedSeconds,
+    splatType: 1,
+    shapeParams0: [halfWidth, halfHeight, 0, softness],
+    shapeParams1: [rotationSpeed, pulseAmount, pulseFrequency, 0],
+    proceduralVelocityScale: velocityMagnitude,
+  })
 }
 
 function updateFluidDisplaySource(): void {
@@ -304,6 +362,25 @@ function registerFluidParamWatchers(): void {
     )
     fluidParamWatchers.push(stop)
   }
+
+  const programmatic = state.programmaticSplat
+  if (programmatic) {
+    const stopActive = watch(programmatic.active, (isActive) => {
+      if (!isActive) {
+        programmaticSplatActive = false
+        programmaticSplatStartTime = undefined
+        return
+      }
+      beginProgrammaticSplat()
+    }, { immediate: true })
+    const stopRestart = watch(programmatic.restartToken, () => {
+      if (!programmatic.active.value) {
+        return
+      }
+      beginProgrammaticSplat()
+    })
+    fluidParamWatchers.push(stopActive, stopRestart)
+  }
 }
 
 function startLoop(fluidEngine: BABYLON.WebGPUEngine): void {
@@ -321,8 +398,25 @@ function startLoop(fluidEngine: BABYLON.WebGPUEngine): void {
       return
     }
 
+    const frameNow = now()
+
+    if (programmaticSplatActive && fluidSim) {
+      if (programmaticSplatStartTime === undefined) {
+        programmaticSplatStartTime = frameNow
+        programmaticColorPhase = Math.random() * Math.PI * 2
+      }
+      const startTime = programmaticSplatStartTime ?? frameNow
+      programmaticSplatStartTime = startTime
+      const elapsedSeconds = Math.max(0, (frameNow - startTime) / 1000)
+      updateProgrammaticSplat(elapsedSeconds)
+      if (state.debugMode.value === 'splat') {
+        updateFluidDisplaySource()
+      }
+    }
+
+    const pointerTriggered = fluidPointer.down && fluidPointer.moved
     // Apply direct pointer splat if needed
-    if (fluidPointer.down && fluidPointer.moved && fluidSim) {
+    if (pointerTriggered && fluidSim) {
       const radius = computeNormalizedSplatRadius()
       const velX = fluidPointer.vx
       const velY = fluidPointer.vy
@@ -351,16 +445,18 @@ function startLoop(fluidEngine: BABYLON.WebGPUEngine): void {
         }
       }
 
+    }
+
+    if (pointerTriggered) {
       fluidPointer.moved = false
       fluidPointer.vx = 0
       fluidPointer.vy = 0
     }
 
-    const shouldRenderFluid = !state.paused || (fluidPointer.down && fluidPointer.moved)
+    const shouldRenderFluid = !state.paused || pointerTriggered || programmaticSplatActive
     if (shouldRenderFluid) {
-      const now = performance.now()
-      const dt = lastFrameTime !== undefined ? Math.min((now - lastFrameTime) / 1000, 1 / 30) : 1 / 60
-      lastFrameTime = now
+      const dt = lastFrameTime !== undefined ? Math.min((frameNow - lastFrameTime) / 1000, 1 / 30) : 1 / 60
+      lastFrameTime = frameNow
       if (!state.paused) {
         fluidSim?.updateForFrame(dt)
       }
@@ -374,7 +470,7 @@ function startLoop(fluidEngine: BABYLON.WebGPUEngine): void {
     }
     animationHandle = requestAnimationFrame(render)
   }
-  lastFrameTime = performance.now()
+  lastFrameTime = now()
   animationHandle = requestAnimationFrame(render)
 }
 
