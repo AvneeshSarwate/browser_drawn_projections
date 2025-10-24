@@ -1,4 +1,4 @@
-type Entry = {
+export type Entry = {
   type: string;
   children: {
     type: string;
@@ -12995,7 +12995,7 @@ function entryBoundingBox(entry: Entry) {
   return { minX, minY, maxX, maxY, width: maxX-minX, height: maxY-minY }
 }
 
-const charToEntryMap = new Map<string, Entry>()
+export const charToEntryMap = new Map<string, Entry>()
 
 normalizedMetadata.forEach(g => {
   if (!g.metadata) {
@@ -13017,49 +13017,72 @@ normalizedMetadata.forEach(g => {
 function sampleEntryByNormTime(entry: Entry, time: number, sizeScale: number = 1) {
   const points = entry.children.flatMap(c => c.points)
   const numPts = points.length
-  const pt = points[Math.floor(time * numPts)]
   const { minX, minY, width, height } = entry.metadata!.boundingBox!
   const baseline = entry.metadata!.baseline!
   const w = width * sizeScale
   const h = height * sizeScale
-  const baselineShift = (1 - baseline) * h
+  // use unscaled height when computing the baseline offset so it's not scaled twice
+  const baselineShift = (1 - baseline) * height
+  if (numPts === 0) {
+    const y = baselineShift * sizeScale
+    return { x: 0, y, w, h, baseline }
+  }
+
+  const clampedTime = Math.min(Math.max(time, 0), 1)
+  const idx = Math.min(numPts - 1, Math.floor(clampedTime * numPts))
+  const pt = points[idx]
   const x = (pt.x - minX) * sizeScale
-  const y = ((pt.y - minY) + baselineShift) * sizeScale
-  return {x, y, w, h, baseline}
+  const y = ((pt.y - minY) - baselineShift) * sizeScale
+  return { x, y, w, h, baseline }
 }
 
 //todo: handle line breaks for words
-function calculateLineLayout(line: string, spaceWidth: number=40, kernWidth = 8, maxLineWidth:1024) {
-  const positions: { x: number, y: number }[] = [{x: 0, y: 0}]
-  let baseLen = 0
+export function calculateLineLayout(line: string, spaceWidth = 40, kernWidth = 8, maxLineWidth:1024) {
+  const positions: { x: number, y: number }[] = []
+  let cursor = 0
   for (let i = 0; i < line.length; i++) {
     const char = line[i]
-    if (char == ' ') {
-      baseLen += spaceWidth
-    } else {
-      baseLen += charToEntryMap.get(char)!.metadata!.boundingBox!.width + kernWidth
+    if (char === ' ') {
+      cursor += spaceWidth
+      continue
     }
-    positions.push({x: baseLen, y: 0})
+    const entry = charToEntryMap.get(char)
+    if (!entry) continue
+    positions.push({ x: cursor, y: 0 })
+    cursor += entry.metadata!.boundingBox!.width + kernWidth
   }
 
   return positions
 }
 
 // for time ranging from [0-1] calculate where the pen point is, assuming even time per actual letter
-function sampleEntryIndexInLine(line: string, normTime: number, positions: { x: number, y: number }[]) {
-  const entries: Entry[] = []
+export function sampleEntryIndexInLine(line: string, normTime: number, positions: { x: number, y: number }[], sizeScale: number = 1) {
+  const glyphs: { entry: Entry; position: { x: number, y: number } }[] = []
+  let glyphIndex = 0
   for (let i = 0; i < line.length; i++) {
     const char = line[i]
-    if (char != ' ') {
-      entries.push(charToEntryMap.get(char)!)
-    } 
+    if (char === ' ') continue
+    const entry = charToEntryMap.get(char)
+    if (!entry) continue
+    const position = positions[glyphIndex] ?? { x: 0, y: 0 }
+    glyphs.push({ entry, position })
+    glyphIndex++
   }
-  
-  const ind = Math.floor(normTime * entries.length)
-  const entry = entries[ind]
-  const entryTime = normTime / entries.length
-  const entryProgTime = (normTime - ind * entryTime) / entryTime
-  const pt = sampleEntryByNormTime(entry, entryProgTime)
-  const movedPt = {x: pt.x + positions[ind].x, y: pt.y + positions[ind].y}
-  return movedPt
+
+  if (glyphs.length === 0) {
+    return { x: 0, y: 0, w: 0, h: 0, baseline: 1 }
+  }
+
+  const clampedTime = Math.min(Math.max(normTime, 0), 1)
+  const totalEntries = glyphs.length
+  const ind = Math.min(totalEntries - 1, Math.floor(clampedTime * totalEntries))
+  const entryTime = 1 / totalEntries
+  const entryProgTime = Math.min(
+    1,
+    Math.max(0, (clampedTime - ind * entryTime) / entryTime)
+  )
+  const { entry, position } = glyphs[ind]
+  const scaledPosition = { x: position.x * sizeScale, y: position.y * sizeScale }
+  const pt = sampleEntryByNormTime(entry, entryProgTime, sizeScale)
+  return { ...pt, x: pt.x + scaledPosition.x, y: pt.y + scaledPosition.y }
 }

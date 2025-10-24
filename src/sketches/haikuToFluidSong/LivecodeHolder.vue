@@ -10,8 +10,8 @@ import {
 } from '@/rendering/fluidSimulationHack'
 import { clearListeners, pointerdownEvent, pointermoveEvent, pointerupEvent, singleKeydownEvent } from '@/io/keyboardAndMouse'
 import { TimeContext, launch } from '@/channels/base_time_context'
-import { cosN, sinN, type CancelablePromisePoxy } from '@/channels/channels'
-import { normalizedMetadata } from './alphabet_groups'
+import { type CancelablePromisePoxy } from '@/channels/channels'
+import { normalizedMetadata, calculateLineLayout, sampleEntryIndexInLine, charToEntryMap } from './alphabet_groups'
 
 console.log(normalizedMetadata.map(g => [g.metadata!.name, g.metadata!.baseline]).sort())
 
@@ -748,27 +748,61 @@ function launchProgrammaticPointer() {
 
     resetSyntheticPointer(fluidPointer)
 
-    const runTime = 0.5
+    const text = 'hello world'
+    const glyphPositions = calculateLineLayout(text)
+    const glyphEntries = Array.from(text)
+      .filter(char => char !== ' ')
+      .map(char => charToEntryMap.get(char))
+      .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
+
+    if (glyphEntries.length === 0 || glyphPositions.length === 0) {
+      console.warn('[fluid] launchProgrammaticPointer: no glyph data available')
+      return
+    }
+
+    const totalWidth = glyphEntries.reduce((max, entry, index) => {
+      const position = glyphPositions[index]
+      if (!position) return max
+      return Math.max(max, position.x + entry.metadata!.boundingBox!.width)
+    }, 0)
+
+    const maxHeight = glyphEntries.reduce((max, entry) => {
+      return Math.max(max, entry.metadata!.boundingBox!.height)
+    }, 0)
+
+    if (totalWidth === 0 || maxHeight === 0) {
+      console.warn('[fluid] launchProgrammaticPointer: invalid glyph dimensions')
+      return
+    }
+
+    const runTime = 3
     const startTime = ctx.time
     const width = fluidCanvas.width
     const height = fluidCanvas.height
-    let counter = 0
+    const scale = Math.min((width * 0.7) / totalWidth, (height * 0.4) / maxHeight)
+    const originX = (width - totalWidth * scale) / 2
+    const originY = (height - maxHeight * scale) / 2
+
     while (ctx.time - startTime < runTime) {
-      if (counter++ % 1 == 0) {
-        const t = (ctx.time - startTime) / runTime
-        const canvasX = width * (0.5 + 0.1 * cosN(t))
-        const canvasY = height * (0.5 + 0.1 * sinN(t))
-
-        updateSyntheticPointerFrame({
-          canvasX,
-          canvasY,
-          down: true,
-          color: { r: 255, g: 0, b: 0 },
-        })
-      }
-
+      const t = Math.min((ctx.time - startTime) / runTime, 1)
+      const sample = sampleEntryIndexInLine(text, t, glyphPositions, scale)
+      const canvasX = originX + sample.x
+      const canvasY = originY + sample.y
+      updateSyntheticPointerFrame({
+        canvasX,
+        canvasY,
+        down: true,
+        color: { r: 255, g: 0, b: 0 },
+      })
       await ctx.waitSec(0.016)
     }
+
+    const finalSample = sampleEntryIndexInLine(text, 1, glyphPositions, scale)
+    updateSyntheticPointerFrame({
+      canvasX: originX + finalSample.x,
+      canvasY: originY + finalSample.y,
+      down: false,
+    })
 
     updateSyntheticPointerFrame({
       canvasX: width * 0.5,
