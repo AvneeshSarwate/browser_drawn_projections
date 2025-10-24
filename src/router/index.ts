@@ -47,7 +47,8 @@ export const sketchNames = [
   'fluidReactionSim',
   'vuePianoRoll',
   'fluidSimChat',
-  'pianoRollChatbot'
+  'pianoRollChatbot',
+  'haikuToFluidSong'
 ]
 
 const sketchRoutes = sketchNames.map(name => {
