@@ -13034,112 +13034,254 @@ function sampleEntryByNormTime(entry: Entry, time: number, sizeScale: number = 1
   return { x, y, w, h, baseline }
 }
 
-export type LineLayoutPosition = { x: number; y: number }
+export type LineLayoutPosition = { x: number; y: number; line: number }
+
 export type LineLayout = {
   positions: LineLayoutPosition[]
-  advance: number
+  scale: number
+  lineHeight: number
+  lineStart: { x: number; y: number }
+  maxLineWidth: number
+  usedLineWidth: number
+  lineCount: number
   maxBaseline: number
   maxDescender: number
-  baselineOffset: number
-  lineStartX: number
-  baselineY: number
+  blockHeight: number
 }
 
-//todo: handle line breaks for words
+export type HorizontalAlign = 'start' | 'center' | 'end'
+export type VerticalAlign = 'baseline' | 'top' | 'middle' | 'bottom'
+
+export interface CalculateLineLayoutOptions {
+  scale?: number
+  spaceWidth?: number
+  kernWidth?: number
+  lineHeight?: number
+  origin?: { x?: number; y?: number }
+  maxLineWidth?: number
+  canvasWidth?: number
+  canvasHeight?: number
+  horizontalAlign?: HorizontalAlign
+  verticalAlign?: VerticalAlign
+}
+
 export function calculateLineLayout(
-  line: string,
-  spaceWidth = 40,
-  kernWidth = 8,
-  lineStartX = 0,
-  lineStartY = 0,
-  lineHeight?: number,
-  maxLineWidth = 1024
+  text: string,
+  options: CalculateLineLayoutOptions = {}
 ): LineLayout {
-  const entriesPerChar = Array.from(line).map(char => {
-    if (char === ' ') return null
+  const scale = options.scale ?? 1
+  const spaceWidth = options.spaceWidth ?? 40
+  const kernWidth = options.kernWidth ?? 8
+  const originX = options.origin?.x ?? 0
+  const originY = options.origin?.y ?? 0
+  const canvasWidth = options.canvasWidth
+  const canvasHeight = options.canvasHeight
+  const horizontalAlign: HorizontalAlign = options.horizontalAlign ?? 'start'
+  const verticalAlign: VerticalAlign = options.verticalAlign ?? 'top'
+  const maxLineWidthOption = options.maxLineWidth ?? canvasWidth ?? Infinity
+  const maxLineWidth = Number.isFinite(maxLineWidthOption)
+    ? maxLineWidthOption
+    : Infinity
+
+  const scaledSpace = spaceWidth * scale
+  const scaledKern = kernWidth * scale
+  const entriesPerChar = Array.from(text).map(char => {
+    if (char === ' ' || char === '\n') return null
     return charToEntryMap.get(char) ?? null
   })
 
-  const glyphEntries = entriesPerChar.filter((entry): entry is Entry => entry != null)
-
-  let remainingGlyphs = glyphEntries.length
-  let totalAdvance = 0
-  let maxBaseline = 0
-  let maxDescender = 0
-
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i]
-    if (char === ' ') {
-      totalAdvance += spaceWidth
-      continue
-    }
-    const entry = entriesPerChar[i]
-    if (!entry) continue
+  let globalBaseline = 0
+  let globalDescender = 0
+  entriesPerChar.forEach(entry => {
+    if (!entry) return
     const bbox = entry.metadata!.boundingBox!
     const baselineRatio = entry.metadata!.baseline ?? 1
-    const baselinePx = baselineRatio * bbox.height
-    const descenderPx = (1 - baselineRatio) * bbox.height
-    maxBaseline = Math.max(maxBaseline, baselinePx)
-    maxDescender = Math.max(maxDescender, descenderPx)
-    totalAdvance += bbox.width
-    remainingGlyphs--
-    if (remainingGlyphs > 0) {
-      totalAdvance += kernWidth
+    const baselinePx = baselineRatio * bbox.height * scale
+    const descenderPx = (1 - baselineRatio) * bbox.height * scale
+    if (baselinePx > globalBaseline) {
+      globalBaseline = baselinePx
     }
+    if (descenderPx > globalDescender) {
+      globalDescender = descenderPx
+    }
+  })
+
+  const defaultLineHeight =
+    options.lineHeight !== undefined
+      ? options.lineHeight * scale
+      : (globalBaseline + globalDescender) || scale
+  const scaledLineHeight = defaultLineHeight
+
+  let lineStartX = originX
+  let lineStartY = verticalAlign === 'baseline' ? originY : originY + globalBaseline
+  const positions: LineLayoutPosition[] = []
+  const lineWidths: number[] = [0]
+  let lineIndex = 0
+  let currentX = lineStartX
+  let currentLineWidth = 0
+  let currentBaselineY = lineStartY
+  let pendingSpaceWidth = 0
+
+  const applyPendingSpaces = () => {
+    if (pendingSpaceWidth > 0 && currentLineWidth > 0) {
+      currentX += pendingSpaceWidth
+      currentLineWidth += pendingSpaceWidth
+      lineWidths[lineIndex] = Math.max(lineWidths[lineIndex] ?? 0, currentLineWidth)
+    }
+    pendingSpaceWidth = 0
   }
 
-  const resolvedBaselineOffset = lineHeight ?? maxBaseline
-  const baselineY = lineStartY + resolvedBaselineOffset
+  const newLine = () => {
+    lineIndex += 1
+    currentX = lineStartX
+    currentLineWidth = 0
+    currentBaselineY = lineStartY + lineIndex * scaledLineHeight
+    lineWidths[lineIndex] = 0
+    pendingSpaceWidth = 0
+  }
 
-  const positions: LineLayoutPosition[] = []
-  let cursor = lineStartX
-  remainingGlyphs = glyphEntries.length
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i]
-    if (char === ' ') {
-      cursor += spaceWidth
-      continue
+  const paragraphs = text.split(/\n/)
+
+  const measureWord = (word: string) => {
+    const glyphs: Entry[] = []
+    let width = 0
+    for (let i = 0; i < word.length; i++) {
+      const char = word[i]
+      const entry = charToEntryMap.get(char)
+      if (!entry) continue
+      const bbox = entry.metadata!.boundingBox!
+      const glyphWidth = bbox.width * scale
+      glyphs.push(entry)
+      width += glyphWidth
+      if (i < word.length - 1) {
+        width += scaledKern
+      }
     }
-    const entry = entriesPerChar[i]
-    if (!entry) continue
-    positions.push({ x: cursor, y: baselineY })
-    const bbox = entry.metadata!.boundingBox!
-    cursor += bbox.width
-    remainingGlyphs--
-    if (remainingGlyphs > 0) {
-      cursor += kernWidth
+    return { glyphs, width }
+  }
+
+  paragraphs.forEach((paragraph, paragraphIndex) => {
+    if (paragraphIndex > 0) {
+      newLine()
     }
+
+    const tokens = paragraph.match(/\S+|\s+/g) ?? []
+    tokens.forEach(token => {
+      if (/^\s+$/.test(token)) {
+        pendingSpaceWidth += token.length * scaledSpace
+        return
+      }
+
+      const { glyphs, width: wordWidth } = measureWord(token)
+      if (glyphs.length === 0) {
+        pendingSpaceWidth = 0
+        return
+      }
+      const pendingSpaces = currentLineWidth > 0 ? pendingSpaceWidth : 0
+      const projectedWidth = currentLineWidth + pendingSpaces + wordWidth
+      if (maxLineWidth > 0 && currentLineWidth > 0 && projectedWidth > maxLineWidth) {
+        newLine()
+      }
+
+      applyPendingSpaces()
+
+      glyphs.forEach((entry, glyphIdx) => {
+        positions.push({ x: currentX, y: currentBaselineY, line: lineIndex })
+        const bbox = entry.metadata!.boundingBox!
+        const glyphWidth = bbox.width * scale
+        currentX += glyphWidth
+        currentLineWidth += glyphWidth
+        if (glyphIdx < glyphs.length - 1) {
+          currentX += scaledKern
+          currentLineWidth += scaledKern
+        }
+        lineWidths[lineIndex] = Math.max(lineWidths[lineIndex] ?? 0, currentLineWidth)
+      })
+    })
+
+    pendingSpaceWidth = 0
+  })
+  const usedLineWidth = lineWidths.reduce((max, width) => Math.max(max, width ?? 0), 0)
+  const lineCount = positions.length > 0 ? lineIndex + 1 : paragraphs.length || 1
+  const blockHeight =
+    globalBaseline + globalDescender + Math.max(0, lineCount - 1) * scaledLineHeight
+
+  // Alignment adjustments
+  const availableWidth = canvasWidth ?? usedLineWidth
+  const offsetX =
+    horizontalAlign === 'center'
+      ? (availableWidth - usedLineWidth) / 2
+      : horizontalAlign === 'end'
+      ? availableWidth - usedLineWidth
+      : 0
+  const alignedLineStartX = lineStartX + offsetX
+
+  let alignedLineStartY = lineStartY
+  if (verticalAlign !== 'baseline') {
+    const containerHeight = canvasHeight ?? blockHeight
+    const topOffset =
+      verticalAlign === 'middle'
+        ? (containerHeight - blockHeight) / 2
+        : verticalAlign === 'bottom'
+        ? containerHeight - blockHeight
+        : 0
+    alignedLineStartY = originY + topOffset + globalBaseline
+  }
+
+  const deltaX = alignedLineStartX - lineStartX
+  const deltaY = alignedLineStartY - lineStartY
+  if (deltaX !== 0 || deltaY !== 0) {
+    positions.forEach(pos => {
+      pos.x += deltaX
+      pos.y += deltaY
+    })
+    lineStartX = alignedLineStartX
+    lineStartY = alignedLineStartY
   }
 
   return {
     positions,
-    advance: totalAdvance,
-    maxBaseline,
-    maxDescender,
-    baselineOffset: resolvedBaselineOffset,
-    lineStartX,
-    baselineY
+    scale,
+    lineHeight: scaledLineHeight,
+    lineStart: { x: lineStartX, y: lineStartY },
+    maxLineWidth,
+    usedLineWidth,
+    lineCount,
+    maxBaseline: globalBaseline,
+    maxDescender: globalDescender,
+    blockHeight,
   }
 }
 
-// for time ranging from [0-1] calculate where the pen point is, assuming even time per actual letter
-export function sampleEntryIndexInLine(line: string, normTime: number, layout: LineLayout, sizeScale: number = 1) {
+export function sampleEntryIndexInLine(
+  line: string,
+  normTime: number,
+  layout: LineLayout,
+  sizeScale: number = layout.scale || 1
+) {
   const glyphs: { entry: Entry; position: LineLayoutPosition }[] = []
   let glyphIndex = 0
   for (let i = 0; i < line.length; i++) {
     const char = line[i]
-    if (char === ' ') continue
+    if (char === ' ' || char === '\n') continue
     const entry = charToEntryMap.get(char)
     if (!entry) continue
-    const position = layout.positions[glyphIndex] ?? layout.positions[0] ?? { x: layout.lineStartX, y: layout.baselineY }
+    const position =
+      layout.positions[glyphIndex] ??
+      layout.positions[layout.positions.length - 1] ??
+      { x: layout.lineStart.x, y: layout.lineStart.y, line: 0 }
     glyphs.push({ entry, position })
     glyphIndex++
   }
 
   if (glyphs.length === 0) {
-    const baseX = layout.lineStartX * sizeScale
-    const baseY = layout.baselineY * sizeScale
-    return { x: baseX, y: baseY, w: 0, h: 0, baseline: 1 }
+    return {
+      x: layout.lineStart.x,
+      y: layout.lineStart.y,
+      w: 0,
+      h: 0,
+      baseline: 1,
+    }
   }
 
   const clampedTime = Math.min(Math.max(normTime, 0), 1)
@@ -13151,7 +13293,6 @@ export function sampleEntryIndexInLine(line: string, normTime: number, layout: L
     Math.max(0, (clampedTime - ind * entryTime) / entryTime)
   )
   const { entry, position } = glyphs[ind]
-  const scaledPosition = { x: position.x * sizeScale, y: position.y * sizeScale }
   const pt = sampleEntryByNormTime(entry, entryProgTime, sizeScale)
-  return { ...pt, x: pt.x + scaledPosition.x, y: pt.y + scaledPosition.y }
+  return { ...pt, x: pt.x + position.x, y: pt.y + position.y }
 }

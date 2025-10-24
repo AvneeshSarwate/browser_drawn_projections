@@ -11,7 +11,7 @@ import {
 import { clearListeners, pointerdownEvent, pointermoveEvent, pointerupEvent, singleKeydownEvent } from '@/io/keyboardAndMouse'
 import { TimeContext, launch } from '@/channels/base_time_context'
 import { type CancelablePromisePoxy } from '@/channels/channels'
-import { normalizedMetadata, calculateLineLayout, sampleEntryIndexInLine, charToEntryMap } from './alphabet_groups'
+import { normalizedMetadata, calculateLineLayout, sampleEntryIndexInLine } from './alphabet_groups'
 
 console.log(normalizedMetadata.map(g => [g.metadata!.name, g.metadata!.baseline]).sort())
 
@@ -749,70 +749,33 @@ function launchProgrammaticPointer() {
     resetSyntheticPointer(fluidPointer)
 
     const text = 'hello world'
-    const characters = Array.from(text)
-    const entriesPerChar = characters.map(char => {
-      if (char === ' ') return null
-      const entry = charToEntryMap.get(char)
-      return entry ?? null
-    })
-    const glyphEntries = entriesPerChar.filter((entry): entry is NonNullable<typeof entry> => entry != null)
-
-    if (glyphEntries.length === 0) {
-      console.warn('[fluid] launchProgrammaticPointer: no glyph data available')
-      return
-    }
-
     const spaceWidth = 40
     const kernWidth = 8
-    let remainingGlyphs = glyphEntries.length
-    let totalAdvance = 0
-    let maxBaseline = 0
-    let maxDescender = 0
+    const width = fluidCanvas.width
+    const height = fluidCanvas.height
+    const scale = 2
+    const layout = calculateLineLayout(text, {
+      scale,
+      spaceWidth,
+      kernWidth,
+      maxLineWidth: width * 0.7,
+      canvasWidth: width,
+      canvasHeight: height,
+      horizontalAlign: 'center',
+      verticalAlign: 'middle',
+    })
 
-    for (let i = 0; i < characters.length; i++) {
-      const char = characters[i]
-      if (char === ' ') {
-        totalAdvance += spaceWidth
-        continue
-      }
-      const entry = entriesPerChar[i]
-      if (!entry) continue
-      const bbox = entry.metadata!.boundingBox!
-      const baselineRatio = entry.metadata!.baseline ?? 1
-      const baselinePx = baselineRatio * bbox.height
-      const descenderPx = (1 - baselineRatio) * bbox.height
-      maxBaseline = Math.max(maxBaseline, baselinePx)
-      maxDescender = Math.max(maxDescender, descenderPx)
-      totalAdvance += bbox.width
-      remainingGlyphs--
-      if (remainingGlyphs > 0) {
-        totalAdvance += kernWidth
-      }
-    }
-
-    const totalHeight = maxBaseline + maxDescender
-
-    if (totalAdvance === 0 || totalHeight === 0) {
-      console.warn('[fluid] launchProgrammaticPointer: invalid glyph dimensions')
+    if (layout.positions.length === 0) {
+      console.warn('[fluid] launchProgrammaticPointer: no glyph data available')
       return
     }
 
     const runTime = 3
     const startTime = ctx.time
-    const width = fluidCanvas.width
-    const height = fluidCanvas.height
-    const widthScale = (width * 0.7) / totalAdvance
-    const heightScale = (height * 0.4) / totalHeight
-    const scale = Math.min(widthScale, heightScale)
-    const lineStartCanvasX = (width - totalAdvance * scale) / 2
-    const baselineCanvasY = height / 2 - (maxDescender - maxBaseline) * scale / 2
-    const lineStartX = totalAdvance > 0 ? lineStartCanvasX / scale : 0
-    const lineStartY = baselineCanvasY / scale - maxBaseline
-    const layout = calculateLineLayout(text, spaceWidth, kernWidth, lineStartX, lineStartY, maxBaseline)
 
     while (ctx.time - startTime < runTime) {
       const t = Math.min((ctx.time - startTime) / runTime, 1)
-      const sample = sampleEntryIndexInLine(text, t, layout, scale)
+      const sample = sampleEntryIndexInLine(text, t, layout)
       const canvasX = sample.x
       const canvasY = sample.y
       updateSyntheticPointerFrame({
@@ -824,7 +787,7 @@ function launchProgrammaticPointer() {
       await ctx.waitSec(0.016)
     }
 
-    const finalSample = sampleEntryIndexInLine(text, 1, layout, scale)
+    const finalSample = sampleEntryIndexInLine(text, 1, layout)
     updateSyntheticPointerFrame({
       canvasX: finalSample.x,
       canvasY: finalSample.y,
