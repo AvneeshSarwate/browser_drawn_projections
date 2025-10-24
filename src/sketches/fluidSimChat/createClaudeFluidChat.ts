@@ -25,7 +25,9 @@ export interface ClaudeFluidChat {
   reset: () => void
 }
 
-const MODEL_NAME = 'claude-3-7-sonnet-latest'
+// const MODEL_NAME = 'claude-3-7-sonnet-latest'
+// CLAUDE_500_ERROR_TEST
+const MODEL_NAME = 'claude-sonnet-4-5-20250929'
 const MAX_TOOL_ITERATIONS = 6
 
 const PARAMETER_DESCRIPTIONS: Record<string, string> = {
@@ -349,7 +351,13 @@ export function createClaudeFluidChat(options: ClaudeFluidChatOptions): ClaudeFl
       })
 
       const { tools, handlers } = buildTools(params)
-      const toolsWithSearch = tools
+      // Add Anthropic server web search tool (no domain filters)
+      // const toolsWithSearch = tools
+      // CLAUDE_500_ERROR_TEST
+      const toolsWithSearch: Anthropic.Tool[] = [
+        ...tools,
+        { name: 'web_search', type: 'web_search_20250305' } as any,
+      ]
 
       const userContent = buildUserContentBlocks(prompt, attachments)
       const conversationMessages: Anthropic.MessageParam[] = [

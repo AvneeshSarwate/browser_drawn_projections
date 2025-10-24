@@ -1,0 +1,10 @@
+- clean up props vs internal state stuff
+  - understand how/if vue props are converted to web component props - can they be dynamically modified? handle this
+- will probably need various extra callbacks and externally exposed methods
+  - newNotesSelected() callback so you can add extra ancilliary editors for note metadata 
+- need to figure out proper focus handling for keybinding shortcuts
+- figure out layer based multi-clip editting, like ableton?
+- extensions 
+  - ableton clip-view style clip organizer?
+- add playNoteOnSelected and playNotesAtCursor callbacks like original
+- mouseup doesn't release properly when dragged off canvas
