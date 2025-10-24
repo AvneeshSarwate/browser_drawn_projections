@@ -49,8 +49,8 @@ function createOrUpdateGuides({bbox, metadata}: AVContext, existing?: Konva.Line
   const guidelines = [
     { key: 'baseline', fraction: metadata.baseline, color: '#333' },
     { key: 'lowLine', fraction: metadata.lowLine, color: '#888' },
-    { key: 'midLine', fraction: metadata.midLine, color: '#f80' },
-    { key: 'capHeight', fraction: metadata.capHeight, color: '#0a0' },
+    { key: 'midLine', fraction: metadata.midLine, color: '#0a0' },
+    { key: 'capHeight', fraction: metadata.capHeight, color: '#f80' },
     { key: 'ascender', fraction: metadata.ascender, color: '#00f' },
     { key: 'descender', fraction: metadata.descender, color: '#f00' }
   ].filter(guide => 
@@ -65,7 +65,7 @@ function createOrUpdateGuides({bbox, metadata}: AVContext, existing?: Konva.Line
     return new Konva.Line({
       points: [bbox.x, y, bbox.x + bbox.width, y],
       stroke: guide.color,
-      strokeWidth: 1,
+      strokeWidth: 5,
       dash: dashed,
       listening: false,
       name: `typo-guide-${guide.key}`
