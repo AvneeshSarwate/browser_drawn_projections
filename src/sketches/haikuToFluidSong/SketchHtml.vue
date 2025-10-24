@@ -1,7 +1,7 @@
 <template>
   <div class="container">
-    <div class="canvas-controls-wrapper">
-      <div class="controls">
+    <div class="canvas-controls-wrapper center-canvas">
+      <div v-if="showParamWindow" class="controls">
         <div class="control-group" v-for="param in fluidParams" :key="param.name">
           <label>{{ param.label }}</label>
           <input type="range" :min="param.min" :max="param.max" :step="param.step" v-model.number="param.value.value" />
@@ -30,6 +30,7 @@
           <div class="canvas-wrapper">
             <canvas id="fluidCanvas" :width="width" :height="height"></canvas>
             <button
+              v-if="showExtraUI"
               type="button"
               class="capture-button"
               :disabled="isCapturing"
@@ -40,9 +41,9 @@
               <span>{{ isCapturing ? 'Capturing…' : 'Capture' }}</span>
             </button>
           </div>
-          <div class="capture-hint">Shift-click the capture button for a lossless PNG capture.</div>
-          <div v-if="captureError" class="capture-error">{{ captureError }}</div>
-          <div class="screenshot-gallery">
+          <div v-if="showExtraUI" class="capture-hint">Shift-click the capture button for a lossless PNG capture.</div>
+          <div v-if="showExtraUI && captureError" class="capture-error">{{ captureError }}</div>
+          <div v-if="showExtraUI" class="screenshot-gallery">
             <div class="gallery-header">
               <span>Recent Captures</span>
               <span class="gallery-count">{{ screenshots.length }} / {{ screenshotStore.maxItems }}</span>
@@ -69,7 +70,7 @@
       </div>
     </div>
 
-    <div class="below-row">
+    <div v-if="showExtraUI" class="below-row">
       <div class="instructions">
         <h2>Fluid Simulation Playground</h2>
         <p>Drag on the canvas to interact with the fluid.</p>
@@ -90,7 +91,7 @@
       </div>
     </div>
 
-    <div v-if="previewShot" class="screenshot-preview-overlay" @click.self="closePreview">
+    <div v-if="showExtraUI && previewShot" class="screenshot-preview-overlay" @click.self="closePreview">
       <div class="screenshot-preview-card">
         <button type="button" class="preview-close" @click="closePreview">×</button>
         <div class="preview-meta">
@@ -185,6 +186,8 @@ function closePreview() {
 
 const programmaticSplat = state.programmaticSplat
 const programmaticKeyActive = ref(false)
+const showParamWindow = ref(true)
+const showExtraUI = ref(false)
 
 function startProgrammaticSplat() {
   programmaticSplat.restartToken.value += 1
@@ -259,6 +262,7 @@ function handleProgrammaticKeyUp() {
   display: flex;
   flex-direction: column;
   gap: 5px;
+  align-items: center;
 }
 
 .canvas-label {
@@ -535,6 +539,14 @@ canvas {
   align-items: flex-start;
   width: 100%;
   max-width: 1200px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.canvas-controls-wrapper.center-canvas {
+  width: 100%;
+  max-width: none;
+  justify-content: left;
 }
 
 .controls {
@@ -545,6 +557,7 @@ canvas {
   background: rgba(255, 255, 255, 0.05);
   border-radius: 8px;
   min-width: 200px;
+  flex: 0 0 auto;
 }
 
 .control-group {
@@ -600,5 +613,7 @@ canvas {
   display: flex;
   flex-direction: column;
   gap: 15px;
+  align-items: center;
+  flex: 1 1 auto;
 }
 </style>

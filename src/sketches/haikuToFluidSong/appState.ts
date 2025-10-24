@@ -35,8 +35,8 @@ export const appState: FluidReactionAppState = {
   reactionEngine: undefined,
   shaderDrawFunc: undefined,
   paused: false,
-  width: 1024,
-  height: 512,
+  width: 128 * 14,
+  height: 128 * 7,
   debugMode: ref('dye'),
   programmaticSplat: {
     active: ref(false),

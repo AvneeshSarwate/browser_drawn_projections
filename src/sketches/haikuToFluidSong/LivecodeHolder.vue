@@ -768,7 +768,7 @@ function launchProgrammaticPointer() {
     const kernWidth = 8
     const width = fluidCanvas.width
     const height = fluidCanvas.height
-    const scale = 1.5
+    const scale = 2
 
     for (const line of lines) {
       console.log('line', line)
