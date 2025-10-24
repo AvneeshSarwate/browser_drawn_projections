@@ -5,11 +5,15 @@ for the following haiku, return a json object of the following format
   mood: string
   wordAnalysis: {word: string, syllables: 2, accentSyllables: number[]}[][]
   pitches: number[]
+  lineByLineMoodTransitions: string[]
+  colorByLine: {r: number, g: number: b: number}
 }
 
 mood - a short description of the overall mood of the haiku 
 wordAnalysis - a per-line, per-word analysis of the words in the haiku 
 piches - a sequence of 5 midi pitch numbers that captures the mood of the poem
+lineByLineMoodTransitions - the emotional arc of the poem by line - short descriptions
+colorByLine - a color for the mood of each line, rgb 0-255
 
 ignore any punctuation in the analysis - for the purpose of word groupings, group punctuation with it's previous word
 

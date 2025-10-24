@@ -248,6 +248,8 @@ export function accentClip(
     targetIndex = newClip.notes.length - 1;
   } else if (noteInd < 0) {
     targetIndex = newClip.notes.length + noteInd;
+  } else {
+    targetIndex = noteInd;
   }
 
   if (targetIndex < 0 || targetIndex >= newClip.notes.length) {

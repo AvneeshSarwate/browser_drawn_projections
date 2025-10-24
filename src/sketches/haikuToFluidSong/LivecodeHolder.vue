@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { inject, onMounted, onUnmounted, watch, type WatchStopHandle } from 'vue'
+import { inject, onMounted, onUnmounted, ref, watch, type WatchStopHandle } from 'vue'
 import type * as BABYLON from 'babylonjs'
 import { appStateName, engineRef, type FluidReactionAppState, type FluidDebugMode } from './appState'
 import { CanvasPaint, type ShaderEffect } from '@/rendering/shaderFXBabylon'
@@ -739,6 +739,18 @@ const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromis
   return loop
 }
 
+const haiku = ref(`A world of dew,
+And within every dewdrop
+A world of struggle.`)
+
+function cleanupLine(line: string): string {
+  return line
+    .toLowerCase()
+    .replace(/[^a-z ]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 function launchProgrammaticPointer() {
   launchLoop(async (ctx) => {
     if (!fluidCanvas) {
@@ -748,51 +760,79 @@ function launchProgrammaticPointer() {
 
     resetSyntheticPointer(fluidPointer)
 
-    const text = 'hello world'
+    const text = haiku.value
+    const lines = text.split('\n')
+      .map(cleanupLine)
+      .filter(line => line.length > 0)
     const spaceWidth = 40
     const kernWidth = 8
     const width = fluidCanvas.width
     const height = fluidCanvas.height
-    const scale = 2
-    const layout = calculateLineLayout(text, {
-      scale,
-      spaceWidth,
-      kernWidth,
-      maxLineWidth: width * 0.7,
-      canvasWidth: width,
-      canvasHeight: height,
-      horizontalAlign: 'center',
-      verticalAlign: 'middle',
-    })
+    const scale = 1.5
 
-    if (layout.positions.length === 0) {
-      console.warn('[fluid] launchProgrammaticPointer: no glyph data available')
-      return
-    }
-
-    const runTime = 3
-    const startTime = ctx.time
-
-    while (ctx.time - startTime < runTime) {
-      const t = Math.min((ctx.time - startTime) / runTime, 1)
-      const sample = sampleEntryIndexInLine(text, t, layout)
-      const canvasX = sample.x
-      const canvasY = sample.y
-      updateSyntheticPointerFrame({
-        canvasX,
-        canvasY,
-        down: true,
-        color: { r: 255, g: 0, b: 0 },
+    for (const line of lines) {
+      console.log('line', line)
+      const layout = calculateLineLayout(line, {
+        scale,
+        spaceWidth,
+        kernWidth,
+        maxLineWidth: width * 0.7,
+        canvasWidth: width,
+        canvasHeight: height,
+        horizontalAlign: 'center',
+        verticalAlign: 'middle',
       })
-      await ctx.waitSec(0.016)
-    }
 
-    const finalSample = sampleEntryIndexInLine(text, 1, layout)
-    updateSyntheticPointerFrame({
-      canvasX: finalSample.x,
-      canvasY: finalSample.y,
-      down: false,
-    })
+      if (layout.positions.length === 0) {
+        console.warn('[fluid] launchProgrammaticPointer: no glyph data available for line')
+        continue
+      }
+
+      const runTime = 6
+      const startTime = ctx.time
+
+      while (ctx.time - startTime < runTime) {
+        const t = Math.min((ctx.time - startTime) / runTime, 1)
+        const sample = sampleEntryIndexInLine(line, t, layout)
+        const canvasX = sample.x
+        const canvasY = sample.y
+        updateSyntheticPointerFrame({
+          canvasX,
+          canvasY,
+          down: true,
+          color: { r: 255, g: 0, b: 0 },
+        })
+        await ctx.waitSec(0.016)
+      }
+
+      const finalSample = sampleEntryIndexInLine(line, 1, layout)
+      updateSyntheticPointerFrame({
+        canvasX: finalSample.x,
+        canvasY: finalSample.y,
+        down: false,
+      })
+
+      //ramp density disappation up to 1
+      const rampUpTime = 0.5
+      const upStartTime = ctx.time
+      while (ctx.time - upStartTime < rampUpTime) {
+        const rampProgress = (ctx.time - upStartTime) / rampUpTime
+        fluidSim?.setUniforms({dyeDissipation: 0.18 + rampProgress*0.82})
+        await ctx.waitSec(0.016)
+      }
+
+      await ctx.waitSec(0.5)
+
+      
+      //ramp density dissapation down to 0.18
+      const rampDownTime = 0.5
+      const downStartTime = ctx.time
+      while (ctx.time - downStartTime < rampDownTime) {
+        const rampProgress = (ctx.time - downStartTime) / rampDownTime
+        fluidSim?.setUniforms({dyeDissipation: 0.18 + (1-rampProgress)*0.82})
+        await ctx.waitSec(0.016)
+      }
+    }
 
     updateSyntheticPointerFrame({
       canvasX: width * 0.5,
@@ -838,4 +878,5 @@ onUnmounted(() => {
 <template>
   <div />
   <button @click="launchProgrammaticPointer">Preview</button>
+  <textarea v-model="haiku" placeholder="Enter haiku here" />
 </template>
