@@ -15,6 +15,14 @@ type Entry = {
   metadata?: {
     name: string;
     baseline?: number
+    boundingBox?: {
+      minX: number;
+      minY: number;
+      maxX: number;
+      maxY: number;
+      width: number;
+      height: number
+    }
   }
 }
 
@@ -12970,11 +12978,88 @@ export const alphabetGroupsRaw: Entry[] = [
 
 export const normalizedMetadata = structuredClone(alphabetGroupsRaw)
 
+
+function entryBoundingBox(entry: Entry) {
+  let maxX = -Infinity
+  let maxY = -Infinity
+  let minX = Infinity
+  let minY = Infinity
+  entry.children.forEach(c => {
+    c.points.forEach(p => {
+      if (p.x > maxX) maxX = p.x
+      if (p.x < minX) minX = p.x
+      if (p.y > maxY) maxY = p.y
+      if (p.y < minY) minY = p.y
+    })
+  })
+  return { minX, minY, maxX, maxY, width: maxX-minX, height: maxY-minY }
+}
+
+const charToEntryMap = new Map<string, Entry>()
+
 normalizedMetadata.forEach(g => {
   if (!g.metadata) {
     //@ts-ignore
     g.metadata = { ...g.children[0].metadata }
     //@ts-ignore
   }
-  g.metadata.baseline = g.metadata.baseline ?? 1
+  g.metadata!.baseline = g.metadata!.baseline ?? 1
+  g.metadata!.boundingBox = entryBoundingBox(g)
+  charToEntryMap.set(g.metadata!.name, g)
 })
+
+
+
+//functions in a sytem where +y is visually "down"
+// baseline for a character is how % wise from the top of the bounding box the line is
+//eg, so if the baseline us .6, .4 of the character is "below" the baseline
+//time is [0-1]
+function sampleEntryByNormTime(entry: Entry, time: number, sizeScale: number = 1) {
+  const points = entry.children.flatMap(c => c.points)
+  const numPts = points.length
+  const pt = points[Math.floor(time * numPts)]
+  const { minX, minY, width, height } = entry.metadata!.boundingBox!
+  const baseline = entry.metadata!.baseline!
+  const w = width * sizeScale
+  const h = height * sizeScale
+  const baselineShift = (1 - baseline) * h
+  const x = (pt.x - minX) * sizeScale
+  const y = ((pt.y - minY) + baselineShift) * sizeScale
+  return {x, y, w, h, baseline}
+}
+
+//todo: handle line breaks for words
+function calculateLineLayout(line: string, spaceWidth: number=40, kernWidth = 8, maxLineWidth:1024) {
+  const positions: { x: number, y: number }[] = [{x: 0, y: 0}]
+  let baseLen = 0
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i]
+    if (char == ' ') {
+      baseLen += spaceWidth
+    } else {
+      baseLen += charToEntryMap.get(char)!.metadata!.boundingBox!.width + kernWidth
+    }
+    positions.push({x: baseLen, y: 0})
+  }
+
+  return positions
+}
+
+// for time ranging from [0-1] calculate where the pen point is, assuming even time per actual letter
+function sampleEntryIndexInLine(line: string, normTime: number, positions: { x: number, y: number }[]) {
+  const entries: Entry[] = []
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i]
+    if (char != ' ') {
+      entries.push(charToEntryMap.get(char)!)
+    } 
+  }
+  
+  const ind = Math.floor(normTime * entries.length)
+  const entry = entries[ind]
+  const entryTime = normTime / entries.length
+  const entryProgTime = (normTime - ind * entryTime) / entryTime
+  const pt = sampleEntryByNormTime(entry, entryProgTime)
+  const movedPt = {x: pt.x + positions[ind].x, y: pt.y + positions[ind].y}
+  return movedPt
+}
