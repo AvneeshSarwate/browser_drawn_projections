@@ -13018,59 +13018,128 @@ function sampleEntryByNormTime(entry: Entry, time: number, sizeScale: number = 1
   const points = entry.children.flatMap(c => c.points)
   const numPts = points.length
   const { minX, minY, width, height } = entry.metadata!.boundingBox!
-  const baseline = entry.metadata!.baseline!
+  const baseline = entry.metadata!.baseline ?? 1
   const w = width * sizeScale
   const h = height * sizeScale
-  // use unscaled height when computing the baseline offset so it's not scaled twice
-  const baselineShift = (1 - baseline) * height
+  const baselineOffset = baseline * height
   if (numPts === 0) {
-    const y = baselineShift * sizeScale
-    return { x: 0, y, w, h, baseline }
+    return { x: 0, y: 0, w, h, baseline }
   }
 
   const clampedTime = Math.min(Math.max(time, 0), 1)
   const idx = Math.min(numPts - 1, Math.floor(clampedTime * numPts))
   const pt = points[idx]
   const x = (pt.x - minX) * sizeScale
-  const y = ((pt.y - minY) - baselineShift) * sizeScale
+  const y = ((pt.y - minY) - baselineOffset) * sizeScale
   return { x, y, w, h, baseline }
 }
 
+export type LineLayoutPosition = { x: number; y: number }
+export type LineLayout = {
+  positions: LineLayoutPosition[]
+  advance: number
+  maxBaseline: number
+  maxDescender: number
+  baselineOffset: number
+  lineStartX: number
+  baselineY: number
+}
+
 //todo: handle line breaks for words
-export function calculateLineLayout(line: string, spaceWidth = 40, kernWidth = 8, maxLineWidth:1024) {
-  const positions: { x: number, y: number }[] = []
-  let cursor = 0
+export function calculateLineLayout(
+  line: string,
+  spaceWidth = 40,
+  kernWidth = 8,
+  lineStartX = 0,
+  lineStartY = 0,
+  lineHeight?: number,
+  maxLineWidth = 1024
+): LineLayout {
+  const entriesPerChar = Array.from(line).map(char => {
+    if (char === ' ') return null
+    return charToEntryMap.get(char) ?? null
+  })
+
+  const glyphEntries = entriesPerChar.filter((entry): entry is Entry => entry != null)
+
+  let remainingGlyphs = glyphEntries.length
+  let totalAdvance = 0
+  let maxBaseline = 0
+  let maxDescender = 0
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i]
+    if (char === ' ') {
+      totalAdvance += spaceWidth
+      continue
+    }
+    const entry = entriesPerChar[i]
+    if (!entry) continue
+    const bbox = entry.metadata!.boundingBox!
+    const baselineRatio = entry.metadata!.baseline ?? 1
+    const baselinePx = baselineRatio * bbox.height
+    const descenderPx = (1 - baselineRatio) * bbox.height
+    maxBaseline = Math.max(maxBaseline, baselinePx)
+    maxDescender = Math.max(maxDescender, descenderPx)
+    totalAdvance += bbox.width
+    remainingGlyphs--
+    if (remainingGlyphs > 0) {
+      totalAdvance += kernWidth
+    }
+  }
+
+  const resolvedBaselineOffset = lineHeight ?? maxBaseline
+  const baselineY = lineStartY + resolvedBaselineOffset
+
+  const positions: LineLayoutPosition[] = []
+  let cursor = lineStartX
+  remainingGlyphs = glyphEntries.length
   for (let i = 0; i < line.length; i++) {
     const char = line[i]
     if (char === ' ') {
       cursor += spaceWidth
       continue
     }
-    const entry = charToEntryMap.get(char)
+    const entry = entriesPerChar[i]
     if (!entry) continue
-    positions.push({ x: cursor, y: 0 })
-    cursor += entry.metadata!.boundingBox!.width + kernWidth
+    positions.push({ x: cursor, y: baselineY })
+    const bbox = entry.metadata!.boundingBox!
+    cursor += bbox.width
+    remainingGlyphs--
+    if (remainingGlyphs > 0) {
+      cursor += kernWidth
+    }
   }
 
-  return positions
+  return {
+    positions,
+    advance: totalAdvance,
+    maxBaseline,
+    maxDescender,
+    baselineOffset: resolvedBaselineOffset,
+    lineStartX,
+    baselineY
+  }
 }
 
 // for time ranging from [0-1] calculate where the pen point is, assuming even time per actual letter
-export function sampleEntryIndexInLine(line: string, normTime: number, positions: { x: number, y: number }[], sizeScale: number = 1) {
-  const glyphs: { entry: Entry; position: { x: number, y: number } }[] = []
+export function sampleEntryIndexInLine(line: string, normTime: number, layout: LineLayout, sizeScale: number = 1) {
+  const glyphs: { entry: Entry; position: LineLayoutPosition }[] = []
   let glyphIndex = 0
   for (let i = 0; i < line.length; i++) {
     const char = line[i]
     if (char === ' ') continue
     const entry = charToEntryMap.get(char)
     if (!entry) continue
-    const position = positions[glyphIndex] ?? { x: 0, y: 0 }
+    const position = layout.positions[glyphIndex] ?? layout.positions[0] ?? { x: layout.lineStartX, y: layout.baselineY }
     glyphs.push({ entry, position })
     glyphIndex++
   }
 
   if (glyphs.length === 0) {
-    return { x: 0, y: 0, w: 0, h: 0, baseline: 1 }
+    const baseX = layout.lineStartX * sizeScale
+    const baseY = layout.baselineY * sizeScale
+    return { x: baseX, y: baseY, w: 0, h: 0, baseline: 1 }
   }
 
   const clampedTime = Math.min(Math.max(normTime, 0), 1)

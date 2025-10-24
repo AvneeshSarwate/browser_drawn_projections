@@ -749,28 +749,50 @@ function launchProgrammaticPointer() {
     resetSyntheticPointer(fluidPointer)
 
     const text = 'hello world'
-    const glyphPositions = calculateLineLayout(text)
-    const glyphEntries = Array.from(text)
-      .filter(char => char !== ' ')
-      .map(char => charToEntryMap.get(char))
-      .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
+    const characters = Array.from(text)
+    const entriesPerChar = characters.map(char => {
+      if (char === ' ') return null
+      const entry = charToEntryMap.get(char)
+      return entry ?? null
+    })
+    const glyphEntries = entriesPerChar.filter((entry): entry is NonNullable<typeof entry> => entry != null)
 
-    if (glyphEntries.length === 0 || glyphPositions.length === 0) {
+    if (glyphEntries.length === 0) {
       console.warn('[fluid] launchProgrammaticPointer: no glyph data available')
       return
     }
 
-    const totalWidth = glyphEntries.reduce((max, entry, index) => {
-      const position = glyphPositions[index]
-      if (!position) return max
-      return Math.max(max, position.x + entry.metadata!.boundingBox!.width)
-    }, 0)
+    const spaceWidth = 40
+    const kernWidth = 8
+    let remainingGlyphs = glyphEntries.length
+    let totalAdvance = 0
+    let maxBaseline = 0
+    let maxDescender = 0
 
-    const maxHeight = glyphEntries.reduce((max, entry) => {
-      return Math.max(max, entry.metadata!.boundingBox!.height)
-    }, 0)
+    for (let i = 0; i < characters.length; i++) {
+      const char = characters[i]
+      if (char === ' ') {
+        totalAdvance += spaceWidth
+        continue
+      }
+      const entry = entriesPerChar[i]
+      if (!entry) continue
+      const bbox = entry.metadata!.boundingBox!
+      const baselineRatio = entry.metadata!.baseline ?? 1
+      const baselinePx = baselineRatio * bbox.height
+      const descenderPx = (1 - baselineRatio) * bbox.height
+      maxBaseline = Math.max(maxBaseline, baselinePx)
+      maxDescender = Math.max(maxDescender, descenderPx)
+      totalAdvance += bbox.width
+      remainingGlyphs--
+      if (remainingGlyphs > 0) {
+        totalAdvance += kernWidth
+      }
+    }
 
-    if (totalWidth === 0 || maxHeight === 0) {
+    const totalHeight = maxBaseline + maxDescender
+
+    if (totalAdvance === 0 || totalHeight === 0) {
       console.warn('[fluid] launchProgrammaticPointer: invalid glyph dimensions')
       return
     }
@@ -779,15 +801,20 @@ function launchProgrammaticPointer() {
     const startTime = ctx.time
     const width = fluidCanvas.width
     const height = fluidCanvas.height
-    const scale = Math.min((width * 0.7) / totalWidth, (height * 0.4) / maxHeight)
-    const originX = (width - totalWidth * scale) / 2
-    const originY = (height - maxHeight * scale) / 2
+    const widthScale = (width * 0.7) / totalAdvance
+    const heightScale = (height * 0.4) / totalHeight
+    const scale = Math.min(widthScale, heightScale)
+    const lineStartCanvasX = (width - totalAdvance * scale) / 2
+    const baselineCanvasY = height / 2 - (maxDescender - maxBaseline) * scale / 2
+    const lineStartX = totalAdvance > 0 ? lineStartCanvasX / scale : 0
+    const lineStartY = baselineCanvasY / scale - maxBaseline
+    const layout = calculateLineLayout(text, spaceWidth, kernWidth, lineStartX, lineStartY, maxBaseline)
 
     while (ctx.time - startTime < runTime) {
       const t = Math.min((ctx.time - startTime) / runTime, 1)
-      const sample = sampleEntryIndexInLine(text, t, glyphPositions, scale)
-      const canvasX = originX + sample.x
-      const canvasY = originY + sample.y
+      const sample = sampleEntryIndexInLine(text, t, layout, scale)
+      const canvasX = sample.x
+      const canvasY = sample.y
       updateSyntheticPointerFrame({
         canvasX,
         canvasY,
@@ -797,10 +824,10 @@ function launchProgrammaticPointer() {
       await ctx.waitSec(0.016)
     }
 
-    const finalSample = sampleEntryIndexInLine(text, 1, glyphPositions, scale)
+    const finalSample = sampleEntryIndexInLine(text, 1, layout, scale)
     updateSyntheticPointerFrame({
-      canvasX: originX + finalSample.x,
-      canvasY: originY + finalSample.y,
+      canvasX: finalSample.x,
+      canvasY: finalSample.y,
       down: false,
     })
 
