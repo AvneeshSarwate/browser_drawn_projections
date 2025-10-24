@@ -22,6 +22,10 @@ import PianoRollDemo from './components/PianoRollDemo.vue'
   </main>
 </template>
 
+<style>
+@import './style.css';
+</style>
+
 <style scoped>
 .description {
   background: var(--surface);
