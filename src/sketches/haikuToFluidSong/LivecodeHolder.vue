@@ -812,16 +812,19 @@ function launchProgrammaticPointer() {
         down: false,
       })
 
+      const densityParam = state.fluidParams?.find(p => p.name === 'densityDissipation')!
+
       //ramp density disappation up to 1
       const rampUpTime = 0.5
       const upStartTime = ctx.time
       while (ctx.time - upStartTime < rampUpTime) {
         const rampProgress = (ctx.time - upStartTime) / rampUpTime
-        fluidSim?.setUniforms({dyeDissipation: 0.18 + rampProgress*0.82})
+        // fluidSim?.setUniforms({dyeDissipation: 0.18 + rampProgress*0.82})
+        densityParam.value.value = 0.18 + rampProgress * 1.3
         await ctx.waitSec(0.016)
       }
 
-      await ctx.waitSec(0.5)
+      await ctx.waitSec(4)
 
       
       //ramp density dissapation down to 0.18
@@ -829,7 +832,8 @@ function launchProgrammaticPointer() {
       const downStartTime = ctx.time
       while (ctx.time - downStartTime < rampDownTime) {
         const rampProgress = (ctx.time - downStartTime) / rampDownTime
-        fluidSim?.setUniforms({dyeDissipation: 0.18 + (1-rampProgress)*0.82})
+        // fluidSim?.setUniforms({dyeDissipation: 0.18 + (1-rampProgress)*0.82})
+        densityParam.value.value = 0.18 + (1 - rampProgress) * 1.3
         await ctx.waitSec(0.016)
       }
     }
