@@ -211,10 +211,12 @@ export const initializeGPUStrokes = async (): Promise<boolean> => {
   }
 }
 
-const mapCharToStrokeGroup = () => {
+const mapCharToStrokeGroup = (charKey = 'char') => {
   appState.freehandRenderData.forEach(fsg => {
-    if (fsg.metadata?.char && fsg.metadata.char.match(/^[a-z0-9]$/i)) {
+    const metadata = fsg.metadata
+    if (metadata && metadata[charKey] && fsg.metadata[charKey].match(/^[a-z0-9]$/i)) {
       charToStrokeMap.set(fsg.metadata.char, fsg)
+      console.log('found char for', metadata[charKey])
     }
   })
 }
@@ -316,7 +318,7 @@ const mouseAnimationMove = (event: MouseEvent) => {
 export const launchLayout = () => {
   layoutActivated.value = true
   const testText = 'aabababcdcde'
-  mapCharToStrokeGroup()
+  mapCharToStrokeGroup('name')
   launchAnimatedLetterLayoutForString(testText)
 }
 

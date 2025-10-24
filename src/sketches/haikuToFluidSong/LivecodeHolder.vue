@@ -11,6 +11,9 @@ import {
 import { clearListeners, pointerdownEvent, pointermoveEvent, pointerupEvent, singleKeydownEvent } from '@/io/keyboardAndMouse'
 import { TimeContext, launch } from '@/channels/base_time_context'
 import { cosN, sinN, type CancelablePromisePoxy } from '@/channels/channels'
+import { normalizedMetadata } from './alphabet_groups'
+
+console.log(normalizedMetadata.map(g => g.metadata?.name).sort())
 
 const state = inject<FluidReactionAppState>(appStateName)!!
 

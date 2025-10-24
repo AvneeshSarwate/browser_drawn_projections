@@ -33,6 +33,17 @@ const clearDrawFuncs = () => {
   appState.drawFuncMap = new Map()
 }
 
+const saveFreehandRenderData = () => {
+  const json = JSON.stringify(appState.freehandRenderData, null, 2)
+  const blob = new Blob([json], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const downloader = document.createElement('a')
+  downloader.href = url
+  downloader.download = `freehandRenderData-${new Date().toISOString().replace(/[:.]/g, '-')}.json`
+  downloader.click()
+  URL.revokeObjectURL(url)
+}
+
 const sleepWait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 onMounted(async () => {
@@ -115,7 +126,7 @@ onMounted(async () => {
       const floodFillFinal = new FloodFillStepEffect(engine, { seed: timeTag, feedback: feedbackNode }, width, height, sampleMode)
       feedbackNode.setFeedbackSrc(floodFillFinal)
 
-      gpuCanvasPaint = new BabylonCanvasPaint(engine, { src: floodFillFinal }, width, height)
+      gpuCanvasPaint = new BabylonCanvasPaint(engine, { src: renderTarget }, width, height)
       drawingSceneRef = drawingScene
     } else {
       console.warn('DrawingScene render target unavailable; GPU strokes will not render to canvas')
@@ -173,5 +184,8 @@ onUnmounted(() => {
     :show-timeline="true"
     :show-visualizations="true"
   />
+  <button type="button" @click="saveFreehandRenderData">
+    Save Freehand JSON
+  </button>
   <StrokeLaunchControls />
 </template>
