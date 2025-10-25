@@ -13,6 +13,9 @@ import { TimeContext, launch } from '@/channels/base_time_context'
 import { type CancelablePromisePoxy } from '@/channels/channels'
 import { normalizedMetadata, calculateLineLayout, sampleEntryIndexInLine } from './alphabet_groups'
 import { AbletonClip, quickNote, type AbletonNote } from '@/io/abletonClips'
+import { getPiano, TONE_AUDIO_START } from '@/music/synths'
+import { m2f } from '@/music/mpeSynth'
+import * as Tone from 'tone'
 
 console.log(normalizedMetadata.map(g => [g.metadata!.name, g.metadata!.baseline]).sort())
 
@@ -744,6 +747,8 @@ const haiku = ref(`A world of dew,
 And within every dewdrop
 A world of struggle.`)
 
+const apiKey = ref('')
+
 function cleanupLine(line: string): string {
   return line
     .toLowerCase()
@@ -816,15 +821,87 @@ function haikuMetadataToMelodies(metadata: HaikuMetadata) {
   return melodies
 }
 
+async function analyzeHaikuWithClaude(): Promise<HaikuMetadata> {
+  if (!apiKey.value) {
+    throw new Error('API key is required')
+  }
+
+  const prompt = `For the following haiku, return a JSON object of the following format:
+
+{
+  mood: string
+  wordAnalysis: {word: string, syllables: number, accentSyllables: number[]}[][]
+  pitches: number[]
+  lineByLineMoodTransitions: string[]
+  colorByLine: {r: number, g: number, b: number}
+}
+
+mood - a short description of the overall mood of the haiku 
+wordAnalysis - a per-line, per-word analysis of the words in the haiku 
+pitches - a sequence of 5 midi pitch numbers that captures the mood of the poem
+lineByLineMoodTransitions - the emotional arc of the poem by line - short descriptions
+colorByLine - a color for the mood of each line, rgb 0-255
+
+ignore any punctuation in the analysis - for the purpose of word groupings, group punctuation with it's previous word
+
+below is the haiku:
+
+${haiku.value}`
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': apiKey.value,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: 'claude-3-haiku-20240307',
+      max_tokens: 2048,
+      messages: [
+        {
+          role: 'user',
+          content: prompt,
+        },
+      ],
+    }),
+  })
+
+  if (!response.ok) {
+    throw new Error(`Claude API error: ${response.status} ${response.statusText}`)
+  }
+
+  const data = await response.json()
+  const contentText = data.content[0].text
+  const jsonMatch = contentText.match(/\{[\s\S]*\}/)
+  
+  if (!jsonMatch) {
+    throw new Error('No JSON found in Claude response')
+  }
+
+  return JSON.parse(jsonMatch[0])
+}
+
+const piano = getPiano()
+
+const playNote = (pitch: number, velocity: number, ctx: TimeContext, noteDur: number) => {
+  console.log(pitch, velocity)
+  return
+  piano.triggerAttack(m2f(pitch), undefined, velocity / 127)
+  ctx.branch(async ctx => {
+    await ctx.wait(noteDur)
+    piano.triggerRelease(m2f(pitch))
+  }).finally(() => {
+    piano.triggerRelease(m2f(pitch))
+  })
+}
+
 async function startPipeline() {
 
-  //pass haiku to claude to get metadata
-  //const haikuMetadata = await analyzeHaikuWithClaude()
-
-  //const melodies =  haikuMetadataToMelodies(haikuMetadata)
-
-  // launchProgrammaticPointer(melodies)
-
+  const haikuMetadata = await analyzeHaikuWithClaude()
+  const melodies = haikuMetadataToMelodies(haikuMetadata)
+  launchProgrammaticPointer(melodies)
 }
 
 function launchProgrammaticPointer(melodies?: AbletonClip[]) {
@@ -875,9 +952,10 @@ function launchProgrammaticPointer(melodies?: AbletonClip[]) {
           const durSec = durBeats * ctx.bpm / 60
           const stretchFactor = runTime / durSec
           const newClip = melodies[0].scale(stretchFactor)
-          for (const [i, note] of newClip.noteBuffer().entries()) {
+          for (const note of newClip.noteBuffer()) {
+            console.log('times', note.preDelta, note.postDelta ?? 0)
             await ctx.wait(note.preDelta)
-            // playNote(ctx, note.note, synth)
+            playNote(note.note.pitch, note.note.velocity, ctx, note.note.duration)
             await ctx.wait(note.postDelta ?? 0)
           }
         })
@@ -938,7 +1016,7 @@ function launchProgrammaticPointer(melodies?: AbletonClip[]) {
   })
 }
 
-onMounted(() => {
+onMounted(async () => {
   const handleEngineChange = (engines: { fluid?: BABYLON.WebGPUEngine; reaction?: BABYLON.WebGPUEngine } | undefined) => {
     if (engines?.fluid) {
       setupEngine(engines.fluid)
@@ -960,6 +1038,8 @@ onMounted(() => {
     },
     { immediate: false },
   )
+
+  await TONE_AUDIO_START
 })
 
 onUnmounted(() => {
@@ -973,6 +1053,8 @@ onUnmounted(() => {
 
 <template>
   <div />
+  <input v-model="apiKey" type="password" placeholder="Claude API Key" />
+  <button @click="startPipeline">Analyze & Run</button>
   <button @click="() => launchProgrammaticPointer()">Preview</button>
   <textarea v-model="haiku" placeholder="Enter haiku here" />
 </template>

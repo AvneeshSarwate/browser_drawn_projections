@@ -20,6 +20,10 @@ ignore any punctuation in the analysis - for the purpose of word groupings, grou
 below is the haiku:
 
 
+
+
+
+
 A world of dew,
 And within every dewdrop
 A world of struggle.
