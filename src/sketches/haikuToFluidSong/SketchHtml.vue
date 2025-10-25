@@ -122,12 +122,12 @@ const previewShot = ref<Screenshot | null>(null)
 
 const fluidParams = [
   { name: 'densityDissipation', label: 'Density Dissipation', min: 0.0, max: 1.0, step: 0.01, value: ref(0.18) },
-  { name: 'velocityDissipation', label: 'Velocity Dissipation', min: 0.0, max: 4.0, step: 0.05, value: ref(3.5) },
+  { name: 'velocityDissipation', label: 'Velocity Dissipation', min: 0.0, max: 4.0, step: 0.05, value: ref(2.35) },
   { name: 'pressure', label: 'Pressure Damping', min: 0.0, max: 1.0, step: 0.01, value: ref(0.2) },
   { name: 'pressureIterations', label: 'Pressure Iterations', min: 1, max: 80, step: 1, value: ref(20) },
-  { name: 'curl', label: 'Vorticity', min: 0, max: 60, step: 1, value: ref(6) },
-  { name: 'splatRadius', label: 'Splat Radius', min: 0.01, max: 1.0, step: 0.01, value: ref(0.03) },
-  { name: 'forceStrength', label: 'Splat Force', min: 0, max: 20000, step: 100, value: ref(500) },
+  { name: 'curl', label: 'Vorticity', min: 0, max: 60, step: 1, value: ref(2) },
+  { name: 'splatRadius', label: 'Splat Radius', min: 0.01, max: 1.0, step: 0.01, value: ref(0.64) },
+  { name: 'forceStrength', label: 'Splat Force', min: 0, max: 20000, step: 100, value: ref(2200) },
   { name: 'dyeInjectionStrength', label: 'Dye Injection', min: 0.0, max: 2.0, step: 0.01, value: ref(1.3) },
 ]
 

@@ -49,7 +49,8 @@ struct SplatUniforms {
 fn gaussianSplat(uv: vec2f, uniforms: SplatUniforms) -> vec4f {
   var offset = uv - uniforms.point;
   offset.x = offset.x * uniforms.aspectRatio;
-  let influence = exp(-dot(offset, offset) / max(uniforms.radius, 1e-6));
+  let sigma = max(uniforms.radius, 1e-6);
+  let influence = exp(-dot(offset, offset) / (2.0 * sigma * sigma));
   let delta = uniforms.color * influence;
   return vec4f(delta, influence);
 }
@@ -212,7 +213,8 @@ struct SplatUniforms {
 fn gaussianSplat(uv: vec2f, uniforms: SplatUniforms) -> vec4f {
   var offset = uv - uniforms.point;
   offset.x = offset.x * uniforms.aspectRatio;
-  let influence = exp(-dot(offset, offset) / max(uniforms.radius, 1e-6));
+  let sigma = max(uniforms.radius, 1e-6);
+  let influence = exp(-dot(offset, offset) / (2.0 * sigma * sigma));
   let delta = uniforms.color * influence;
   return vec4f(delta, influence);
 }

@@ -601,27 +601,11 @@ function setupEngine(fluidEngine: BABYLON.WebGPUEngine): void {
   currentForceStrength = getFluidParam('forceStrength') || 6000
   currentDyeInjectionStrength = state.fluidParams?.find(p => p.name === 'dyeInjectionStrength')?.value.value ?? 0.65
 
-  // Preserve exact aspect ratio like Pavel's getResolution()
-  function getResolution(resolution: number, canvasWidth: number, canvasHeight: number) {
-    let aspectRatio = canvasWidth / canvasHeight
-    if (aspectRatio < 1) aspectRatio = 1.0 / aspectRatio
-
-    const min = Math.round(resolution)
-    const max = Math.round(resolution * aspectRatio)
-
-    if (canvasWidth > canvasHeight)
-      return { width: max, height: min }
-    else
-      return { width: min, height: max }
-  }
-
-  // Split resolutions: low-res physics, higher-res dye visuals
-  const simRes = getResolution(128, width, height)  // Base 128 like Pavel
-  const dyeRes = getResolution(512, width, height)  // Base 512 (4x sim)
-  const simWidth = simRes.width
-  const simHeight = simRes.height
-  const dyeWidth = dyeRes.width
-  const dyeHeight = dyeRes.height
+  // Compute sim resolution as 1/4 of canvas, dye at full canvas resolution
+  const simWidth = Math.round(width / 4)
+  const simHeight = Math.round(height / 4)
+  const dyeWidth = width
+  const dyeHeight = height
 
   console.log('Resolution debug:', {
     canvas: { width, height, ar: width / height },
@@ -970,8 +954,8 @@ const playNote = (pitch: number, velocity: number, ctx: TimeContext, noteDur: nu
 
 async function startPipeline() {
 
-  const haikuMetadata = await analyzeHaikuWithClaude()
-  const melodies = haikuMetadataToMelodies(haikuMetadata)
+  // const haikuMetadata = await analyzeHaikuWithClaude()
+  const melodies = haikuMetadataToMelodies(testHaikuMetadata)
   launchProgrammaticPointer(melodies)
 }
 
@@ -994,7 +978,7 @@ function launchProgrammaticPointer(melodies?: AbletonClip[]) {
     const height = fluidCanvas.height
     const scale = 2
 
-    const runTime = 6
+    const runTime = 12
 
     for (const [i, line] of lines.entries()) {
       console.log('line', line)
@@ -1026,7 +1010,7 @@ function launchProgrammaticPointer(melodies?: AbletonClip[]) {
           for (const note of newClip.noteBuffer()) {
             console.log('times', note.preDelta, note.postDelta ?? 0)
             await ctx.wait(note.preDelta)
-            playNote(note.note.pitch, note.note.velocity, ctx, note.note.duration)
+            // playNote(note.note.pitch, note.note.velocity, ctx, note.note.duration)
             await ctx.wait(note.postDelta ?? 0)
           }
         })
