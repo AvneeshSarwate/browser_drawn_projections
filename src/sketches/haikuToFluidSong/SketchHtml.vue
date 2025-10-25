@@ -238,19 +238,26 @@ function handleProgrammaticKeyUp() {
   stopProgrammaticSplat()
 }
 
+//todo - workaround for weirdness of babylon.js and resizing via css
 function updateCanvasScale() {
   const wrapper = canvasWrapperRef.value
   const canvas = document.getElementById('fluidCanvas') as HTMLCanvasElement
   if (!wrapper || !canvas) return
 
-  // Use viewport width or available width
+  const controlsSlot = document.querySelector('.controls-slot') as HTMLElement
+  const controlsWidth = controlsSlot?.offsetWidth || 0
+  const toggleWidth = 32 + 15 // button width + gap
+  const buffer = 40 // aesthetic padding
+
   const viewportWidth = window.innerWidth
-  const availableWidth = Math.min(viewportWidth * 0.9, 1200) // Match max-width constraint
+  const availableWidth = viewportWidth - controlsWidth - toggleWidth - buffer
   const canvasWidth = canvas.width
   const scale = availableWidth / canvasWidth
 
   wrapper.style.setProperty('--canvas-scale', scale.toString())
 }
+
+let resizeObserver: ResizeObserver | null = null
 
 onMounted(() => {
   // Wait for DOM to settle
@@ -258,10 +265,19 @@ onMounted(() => {
     updateCanvasScale()
   })
   window.addEventListener('resize', updateCanvasScale)
+  
+  const controlsSlot = document.querySelector('.controls-slot') as HTMLElement
+  if (controlsSlot) {
+    resizeObserver = new ResizeObserver(() => {
+      updateCanvasScale()
+    })
+    resizeObserver.observe(controlsSlot)
+  }
 })
 
 onUnmounted(() => {
   window.removeEventListener('resize', updateCanvasScale)
+  resizeObserver?.disconnect()
 })
 </script>
 
