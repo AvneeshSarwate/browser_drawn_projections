@@ -816,7 +816,18 @@ function haikuMetadataToMelodies(metadata: HaikuMetadata) {
   return melodies
 }
 
-function launchProgrammaticPointer() {
+async function startPipeline() {
+
+  //pass haiku to claude to get metadata
+  //const haikuMetadata = await analyzeHaikuWithClaude()
+
+  //const melodies =  haikuMetadataToMelodies(haikuMetadata)
+
+  // launchProgrammaticPointer(melodies)
+
+}
+
+function launchProgrammaticPointer(melodies?: AbletonClip[]) {
   launchLoop(async (ctx) => {
     if (!fluidCanvas) {
       console.warn('[fluid] launchProgrammaticPointer: fluid canvas not ready')
@@ -834,6 +845,8 @@ function launchProgrammaticPointer() {
     const width = fluidCanvas.width
     const height = fluidCanvas.height
     const scale = 2
+
+    const runTime = 6
 
     for (const line of lines) {
       console.log('line', line)
@@ -853,8 +866,22 @@ function launchProgrammaticPointer() {
         continue
       }
 
-      const runTime = 6
+      
       const startTime = ctx.time
+
+      if (melodies && melodies[0]) {
+        ctx.branch(async ctx => {
+          const durBeats = melodies[0].duration
+          const durSec = durBeats * ctx.bpm / 60
+          const stretchFactor = runTime / durSec
+          const newClip = melodies[0].scale(stretchFactor)
+          for (const [i, note] of newClip.noteBuffer().entries()) {
+            await ctx.wait(note.preDelta)
+            // playNote(ctx, note.note, synth)
+            await ctx.wait(note.postDelta ?? 0)
+          }
+        })
+      }
 
       while (ctx.time - startTime < runTime) {
         const t = Math.min((ctx.time - startTime) / runTime, 1)
@@ -946,6 +973,6 @@ onUnmounted(() => {
 
 <template>
   <div />
-  <button @click="launchProgrammaticPointer">Preview</button>
+  <button @click="() => launchProgrammaticPointer()">Preview</button>
   <textarea v-model="haiku" placeholder="Enter haiku here" />
 </template>

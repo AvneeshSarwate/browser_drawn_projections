@@ -339,10 +339,10 @@ export function sendSynthParam(instrumentPath: string, voiceInd: number, paramIn
 export const getDriftChain = (instrumentInd: number) => {
 
 
-  const paramNames = []
-  const paramFuncs = {}
-  const defaultParams = {}
-  const paramScaling = {}
+  const paramNames: string[] = []
+  const paramFuncs: { [key: string]: (val: number) => number } = {}
+  const defaultParams: { [key: string]: number } = {}
+  const paramScaling: { [key: string]: (val: number) => number } = {}
 
   Array.from({ length: 16 }).forEach((_, i) => {
     const paramName = `param${i}`
