@@ -12,6 +12,7 @@ import { clearListeners, pointerdownEvent, pointermoveEvent, pointerupEvent, sin
 import { TimeContext, launch } from '@/channels/base_time_context'
 import { type CancelablePromisePoxy } from '@/channels/channels'
 import { normalizedMetadata, calculateLineLayout, sampleEntryIndexInLine } from './alphabet_groups'
+import { AbletonClip, quickNote, type AbletonNote } from '@/io/abletonClips'
 
 console.log(normalizedMetadata.map(g => [g.metadata!.name, g.metadata!.baseline]).sort())
 
@@ -749,6 +750,70 @@ function cleanupLine(line: string): string {
     .replace(/[^a-z ]/g, '')
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+type HaikuMetadata = {
+  mood: string
+  wordAnalysis: {word: string, syllables: number, accentSyllables: number[]}[][]
+  pitches: number[]
+  lineByLineMoodTransitions: string[]
+  colorByLine: {r: number, g: number, b: number}
+}
+
+function wordAnalysisToRhythm(lineInfo: { word: string, syllables: number, accentSyllables: number[] }[]) {
+  const dur: number[] = []
+  const vel: number[] = []
+  const pos: number[] = [0]
+  let runningLength = 0
+
+  const randBi = (n: number) => Math.floor(Math.random() * 2 * n) - n
+  
+  lineInfo.forEach(wordInfo => {
+    const accents = new Set(wordInfo.accentSyllables)
+    const duration = 1 / wordInfo.syllables
+    runningLength += duration
+    pos.push(runningLength)
+    for (let i = 0; i < wordInfo.syllables; i++) {
+      dur.push(duration)
+      if (accents.has(i)) {
+        vel.push(110 + randBi(10))
+      } else {
+        vel.push(70 + randBi(10))
+      }
+    }
+  })
+
+  pos.pop()
+
+  return { dur, vel, pos, runningLength}
+}
+
+function pitchSeqToMelodies(pitchSeq: number[], rhythmInfo:  ReturnType<typeof wordAnalysisToRhythm>[]) {
+  const base5 = pitchSeq.map(e => e)
+  const doublePickStart = Math.floor(4 * Math.random())
+  const pickedNotes = pitchSeq.slice(doublePickStart, doublePickStart + 2).map(e => e)
+  const insertInd = Math.floor(Math.random() * pitchSeq.length)
+  const sevenPitches = base5.map(e => e).splice(insertInd, 0, ...pickedNotes)
+  const end5 = base5.map(e=>e).reverse()
+
+  const ri = rhythmInfo
+
+  const notes0 = base5.map((p, i) => quickNote(p, ri[0].dur[i], ri[0].vel[i], ri[0].pos[i]))
+  const clip0 = new AbletonClip('c0', ri[0].runningLength, notes0)
+
+  const notes1 = sevenPitches.map((p, i) => quickNote(p, ri[1].dur[i], ri[1].vel[i], ri[1].pos[i]))
+  const clip1 = new AbletonClip('c1', ri[1].runningLength, notes1)
+
+  const notes2 = end5.map((p, i) => quickNote(p, ri[2].dur[i], ri[2].vel[i], ri[2].pos[i]))
+  const clip2 = new AbletonClip('c2', ri[2].runningLength, notes2)
+
+  return [clip0, clip1, clip2]
+}
+
+function haikuMetadataToMelodies(metadata: HaikuMetadata) {
+  const rhytmInfo = metadata.wordAnalysis.map(wa => wordAnalysisToRhythm(wa))
+  const melodies = pitchSeqToMelodies(metadata.pitches, rhytmInfo)
+  return melodies
 }
 
 function launchProgrammaticPointer() {

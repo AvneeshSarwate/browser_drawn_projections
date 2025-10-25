@@ -3,10 +3,10 @@ for the following haiku, return a json object of the following format
 
 {
   mood: string
-  wordAnalysis: {word: string, syllables: 2, accentSyllables: number[]}[][]
+  wordAnalysis: {word: string, syllables: number, accentSyllables: number[]}[][]
   pitches: number[]
   lineByLineMoodTransitions: string[]
-  colorByLine: {r: number, g: number: b: number}
+  colorByLine: {r: number, g: number, b: number}
 }
 
 mood - a short description of the overall mood of the haiku 
