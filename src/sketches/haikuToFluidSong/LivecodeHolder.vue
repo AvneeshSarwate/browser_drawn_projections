@@ -782,12 +782,14 @@ type HaikuMetadataBase = {
   mood: string
   wordAnalysis: {word: string, syllables: number, accentSyllables: number[]}[][]
   lineByLineMoodTransitions: string[]
+}
+
+type HaikuCreativeMetadata = {
+  pitches: number[]
   colorByLine: {r: number, g: number, b: number}[]
 }
 
-type HaikuMetadata = HaikuMetadataBase & {
-  pitches: number[]
-}
+type HaikuMetadata = HaikuMetadataBase & HaikuCreativeMetadata
 
 function wordAnalysisToRhythm(lineInfo: { word: string, syllables: number, accentSyllables: number[] }[]) {
   const dur: number[] = []
@@ -894,13 +896,11 @@ async function analyzeHaikuWithClaude(): Promise<HaikuMetadata> {
   mood: string
   wordAnalysis: {word: string, syllables: number, accentSyllables: number[]}[][]
   lineByLineMoodTransitions: string[]
-  colorByLine: {r: number, g: number, b: number}[]
 }
 
 mood - a short description of the overall mood of the haiku 
 wordAnalysis - a per-line, per-word analysis of the words in the haiku 
 lineByLineMoodTransitions - the emotional arc of the poem by line - short descriptions
-colorByLine - a color for the mood of each line, rgb 0-255
 
 ignore any punctuation in the analysis - for the purpose of word groupings, group punctuation with its previous word
 
@@ -908,24 +908,42 @@ below is the haiku:
 
 ${haiku.value}`
 
-  const pitchPrompt = `For the following haiku, respond with a JSON object containing a single key "pitches" set to an array of exactly five midi pitch numbers (integers, 0-127) that capture the emotional character of the poem. be expressive and adventurous with your note choice and cadencees, but keep things diatonic unless the poem mood suggests otherwise. Do not include any additional text.
+  const creativePrompt = `For the following haiku, respond with a JSON object of the following format:
+
+{
+  pitches: number[]
+  colorByLine: {r: number, g: number, b: number}[]
+}
+
+pitches - an array of exactly five midi pitch numbers (integers, 0-127) that capture the emotional character of the poem. be expressive and adventurous with your note choice and cadencees, but keep things diatonic unless the poem mood suggests otherwise
+colorByLine - one RGB color (0-255 per channel) for each line, expressive but not gaudy; avoid near-white unless strongly justified
+
+Return only the JSON object with no additional commentary.
 
 Haiku:
 
 ${haiku.value}`
 
-  const [baseMetadata, pitchData] = await Promise.all([
+  const [baseMetadata, creativeMetadata] = await Promise.all([
     requestClaudeJson<HaikuMetadataBase>(basePrompt, 0),
-    requestClaudeJson<{ pitches: number[] }>(pitchPrompt, 1),
+    requestClaudeJson<HaikuCreativeMetadata>(creativePrompt, 1),
   ])
 
-  if (!Array.isArray(pitchData.pitches) || pitchData.pitches.length !== 5) {
+  if (!Array.isArray(creativeMetadata.pitches) || creativeMetadata.pitches.length !== 5) {
     throw new Error('Claude pitch response did not contain exactly five pitches')
   }
 
+  if (!Array.isArray(creativeMetadata.colorByLine) || creativeMetadata.colorByLine.some(c =>
+    typeof c?.r !== 'number' || typeof c?.g !== 'number' || typeof c?.b !== 'number'
+  )) {
+    throw new Error('Claude color response was not in the expected RGB array format')
+  }
+
+  console.log('colors', creativeMetadata.colorByLine)
+
   return {
     ...baseMetadata,
-    pitches: pitchData.pitches,
+    ...creativeMetadata,
   }
 }
 
@@ -941,7 +959,7 @@ pianoChain.paramFuncs.chorusRate(1.2)
 const piano = pianoChain.instrument
 
 const playNote = (pitch: number, velocity: number, ctx: TimeContext, noteDur: number) => {
-  console.log('note', pitch, velocity, noteDur)
+  // console.log('note', pitch, velocity, noteDur)
   // piano.triggerAttack(m2f(pitch), undefined, velocity / 127)
   // ctx.branch(async ctx => {
   //   await ctx.wait(noteDur)
@@ -1008,7 +1026,7 @@ function launchProgrammaticPointer(melodies: AbletonClip[], colors: {readonly r:
           const stretchFactor = runTime / durSec
           const newClip = melodies[i].scale(stretchFactor)
           for (const note of newClip.noteBuffer()) {
-            console.log('times', note.preDelta, note.postDelta ?? 0)
+            // console.log('times', note.preDelta, note.postDelta ?? 0)
             await ctx.wait(note.preDelta)
             playNote(note.note.pitch, note.note.velocity, ctx, note.note.duration)
             await ctx.wait(note.postDelta ?? 0)
