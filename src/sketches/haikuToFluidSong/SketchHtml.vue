@@ -1,32 +1,43 @@
 <template>
   <div class="container">
     <div class="canvas-controls-wrapper center-canvas">
-      <div v-if="showParamWindow" class="controls">
-        <div class="control-group" v-for="param in fluidParams" :key="param.name">
-          <label>{{ param.label }}</label>
-          <input type="range" :min="param.min" :max="param.max" :step="param.step" v-model.number="param.value.value" />
-          <input type="number" :min="param.min" :max="param.max" :step="param.step" v-model.number="param.value.value"
-            class="value-input" />
+      <button class="param-toggle" @click="showParamWindow = !showParamWindow" :class="{ collapsed: !showParamWindow }">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <path d="M4 2 L8 6 L4 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <div 
+        class="controls-slot" 
+        :class="{ collapsed: !showParamWindow }"
+        :aria-hidden="!showParamWindow"
+      >
+        <div class="controls">
+          <div class="control-group" v-for="param in fluidParams" :key="param.name">
+            <label>{{ param.label }}</label>
+            <input type="range" :min="param.min" :max="param.max" :step="param.step" v-model.number="param.value.value" />
+            <input type="number" :min="param.min" :max="param.max" :step="param.step" v-model.number="param.value.value"
+              class="value-input" />
+          </div>
+          <button
+            v-if="showExtraUI"
+            type="button"
+            class="programmatic-button-inline"
+            @pointerdown.prevent="handleProgrammaticPointerDown"
+            @pointerup="handleProgrammaticPointerUp"
+            @pointerleave="handleProgrammaticPointerCancel"
+            @pointercancel="handleProgrammaticPointerCancel"
+            @blur="handleProgrammaticPointerCancel"
+            @keydown.space.prevent="handleProgrammaticKeyDown"
+            @keyup.space.prevent="handleProgrammaticKeyUp"
+            @keydown.enter.prevent="handleProgrammaticKeyDown"
+            @keyup.enter.prevent="handleProgrammaticKeyUp"
+          >
+            Programmatic Splat
+          </button>
         </div>
-        <button
-          type="button"
-          class="programmatic-button-inline"
-          @pointerdown.prevent="handleProgrammaticPointerDown"
-          @pointerup="handleProgrammaticPointerUp"
-          @pointerleave="handleProgrammaticPointerCancel"
-          @pointercancel="handleProgrammaticPointerCancel"
-          @blur="handleProgrammaticPointerCancel"
-          @keydown.space.prevent="handleProgrammaticKeyDown"
-          @keyup.space.prevent="handleProgrammaticKeyUp"
-          @keydown.enter.prevent="handleProgrammaticKeyDown"
-          @keyup.enter.prevent="handleProgrammaticKeyUp"
-        >
-          Programmatic Splat
-        </button>
       </div>
       <div class="canvas-column">
         <div class="canvas-group">
-          <div class="canvas-label">Fluid Simulation</div>
           <div class="canvas-wrapper">
             <canvas id="fluidCanvas" :width="width" :height="height"></canvas>
             <button
@@ -549,6 +560,18 @@ canvas {
   justify-content: left;
 }
 
+.controls-slot {
+  flex: 0 0 240px;
+  width: 240px;
+  overflow: hidden;
+  transition: width 300ms ease, flex-basis 300ms ease;
+}
+
+.controls-slot.collapsed {
+  flex-basis: 0px;
+  width: 0px;
+}
+
 .controls {
   display: flex;
   flex-direction: column;
@@ -556,8 +579,17 @@ canvas {
   padding: 10px;
   background: rgba(255, 255, 255, 0.05);
   border-radius: 8px;
-  min-width: 200px;
-  flex: 0 0 auto;
+  min-width: 240px;
+  opacity: 1;
+  transform: translateX(0);
+  transition: opacity 250ms ease, transform 250ms ease;
+  pointer-events: auto;
+}
+
+.controls-slot.collapsed .controls {
+  opacity: 0;
+  transform: translateX(-12px);
+  pointer-events: none;
 }
 
 .control-group {
@@ -615,5 +647,45 @@ canvas {
   gap: 15px;
   align-items: center;
   flex: 1 1 auto;
+}
+
+.param-toggle {
+  position: relative;
+  align-self: flex-start;
+  background: rgba(102, 122, 255, 0.2);
+  border: 1px solid rgba(102, 122, 255, 0.4);
+  border-radius: 6px;
+  color: #dde0ff;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: background 0.3s ease, border-color 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  z-index: 10;
+}
+
+.param-toggle:hover {
+  background: rgba(102, 122, 255, 0.35);
+  border-color: rgba(102, 122, 255, 0.6);
+}
+
+.param-toggle svg {
+  transition: transform 0.3s ease;
+}
+
+.param-toggle.collapsed svg {
+  transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .controls-slot,
+  .controls-slot .controls {
+    transition: none;
+  }
 }
 </style>

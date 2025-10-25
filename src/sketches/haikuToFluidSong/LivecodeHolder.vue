@@ -16,6 +16,7 @@ import { AbletonClip, quickNote, type AbletonNote } from '@/io/abletonClips'
 import { getPiano, getPianoChain, TONE_AUDIO_START } from '@/music/synths'
 import { m2f } from '@/music/mpeSynth'
 import * as Tone from 'tone'
+import { adjustExpressiveColor } from './colorUtils'
 
 console.log(normalizedMetadata.map(g => [g.metadata!.name, g.metadata!.baseline]).sort())
 
