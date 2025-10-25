@@ -916,7 +916,7 @@ ${haiku.value}`
 }
 
 pitches - an array of exactly five midi pitch numbers (integers, 0-127) that capture the emotional character of the poem. be expressive and adventurous with your note choice and cadencees, but keep things diatonic unless the poem mood suggests otherwise
-colorByLine - one RGB color (0-255 per channel) for each line, expressive but not gaudy; avoid near-white unless strongly justified
+colorByLine - one RGB color (0-255 per channel) for each line, expressive but not gaudy; avoid near-white unless strongly justified - keep colors highly saturated - look at the colors and regenerate if they are too close to white
 
 Return only the JSON object with no additional commentary.
 
@@ -939,11 +939,16 @@ ${haiku.value}`
     throw new Error('Claude color response was not in the expected RGB array format')
   }
 
-  console.log('colors', creativeMetadata.colorByLine)
+  const originalColors = [...creativeMetadata.colorByLine]
+  const saturatedColors = creativeMetadata.colorByLine.map(c => adjustExpressiveColor(c))
+  //todo - instead of trying to saturate the colors, just get claude to generate named colors from a list?
+~  console.log('Original colors:', originalColors)
+  console.log('Saturated colors:', saturatedColors)
 
   return {
     ...baseMetadata,
     ...creativeMetadata,
+    colorByLine: saturatedColors,
   }
 }
 
