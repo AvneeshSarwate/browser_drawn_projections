@@ -743,7 +743,8 @@ const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromis
   return loop
 }
 
-const haiku = ref(`A world of dew,
+//todo - need some kind of checking to line up notes and syllables for non-haiku input or syllable miscount from claude
+const haiku = ref(`A world of soft dew,
 And within every dewdrop
 A world of struggle.`)
 
@@ -768,38 +769,39 @@ type HaikuMetadata = {
 function wordAnalysisToRhythm(lineInfo: { word: string, syllables: number, accentSyllables: number[] }[]) {
   const dur: number[] = []
   const vel: number[] = []
-  const pos: number[] = [0]
+  const pos: number[] = []
   let runningLength = 0
 
   const randBi = (n: number) => Math.floor(Math.random() * 2 * n) - n
   
   lineInfo.forEach(wordInfo => {
     const accents = new Set(wordInfo.accentSyllables)
-    const duration = 1 / wordInfo.syllables
-    runningLength += duration
-    pos.push(runningLength)
-    for (let i = 0; i < wordInfo.syllables; i++) {
+    const syllables = Math.max(1, Math.floor(wordInfo.syllables))
+    const duration = 1 / syllables
+    for (let i = 0; i < syllables; i++) {
+      pos.push(runningLength)
       dur.push(duration)
       if (accents.has(i)) {
         vel.push(110 + randBi(10))
       } else {
         vel.push(70 + randBi(10))
       }
+      runningLength += duration
     }
   })
-
-  pos.pop()
 
   return { dur, vel, pos, runningLength}
 }
 
 function pitchSeqToMelodies(pitchSeq: number[], rhythmInfo:  ReturnType<typeof wordAnalysisToRhythm>[]) {
-  const base5 = pitchSeq.map(e => e)
-  const doublePickStart = Math.floor(4 * Math.random())
-  const pickedNotes = pitchSeq.slice(doublePickStart, doublePickStart + 2).map(e => e)
-  const insertInd = Math.floor(Math.random() * pitchSeq.length)
-  const sevenPitches = base5.map(e => e).splice(insertInd, 0, ...pickedNotes)
-  const end5 = base5.map(e=>e).reverse()
+  const base5 = [...pitchSeq]
+  const repeatWindow = Math.max(0, base5.length - 1)
+  const doublePickStart = repeatWindow > 0 ? Math.floor(Math.random() * repeatWindow) : 0
+  const pickedNotes = base5.slice(doublePickStart, doublePickStart + 2)
+  const insertInd = Math.floor(Math.random() * (base5.length + 1))
+  const sevenPitches = [...base5]
+  sevenPitches.splice(insertInd, 0, ...pickedNotes)
+  const end5 = [...base5].reverse()
 
   const ri = rhythmInfo
 
@@ -838,7 +840,7 @@ async function analyzeHaikuWithClaude(): Promise<HaikuMetadata> {
 
 mood - a short description of the overall mood of the haiku 
 wordAnalysis - a per-line, per-word analysis of the words in the haiku 
-pitches - a sequence of 5 midi pitch numbers that captures the mood of the poem
+pitches - a sequence of 5 midi pitch numbers that captures the mood of the poem - be expressive and don't just default to c major
 lineByLineMoodTransitions - the emotional arc of the poem by line - short descriptions
 colorByLine - a color for the mood of each line, rgb 0-255
 
@@ -886,15 +888,15 @@ ${haiku.value}`
 const piano = getPiano()
 
 const playNote = (pitch: number, velocity: number, ctx: TimeContext, noteDur: number) => {
-  console.log(pitch, velocity)
-  return
-  piano.triggerAttack(m2f(pitch), undefined, velocity / 127)
-  ctx.branch(async ctx => {
-    await ctx.wait(noteDur)
-    piano.triggerRelease(m2f(pitch))
-  }).finally(() => {
-    piano.triggerRelease(m2f(pitch))
-  })
+  console.log('note', pitch, velocity, noteDur)
+  // piano.triggerAttack(m2f(pitch), undefined, velocity / 127)
+  // ctx.branch(async ctx => {
+  //   await ctx.wait(noteDur)
+  //   piano.triggerRelease(m2f(pitch))
+  // }).finally(() => {
+  //   piano.triggerRelease(m2f(pitch))
+  // })
+  piano.triggerAttackRelease(m2f(pitch), noteDur * 2, Tone.now(), velocity/127)
 }
 
 async function startPipeline() {
@@ -925,7 +927,7 @@ function launchProgrammaticPointer(melodies?: AbletonClip[]) {
 
     const runTime = 6
 
-    for (const line of lines) {
+    for (const [i, line] of lines.entries()) {
       console.log('line', line)
       const layout = calculateLineLayout(line, {
         scale,
@@ -946,12 +948,12 @@ function launchProgrammaticPointer(melodies?: AbletonClip[]) {
       
       const startTime = ctx.time
 
-      if (melodies && melodies[0]) {
-        ctx.branch(async ctx => {
-          const durBeats = melodies[0].duration
+      if (melodies && melodies[i]) {
+        launchLoop(async ctx => {
+          const durBeats = melodies[i].duration
           const durSec = durBeats * ctx.bpm / 60
           const stretchFactor = runTime / durSec
-          const newClip = melodies[0].scale(stretchFactor)
+          const newClip = melodies[i].scale(stretchFactor)
           for (const note of newClip.noteBuffer()) {
             console.log('times', note.preDelta, note.postDelta ?? 0)
             await ctx.wait(note.preDelta)
