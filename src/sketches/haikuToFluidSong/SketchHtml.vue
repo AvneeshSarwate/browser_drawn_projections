@@ -38,7 +38,7 @@
       </div>
       <div class="canvas-column">
         <div class="canvas-group">
-          <div class="canvas-wrapper">
+          <div class="canvas-wrapper" ref="canvasWrapperRef">
             <canvas id="fluidCanvas" :width="width" :height="height"></canvas>
             <button
               v-if="showExtraUI"
@@ -112,18 +112,22 @@
         <img :src="previewShot.blobUrl" alt="" class="preview-image" />
       </div>
     </div>
+
+    <!-- <WebGPUTest /> -->
   </div>
 </template>
 
 <script setup lang="ts">
-import { inject, computed, ref } from 'vue'
+import { inject, computed, ref, onMounted, onUnmounted } from 'vue'
 import { appStateName, type FluidReactionAppState, type FluidDebugMode } from './appState'
 import FluidChat from './FluidChat.vue'
 import { useScreenshotStore, type Screenshot } from './useScreenshots'
+import WebGPUTest from './WebGPUTest.vue'
 
 const state = inject<FluidReactionAppState>(appStateName)!!
 const width = computed(() => state.width)
 const height = computed(() => state.height)
+const canvasWrapperRef = ref<HTMLDivElement>()
 
 const screenshotStore = useScreenshotStore()
 const isCapturing = computed(() => screenshotStore.isCapturing.value)
@@ -197,7 +201,7 @@ function closePreview() {
 
 const programmaticSplat = state.programmaticSplat
 const programmaticKeyActive = ref(false)
-const showParamWindow = ref(true)
+const showParamWindow = ref(false)
 const showExtraUI = ref(false)
 
 function startProgrammaticSplat() {
@@ -233,6 +237,32 @@ function handleProgrammaticKeyDown(event: KeyboardEvent) {
 function handleProgrammaticKeyUp() {
   stopProgrammaticSplat()
 }
+
+function updateCanvasScale() {
+  const wrapper = canvasWrapperRef.value
+  const canvas = document.getElementById('fluidCanvas') as HTMLCanvasElement
+  if (!wrapper || !canvas) return
+
+  // Use viewport width or available width
+  const viewportWidth = window.innerWidth
+  const availableWidth = Math.min(viewportWidth * 0.9, 1200) // Match max-width constraint
+  const canvasWidth = canvas.width
+  const scale = availableWidth / canvasWidth
+
+  wrapper.style.setProperty('--canvas-scale', scale.toString())
+}
+
+onMounted(() => {
+  // Wait for DOM to settle
+  requestAnimationFrame(() => {
+    updateCanvasScale()
+  })
+  window.addEventListener('resize', updateCanvasScale)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', updateCanvasScale)
+})
 </script>
 
 <style scoped>
@@ -475,6 +505,12 @@ canvas {
   cursor: crosshair;
   touch-action: none;
   background: black;
+}
+
+.canvas-wrapper {
+  transform-origin: top left;
+  /* Scale to fit container width while maintaining aspect ratio */
+  transform: scale(var(--canvas-scale, 1));
 }
 
 .instructions {

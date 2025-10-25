@@ -13,14 +13,15 @@ onMounted(async () => {
     return
   }
   
-  const fluidEngine = new BABYLON.WebGPUEngine(fluidCanvas, { antialias: true })
+  const fluidEngine = new BABYLON.WebGPUEngine(fluidCanvas, { 
+    antialias: true,
+    adaptToDeviceRatio: false,
+    limitDeviceRatio: 1.0
+  })
   await fluidEngine.initAsync()
-  fluidEngine.resize()
+  fluidEngine.resize() // Initial resize needed for proper WebGPU setup
+  // NOTE: No window resize listener - render size stays fixed, CSS handles display scaling
   
-  resizeHandler = () => {
-    fluidEngine.resize()
-  }
-  window.addEventListener('resize', resizeHandler)
   state.fluidEngine = fluidEngine
   engineRef.value = { fluid: fluidEngine }
 })
