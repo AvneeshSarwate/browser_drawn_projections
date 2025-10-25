@@ -952,14 +952,14 @@ const playNote = (pitch: number, velocity: number, ctx: TimeContext, noteDur: nu
   piano.triggerAttackRelease(m2f(pitch), noteDur * 2, Tone.now(), velocity/127)
 }
 
-async function startPipeline() {
+async function startPipeline(skipMusic: boolean = false, useTestData: boolean = false) {
 
-  // const haikuMetadata = await analyzeHaikuWithClaude()
-  const melodies = haikuMetadataToMelodies(testHaikuMetadata)
-  launchProgrammaticPointer(melodies)
+  const haikuMetadata = useTestData ? testHaikuMetadata : await analyzeHaikuWithClaude()
+  const melodies = haikuMetadataToMelodies(haikuMetadata)
+  launchProgrammaticPointer(melodies, haikuMetadata.colorByLine, skipMusic)
 }
 
-function launchProgrammaticPointer(melodies?: AbletonClip[]) {
+function launchProgrammaticPointer(melodies: AbletonClip[], colors: {readonly r: number, readonly g: number, readonly b: number}[], skipMusic: boolean = false) {
   launchLoop(async (ctx) => {
     if (!fluidCanvas) {
       console.warn('[fluid] launchProgrammaticPointer: fluid canvas not ready')
@@ -972,8 +972,8 @@ function launchProgrammaticPointer(melodies?: AbletonClip[]) {
     const lines = text.split('\n')
       .map(cleanupLine)
       .filter(line => line.length > 0)
-    const spaceWidth = 40
-    const kernWidth = 8
+    const spaceWidth = 60
+    const kernWidth = 16
     const width = fluidCanvas.width
     const height = fluidCanvas.height
     const scale = 2
@@ -1001,7 +1001,7 @@ function launchProgrammaticPointer(melodies?: AbletonClip[]) {
       
       const startTime = ctx.time
 
-      if (melodies && melodies[i]) {
+      if (melodies && melodies[i] && !skipMusic) {
         launchLoop(async ctx => {
           const durBeats = melodies[i].duration
           const durSec = durBeats * ctx.bpm / 60
@@ -1010,7 +1010,7 @@ function launchProgrammaticPointer(melodies?: AbletonClip[]) {
           for (const note of newClip.noteBuffer()) {
             console.log('times', note.preDelta, note.postDelta ?? 0)
             await ctx.wait(note.preDelta)
-            // playNote(note.note.pitch, note.note.velocity, ctx, note.note.duration)
+            playNote(note.note.pitch, note.note.velocity, ctx, note.note.duration)
             await ctx.wait(note.postDelta ?? 0)
           }
         })
@@ -1025,7 +1025,7 @@ function launchProgrammaticPointer(melodies?: AbletonClip[]) {
           canvasX,
           canvasY,
           down: true,
-          color: { r: 255, g: 0, b: 0 },
+          color: colors[i] ?? { r: 255, g: 0, b: 0 },
         })
         await ctx.waitSec(0.016)
       }
@@ -1109,7 +1109,7 @@ onUnmounted(() => {
 <template>
   <div />
   <input v-model="apiKey" type="password" placeholder="Claude API Key" />
-  <button @click="startPipeline">Analyze & Run</button>
-  <button @click="() => launchProgrammaticPointer()">Preview</button>
+  <button @click="() => startPipeline(false, false)">Analyze & Run</button>
+  <button @click="() => startPipeline(true, true)">test data graphics</button>
   <textarea v-model="haiku" placeholder="Enter haiku here" />
 </template>
