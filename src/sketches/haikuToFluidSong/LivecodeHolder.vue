@@ -13,7 +13,7 @@ import { TimeContext, launch } from '@/channels/base_time_context'
 import { type CancelablePromisePoxy } from '@/channels/channels'
 import { normalizedMetadata, calculateLineLayout, sampleEntryIndexInLine } from './alphabet_groups'
 import { AbletonClip, quickNote, type AbletonNote } from '@/io/abletonClips'
-import { getPiano, TONE_AUDIO_START } from '@/music/synths'
+import { getPiano, getPianoChain, TONE_AUDIO_START } from '@/music/synths'
 import { m2f } from '@/music/mpeSynth'
 import * as Tone from 'tone'
 
@@ -750,6 +750,42 @@ A world of struggle.`)
 
 const apiKey = ref('')
 
+const testHaikuMetadata = {
+  "mood": "Contemplative melancholy with underlying resilience",
+  "wordAnalysis": [
+    [
+      {"word": "A", "syllables": 1, "accentSyllables": [0]},
+      {"word": "world", "syllables": 1, "accentSyllables": [0]},
+      {"word": "of", "syllables": 1, "accentSyllables": [] },
+      {"word": "soft", "syllables": 1, "accentSyllables": [0]},
+      {"word": "dew,", "syllables": 1, "accentSyllables": [0]}
+    ],
+    [
+      {"word": "And", "syllables": 1, "accentSyllables": []},
+      {"word": "within", "syllables": 2, "accentSyllables": [1]},
+      {"word": "every", "syllables": 2, "accentSyllables": [0]},
+      {"word": "dewdrop", "syllables": 2, "accentSyllables": [0]}
+    ],
+    [
+      {"word": "A", "syllables": 1, "accentSyllables": [0]},
+      {"word": "world", "syllables": 1, "accentSyllables": [0]},
+      {"word": "of", "syllables": 1, "accentSyllables": []},
+      {"word": "struggle.", "syllables": 2, "accentSyllables": [0]}
+    ]
+  ],
+  "pitches": [60, 62, 64, 65, 60],
+  "lineByLineMoodTransitions": [
+    "Delicate wonder and pristine beauty",
+    "Introspective deepening, zooming inward",
+    "Poignant realization of hidden difficulty"
+  ],
+  "colorByLine": [
+    {"r": 200, "g": 220, "b": 255},
+    {"r": 150, "g": 180, "b": 220},
+    {"r": 120, "g": 100, "b": 180}
+  ]
+}
+
 function cleanupLine(line: string): string {
   return line
     .toLowerCase()
@@ -758,12 +794,15 @@ function cleanupLine(line: string): string {
     .trim()
 }
 
-type HaikuMetadata = {
+type HaikuMetadataBase = {
   mood: string
   wordAnalysis: {word: string, syllables: number, accentSyllables: number[]}[][]
-  pitches: number[]
   lineByLineMoodTransitions: string[]
-  colorByLine: {r: number, g: number, b: number}
+  colorByLine: {r: number, g: number, b: number}[]
+}
+
+type HaikuMetadata = HaikuMetadataBase & {
+  pitches: number[]
 }
 
 function wordAnalysisToRhythm(lineInfo: { word: string, syllables: number, accentSyllables: number[] }[]) {
@@ -823,32 +862,10 @@ function haikuMetadataToMelodies(metadata: HaikuMetadata) {
   return melodies
 }
 
-async function analyzeHaikuWithClaude(): Promise<HaikuMetadata> {
+async function requestClaudeJson<T>(prompt: string, temperature = 0): Promise<T> {
   if (!apiKey.value) {
     throw new Error('API key is required')
   }
-
-  const prompt = `For the following haiku, return a JSON object of the following format:
-
-{
-  mood: string
-  wordAnalysis: {word: string, syllables: number, accentSyllables: number[]}[][]
-  pitches: number[]
-  lineByLineMoodTransitions: string[]
-  colorByLine: {r: number, g: number, b: number}
-}
-
-mood - a short description of the overall mood of the haiku 
-wordAnalysis - a per-line, per-word analysis of the words in the haiku 
-pitches - a sequence of 5 midi pitch numbers that captures the mood of the poem - be expressive and don't just default to c major
-lineByLineMoodTransitions - the emotional arc of the poem by line - short descriptions
-colorByLine - a color for the mood of each line, rgb 0-255
-
-ignore any punctuation in the analysis - for the purpose of word groupings, group punctuation with it's previous word
-
-below is the haiku:
-
-${haiku.value}`
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -867,6 +884,7 @@ ${haiku.value}`
           content: prompt,
         },
       ],
+      temperature,
     }),
   })
 
@@ -885,7 +903,58 @@ ${haiku.value}`
   return JSON.parse(jsonMatch[0])
 }
 
-const piano = getPiano()
+async function analyzeHaikuWithClaude(): Promise<HaikuMetadata> {
+  const basePrompt = `For the following haiku, return a JSON object of the following format:
+
+{
+  mood: string
+  wordAnalysis: {word: string, syllables: number, accentSyllables: number[]}[][]
+  lineByLineMoodTransitions: string[]
+  colorByLine: {r: number, g: number, b: number}[]
+}
+
+mood - a short description of the overall mood of the haiku 
+wordAnalysis - a per-line, per-word analysis of the words in the haiku 
+lineByLineMoodTransitions - the emotional arc of the poem by line - short descriptions
+colorByLine - a color for the mood of each line, rgb 0-255
+
+ignore any punctuation in the analysis - for the purpose of word groupings, group punctuation with its previous word
+
+below is the haiku:
+
+${haiku.value}`
+
+  const pitchPrompt = `For the following haiku, respond with a JSON object containing a single key "pitches" set to an array of exactly five midi pitch numbers (integers, 0-127) that capture the emotional character of the poem. be expressive and adventurous with your note choice and cadencees, but keep things diatonic unless the poem mood suggests otherwise. Do not include any additional text.
+
+Haiku:
+
+${haiku.value}`
+
+  const [baseMetadata, pitchData] = await Promise.all([
+    requestClaudeJson<HaikuMetadataBase>(basePrompt, 0),
+    requestClaudeJson<{ pitches: number[] }>(pitchPrompt, 1),
+  ])
+
+  if (!Array.isArray(pitchData.pitches) || pitchData.pitches.length !== 5) {
+    throw new Error('Claude pitch response did not contain exactly five pitches')
+  }
+
+  return {
+    ...baseMetadata,
+    pitches: pitchData.pitches,
+  }
+}
+
+// const piano = getPiano()
+const pianoChain = getPianoChain()
+pianoChain.paramFuncs.gain(1)
+pianoChain.paramFuncs.delayMix(0.5)
+pianoChain.paramFuncs.delayTime(0.75)
+pianoChain.paramFuncs.chorusWet(0.8)
+pianoChain.paramFuncs.chorusDepth(0.4)
+pianoChain.paramFuncs.chorusRate(1.2)
+// pianoChain.paramFuncs.reverb(0.7)
+const piano = pianoChain.instrument
 
 const playNote = (pitch: number, velocity: number, ctx: TimeContext, noteDur: number) => {
   console.log('note', pitch, velocity, noteDur)

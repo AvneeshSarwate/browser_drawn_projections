@@ -114,7 +114,7 @@ export function getPianoChain() {
     distortion: (val: number) => val,
     chorusWet: (val: number) => val,
     chorusDepth: (val: number) => val,
-    chorusRate: (val: number) => 2 + val ** 2 * 20,
+    chorusRate: (val: number) => 0.1 + val ** 2 * 20,
     filterFreq: (val: number) => 20000 * val ** 2,
     filterRes: (val: number) => val * 10,
     delayTime: (val: number) => val ** 2,
