@@ -1,41 +1,32 @@
 <template>
   <div class="container">
+    <section class="haiku-controls minimal">
+      <div class="minimal-header">enter a haiku</div>
+      <textarea
+        class="haiku-input"
+        v-model="haikuText"
+        rows="5"
+        spellcheck="false"
+      ></textarea>
+      <button
+        type="button"
+        class="haiku-ready"
+        :disabled="!canRunAnalysis"
+        @click="handleRunAnalysis"
+      >
+        ready
+      </button>
+      <p v-if="isHaikuAnimating" class="haiku-controls__status">Animating…</p>
+      <transition name="fade"><p v-if="isProcessing" class="haiku-controls__status">Preparing…</p></transition>
+      <p v-if="pipelineError" class="haiku-controls__error">{{ pipelineError }}</p>
+    </section>
     <div class="canvas-controls-wrapper center-canvas">
       <button class="param-toggle" @click="showParamWindow = !showParamWindow" :class="{ collapsed: !showParamWindow }">
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
           <path d="M4 2 L8 6 L4 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </button>
-      <div 
-        class="controls-slot" 
-        :class="{ collapsed: !showParamWindow }"
-        :aria-hidden="!showParamWindow"
-      >
-        <div class="controls">
-          <div class="control-group" v-for="param in fluidParams" :key="param.name">
-            <label>{{ param.label }}</label>
-            <input type="range" :min="param.min" :max="param.max" :step="param.step" v-model.number="param.value.value" />
-            <input type="number" :min="param.min" :max="param.max" :step="param.step" v-model.number="param.value.value"
-              class="value-input" />
-          </div>
-          <button
-            v-if="showExtraUI"
-            type="button"
-            class="programmatic-button-inline"
-            @pointerdown.prevent="handleProgrammaticPointerDown"
-            @pointerup="handleProgrammaticPointerUp"
-            @pointerleave="handleProgrammaticPointerCancel"
-            @pointercancel="handleProgrammaticPointerCancel"
-            @blur="handleProgrammaticPointerCancel"
-            @keydown.space.prevent="handleProgrammaticKeyDown"
-            @keyup.space.prevent="handleProgrammaticKeyUp"
-            @keydown.enter.prevent="handleProgrammaticKeyDown"
-            @keyup.enter.prevent="handleProgrammaticKeyUp"
-          >
-            Programmatic Splat
-          </button>
-        </div>
-      </div>
+      <!-- Minimal mode: hide parameter panel and extras -->
       <div class="canvas-column">
         <div class="canvas-group">
           <div class="canvas-wrapper" ref="canvasWrapperRef">
@@ -52,66 +43,11 @@
               <span>{{ isCapturing ? 'Capturing…' : 'Capture' }}</span>
             </button>
           </div>
-          <div v-if="showExtraUI" class="capture-hint">Shift-click the capture button for a lossless PNG capture.</div>
-          <div v-if="showExtraUI && captureError" class="capture-error">{{ captureError }}</div>
-          <div v-if="showExtraUI" class="screenshot-gallery">
-            <div class="gallery-header">
-              <span>Recent Captures</span>
-              <span class="gallery-count">{{ screenshots.length }} / {{ screenshotStore.maxItems }}</span>
-            </div>
-            <div v-if="screenshots.length" class="gallery-strip">
-              <button
-                v-for="shot in screenshots"
-                :key="shot.id"
-                type="button"
-                class="gallery-item"
-                :title="`${shot.label} • ${shot.width}x${shot.height}`"
-                @click="handlePreview(shot)"
-              >
-                <img :src="shot.blobUrl" alt="" />
-                <div class="gallery-item-label">
-                  <span>{{ shot.label }}</span>
-                  <span>{{ shot.debugMode }}</span>
-                </div>
-              </button>
-            </div>
-            <div v-else class="gallery-empty">Captured screenshots will appear here.</div>
-          </div>
+          
         </div>
       </div>
     </div>
 
-    <div v-if="showExtraUI" class="below-row">
-      <div class="instructions">
-        <h2>Fluid Simulation Playground</h2>
-        <p>Drag on the canvas to interact with the fluid.</p>
-        <p>Press <strong>P</strong> to pause/resume. Press <strong>1-6</strong> or <strong>[ ]</strong> to cycle debug
-          views.</p>
-
-        <div class="debug-info">
-          <h3>{{ currentDebugInfo.title }}</h3>
-          <p>{{ currentDebugInfo.description }}</p>
-        </div>
-
-        <div class="debug-shortcuts">
-          <strong>Quick Keys:</strong> 1-Dye | 2-Velocity | 3-Divergence | 4-Pressure | 5-Splat | 6-Splat Raw | [ ] Cycle
-        </div>
-      </div>
-      <div class="chat-wrapper">
-        <FluidChat />
-      </div>
-    </div>
-
-    <div v-if="showExtraUI && previewShot" class="screenshot-preview-overlay" @click.self="closePreview">
-      <div class="screenshot-preview-card">
-        <button type="button" class="preview-close" @click="closePreview">×</button>
-        <div class="preview-meta">
-          <span class="preview-label">{{ previewShot.label }}</span>
-          <span class="preview-details">{{ previewShot.debugMode }} • {{ previewShot.width }}×{{ previewShot.height }}</span>
-        </div>
-        <img :src="previewShot.blobUrl" alt="" class="preview-image" />
-      </div>
-    </div>
 
     <!-- <WebGPUTest /> -->
   </div>
@@ -128,6 +64,44 @@ const state = inject<FluidReactionAppState>(appStateName)!!
 const width = computed(() => state.width)
 const height = computed(() => state.height)
 const canvasWrapperRef = ref<HTMLDivElement>()
+
+const haikuText = computed({
+  get: () => state.haikuText.value,
+  set: (value: string) => {
+    state.haikuText.value = value
+  },
+})
+
+const isHaikuAnimating = computed(() => state.isHaikuAnimating.value)
+const isProcessing = ref(false)
+const canRunAnalysis = computed(() => Boolean(state.startHaikuPipeline.value) && !!haikuText.value.trim() && !state.isHaikuAnimating.value)
+const canRunTest = computed(() => false)
+const pipelineError = ref<string | null>(null)
+
+async function runPipeline(skipMusic = false, useTestData = false) {
+  pipelineError.value = null
+  const runner = state.startHaikuPipeline.value
+  if (!runner) {
+    pipelineError.value = 'Sketch pipeline is not ready yet.'
+    return
+  }
+  try {
+    isProcessing.value = true
+    await runner(skipMusic, useTestData)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to run haiku animation'
+    pipelineError.value = message
+    console.error('[fluid] haiku pipeline failed', err)
+  } finally {
+    isProcessing.value = false
+  }
+}
+
+function handleRunAnalysis() {
+  void runPipeline(false, false)
+}
+
+function handleRunTestGraphics() { /* hidden in minimal UI */ }
 
 const screenshotStore = useScreenshotStore()
 const isCapturing = computed(() => screenshotStore.isCapturing.value)
@@ -291,6 +265,117 @@ onUnmounted(() => {
   background: #08090f;
   color: #dde0ff;
   min-height: 100vh;
+}
+
+.haiku-controls {
+  width: 100%;
+  max-width: 960px;
+  background: rgba(10, 12, 26, 0.92);
+  border: 1px solid rgba(124, 156, 255, 0.25);
+  border-radius: 18px;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 0 32px 60px rgba(4, 6, 16, 0.55);
+  backdrop-filter: blur(8px);
+}
+
+.haiku-controls__header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #f4f6ff;
+}
+
+.haiku-controls__header p {
+  margin: 6px 0 0;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: rgba(221, 224, 255, 0.75);
+}
+
+.control-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field-label {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(221, 224, 255, 0.65);
+}
+
+.control-field input,
+.control-field textarea {
+  background: rgba(18, 20, 36, 0.95);
+  border: 1px solid rgba(124, 156, 255, 0.35);
+  border-radius: 10px;
+  color: #dde0ff;
+  padding: 12px 14px;
+  font-size: 0.95rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  font-family: 'Inter', sans-serif;
+}
+
+.control-field input:focus,
+.control-field textarea:focus {
+  border-color: rgba(162, 190, 255, 0.85);
+  box-shadow: 0 0 0 3px rgba(90, 122, 255, 0.35);
+  outline: none;
+}
+
+.control-field textarea {
+  min-height: 140px;
+  resize: vertical;
+}
+
+.haiku-controls__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.haiku-button {
+  flex: 1 1 200px;
+  border-radius: 999px;
+  border: 1px solid rgba(160, 184, 255, 0.35);
+  padding: 12px 18px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease;
+  color: #f3f5ff;
+  background: linear-gradient(135deg, rgba(91, 119, 255, 0.95), rgba(148, 87, 255, 0.95));
+}
+
+.haiku-button.secondary {
+  background: rgba(28, 32, 52, 0.9);
+  border-color: rgba(126, 150, 255, 0.3);
+}
+
+.haiku-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 32px rgba(70, 104, 255, 0.35);
+}
+
+.haiku-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.haiku-controls__status {
+  font-size: 0.85rem;
+  color: rgba(172, 189, 255, 0.85);
+}
+
+.haiku-controls__error {
+  font-size: 0.85rem;
+  color: #ff9aa2;
 }
 
 
@@ -739,5 +824,67 @@ canvas {
   .controls-slot .controls {
     transition: none;
   }
+}
+
+/* Minimal UI overrides */
+.haiku-controls.minimal {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  max-width: 720px;
+  gap: 12px;
+  align-items: center;
+  --haiku-width: 300px;
+}
+
+.minimal-header {
+  color: #dde0ff;
+  font-size: 0.95rem;
+  letter-spacing: 0.02em;
+}
+
+.haiku-input {
+  width: var(--haiku-width);
+  min-height: 140px;
+  resize: none;
+  background: #000;
+  color: #fff;
+  border: 1px solid #3a3f5a;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 0.95rem;
+}
+
+.haiku-input:focus {
+  outline: none;
+  border-color: #5a6280;
+}
+
+.haiku-ready {
+  align-self: center;
+  background: #08090f; /* match container */
+  color: #dde0ff;
+  border: 1px solid #3a3f5a;
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-size: 0.95rem;
+  cursor: pointer;
+  width: var(--haiku-width);
+  text-align: left;
+}
+
+.haiku-ready:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* Fade for preparing status */
+.fade-enter-active, .fade-leave-active { transition: opacity 200ms ease; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+
+:global(body) {
+  background: #05060f;
+  color: #dde0ff;
 }
 </style>

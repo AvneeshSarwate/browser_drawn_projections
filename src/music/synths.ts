@@ -176,6 +176,123 @@ export function getPianoChain() {
   }
 }
 
+export function getPianoChain2() {
+  const piano = getPiano(false)
+  const distortion = new Tone.Distortion(0.1)
+  const chorus = new Tone.Chorus(2, 2, 0.3)
+  const filter = new Tone.Filter(20000, 'lowpass')
+  const delay = new Tone.FeedbackDelay(0.5, 0.1)
+  const delayDistortion = new Tone.Distortion(0.1)
+  const delayFilter = new Tone.Filter(8000, 'lowpass')
+  const delayFilterLFO = new Tone.LFO({ frequency: 0.3, min: 400, max: 10000 })
+  const delayCrossfader = new Tone.CrossFade(0)
+  const reverb = new Tone.Freeverb()
+  const gain = new Tone.Gain(1)
+  const panner = new Tone.Panner(0)
+
+  chorus.spread = 90
+  chorus.frequency.value = 2
+  chorus.feedback.value = 0.8
+
+  delayFilterLFO.connect(delayFilter.frequency)
+  delayFilterLFO.start()
+
+  piano.connect(distortion)
+  distortion.connect(chorus)
+  chorus.connect(filter)
+  filter.connect(delayCrossfader.a)
+  filter.connect(delay)
+  delay.connect(delayDistortion)
+  delayDistortion.connect(delayFilter)
+  delayFilter.connect(delayCrossfader.b)
+  delayCrossfader.connect(reverb)
+  reverb.connect(gain)
+  gain.connect(panner)
+  panner.connect(Tone.getDestination())
+
+  const paramScaling = {
+    distortion: (val: number) => val,
+    chorusWet: (val: number) => val,
+    chorusDepth: (val: number) => val,
+    chorusRate: (val: number) => 0.1 + val ** 2 * 20,
+    filterFreq: (val: number) => 20000 * val ** 2,
+    filterRes: (val: number) => val * 10,
+    delayTime: (val: number) => val ** 2,
+    delayFeedback: (val: number) => val,
+    delayMix: (val: number) => val,
+    delayDistortion: (val: number) => val,
+    delayFilterFreq: (val: number) => 400 + val ** 2 * (10000 - 400),
+    delayFilterRes: (val: number) => val * 10,
+    delayLFORate: (val: number) => 0.05 + val ** 2 * 10,
+    delayLFODepth: (val: number) => val,
+    reverb: (val: number) => val,
+    gain: (val: number) => val * 5,
+    pan: (val: number) => (val - 0.5) * 2
+  }
+
+  const paramFuncs = {
+    distortion: (val: number) => distortion.distortion = paramScaling.distortion(val),
+    chorusWet: (val: number) => chorus.wet.value = paramScaling.chorusWet(val),
+    chorusDepth: (val: number) => chorus.depth = paramScaling.chorusDepth(val),
+    chorusRate: (val: number) => chorus.delayTime = paramScaling.chorusRate(val),
+    filterFreq: (val: number) => filter.frequency.value = paramScaling.filterFreq(val),
+    filterRes: (val: number) => filter.Q.value = paramScaling.filterRes(val),
+    delayTime: (val: number) => delay.delayTime.rampTo(paramScaling.delayTime(val), 0.01),
+    delayFeedback: (val: number) => delay.feedback.value = paramScaling.delayFeedback(val),
+    delayMix: (val: number) => delayCrossfader.fade.value = paramScaling.delayMix(val),
+    delayDistortion: (val: number) => delayDistortion.distortion = paramScaling.delayDistortion(val),
+    delayFilterFreq: (val: number) => delayFilter.frequency.value = paramScaling.delayFilterFreq(val),
+    delayFilterRes: (val: number) => delayFilter.Q.value = paramScaling.delayFilterRes(val),
+    delayLFORate: (val: number) => delayFilterLFO.frequency.value = paramScaling.delayLFORate(val),
+    delayLFODepth: (val: number) => delayFilterLFO.amplitude.value = paramScaling.delayLFODepth(val),
+    reverb: (val: number) => reverb.wet.value = paramScaling.reverb(val),
+    gain: (val: number) => gain.gain.value = paramScaling.gain(val),
+    pan: (val: number) => panner.pan.value = paramScaling.pan(val)
+  }
+
+  const defaultParams = {
+    distortion: 0,
+    chorusWet: 0,
+    chorusDepth: 0.3,
+    chorusRate: 0.2,
+    filterFreq: 1.0,
+    filterRes: 0.5,
+    delayTime: 0.5,
+    delayFeedback: 0.1,
+    delayMix: 0,
+    delayDistortion: 0,
+    delayFilterFreq: 0.6,
+    delayFilterRes: 0.3,
+    delayLFORate: 0.3,
+    delayLFODepth: 0.5,
+    reverb: 0,
+    gain: 0.2,
+    pan: 0.5
+  }
+
+  Object.keys(defaultParams).forEach(param => {
+    paramFuncs[param as keyof typeof paramFuncs](defaultParams[param as keyof typeof defaultParams])
+  })
+
+  return {
+    instrument: piano,
+    distortion,
+    chorus,
+    filter,
+    delay,
+    delayDistortion,
+    delayFilter,
+    delayFilterLFO,
+    reverb,
+    gain,
+    panner,
+    paramFuncs,
+    paramNames: Object.keys(paramFuncs),
+    defaultParams,
+    paramScaling
+  }
+}
+
 
 
 

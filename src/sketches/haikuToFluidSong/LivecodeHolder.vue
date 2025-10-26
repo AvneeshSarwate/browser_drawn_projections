@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { inject, onMounted, onUnmounted, ref, watch, type WatchStopHandle } from 'vue'
 import type * as BABYLON from 'babylonjs'
-import { appStateName, engineRef, type FluidReactionAppState, type FluidDebugMode } from './appState'
+import { appStateName, engineRef, DEFAULT_HAIKU, type FluidReactionAppState, type FluidDebugMode } from './appState'
 import { CanvasPaint, type ShaderEffect } from '@/rendering/shaderFXBabylon'
 import {
   FluidSimulationEffect,
@@ -13,7 +13,7 @@ import { TimeContext, launch } from '@/channels/base_time_context'
 import { type CancelablePromisePoxy } from '@/channels/channels'
 import { normalizedMetadata, calculateLineLayout, sampleEntryIndexInLine } from './alphabet_groups'
 import { AbletonClip, quickNote, type AbletonNote } from '@/io/abletonClips'
-import { getPiano, getPianoChain, TONE_AUDIO_START } from '@/music/synths'
+import { getPianoChain2, TONE_AUDIO_START } from '@/music/synths'
 import { m2f } from '@/music/mpeSynth'
 import * as Tone from 'tone'
 import { adjustExpressiveColor } from './colorUtils'
@@ -92,6 +92,7 @@ function disposeGraph(): void {
   splatDebugEffect?.dispose()
   splatDebugEffect = undefined
   state.debugMode.value = 'dye'
+  state.isHaikuAnimating.value = false
   fluidCanvas = undefined
   programmaticSplatActive = false
   programmaticSplatStartTime = undefined
@@ -199,10 +200,18 @@ function attachPointerHandlers(canvas: HTMLCanvasElement, pointerState: PointerS
     applyNormalizedPointerUpdate(pointerState, nx, ny, canvas)
   }
 
+  const pointerInteractionBlocked = () => state.isHaikuAnimating.value
+
   const handleMove = (event: PointerEvent) => {
+    if (pointerInteractionBlocked()) {
+      return
+    }
     updateFromEvent(event)
   }
   const handleDown = (event: PointerEvent) => {
+    if (pointerInteractionBlocked()) {
+      return
+    }
     pointerState.down = true
     canvas.setPointerCapture(event.pointerId)
     updateFromEvent(event)
@@ -216,6 +225,9 @@ function attachPointerHandlers(canvas: HTMLCanvasElement, pointerState: PointerS
     pointerState.moved = false
     if (canvas.hasPointerCapture(event.pointerId)) {
       canvas.releasePointerCapture(event.pointerId)
+    }
+    if (pointerInteractionBlocked()) {
+      return
     }
     updateFromEvent(event)
   }
@@ -729,11 +741,12 @@ const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromis
 }
 
 //todo - need some kind of checking to line up notes and syllables for non-haiku input or syllable miscount from claude
-const haiku = ref(`A world of soft dew,
-And within every dewdrop
-A world of struggle.`)
+const haiku = state.haikuText
+haiku.value = DEFAULT_HAIKU
 
-const apiKey = ref('')
+const apiKey = state.apiKey
+apiKey.value = ''
+state.startHaikuPipeline.value = startPipeline
 
 const testHaikuMetadata = {
   "mood": "Contemplative melancholy with underlying resilience",
@@ -953,15 +966,19 @@ ${haiku.value}`
   }
 }
 
-// const piano = getPiano()
-const pianoChain = getPianoChain()
+const pianoChain = getPianoChain2()
 pianoChain.paramFuncs.gain(1)
-pianoChain.paramFuncs.delayMix(0.5)
+pianoChain.paramFuncs.delayMix(0.6)
 pianoChain.paramFuncs.delayTime(0.75)
+pianoChain.paramFuncs.delayFeedback(0.35)
+pianoChain.paramFuncs.delayDistortion(0.45)
+pianoChain.paramFuncs.delayFilterFreq(0.55)
+pianoChain.paramFuncs.delayFilterRes(0.25)
+pianoChain.paramFuncs.delayLFORate(0.4)
+pianoChain.paramFuncs.delayLFODepth(0.65)
 pianoChain.paramFuncs.chorusWet(0.8)
 pianoChain.paramFuncs.chorusDepth(0.4)
 pianoChain.paramFuncs.chorusRate(1.2)
-// pianoChain.paramFuncs.reverb(0.7)
 const piano = pianoChain.instrument
 
 const playNote = (pitch: number, velocity: number, ctx: TimeContext, noteDur: number) => {
@@ -984,114 +1001,123 @@ async function startPipeline(skipMusic: boolean = false, useTestData: boolean = 
 }
 
 function launchProgrammaticPointer(melodies: AbletonClip[], colors: {readonly r: number, readonly g: number, readonly b: number}[], skipMusic: boolean = false) {
-  launchLoop(async (ctx) => {
-    if (!fluidCanvas) {
-      console.warn('[fluid] launchProgrammaticPointer: fluid canvas not ready')
-      return
-    }
-
-    resetSyntheticPointer(fluidPointer)
-
-    const text = haiku.value
-    const lines = text.split('\n')
-      .map(cleanupLine)
-      .filter(line => line.length > 0)
-    const spaceWidth = 60
-    const kernWidth = 16
-    const width = fluidCanvas.width
-    const height = fluidCanvas.height
-    const scale = 2
-
-    const runTime = 12
-
-    for (const [i, line] of lines.entries()) {
-      console.log('line', line)
-      const layout = calculateLineLayout(line, {
-        scale,
-        spaceWidth,
-        kernWidth,
-        maxLineWidth: width * 0.7,
-        canvasWidth: width,
-        canvasHeight: height,
-        horizontalAlign: 'center',
-        verticalAlign: 'middle',
-      })
-
-      if (layout.positions.length === 0) {
-        console.warn('[fluid] launchProgrammaticPointer: no glyph data available for line')
-        continue
+  state.isHaikuAnimating.value = true
+  const pointerLoop = launchLoop(async (ctx) => {
+    try {
+      if (!fluidCanvas) {
+        console.warn('[fluid] launchProgrammaticPointer: fluid canvas not ready')
+        return
       }
 
-      
-      const startTime = ctx.time
+      resetSyntheticPointer(fluidPointer)
 
-      if (melodies && melodies[i] && !skipMusic) {
-        launchLoop(async ctx => {
-          const durBeats = melodies[i].duration
-          const durSec = durBeats * ctx.bpm / 60
-          const stretchFactor = runTime / durSec
-          const newClip = melodies[i].scale(stretchFactor)
-          for (const note of newClip.noteBuffer()) {
-            // console.log('times', note.preDelta, note.postDelta ?? 0)
-            await ctx.wait(note.preDelta)
-            playNote(note.note.pitch, note.note.velocity, ctx, note.note.duration)
-            await ctx.wait(note.postDelta ?? 0)
-          }
+      const text = haiku.value
+      const lines = text.split('\n')
+        .map(cleanupLine)
+        .filter(line => line.length > 0)
+      const spaceWidth = 60
+      const kernWidth = 16
+      const width = fluidCanvas.width
+      const height = fluidCanvas.height
+      const scale = 2
+
+      const runTime = 12
+
+      for (const [i, line] of lines.entries()) {
+        console.log('line', line)
+        const layout = calculateLineLayout(line, {
+          scale,
+          spaceWidth,
+          kernWidth,
+          maxLineWidth: width * 0.7,
+          canvasWidth: width,
+          canvasHeight: height,
+          horizontalAlign: 'center',
+          verticalAlign: 'middle',
         })
-      }
 
-      while (ctx.time - startTime < runTime) {
-        const t = Math.min((ctx.time - startTime) / runTime, 1)
-        const sample = sampleEntryIndexInLine(line, t, layout)
-        const canvasX = sample.x
-        const canvasY = sample.y
+        if (layout.positions.length === 0) {
+          console.warn('[fluid] launchProgrammaticPointer: no glyph data available for line')
+          continue
+        }
+
+
+        const startTime = ctx.time
+
+        if (melodies && melodies[i] && !skipMusic) {
+          launchLoop(async ctx => {
+            const durBeats = melodies[i].duration
+            const durSec = durBeats * ctx.bpm / 60
+            const stretchFactor = runTime / durSec
+            const newClip = melodies[i].scale(stretchFactor)
+            for (const note of newClip.noteBuffer()) {
+              // console.log('times', note.preDelta, note.postDelta ?? 0)
+              await ctx.wait(note.preDelta)
+              playNote(note.note.pitch, note.note.velocity, ctx, note.note.duration)
+              await ctx.wait(note.postDelta ?? 0)
+            }
+          })
+        }
+
+        while (ctx.time - startTime < runTime) {
+          const t = Math.min((ctx.time - startTime) / runTime, 1)
+          const sample = sampleEntryIndexInLine(line, t, layout)
+          const canvasX = sample.x
+          const canvasY = sample.y
+          updateSyntheticPointerFrame({
+            canvasX,
+            canvasY,
+            down: true,
+            color: colors[i] ?? { r: 255, g: 0, b: 0 },
+          })
+          await ctx.waitSec(0.016)
+        }
+
+        const finalSample = sampleEntryIndexInLine(line, 1, layout)
         updateSyntheticPointerFrame({
-          canvasX,
-          canvasY,
-          down: true,
-          color: colors[i] ?? { r: 255, g: 0, b: 0 },
+          canvasX: finalSample.x,
+          canvasY: finalSample.y,
+          down: false,
         })
-        await ctx.waitSec(0.016)
+
+        const densityParam = state.fluidParams?.find(p => p.name === 'densityDissipation')!
+
+        //ramp density disappation up to 1
+        const rampUpTime = 0.5
+        const upStartTime = ctx.time
+        while (ctx.time - upStartTime < rampUpTime) {
+          const rampProgress = (ctx.time - upStartTime) / rampUpTime
+          // fluidSim?.setUniforms({dyeDissipation: 0.18 + rampProgress*0.82})
+          densityParam.value.value = 0.18 + rampProgress * 1.3
+          await ctx.waitSec(0.016)
+        }
+
+        await ctx.waitSec(4)
+
+
+        //ramp density dissapation down to 0.18
+        const rampDownTime = 0.5
+        const downStartTime = ctx.time
+        while (ctx.time - downStartTime < rampDownTime) {
+          const rampProgress = (ctx.time - downStartTime) / rampDownTime
+          // fluidSim?.setUniforms({dyeDissipation: 0.18 + (1-rampProgress)*0.82})
+          densityParam.value.value = 0.18 + (1 - rampProgress) * 1.3
+          await ctx.waitSec(0.016)
+        }
       }
 
-      const finalSample = sampleEntryIndexInLine(line, 1, layout)
       updateSyntheticPointerFrame({
-        canvasX: finalSample.x,
-        canvasY: finalSample.y,
+        canvasX: width * 0.5,
+        canvasY: height * 0.5,
         down: false,
       })
-
-      const densityParam = state.fluidParams?.find(p => p.name === 'densityDissipation')!
-
-      //ramp density disappation up to 1
-      const rampUpTime = 0.5
-      const upStartTime = ctx.time
-      while (ctx.time - upStartTime < rampUpTime) {
-        const rampProgress = (ctx.time - upStartTime) / rampUpTime
-        // fluidSim?.setUniforms({dyeDissipation: 0.18 + rampProgress*0.82})
-        densityParam.value.value = 0.18 + rampProgress * 1.3
-        await ctx.waitSec(0.016)
-      }
-
-      await ctx.waitSec(4)
-
-      
-      //ramp density dissapation down to 0.18
-      const rampDownTime = 0.5
-      const downStartTime = ctx.time
-      while (ctx.time - downStartTime < rampDownTime) {
-        const rampProgress = (ctx.time - downStartTime) / rampDownTime
-        // fluidSim?.setUniforms({dyeDissipation: 0.18 + (1-rampProgress)*0.82})
-        densityParam.value.value = 0.18 + (1 - rampProgress) * 1.3
-        await ctx.waitSec(0.016)
-      }
+    } finally {
+      state.isHaikuAnimating.value = false
     }
+  })
 
-    updateSyntheticPointerFrame({
-      canvasX: width * 0.5,
-      canvasY: height * 0.5,
-      down: false,
-    })
+  pointerLoop.finally(() => {
+    state.isHaikuAnimating.value = false
   })
 }
 
@@ -1127,13 +1153,13 @@ onUnmounted(() => {
   engineWatcher = undefined
   disposeGraph()
   clearListeners()
+  state.haikuText.value = DEFAULT_HAIKU
+  state.apiKey.value = ''
+  state.startHaikuPipeline.value = null
+  state.isHaikuAnimating.value = false
 })
 </script>
 
 <template>
-  <div />
-  <input v-model="apiKey" type="password" placeholder="Claude API Key" />
-  <button @click="() => startPipeline(false, false)">Analyze & Run</button>
-  <button @click="() => startPipeline(true, true)">test data graphics</button>
-  <textarea v-model="haiku" placeholder="Enter haiku here" />
+  <div></div>
 </template>

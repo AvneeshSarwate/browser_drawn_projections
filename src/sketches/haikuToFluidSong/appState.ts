@@ -1,6 +1,12 @@
 import type * as BABYLON from 'babylonjs'
 import { shallowRef, ref, type Ref } from 'vue'
 
+export const DEFAULT_HAIKU = `A world of soft dew,
+And within every dewdrop
+A world of struggle.`
+
+export type HaikuPipelineRunner = (skipMusic?: boolean, useTestData?: boolean) => Promise<void>
+
 export interface ParamDef {
   name: string
   label: string
@@ -28,6 +34,10 @@ export interface FluidReactionAppState {
   reactionParams?: ParamDef[]
   debugMode: Ref<FluidDebugMode>
   programmaticSplat: ProgrammaticSplatControl
+  haikuText: Ref<string>
+  apiKey: Ref<string>
+  startHaikuPipeline: Ref<HaikuPipelineRunner | null>
+  isHaikuAnimating: Ref<boolean>
 }
 
 export const appState: FluidReactionAppState = {
@@ -42,6 +52,10 @@ export const appState: FluidReactionAppState = {
     active: ref(false),
     restartToken: ref(0),
   },
+  haikuText: ref(DEFAULT_HAIKU),
+  apiKey: ref(''),
+  startHaikuPipeline: ref<HaikuPipelineRunner | null>(null),
+  isHaikuAnimating: ref(false),
 }
 
 export const appStateName = 'fluidReactionAppState'
