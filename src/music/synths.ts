@@ -427,25 +427,29 @@ export function getFMSynthChain() {
     modulation: { type: "square" },         // modulator
     envelope: { attack: 1, decay: 0.2, sustain: 1, release: 10.0 },
     modulationEnvelope: { attack: 2, decay: 0.1, sustain: 1.0, release: 5 }
-  }).toDestination();
+  });
   
   const distortion = new Tone.Distortion(0.1)
   const chorus = new Tone.Chorus(2, 2, 0.3)
   const filter = new Tone.Filter(1000, 'lowpass')
   const delay = new Tone.FeedbackDelay(0.5, 0.1)
   const delayCrossfader = new Tone.CrossFade(0)
+  const filter2 = new Tone.Filter(1000, 'lowpass')
   const reverb = new Tone.Freeverb()
+  const phaser = new Tone.Phaser(0.2)
   const gain = new Tone.Gain(1)
   const panner = new Tone.Panner(0)
-
+  
   synth.connect(distortion)
   distortion.connect(chorus)
   chorus.connect(filter)
   filter.connect(delayCrossfader.a)
   filter.connect(delay)
   delay.connect(delayCrossfader.b)
-  delayCrossfader.connect(reverb)
-  reverb.connect(gain)
+  delayCrossfader.connect(filter2)
+  filter2.connect(reverb)
+  reverb.connect(phaser)
+  phaser.connect(gain)
   gain.connect(panner)
   panner.connect(Tone.getDestination())
 
@@ -495,6 +499,8 @@ export function getFMSynthChain() {
     chorusRate: (val: number) => chorus.delayTime = paramScaling.chorusRate(val),
     filterFreq: (val: number) => filter.frequency.value = paramScaling.filterFreq(val),
     filterRes: (val: number) => filter.Q.value = paramScaling.filterRes(val),
+    filter2Freq: (val: number) => filter2.frequency.value = paramScaling.filterFreq(val),
+    filter2Res: (val: number) => filter2.Q.value = paramScaling.filterRes(val),
     delayTime: (val: number) => delay.delayTime.value = paramScaling.delayTime(val),
     delayFeedback: (val: number) => delay.feedback.value = paramScaling.delayFeedback(val),
     delayMix: (val: number) => delayCrossfader.fade.value = paramScaling.delayMix(val),
@@ -507,17 +513,19 @@ export function getFMSynthChain() {
   const defaultParams = {
     attack: 1,
     decay: 0.1,
-    sustain: 0.1,
-    release: 0.1,
+    sustain: 1,
+    release: 0.3,
     distortion: 0.1,
-    chorusWet: 0.1,
+    chorusWet: 0.4,
     chorusDepth: 0.3,
     chorusRate: 0.2,
-    filterFreq: 1.0,
+    filterFreq: 0.6,
     filterRes: 0.5,
+    filter2Freq: 0.35,
+    filter2Res: 0.5,
     delayTime: 0.5,
-    delayFeedback: 0.1,
-    delayMix: 0.0,
+    delayFeedback: 0.8,
+    delayMix: 0.4,
     reverb: 0.1,
     gain: 0.2,
     pan: 0.5
