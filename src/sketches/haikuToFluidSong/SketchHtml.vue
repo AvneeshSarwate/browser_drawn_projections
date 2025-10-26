@@ -33,27 +33,48 @@
       <p v-if="pipelineError" class="haiku-controls__error">{{ pipelineError }}</p>
     </section>
     <div class="canvas-controls-wrapper center-canvas">
-      <button class="param-toggle" @click="showParamWindow = !showParamWindow" :class="{ collapsed: !showParamWindow }">
+      <button
+        type="button"
+        class="param-toggle"
+        @click="toggleParamWindow"
+        :aria-expanded="showParamWindow ? 'true' : 'false'"
+        :class="{ collapsed: !showParamWindow }"
+      >
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
           <path d="M4 2 L8 6 L4 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </button>
-      <!-- Minimal mode: hide parameter panel and extras -->
+      <div
+        class="controls-slot"
+        :class="{ collapsed: !showParamWindow }"
+        :aria-hidden="showParamWindow ? 'false' : 'true'"
+      >
+        <div class="controls">
+          <div class="control-group" v-for="param in fluidParams" :key="param.name">
+            <label :for="`fluid-param-${param.name}`">{{ param.label }}</label>
+            <input
+              :id="`fluid-param-${param.name}`"
+              type="range"
+              :min="param.min"
+              :max="param.max"
+              :step="param.step"
+              v-model.number="param.value.value"
+            />
+            <input
+              type="number"
+              :min="param.min"
+              :max="param.max"
+              :step="param.step"
+              v-model.number="param.value.value"
+              class="value-input"
+            />
+          </div>
+        </div>
+      </div>
       <div class="canvas-column">
         <div class="canvas-group">
           <div class="canvas-wrapper" ref="canvasWrapperRef">
             <canvas id="fluidCanvas" :width="width" :height="height"></canvas>
-            <button
-              v-if="showExtraUI"
-              type="button"
-              class="capture-button"
-              :disabled="isCapturing"
-              :aria-busy="isCapturing ? 'true' : 'false'"
-              :title="isCapturing ? 'Capturing…' : 'Capture screenshot (shift-click for PNG)'"
-              @click="handleCapture($event)"
-            >
-              <span>{{ isCapturing ? 'Capturing…' : 'Capture' }}</span>
-            </button>
           </div>
           
         </div>
@@ -180,18 +201,6 @@ const debugModeDescriptions: Record<FluidDebugMode, { title: string; description
 
 const currentDebugInfo = computed(() => debugModeDescriptions[state.debugMode.value])
 
-async function handleCapture(event?: MouseEvent) {
-  captureError.value = null
-  const lossless = event?.shiftKey ?? false
-  try {
-    await screenshotStore.capture({ lossless })
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Failed to capture screenshot'
-    captureError.value = message
-    console.error('[fluid] screenshot capture failed', err)
-  }
-}
-
 function handlePreview(shot: Screenshot) {
   previewShot.value = shot
 }
@@ -204,6 +213,15 @@ const programmaticSplat = state.programmaticSplat
 const programmaticKeyActive = ref(false)
 const showParamWindow = ref(false)
 const showExtraUI = ref(false)
+
+function toggleParamWindow() {
+  const next = !showParamWindow.value
+  showParamWindow.value = next
+  showExtraUI.value = next
+  requestAnimationFrame(() => {
+    updateCanvasScale()
+  })
+}
 
 function startProgrammaticSplat() {
   programmaticSplat.restartToken.value += 1
