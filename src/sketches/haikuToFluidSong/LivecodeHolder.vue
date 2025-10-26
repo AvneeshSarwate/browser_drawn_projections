@@ -18,6 +18,7 @@ import { m2f } from '@/music/mpeSynth'
 import * as Tone from 'tone'
 import { adjustExpressiveColor } from './colorUtils'
 import { generateHaikuTransformPipelines, transformHaikuClips } from './haikuMelodyTransforms'
+import { generateHaikuSynthPreset } from './haikuSynthPreset'
 
 console.log(normalizedMetadata.map(g => [g.metadata!.name, g.metadata!.baseline]).sort())
 
@@ -963,9 +964,10 @@ Haiku:
 
 ${haiku.value}`
 
-  const [baseMetadata, creativeMetadata] = await Promise.all([
+  const [baseMetadata, creativeMetadata, synthPreset] = await Promise.all([
     requestClaudeJson<HaikuMetadataBase>(basePrompt, 0, signal),
     requestClaudeJson<HaikuCreativeMetadata>(creativePrompt, 1, signal),
+    generateHaikuSynthPreset(apiKey.value, haiku.value),
   ])
 
   if (!Array.isArray(creativeMetadata.pitches) || creativeMetadata.pitches.length !== 5) {
@@ -983,6 +985,13 @@ ${haiku.value}`
   //todo - instead of trying to saturate the colors, just get claude to generate named colors from a list?
 ~  console.log('Original colors:', originalColors)
   console.log('Saturated colors:', saturatedColors)
+
+  console.log('Synth preset:', synthPreset)
+  Object.entries(synthPreset).forEach(([param, value]) => {
+    if (param in fmChain.paramFuncs) {
+      fmChain.paramFuncs[param as keyof typeof fmChain.paramFuncs](value)
+    }
+  })
 
   return {
     ...baseMetadata,
@@ -1025,7 +1034,7 @@ const playNote = (pitch: number, velocity: number, ctx: TimeContext, noteDur: nu
 }
 
 async function startPipeline(skipMusic: boolean = false, useTestData: boolean = false) {
-  useTestData = true
+  // useTestData = true
   cancelPipeline()
   const abortController = new AbortController()
   currentPipelineAbort = abortController
