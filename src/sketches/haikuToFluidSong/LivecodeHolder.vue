@@ -1048,13 +1048,13 @@ async function startPipeline(skipMusic: boolean = false, useTestData: boolean = 
     if (useTestData) {
       transformedMelodies = rawMelodies
     } else {
-    const pipelines = await generateHaikuTransformPipelines(apiKey.value, haiku.value)
-    if (abortController.signal.aborted) {
-      return
-    }
+      const pipelines = await generateHaikuTransformPipelines(apiKey.value, haiku.value)
+      if (abortController.signal.aborted) {
+        return
+      }
 
       transformedMelodies = transformHaikuClips(rawMelodies, pipelines)
-    console.log('Transformation pipelines:', Array.from(pipelines.entries()))
+      console.log('Transformation pipelines:', Array.from(pipelines.entries()))
     }
 
     launchProgrammaticPointer(transformedMelodies, haikuMetadata.colorByLine, skipMusic)
