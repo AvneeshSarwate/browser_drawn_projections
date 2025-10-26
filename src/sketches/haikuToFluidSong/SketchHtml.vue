@@ -8,15 +8,28 @@
         rows="5"
         spellcheck="false"
       ></textarea>
-      <button
-        type="button"
-        class="haiku-ready"
-        :class="{ status: isStatusActive }"
-        :disabled="!canRunAnalysis"
-        @click="handleRunAnalysis"
-      >
-        {{ buttonLabel }}
-      </button>
+      <div class="haiku-actions">
+        <button
+          type="button"
+          class="haiku-ready"
+          :class="{ status: isStatusActive }"
+          :disabled="!canRunAnalysis"
+          @click="handleRunAnalysis"
+        >
+          {{ buttonLabel }}
+        </button>
+        <transition name="cancel-slide">
+          <div v-if="canCancel" class="haiku-cancel-wrapper">
+            <button
+              type="button"
+              class="haiku-cancel"
+              @click="handleCancel"
+            >
+              cancel
+            </button>
+          </div>
+        </transition>
+      </div>
       <p v-if="pipelineError" class="haiku-controls__error">{{ pipelineError }}</p>
     </section>
     <div class="canvas-controls-wrapper center-canvas">
@@ -84,6 +97,7 @@ const buttonLabel = computed(() => {
   }
   return 'ready'
 })
+const canCancel = computed(() => isStatusActive.value && Boolean(state.cancelHaikuPipeline.value))
 const canRunTest = computed(() => false)
 const pipelineError = ref<string | null>(null)
 
@@ -111,6 +125,10 @@ function handleRunAnalysis() {
 }
 
 function handleRunTestGraphics() { /* hidden in minimal UI */ }
+
+function handleCancel() {
+  state.cancelHaikuPipeline.value?.()
+}
 
 const screenshotStore = useScreenshotStore()
 const isCapturing = computed(() => screenshotStore.isCapturing.value)
@@ -840,12 +858,23 @@ canvas {
   gap: 12px;
   align-items: center;
   --haiku-width: 300px;
+  --cancel-width: 78px;
 }
 
 .minimal-header {
   color: #dde0ff;
   font-size: 0.95rem;
   letter-spacing: 0.02em;
+}
+
+.haiku-actions {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  width: var(--haiku-width);
+  align-items: stretch;
+  justify-content: center;
+  margin: 0 auto;
 }
 
 .haiku-input {
@@ -865,8 +894,14 @@ canvas {
   border-color: #5a6280;
 }
 
+.haiku-cancel-wrapper {
+  display: flex;
+  max-width: var(--cancel-width);
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+
 .haiku-ready {
-  align-self: center;
   background: #08090f; /* match container */
   color: #dde0ff;
   border: 1px solid #3a3f5a;
@@ -874,7 +909,8 @@ canvas {
   padding: 8px 14px;
   font-size: 0.95rem;
   cursor: pointer;
-  width: var(--haiku-width);
+  flex: 1;
+  min-width: 0;
   text-align: left;
 }
 
@@ -893,6 +929,42 @@ canvas {
 .haiku-ready.status:disabled {
   opacity: 1;
   cursor: default;
+}
+
+.haiku-cancel {
+  background: transparent;
+  color: #a0a4b8;
+  border: 1px solid #3a3f5a;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  white-space: nowrap;
+  width: 100%;
+}
+
+.haiku-cancel:hover {
+  border-color: #505b79;
+  color: #c2c7dd;
+}
+
+.cancel-slide-enter-active,
+.cancel-slide-leave-active {
+  transition: opacity 200ms ease, transform 200ms ease, max-width 200ms ease, margin 200ms ease;
+}
+
+.cancel-slide-enter-from,
+.cancel-slide-leave-to {
+  opacity: 0;
+  transform: translateX(12px);
+  max-width: 0;
+  margin-left: -10px;
+}
+
+.cancel-slide-enter-to,
+.cancel-slide-leave-from {
+  max-width: var(--cancel-width);
+  margin-left: 0;
 }
 
 :global(body) {

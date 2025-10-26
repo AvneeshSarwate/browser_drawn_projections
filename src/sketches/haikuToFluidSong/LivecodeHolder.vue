@@ -17,6 +17,7 @@ import { getPianoChain2, TONE_AUDIO_START } from '@/music/synths'
 import { m2f } from '@/music/mpeSynth'
 import * as Tone from 'tone'
 import { adjustExpressiveColor } from './colorUtils'
+import { generateHaikuTransformPipelines, transformHaikuClips } from './haikuMelodyTransforms'
 
 console.log(normalizedMetadata.map(g => [g.metadata!.name, g.metadata!.baseline]).sort())
 
@@ -746,6 +747,22 @@ const cancelAllLoops = () => {
   timeLoops = []
 }
 
+let currentPipelineAbort: AbortController | null = null
+
+const cancelPipeline = () => {
+  currentPipelineAbort?.abort()
+  currentPipelineAbort = null
+  cancelAllLoops()
+  state.programmaticSplat.active.value = false
+  state.isHaikuAnimating.value = false
+  resetSyntheticPointer(fluidPointer)
+  const densityParam = state.fluidParams?.find(p => p.name === 'densityDissipation')!
+  densityParam.value.value = 5
+  setTimeout(() => {
+    densityParam.value.value = 0.18
+  }, 1000)
+}
+
 //todo - need some kind of checking to line up notes and syllables for non-haiku input or syllable miscount from claude
 const haiku = state.haikuText
 haiku.value = DEFAULT_HAIKU
@@ -753,6 +770,7 @@ haiku.value = DEFAULT_HAIKU
 const apiKey = state.apiKey
 apiKey.value = ''
 state.startHaikuPipeline.value = startPipeline
+state.cancelHaikuPipeline.value = cancelPipeline
 
 const testHaikuMetadata = {
   "mood": "Contemplative melancholy with underlying resilience",
@@ -868,7 +886,7 @@ function haikuMetadataToMelodies(metadata: HaikuMetadata) {
   return melodies
 }
 
-async function requestClaudeJson<T>(prompt: string, temperature = 0): Promise<T> {
+async function requestClaudeJson<T>(prompt: string, temperature = 0, signal?: AbortSignal): Promise<T> {
   if (!apiKey.value) {
     throw new Error('API key is required')
   }
@@ -892,6 +910,7 @@ async function requestClaudeJson<T>(prompt: string, temperature = 0): Promise<T>
       ],
       temperature,
     }),
+    signal,
   })
 
   if (!response.ok) {
@@ -909,7 +928,7 @@ async function requestClaudeJson<T>(prompt: string, temperature = 0): Promise<T>
   return JSON.parse(jsonMatch[0])
 }
 
-async function analyzeHaikuWithClaude(): Promise<HaikuMetadata> {
+async function analyzeHaikuWithClaude(signal?: AbortSignal): Promise<HaikuMetadata> {
   const basePrompt = `For the following haiku, return a JSON object of the following format:
 
 {
@@ -945,8 +964,8 @@ Haiku:
 ${haiku.value}`
 
   const [baseMetadata, creativeMetadata] = await Promise.all([
-    requestClaudeJson<HaikuMetadataBase>(basePrompt, 0),
-    requestClaudeJson<HaikuCreativeMetadata>(creativePrompt, 1),
+    requestClaudeJson<HaikuMetadataBase>(basePrompt, 0, signal),
+    requestClaudeJson<HaikuCreativeMetadata>(creativePrompt, 1, signal),
   ])
 
   if (!Array.isArray(creativeMetadata.pitches) || creativeMetadata.pitches.length !== 5) {
@@ -1000,10 +1019,43 @@ const playNote = (pitch: number, velocity: number, ctx: TimeContext, noteDur: nu
 }
 
 async function startPipeline(skipMusic: boolean = false, useTestData: boolean = false) {
+  cancelPipeline()
+  const abortController = new AbortController()
+  currentPipelineAbort = abortController
 
-  const haikuMetadata = useTestData ? testHaikuMetadata : await analyzeHaikuWithClaude()
-  const melodies = haikuMetadataToMelodies(haikuMetadata)
-  launchProgrammaticPointer(melodies, haikuMetadata.colorByLine, skipMusic)
+  try {
+    const haikuMetadata = useTestData
+      ? testHaikuMetadata
+      : await analyzeHaikuWithClaude(abortController.signal)
+
+    if (abortController.signal.aborted) {
+      return
+    }
+
+    const rawMelodies = haikuMetadataToMelodies(haikuMetadata)
+    if (abortController.signal.aborted) {
+      return
+    }
+
+    const pipelines = await generateHaikuTransformPipelines(apiKey.value, haiku.value)
+    if (abortController.signal.aborted) {
+      return
+    }
+
+    const transformedMelodies = transformHaikuClips(rawMelodies, pipelines)
+    console.log('Transformation pipelines:', Array.from(pipelines.entries()))
+
+    launchProgrammaticPointer(transformedMelodies, haikuMetadata.colorByLine, skipMusic)
+  } catch (err) {
+    if (abortController.signal.aborted || (err instanceof DOMException && err.name === 'AbortError')) {
+      return
+    }
+    throw err
+  } finally {
+    if (currentPipelineAbort === abortController) {
+      currentPipelineAbort = null
+    }
+  }
 }
 
 function launchProgrammaticPointer(melodies: AbletonClip[], colors: {readonly r: number, readonly g: number, readonly b: number}[], skipMusic: boolean = false) {
@@ -1154,6 +1206,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  cancelPipeline()
   timeLoops.forEach(loop => loop.cancel())
   engineWatcher?.()
   engineWatcher = undefined
@@ -1162,6 +1215,7 @@ onUnmounted(() => {
   state.haikuText.value = DEFAULT_HAIKU
   state.apiKey.value = ''
   state.startHaikuPipeline.value = null
+  state.cancelHaikuPipeline.value = null
   state.isHaikuAnimating.value = false
 })
 </script>

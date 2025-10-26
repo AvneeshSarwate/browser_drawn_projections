@@ -7,6 +7,8 @@ A world of struggle.`
 
 export type HaikuPipelineRunner = (skipMusic?: boolean, useTestData?: boolean) => Promise<void>
 
+export type HaikuPipelineCanceler = () => void
+
 export interface ParamDef {
   name: string
   label: string
@@ -37,6 +39,7 @@ export interface FluidReactionAppState {
   haikuText: Ref<string>
   apiKey: Ref<string>
   startHaikuPipeline: Ref<HaikuPipelineRunner | null>
+  cancelHaikuPipeline: Ref<HaikuPipelineCanceler | null>
   isHaikuAnimating: Ref<boolean>
 }
 
@@ -55,6 +58,7 @@ export const appState: FluidReactionAppState = {
   haikuText: ref(DEFAULT_HAIKU),
   apiKey: ref(''),
   startHaikuPipeline: ref<HaikuPipelineRunner | null>(null),
+  cancelHaikuPipeline: ref<HaikuPipelineCanceler | null>(null),
   isHaikuAnimating: ref(false),
 }
 

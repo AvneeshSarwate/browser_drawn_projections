@@ -226,7 +226,7 @@ export function easeInOutBounce(elapsed: number, initialValue: number, amountOfC
 	return easeOutBounce(elapsed * 2 - duration, 0, amountOfChange, duration) * 0.5 + amountOfChange * 0.5 + initialValue;
 }
 
-export const easingMap = {}
+export const easingMap: { [key: string]: (x: number) => number } = {}
 easingMap['in2'] = (x: number) => easeInQuad(x, 0, 1, 1)
 easingMap['out2'] = (x: number) => easeOutQuad(x, 0, 1, 1)
 easingMap['io2'] = (x: number) => easeInOutQuad(x, 0, 1, 1)
