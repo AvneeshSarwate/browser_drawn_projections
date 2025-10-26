@@ -29,6 +29,7 @@ export interface FluidSimulationConfig {
   enableVorticity?: boolean;
   vorticityStrength?: number;
   dyeInjectionStrength?: number;
+  seedInitialDye?: boolean;
 }
 
 /**
@@ -152,6 +153,9 @@ export class FluidSimulationEffect {
     }
     if (this.config.pressure === undefined) {
       this.config.pressure = 0.8;
+    }
+    if (this.config.seedInitialDye === undefined) {
+      this.config.seedInitialDye = true;
     }
     this.currentTimeStep = config.timeStep;
     
@@ -285,9 +289,13 @@ export class FluidSimulationEffect {
     // ===== DYE PIPELINE =====
     
     // 7. Initialize dye feedback loop at higher resolution
+    const initialDyeSource = (this.config.seedInitialDye ?? true)
+      ? this.createInitialDye(dyeWidth, dyeHeight)
+      : this.createBlackTexture(dyeWidth, dyeHeight);
+
     const dyeInitial = new PassthruEffect(
       engine,
-      { src: this.createInitialDye(dyeWidth, dyeHeight) },
+      { src: initialDyeSource },
       dyeWidth,
       dyeHeight,
       linearSample,

@@ -643,6 +643,7 @@ function setupEngine(fluidEngine: BABYLON.WebGPUEngine): void {
       enableVorticity: true,
       vorticityStrength: getFluidParam('curl') || 30,
       dyeInjectionStrength: currentDyeInjectionStrength,
+      seedInitialDye: false,
     }
   )
   state.debugMode.value = 'dye'
@@ -738,6 +739,11 @@ const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromis
   const loop = launch(block)
   timeLoops.push(loop)
   return loop
+}
+
+const cancelAllLoops = () => {
+  timeLoops.forEach(loop => loop.cancel())
+  timeLoops = []
 }
 
 //todo - need some kind of checking to line up notes and syllables for non-haiku input or syllable miscount from claude

@@ -11,13 +11,12 @@
       <button
         type="button"
         class="haiku-ready"
+        :class="{ status: isStatusActive }"
         :disabled="!canRunAnalysis"
         @click="handleRunAnalysis"
       >
-        ready
+        {{ buttonLabel }}
       </button>
-      <p v-if="isHaikuAnimating" class="haiku-controls__status">Animating…</p>
-      <transition name="fade"><p v-if="isProcessing" class="haiku-controls__status">Preparing…</p></transition>
       <p v-if="pipelineError" class="haiku-controls__error">{{ pipelineError }}</p>
     </section>
     <div class="canvas-controls-wrapper center-canvas">
@@ -74,7 +73,17 @@ const haikuText = computed({
 
 const isHaikuAnimating = computed(() => state.isHaikuAnimating.value)
 const isProcessing = ref(false)
-const canRunAnalysis = computed(() => Boolean(state.startHaikuPipeline.value) && !!haikuText.value.trim() && !state.isHaikuAnimating.value)
+const canRunAnalysis = computed(() => Boolean(state.startHaikuPipeline.value) && !!haikuText.value.trim() && !state.isHaikuAnimating.value && !isProcessing.value)
+const isStatusActive = computed(() => isHaikuAnimating.value || isProcessing.value)
+const buttonLabel = computed(() => {
+  if (isHaikuAnimating.value) {
+    return 'Animating…'
+  }
+  if (isProcessing.value) {
+    return 'Preparing…'
+  }
+  return 'ready'
+})
 const canRunTest = computed(() => false)
 const pipelineError = ref<string | null>(null)
 
@@ -366,11 +375,6 @@ onUnmounted(() => {
   opacity: 0.55;
   cursor: not-allowed;
   box-shadow: none;
-}
-
-.haiku-controls__status {
-  font-size: 0.85rem;
-  color: rgba(172, 189, 255, 0.85);
 }
 
 .haiku-controls__error {
@@ -879,9 +883,17 @@ canvas {
   cursor: default;
 }
 
-/* Fade for preparing status */
-.fade-enter-active, .fade-leave-active { transition: opacity 200ms ease; }
-.fade-enter-from, .fade-leave-to { opacity: 0; }
+.haiku-ready.status {
+  background: #000;
+  color: #70768d;
+  border-color: #292c3c;
+  opacity: 1;
+}
+
+.haiku-ready.status:disabled {
+  opacity: 1;
+  cursor: default;
+}
 
 :global(body) {
   background: #05060f;
