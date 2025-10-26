@@ -34,10 +34,10 @@ const HAIKU_TRANSFORM_SYSTEM_PROMPT = `You are a music co-creator that transform
    - tension: rising|falling|steady (does the line build or release energy?)
    - confidence: [0..1]
 
-2) For each line, propose a short pipeline of 1–3 steps using only:
-   - easeIn(amount) → use easingMap["in2"] timing warp
-   - easeOut(amount) → use easingMap["out2"] timing warp
-   - octaveShift(semitones) → use AbletonClip.transpose(±12)
+2) For each line, propose a short pipeline of 1-3 steps using only:
+   - easeIn(amount) → a function that warps the melody so that it speeds up over time (but keeps the same duration)
+   - easeOut(amount) → a function that warps the melody so that it slows down over time (but keeps the same duration)
+   - octaveShift(semitones) → a function that transposes the melody by ±12 semitones
 
 3) Composition rules:
    - If tension is rising or the line feels like "waking/building/approaching," add easeIn. Amount ≈ arousal (0.3 for gentle, 0.6 medium, 0.9 intense).
@@ -90,36 +90,28 @@ const HAIKU_TRANSFORM_TOOL: Anthropic.Tool = {
                   type: 'array',
                   minItems: 1,
                   maxItems: 3,
+                  description: 'Each step must have "op" (easeIn|easeOut|octaveShift) and either "amount" (0-1 for ease ops) or "semitones" (-12 or 12 for octaveShift)',
                   items: {
-                    oneOf: [
-                      {
-                        type: 'object',
-                        additionalProperties: false,
-                        required: ['op', 'amount'],
-                        properties: {
-                          op: { const: 'easeIn' },
-                          amount: { type: 'number', minimum: 0, maximum: 1, default: 0.6 }
-                        }
+                    type: 'object',
+                    required: ['op'],
+                    properties: {
+                      op: { 
+                        type: 'string', 
+                        enum: ['easeIn', 'easeOut', 'octaveShift'],
+                        description: 'Transform operation: easeIn (accelerate), easeOut (decelerate), octaveShift (transpose)'
                       },
-                      {
-                        type: 'object',
-                        additionalProperties: false,
-                        required: ['op', 'amount'],
-                        properties: {
-                          op: { const: 'easeOut' },
-                          amount: { type: 'number', minimum: 0, maximum: 1, default: 0.6 }
-                        }
+                      amount: { 
+                        type: 'number', 
+                        minimum: 0, 
+                        maximum: 1,
+                        description: 'For easeIn/easeOut: blend amount (0.3=gentle, 0.6=medium, 0.9=intense). Omit for octaveShift.'
                       },
-                      {
-                        type: 'object',
-                        additionalProperties: false,
-                        required: ['op', 'semitones'],
-                        properties: {
-                          op: { const: 'octaveShift' },
-                          semitones: { type: 'integer', enum: [-12, 12] }
-                        }
+                      semitones: { 
+                        type: 'integer',
+                        enum: [-12, 12],
+                        description: 'For octaveShift: -12 (down one octave) or 12 (up one octave). Omit for ease ops.'
                       }
-                    ]
+                    }
                   }
                 }
               }
