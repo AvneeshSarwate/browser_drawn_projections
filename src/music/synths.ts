@@ -419,6 +419,132 @@ export function getSynthChain() {
   }
 }
 
+export function getFMSynthChain() {
+  const synth = new Tone.PolySynth(Tone.FMSynth, {
+    harmonicity: 2,
+    modulationIndex: 10,
+    oscillator: { type: "sine" },           // carrier
+    modulation: { type: "square" },         // modulator
+    envelope: { attack: 1, decay: 0.2, sustain: 1, release: 10.0 },
+    modulationEnvelope: { attack: 2, decay: 0.1, sustain: 1.0, release: 5 }
+  }).toDestination();
+  
+  const distortion = new Tone.Distortion(0.1)
+  const chorus = new Tone.Chorus(2, 2, 0.3)
+  const filter = new Tone.Filter(1000, 'lowpass')
+  const delay = new Tone.FeedbackDelay(0.5, 0.1)
+  const delayCrossfader = new Tone.CrossFade(0)
+  const reverb = new Tone.Freeverb()
+  const gain = new Tone.Gain(1)
+  const panner = new Tone.Panner(0)
+
+  synth.connect(distortion)
+  distortion.connect(chorus)
+  chorus.connect(filter)
+  filter.connect(delayCrossfader.a)
+  filter.connect(delay)
+  delay.connect(delayCrossfader.b)
+  delayCrossfader.connect(reverb)
+  reverb.connect(gain)
+  gain.connect(panner)
+  panner.connect(Tone.getDestination())
+
+  // piano.chain(distortion, chorus, filter, delay, reverb, Tone.getDestination())
+  // piano.chain(delay, Tone.getDestination())
+
+
+  const paramScaling = {
+    attack: (val: number) => val**2,
+    decay: (val: number) => val**2,
+    sustain: (val: number) => val,
+    release: (val: number) => (val**2)*5,
+    distortion: (val: number) => val,
+    chorusWet: (val: number) => val,
+    chorusDepth: (val: number) => val,
+    chorusRate: (val: number) => 2 + val ** 2 * 20,
+    filterFreq: (val: number) => 20000 * val ** 2,
+    filterRes: (val: number) => val * 10,
+    delayTime: (val: number) => val ** 2,
+    delayFeedback: (val: number) => val,
+    delayMix: (val: number) => val,
+    reverb: (val: number) => val,
+    gain: (val: number) => val * 5, //map 1 to 5
+    pan: (val: number) => (val - 0.5) * 2 // Map 0-1 to -1 to 1
+  }
+
+  const paramFuncs = {
+    attack: (val: number) => {
+      synth.set({ envelope: { attack: paramScaling.attack(val) } })
+      return paramScaling.attack(val)
+    },
+    decay: (val: number) => {
+      synth.set({envelope: {decay: paramScaling.decay(val)}})
+      return paramScaling.decay(val)
+    },
+    sustain: (val: number) => {
+      synth.set({envelope: {sustain: paramScaling.sustain(val)}})
+      return val
+    },
+    release: (val: number) => {
+      synth.set({envelope: {release: paramScaling.release(val)}})
+      return paramScaling.release(val)
+    },
+    distortion: (val: number) => distortion.distortion = paramScaling.distortion(val),
+    chorusWet: (val: number) => chorus.wet.value = paramScaling.chorusWet(val),
+    chorusDepth: (val: number) => chorus.depth = paramScaling.chorusDepth(val),
+    chorusRate: (val: number) => chorus.delayTime = paramScaling.chorusRate(val),
+    filterFreq: (val: number) => filter.frequency.value = paramScaling.filterFreq(val),
+    filterRes: (val: number) => filter.Q.value = paramScaling.filterRes(val),
+    delayTime: (val: number) => delay.delayTime.value = paramScaling.delayTime(val),
+    delayFeedback: (val: number) => delay.feedback.value = paramScaling.delayFeedback(val),
+    delayMix: (val: number) => delayCrossfader.fade.value = paramScaling.delayMix(val),
+    reverb: (val: number) => reverb.wet.value = paramScaling.reverb(val),
+    gain: (val: number) => gain.gain.value = paramScaling.gain(val),
+    pan: (val: number) => panner.pan.value = paramScaling.pan(val)
+  }
+
+
+  const defaultParams = {
+    attack: 1,
+    decay: 0.1,
+    sustain: 0.1,
+    release: 0.1,
+    distortion: 0.1,
+    chorusWet: 0.1,
+    chorusDepth: 0.3,
+    chorusRate: 0.2,
+    filterFreq: 1.0,
+    filterRes: 0.5,
+    delayTime: 0.5,
+    delayFeedback: 0.1,
+    delayMix: 0.0,
+    reverb: 0.1,
+    gain: 0.2,
+    pan: 0.5
+  }
+
+  //INITIALIZE FX TO DEFAULT VALUES
+  Object.keys(defaultParams).forEach(param => {
+    paramFuncs[param as keyof typeof paramFuncs](defaultParams[param as keyof typeof defaultParams])
+  })
+
+
+  return {
+    instrument: synth,
+    distortion,
+    chorus,
+    filter,
+    delay,
+    reverb,
+    gain,
+    panner,
+    paramFuncs,
+    paramNames: Object.keys(paramFuncs),
+    defaultParams,
+    paramScaling
+  }
+}
+
 
 export const TONE_AUDIO_START = new Promise((resolve) => {
 

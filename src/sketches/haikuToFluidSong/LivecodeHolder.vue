@@ -13,7 +13,7 @@ import { TimeContext, launch } from '@/channels/base_time_context'
 import { type CancelablePromisePoxy } from '@/channels/channels'
 import { normalizedMetadata, calculateLineLayout, sampleEntryIndexInLine } from './alphabet_groups'
 import { AbletonClip, quickNote, type AbletonNote } from '@/io/abletonClips'
-import { getPianoChain2, TONE_AUDIO_START } from '@/music/synths'
+import { getFMSynthChain, getPianoChain2, TONE_AUDIO_START } from '@/music/synths'
 import { m2f } from '@/music/mpeSynth'
 import * as Tone from 'tone'
 import { adjustExpressiveColor } from './colorUtils'
@@ -991,20 +991,26 @@ ${haiku.value}`
   }
 }
 
-const pianoChain = getPianoChain2()
-pianoChain.paramFuncs.gain(1)
-pianoChain.paramFuncs.delayMix(0.6)
-pianoChain.paramFuncs.delayTime(0.75)
-pianoChain.paramFuncs.delayFeedback(0.35)
-pianoChain.paramFuncs.delayDistortion(0.45)
-pianoChain.paramFuncs.delayFilterFreq(0.55)
-pianoChain.paramFuncs.delayFilterRes(0.25)
-pianoChain.paramFuncs.delayLFORate(0.4)
-pianoChain.paramFuncs.delayLFODepth(0.65)
-pianoChain.paramFuncs.chorusWet(0.8)
-pianoChain.paramFuncs.chorusDepth(0.4)
-pianoChain.paramFuncs.chorusRate(1.2)
-const piano = pianoChain.instrument
+// const pianoChain = getPianoChain2()
+// pianoChain.paramFuncs.gain(1)
+// pianoChain.paramFuncs.delayMix(0.6)
+// pianoChain.paramFuncs.delayTime(0.5)
+// pianoChain.paramFuncs.delayFeedback(0.35)
+// pianoChain.paramFuncs.delayDistortion(0.25)
+// pianoChain.paramFuncs.delayFilterFreq(0.55)
+// pianoChain.paramFuncs.delayFilterRes(0.25)
+// pianoChain.paramFuncs.delayLFORate(0.07)
+// pianoChain.paramFuncs.delayLFODepth(0.65)
+// pianoChain.paramFuncs.chorusWet(0.8)
+// pianoChain.paramFuncs.chorusDepth(0.4)
+// pianoChain.paramFuncs.chorusRate(1.2)
+
+
+const fmChain = getFMSynthChain()
+
+
+
+const instrument = fmChain.instrument
 
 const playNote = (pitch: number, velocity: number, ctx: TimeContext, noteDur: number) => {
   // console.log('note', pitch, velocity, noteDur)
@@ -1015,10 +1021,11 @@ const playNote = (pitch: number, velocity: number, ctx: TimeContext, noteDur: nu
   // }).finally(() => {
   //   piano.triggerRelease(m2f(pitch))
   // })
-  piano.triggerAttackRelease(m2f(pitch), noteDur * 2, Tone.now(), velocity/127)
+  instrument.triggerAttackRelease(m2f(pitch), noteDur * 2, Tone.now(), velocity/127)
 }
 
 async function startPipeline(skipMusic: boolean = false, useTestData: boolean = false) {
+  useTestData = true
   cancelPipeline()
   const abortController = new AbortController()
   currentPipelineAbort = abortController
@@ -1037,13 +1044,18 @@ async function startPipeline(skipMusic: boolean = false, useTestData: boolean = 
       return
     }
 
+    let transformedMelodies: AbletonClip[] | undefined
+    if (useTestData) {
+      transformedMelodies = rawMelodies
+    } else {
     const pipelines = await generateHaikuTransformPipelines(apiKey.value, haiku.value)
     if (abortController.signal.aborted) {
       return
     }
 
-    const transformedMelodies = transformHaikuClips(rawMelodies, pipelines)
+      transformedMelodies = transformHaikuClips(rawMelodies, pipelines)
     console.log('Transformation pipelines:', Array.from(pipelines.entries()))
+    }
 
     launchProgrammaticPointer(transformedMelodies, haikuMetadata.colorByLine, skipMusic)
   } catch (err) {
