@@ -158,6 +158,9 @@ export class Scale {
       const pitches = this.degrees.map(d => octaveBelow + d)
       const noteBelow = Math.max(...pitches.filter(p => p < pitch))
       const noteAbove = pitches.find(p => p > pitch)
+      if (noteAbove === undefined) {
+        throw new Error(`Could not find note above pitch ${pitch} in scale`)
+      }
       const indFrac = (pitch - noteBelow) / (noteAbove - noteBelow)
       const lowerChroma = pitches.findIndex(d => d === noteBelow)
       chromaDegree = lowerChroma + indFrac
@@ -184,4 +187,97 @@ export class Scale {
   setRoot(root: number): void {
     this.root = root
   }
+
+  getRoot(): number {
+    return this.root
+  }
+}
+
+import type { AbletonClip } from '@/io/abletonClips'
+
+const DIATONIC_INTERVALS = [0, 2, 4, 5, 7, 9, 11, 12]
+
+export function bestFitScale(clip: AbletonClip): Scale {
+  const pitches = clip.notes.map(n => n.pitch)
+  
+  let bestScale: Scale | null = null
+  let bestScore = -Infinity
+  
+  // Try all 12 roots
+  for (let root = 0; root < 12; root++) {
+    // Try all 7 modes (rotations of the diatonic scale)
+    for (let mode = 0; mode < 7; mode++) {
+      const scale = new Scale(DIATONIC_INTERVALS, root).cycle(mode)
+      
+      // Calculate how well notes fit this scale
+      let fitScore = 0
+      let pointScore = 0
+      
+      for (const pitch of pitches) {
+        const ind = scale.getIndFromPitch(pitch)
+        const isInScale = Number.isInteger(ind)
+        
+        if (isInScale) {
+          fitScore++
+          
+          // Calculate degree within scale (mod by 7 degrees)
+          const degree = mod2(Math.round(ind), 7)
+          
+          // Award points: root=3, 5th=2, 4th=1
+          if (degree === 0) pointScore += 3      // root
+          else if (degree === 4) pointScore += 2 // 5th (4th degree in 0-indexed)
+          else if (degree === 3) pointScore += 1 // 4th (3rd degree in 0-indexed)
+        }
+      }
+      
+      // Combined score: fit weighted heavily, then tiebreak with points
+      const totalScore = fitScore * 1000 + pointScore
+      
+      if (totalScore > bestScore) {
+        bestScore = totalScore
+        bestScale = scale
+      }
+    }
+  }
+  
+  return bestScale || new Scale(DIATONIC_INTERVALS, 60)
+}
+
+export function fitToScale(clip: AbletonClip, scale?: Scale): { clip: AbletonClip; scale: Scale } {
+  const targetScale = scale || bestFitScale(clip)
+  const clone = clip.clone()
+  
+  clone.notes.forEach(note => {
+    const ind = targetScale.getIndFromPitch(note.pitch)
+    
+    // If not in scale (fractional index), round to nearest scale degree
+    if (!Number.isInteger(ind)) {
+      note.pitch = targetScale.getByIndex(Math.round(ind))
+    }
+  })
+  
+  return { clip: clone, scale: targetScale }
+}
+
+export function scaleFromClip(clip: AbletonClip, rootPicker?: (clip: AbletonClip) => number): Scale {
+  const pitches = [...new Set(clip.notes.map(n => n.pitch))].sort((a, b) => a - b)
+  
+  if (pitches.length === 0) {
+    return new Scale(DIATONIC_INTERVALS, 60)
+  }
+  
+  const root = rootPicker ? rootPicker(clip) : pitches[0]
+  const degrees = pitches.map(p => mod2(p - root, 12)).sort((a, b) => a - b)
+  const uniqueDegrees = [...new Set(degrees)]
+  
+  if (!uniqueDegrees.includes(0)) {
+    uniqueDegrees.unshift(0)
+  }
+  
+  const octave = Math.max(...uniqueDegrees) < 12 ? 12 : Math.max(...uniqueDegrees) + 1
+  if (!uniqueDegrees.includes(octave)) {
+    uniqueDegrees.push(octave)
+  }
+  
+  return new Scale(uniqueDegrees, root)
 }

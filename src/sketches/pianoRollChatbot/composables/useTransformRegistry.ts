@@ -3,6 +3,7 @@ import { Parser } from 'acorn'
 import * as walk from 'acorn-walk'
 import type { NoteDataInput } from '../components/pianoRoll/pianoRollState'
 import type Anthropic from '@anthropic-ai/sdk'
+import { transformLibs, type TransformLibs } from '@/music/transformLibs'
 
 interface GridInfo {
   maxLength: number
@@ -21,7 +22,7 @@ interface ValidationResult {
   functionName?: string
   params?: ParamInfo[]
   jsdocSummary?: string
-  compiled?: (notes: NoteDataInput[], ...args: number[]) => NoteDataInput[]
+  compiled?: (notes: NoteDataInput[], libs: TransformLibs, ...args: number[]) => NoteDataInput[]
 }
 
 export interface TransformSlot {
@@ -31,7 +32,7 @@ export interface TransformSlot {
   functionName?: string
   params: ParamInfo[]
   errors: string[]
-  compiled?: (notes: NoteDataInput[], ...args: number[]) => NoteDataInput[]
+  compiled?: (notes: NoteDataInput[], libs: TransformLibs, ...args: number[]) => NoteDataInput[]
   jsdocSummary?: string
 }
 
@@ -97,7 +98,7 @@ function extractJSDocParams(comments: any[], paramNames: string[]): { params: Pa
       
       // Fallback: check if each param name appears in any line
       for (const param of params) {
-        if (param.name === 'notes') continue // Skip the notes parameter
+        if (param.name === 'notes' || param.name === 'libs') continue // Skip notes and libs parameters
         if (!param.description) {
           for (const line of lines) {
             if (line.includes(param.name) && !line.startsWith('function')) {
@@ -173,13 +174,18 @@ function validateTransform(code: string): ValidationResult {
       return { valid: false, errors }
     }
     
-    if (transformParams.length === 0) {
-      errors.push('Transform function must have at least one parameter (notes)')
+    if (transformParams.length < 2) {
+      errors.push('Transform function must have at least two parameters (notes, libs)')
       return { valid: false, errors }
     }
     
     if (transformParams[0] !== 'notes') {
       errors.push('First parameter must be named "notes"')
+      return { valid: false, errors }
+    }
+    
+    if (transformParams[1] !== 'libs') {
+      errors.push('Second parameter must be named "libs"')
       return { valid: false, errors }
     }
     
@@ -215,8 +221,8 @@ function validateTransform(code: string): ValidationResult {
     
     const compiledFn = factory()
     
-    // Smoke test
-    const testResult = compiledFn([])
+    // Smoke test with libs
+    const testResult = compiledFn([], transformLibs)
     if (!Array.isArray(testResult)) {
       errors.push('Function must return an array')
       return { valid: false, errors }
@@ -306,7 +312,7 @@ export function createTransformRegistry(config: TransformRegistryConfig) {
       }
       redoStack.value = []
       
-      const result = slot.compiled(prevNotes, ...args)
+      const result = slot.compiled(prevNotes, transformLibs, ...args)
       const normalized = validateClampNotes(result, getGrid())
       
       setNotes(normalized)
@@ -348,7 +354,7 @@ export function createTransformRegistry(config: TransformRegistryConfig) {
       const required: string[] = []
       
       for (const param of slot.params) {
-        if (param.name === 'notes') continue
+        if (param.name === 'notes' || param.name === 'libs') continue
         
         properties[param.name] = {
           type: 'number',
@@ -381,7 +387,7 @@ export function createTransformRegistry(config: TransformRegistryConfig) {
       const toolName = `transform_slot_${i + 1}`
       handlers.set(toolName, async (input: any) => {
         const args = slot.params
-          .filter(p => p.name !== 'notes')
+          .filter(p => p.name !== 'notes' && p.name !== 'libs')
           .map(p => input[p.name] || 0)
         
         const result = applyTransform(i, args)
@@ -421,7 +427,7 @@ export function createTransformRegistry(config: TransformRegistryConfig) {
       const functionName = slot.functionName || 'unnamed'
       const summary = slot.jsdocSummary || 'User-defined transform'
       const paramList = slot.params
-        .filter(p => p.name !== 'notes')
+        .filter(p => p.name !== 'notes' && p.name !== 'libs')
         .map(p => `${p.name}${p.description ? ` (${p.description})` : ''}`)
         .join(', ')
       

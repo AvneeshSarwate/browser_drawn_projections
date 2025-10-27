@@ -233,11 +233,11 @@ export async function generateHaikuSynthPreset(apiKey: string, haikuText: string
   })
 
   const response = await client.messages.create({
-    model: 'claude-3-haiku-20240307',
+    model: 'claude-sonnet-4-5-20250929',
     system: FM_SYNTH_PRESET_SYSTEM_PROMPT,
     tools: [FM_SYNTH_PRESET_TOOL],
     max_tokens: 1024,
-    temperature: 0.5,
+    temperature: 1,
     messages: [
       {
         role: 'user',

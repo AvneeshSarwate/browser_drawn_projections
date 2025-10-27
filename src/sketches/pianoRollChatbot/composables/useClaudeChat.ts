@@ -177,24 +177,68 @@ Use write_transform_function(code, slotIndex) only when:
 - The operation would be reusable for future requests
 
 Transform code requirements:
-- Must define a function with notes as the first parameter, followed by numeric parameters
+- Must define a function with notes as first parameter, libs as second parameter, then numeric parameters
 - Function can have any name (e.g., transpose, quantize, humanize)
 - First parameter must be 'notes' (the input array)
+- Second parameter must be 'libs' (utility library object, automatically provided)
 - Additional parameters must be numbers that configure the transformation
-- Must include JSDoc with @param tags for each parameter
+- Must include JSDoc with @param tags for each parameter (including libs)
 - Should return a new array, not modify input array
+
+LIBS PARAMETER - Available utilities:
+The 'libs' object provides music theory and MIDI manipulation utilities:
+
+1. libs.Scale - Class for working with musical scales
+   - new libs.Scale([intervals], rootPitch) - Create scale (e.g., [0,2,4,5,7,9,11,12] for major scale, root like 60 for C)
+   - scale.getByIndex(index) - Get MIDI pitch at scale degree (0=root, 1=second, etc.)
+   - scale.getIndFromPitch(pitch) - Get scale degree from MIDI pitch (returns fractional if pitch not in scale)
+   - scale.cycle(n) - Rotate scale modes (n=1 for next mode, e.g., Ionian->Dorian)
+   - scale.invert(n) - Invert scale to different root
+
+2. libs.bestFitScale(clip) - Analyzes an AbletonClip and returns the best-fitting diatonic scale
+   - Tries all 12 chromatic roots × 7 modes
+   - Uses fractional indices to detect out-of-scale notes
+   - Scores based on fit + bonus points for root/4th/5th emphasis
+   - Returns a Scale object
+
+3. libs.fitToScale(clip, scale?) - Quantizes all notes in clip to nearest scale degree
+   - If no scale provided, uses bestFitScale() automatically
+   - Rounds fractional scale indices to nearest in-scale pitch
+   - Returns { clip: AbletonClip, scale: Scale } - both the corrected clip and the scale used
+
+4. libs.scaleFromClip(clip, rootPicker?) - Creates a Scale from actual unique pitches in clip
+   - Uses first note as root by default
+   - Optional rootPicker function: (clip) => midiPitch to choose different root
+   - Returns Scale containing only the pitches that appear in the clip
+
+5. libs.AbletonClip - Class for advanced MIDI manipulation
+   - new libs.AbletonClip(name, duration, notes) - Create clip from notes array
+   - clip.transpose(semitones) - Transpose by chromatic semitones
+   - clip.scaleTranspose(degrees, scale) - Transpose by scale degrees
+   - clip.scale(factor) - Time stretch (factor=2 doubles duration)
+   - clip.shift(delta) - Time shift (delta in quarter notes)
 
 Example transform structure:
 /**
- * Brief description of what this does.
+ * Add harmony notes at specified scale degree interval
  * @param {Note[]} notes - Input notes array
- * @param {number} paramName - Description and recommended range (e.g., 0-127, -12 to +12)
- * * ... - more parameters, as long as they are all numbers (and you need a description line for each)
+ * @param {object} libs - Utility library (automatically provided)
+ * @param {number} degrees - Scale degrees to harmonize (e.g., 3 for thirds, -2 for seconds below)
  */
-function myTransform(notes, paramName) {
-  const newNotes = notes.map(n => ({...n}));
-  // transform newNotes here
-  return newNotes;
+function harmonize(notes, libs, degrees) {
+  // Convert to AbletonClip and find best-fitting scale
+  const clip = new libs.AbletonClip('temp', 4, notes);
+  const { clip: quantized, scale } = libs.fitToScale(clip);
+  
+  // Create harmony notes
+  const harmony = quantized.notes.map(n => {
+    const scaleIndex = scale.getIndFromPitch(n.pitch);
+    const harmonyPitch = scale.getByIndex(Math.round(scaleIndex) + degrees);
+    return { ...n, pitch: harmonyPitch };
+  });
+  
+  // Return original notes plus harmony
+  return [...notes, ...harmony];
 }`
     }
     
