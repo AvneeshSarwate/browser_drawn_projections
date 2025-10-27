@@ -240,6 +240,8 @@ const setAnimatingState = (animating: boolean) => {
   }
 }
 
+defineExpose({ canvasState })
+
 const updateCanvasGrid = () => {
   const stageRef = canvasState.stage
   const gridLayer = canvasState.layers.grid

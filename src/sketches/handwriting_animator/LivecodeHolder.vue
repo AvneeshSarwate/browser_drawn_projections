@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { inject, onMounted, onUnmounted } from 'vue'
+import { inject, onMounted, onUnmounted, ref } from 'vue'
 import CanvasRoot from '@/canvas/CanvasRoot.vue'
 import StrokeLaunchControls from './StrokeLaunchControls.vue'
 import { appStateName, type TemplateAppState, drawFlattenedStrokeGroup, resolution } from './appState'
@@ -13,8 +13,10 @@ import { clearListeners, singleKeydownEvent, mousemoveEvent, targetToP5Coords } 
 import type p5 from 'p5'
 import { sinN } from '@/channels/channels'
 import type { DrawingScene } from '@/rendering/gpuStrokes/drawingScene'
+import { getPreset } from './presets'
 
 const appState = inject<TemplateAppState>(appStateName)!!
+const canvasRootRef = ref<InstanceType<typeof CanvasRoot> | null>(null)
 
 const syncCanvasState = (state: CanvasStateSnapshot) => {
   appState.freehandStateString = state.freehand.serializedState
@@ -47,6 +49,23 @@ const saveFreehandRenderData = () => {
 const sleepWait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 onMounted(async () => {
+  const params = new URLSearchParams(window.location.search)
+  const presetName = params.get('preset')
+  
+  if (presetName && canvasRootRef.value) {
+    const preset = getPreset(presetName)
+    if (preset) {
+      const canvasState = (canvasRootRef.value as any).canvasState
+      if (canvasState) {
+        try {
+          await preset(canvasState)
+        } catch (error) {
+          console.error(`Failed to apply preset "${presetName}":`, error)
+        }
+      }
+    }
+  }
+
   // p5/Three canvas elements
   const p5i = appState.p5Instance!!
   const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
@@ -176,6 +195,7 @@ onUnmounted(() => {
 
 <template>
   <CanvasRoot
+    ref="canvasRootRef"
     :sync-state="syncCanvasState"
     :initial-freehand-state="appState.freehandStateString"
     :initial-polygon-state="appState.polygonStateString"
