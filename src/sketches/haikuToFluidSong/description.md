@@ -9,7 +9,11 @@
 # fluid simulation
 - a port of Pavel Dogret's WebGL fluid simulation into a modular WebGPU shader graph system to make it more hackable
 - an LLM analyzes the haiku and picks a color per line
-- link {}
+- link {currentOrigin}/fluidSimChat
+
+# Timing engine
+- A custom typescript timing library that allows you freely interleave musical and visual events and write heirarchical, generative timelines 
+- link https://github.com/AvneeshSarwate/browser_drawn_projections/?tab=readme-ov-file#sequencing-and-time
 
 # Haiku => Music LLM translator 
 - LLM to Pitch: LLM analyzes haiku and picks a 5 pitch sequence
