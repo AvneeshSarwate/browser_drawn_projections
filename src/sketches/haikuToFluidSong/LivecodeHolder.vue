@@ -1034,7 +1034,12 @@ const playNote = (pitch: number, velocity: number, ctx: TimeContext, noteDur: nu
 }
 
 async function startPipeline(skipMusic: boolean = false, useTestData: boolean = false) {
-  // useTestData = true
+  const urlParams = new URLSearchParams(window.location.search)
+  const noQuery = urlParams.has('noquery')
+  if (noQuery) {
+    useTestData = true
+  }
+  
   cancelPipeline()
   const abortController = new AbortController()
   currentPipelineAbort = abortController

@@ -92,7 +92,20 @@
       </button>
       <transition name="description-expand">
         <div v-if="showDescription" class="description-content">
-          <h2>General Components</h2>
+          <div class="description-header-row">
+            <h2>General Components</h2>
+            <button
+              type="button"
+              class="popout-button"
+              @click="popoutDescription"
+              title="Open in new window"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M9 2L14 2L14 7M14 2L7 9M6 3H3C2.44772 3 2 3.44772 2 4V13C2 13.5523 2.44772 14 3 14H12C12.5523 14 13 13.5523 13 13V10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span>Pop Out</span>
+            </button>
+          </div>
           
           <div class="component-section">
             <h3>Handwriting Animation System</h3>
@@ -288,6 +301,246 @@ async function toggleDescription() {
     await nextTick()
     renderMermaidDiagram()
   }
+}
+
+// @ts-ignore - TypeScript incorrectly detects duplicate from HTML template string
+function popoutDescription() {
+  const popupWindow = window.open('', 'Haiku to Fluid Song - Description', 'width=900,height=700,menubar=no,toolbar=no,location=no,status=no')
+  
+  if (!popupWindow) {
+    alert('Please allow popups for this site to open the description in a new window')
+    return
+  }
+
+  const origin = window.location.origin
+  
+  popupWindow.document.write(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Haiku to Fluid Song - Description</title>
+        <style>
+          body {
+            margin: 0;
+            padding: 20px;
+            background: #08090f;
+            color: #dde0ff;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+          }
+          
+          h1 {
+            margin: 0 0 25px 0;
+            font-size: 1.8rem;
+            color: #f4f6ff;
+            border-bottom: 2px solid rgba(102, 122, 255, 0.3);
+            padding-bottom: 12px;
+          }
+          
+          h2 {
+            margin: 25px 0 15px 0;
+            font-size: 1.4rem;
+            color: #99aaff;
+          }
+          
+          .component-section {
+            margin-bottom: 25px;
+            padding: 15px 20px;
+            background: rgba(102, 122, 255, 0.08);
+            border-left: 3px solid #667aff;
+            border-radius: 6px;
+          }
+          
+          .component-section h3 {
+            margin: 0 0 12px 0;
+            font-size: 1.15rem;
+            color: #99aaff;
+          }
+          
+          .component-section p {
+            margin: 0 0 8px 0;
+            line-height: 1.6;
+            font-size: 0.95rem;
+            color: rgba(221, 224, 255, 0.85);
+          }
+          
+          .component-section p:last-of-type {
+            margin-bottom: 12px;
+          }
+          
+          .component-link {
+            display: inline-block;
+            color: #99aaff;
+            text-decoration: none;
+            font-size: 0.9rem;
+            padding: 6px 12px;
+            background: rgba(102, 122, 255, 0.15);
+            border-radius: 4px;
+            transition: background 0.2s ease, color 0.2s ease;
+          }
+          
+          .component-link:hover {
+            background: rgba(102, 122, 255, 0.25);
+            color: #b3c4ff;
+          }
+          
+          .feature-list {
+            margin: 8px 0 0 0;
+            padding-left: 20px;
+            list-style-type: none;
+          }
+          
+          .feature-list li {
+            margin-bottom: 10px;
+            line-height: 1.6;
+            font-size: 0.95rem;
+            color: rgba(221, 224, 255, 0.85);
+            position: relative;
+            padding-left: 15px;
+          }
+          
+          .feature-list li::before {
+            content: '→';
+            position: absolute;
+            left: 0;
+            color: #667aff;
+          }
+          
+          .feature-list strong {
+            color: #99aaff;
+          }
+          
+          .mermaid-container {
+            margin-top: 15px;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(102, 122, 255, 0.2);
+            border-radius: 6px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 300px;
+          }
+          
+          .mermaid-container svg {
+            max-width: 100%;
+            height: auto;
+          }
+        </style>
+        <script type="module">
+          import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+          
+          mermaid.initialize({
+            startOnLoad: false,
+            theme: 'base',
+            themeVariables: {
+              primaryColor: '#1a1d2e',
+              primaryTextColor: '#dde0ff',
+              primaryBorderColor: '#667aff',
+              lineColor: '#667aff',
+              secondaryColor: '#1a1d2e',
+              tertiaryColor: '#1a1d2e',
+              background: '#08090f',
+              mainBkg: '#1a1d2e',
+              secondBkg: '#1a1d2e',
+              tertiaryBkg: '#1a1d2e',
+              nodeBorder: '#667aff',
+              clusterBkg: '#1a1d2e',
+              clusterBorder: '#667aff',
+              textColor: '#dde0ff',
+              edgeLabelBackground: '#08090f',
+              fontSize: '14px'
+            }
+          });
+          
+          const diagramDefinition = 'graph TD\\n' +
+    '    Haiku[Haiku Input]\\n' +
+    '    LLMPitch[LLM to Pitch]\\n' +
+    '    LLMSyllables[LLM Syllables]\\n' +
+    '    LLMSynth[LLM Synth Preset]\\n' +
+    '    BaseGen[Base Melody Generator]\\n' +
+    '    LLMTransforms[LLM Pitch Transforms]\\n' +
+    '    Final[Final Output]\\n' +
+    '    \\n' +
+    '    Haiku --> LLMPitch\\n' +
+    '    Haiku --> LLMSyllables\\n' +
+    '    Haiku --> LLMSynth\\n' +
+    '    LLMPitch --> BaseGen\\n' +
+    '    LLMSyllables --> BaseGen\\n' +
+    '    Haiku --> LLMTransforms\\n' +
+    '    BaseGen --> LLMTransforms\\n' +
+    '    LLMSynth --> Final\\n' +
+    '    LLMTransforms --> Final\\n' +
+    '    \\n' +
+    '    style Haiku fill:#1a1d2e,stroke:#667aff,color:#dde0ff\\n' +
+    '    style LLMPitch fill:#1a1d2e,stroke:#667aff,color:#dde0ff\\n' +
+    '    style LLMSyllables fill:#1a1d2e,stroke:#667aff,color:#dde0ff\\n' +
+    '    style LLMSynth fill:#1a1d2e,stroke:#667aff,color:#dde0ff\\n' +
+    '    style BaseGen fill:#1a1d2e,stroke:#885cff,color:#dde0ff\\n' +
+    '    style LLMTransforms fill:#1a1d2e,stroke:#885cff,color:#dde0ff\\n' +
+    '    style Final fill:#1a1d2e,stroke:#99aaff,color:#dde0ff';
+          
+          window.addEventListener('load', async () => {
+            try {
+              const { svg } = await mermaid.render('mermaid-svg-id', diagramDefinition);
+              const container = document.getElementById('mermaid-diagram');
+              if (container) {
+                container.innerHTML = svg;
+              }
+            } catch (error) {
+              console.error('Mermaid rendering error:', error);
+            }
+          });
+        <` + `/script>
+      </head>
+      <body>
+        <h1>Haiku to Fluid Song</h1>
+        
+        <div class="component-section">
+          <h3>Handwriting Animation System</h3>
+          <p>A custom canvas tool that allows you draw strokes and also add metadata to help with letter alignment for typesetting</p>
+          <a href="${origin}/handwriting_animator?preset=alphabet" target="_blank" class="component-link">
+            View Handwriting Animator →
+          </a>
+        </div>
+
+        <div class="component-section">
+          <h3>Fluid Simulation</h3>
+          <p>A port of Pavel Dogret's WebGL fluid simulation into a modular WebGPU shader graph system to make it more hackable</p>
+          <p>An LLM analyzes the haiku and picks a color per line</p>
+          <a href="${origin}/fluidSimChat" target="_blank" class="component-link">
+            View Fluid Simulation →
+          </a>
+        </div>
+
+        <div class="component-section">
+          <h3>Timing Engine</h3>
+          <p>A custom typescript timing library that allows you freely interleave musical and visual events and write heirarchical, generative timelines</p>
+          <a href="https://github.com/AvneeshSarwate/browser_drawn_projections/?tab=readme-ov-file#sequencing-and-time" target="_blank" class="component-link">
+            View Documentation →
+          </a>
+        </div>
+
+        <div class="component-section">
+          <h3>Haiku ⇒ Music LLM Translator</h3>
+          <ul class="feature-list">
+            <li><strong>LLM to Pitch:</strong> LLM analyzes haiku and picks a 5 pitch sequence</li>
+            <li><strong>LLM syllables:</strong> LLM analyzes the syllable patterns of the lines of the haiku</li>
+            <li><strong>Base melody generator:</strong> A handwritten melody generation system takes the pitch sequence and syllable patterns and builds the base melodies for each line</li>
+            <li><strong>LLM pitch transforms:</strong> LLM analyzes each line of the haiku, and decides on a stack of transformations to apply to each line's base melody</li>
+            <li><strong>LLM synth preset:</strong> LLM analyzes the haiku and generates a synth param preset to match the mood</li>
+          </ul>
+        </div>
+
+        <div class="component-section">
+          <h2>System Dependencies</h2>
+          <div id="mermaid-diagram" class="mermaid-container"></div>
+        </div>
+      </body>
+    </html>
+  `)
+  
+  popupWindow.document.close()
 }
 
 async function renderMermaidDiagram() {
@@ -1149,6 +1402,50 @@ canvas {
   border-color: rgba(102, 122, 255, 0.5);
 }
 
+.description-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid rgba(102, 122, 255, 0.3);
+}
+
+.description-header-row h2 {
+  margin: 0;
+  font-size: 1.4rem;
+  color: #f4f6ff;
+}
+
+.popout-button {
+  background: rgba(102, 122, 255, 0.15);
+  border: 1px solid rgba(102, 122, 255, 0.4);
+  border-radius: 6px;
+  color: #dde0ff;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+}
+
+.popout-button:hover {
+  background: rgba(102, 122, 255, 0.25);
+  border-color: rgba(102, 122, 255, 0.6);
+  transform: translateY(-1px);
+}
+
+.popout-button svg {
+  display: block;
+  flex-shrink: 0;
+}
+
+.popout-button span {
+  font-weight: 500;
+}
+
 .description-toggle span {
   font-weight: 500;
 }
@@ -1160,14 +1457,6 @@ canvas {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
   text-align: left;
-}
-
-.description-content h2 {
-  margin: 0 0 20px 0;
-  font-size: 1.4rem;
-  color: #f4f6ff;
-  border-bottom: 2px solid rgba(102, 122, 255, 0.3);
-  padding-bottom: 10px;
 }
 
 .component-section {
