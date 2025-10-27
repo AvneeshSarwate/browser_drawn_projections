@@ -16,6 +16,91 @@
       placeholder="sk-ant-..."
       class="api-input"
     />
+    <div v-if="showApiKeyWarning && apiKeyExpanded" class="alert alert-warning warning">
+      <span class="warning-icon">⚠️</span>
+      <div class="warning-content">
+        <strong>Security Warning:</strong> This API key is exposed in your browser. 
+        Use a limited, revocable key. Never use production keys.
+        <a href="#" @click.prevent="showSecurityModal = true" class="learn-more-link">Click here to learn more</a>
+        <button @click="showApiKeyWarning = false" class="btn btn-ghost dismiss-btn">Dismiss</button>
+      </div>
+    </div>
+
+    <!-- Security Modal -->
+    <div v-if="showSecurityModal" class="modal-overlay" @click="showSecurityModal = false">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h2>⚠️ Important notice about your API key</h2>
+          <button @click="showSecurityModal = false" class="btn btn-ghost modal-close">×</button>
+        </div>
+        <div class="modal-body">
+          <section>
+            <h3>Where your key lives:</h3>
+            <p>This app runs entirely in your browser. Your API key is kept in memory only and is not saved to localStorage, cookies, or our servers. When you close or refresh the page, the key is discarded.</p>
+          </section>
+
+          <section>
+            <h3>What that still means in practice:</h3>
+            <p>Even without storage, a key used in the browser can be exposed in several ways:</p>
+            <ul>
+              <li><strong>Browser extensions</strong> – Any extension with permission to run on this page can read the DOM, intercept network requests, or capture keystrokes. Malicious or over-permissive extensions can exfiltrate your key and chat data.</li>
+              <li><strong>Developer tools & logs</strong> – Authorization headers and request bodies may be visible in the Network tab. Copy/paste history, crash reports, debugging overlays, or third-party analytics/debug scripts could capture sensitive data.</li>
+              <li><strong>Clipboard & screenshots</strong> – Some clipboard managers keep history; screen recorders or "share your screen" sessions can reveal the key or responses.</li>
+              <li><strong>Malware or shared devices</strong> – Keyloggers and remote-control tools can grab what you type. Anyone with access to your machine or account profile could view active sessions.</li>
+              <li><strong>Third-party scripts</strong> – If you enable content blockers or load-helper scripts, be aware that any third-party script running on the page could read page memory.</li>
+              <li><strong>Network visibility</strong> – We use HTTPS, but corporate proxies, antivirus, or traffic-capturing tools on your device/network could still inspect requests.</li>
+              <li><strong>Usage risk</strong> – If your key leaks, someone else can spend your credits, hit your rate limits, or access models/features under your account until you revoke it.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h3>How to reduce your risk (recommended):</h3>
+            <ul>
+              <li>
+                <strong>Use a limited, revocable key:</strong>
+                <p>Create a non-production key with the lowest possible permissions, strict quotas/spend caps, and model/endpoint allow-lists (if supported). Be ready to revoke it at any time.</p>
+              </li>
+              <li>
+                <strong>Prefer a clean browser session:</strong>
+                <p>Use a private/incognito window with extensions disabled. Don't save the key between sessions. Avoid pasting it into multiple tabs.</p>
+              </li>
+              <li>
+                <strong>Keep it off the clipboard:</strong>
+                <p>Paste once if needed, then clear it. Disable clipboard history managers while using the app.</p>
+              </li>
+              <li>
+                <strong>Don't open DevTools while using the key:</strong>
+                <p>This reduces the chance of accidental logging or copying of request data.</p>
+              </li>
+              <li>
+                <strong>Verify the site:</strong>
+                <p>Make sure you're on the correct domain (HTTPS lock icon, expected URL). Don't use the app from untrusted links or if your browser shows security warnings.</p>
+              </li>
+              <li>
+                <strong>Rotate and monitor:</strong>
+                <p>Rotate keys periodically, and keep an eye on your provider's usage/billing dashboard for unexpected spikes.</p>
+              </li>
+              <li>
+                <strong>Prefer a server-side proxy for production:</strong>
+                <p>For real projects, use a backend that keeps provider keys on the server and issues short-lived, scoped tokens to the browser. That's the only robust way to protect a production key.</p>
+              </li>
+            </ul>
+          </section>
+
+          <section>
+            <h3>By proceeding, you acknowledge:</h3>
+            <ul>
+              <li>You understand your key is used client-side and may be visible to software on your device (including extensions) and in browser tools.</li>
+              <li>You accept the risk of unintended exposure and potential charges if the key is leaked.</li>
+              <li>You agree to use a limited, revocable, non-production key and to revoke it immediately if you suspect misuse.</li>
+            </ul>
+          </section>
+        </div>
+        <div class="modal-footer">
+          <button @click="showSecurityModal = false" class="btn btn-primary modal-ok-btn">I understand</button>
+        </div>
+      </div>
+    </div>
 
     <div class="history" ref="scrollContainer">
       <div v-if="messages.length === 0 && !isWaiting" class="empty-state">
@@ -172,6 +257,8 @@ const userInput = ref('')
 const scrollContainer = ref<HTMLDivElement | null>(null)
 const localError = ref<string | null>(null)
 const dropdownSelection = ref<string>('')
+const showApiKeyWarning = ref(true)
+const showSecurityModal = ref(false)
 
 const screenshots = computed(() => screenshotStore.screenshots.value)
 const selectedScreenshots = computed(() => screenshotStore.selectedScreenshots.value)
@@ -735,5 +822,174 @@ watch(isWaiting, () => {
 .error {
   color: #ff9aa2;
   font-size: 0.8rem;
+}
+
+.warning {
+  display: flex;
+  gap: 8px;
+  padding: 10px;
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  color: #856404;
+  margin-top: 6px;
+}
+
+.warning-icon {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.warning-content {
+  flex: 1;
+  line-height: 1.4;
+}
+
+.dismiss-btn {
+  margin-left: 8px;
+  padding: 2px 8px;
+  background: transparent;
+  border: 1px solid #856404;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  color: #856404;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.dismiss-btn:hover {
+  background: #856404;
+  color: #fff;
+}
+
+.learn-more-link {
+  color: #856404;
+  text-decoration: underline;
+  cursor: pointer;
+  margin-left: 6px;
+  font-weight: 600;
+}
+
+.learn-more-link:hover {
+  color: #664d03;
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.65);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modal-content {
+  background: #1a1d2e;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  max-width: 700px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  color: #dde0ff;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 22px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 1.2rem;
+  color: #dde0ff;
+}
+
+.modal-close {
+  background: transparent;
+  border: none;
+  font-size: 1.8rem;
+  color: rgba(221, 224, 255, 0.6);
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  transition: color 0.15s ease;
+}
+
+.modal-close:hover {
+  color: #dde0ff;
+}
+
+.modal-body {
+  overflow-y: auto;
+  padding: 18px 22px;
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+.modal-body section {
+  margin-bottom: 20px;
+}
+
+.modal-body section:last-child {
+  margin-bottom: 0;
+}
+
+.modal-body h3 {
+  margin: 0 0 8px 0;
+  font-size: 1rem;
+  color: #8e9bff;
+}
+
+.modal-body p {
+  margin: 0 0 10px 0;
+  color: rgba(221, 224, 255, 0.85);
+}
+
+.modal-body ul {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+.modal-body li {
+  margin-bottom: 8px;
+  color: rgba(221, 224, 255, 0.85);
+}
+
+.modal-body strong {
+  color: #dde0ff;
+}
+
+.modal-footer {
+  padding: 14px 22px;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.modal-ok-btn {
+  background: rgba(142, 155, 255, 0.2);
+  color: #dde0ff;
+  border: 1px solid rgba(142, 155, 255, 0.4);
+  border-radius: 6px;
+  padding: 8px 18px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.modal-ok-btn:hover {
+  background: rgba(142, 155, 255, 0.3);
+  border-color: rgba(142, 155, 255, 0.6);
 }
 </style>
