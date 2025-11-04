@@ -607,6 +607,38 @@ export function ease(clip: AbletonClip, easeType: string, amount: number = 1): A
   return newClip
 }
 
+export function repeatNotes(clip: AbletonClip, n: number): AbletonClip {
+  if (clip.notes.length === 0 || n <= 0) {
+    return clip.clone();
+  }
+  
+  const sortedNotes = [...clip.notes].sort((a, b) => a.position - b.position);
+  const repeatedNotes: AbletonNote[] = [];
+  let currentPosition = 0;
+  
+  for (let i = 0; i < sortedNotes.length; i++) {
+    const note = sortedNotes[i];
+    const nextNote = i < sortedNotes.length - 1 ? sortedNotes[i + 1] : null;
+    const gapToNext = nextNote ? (nextNote.position - (note.position + note.duration)) : 0;
+    
+    for (let rep = 0; rep < n; rep++) {
+      repeatedNotes.push({
+        ...note,
+        position: currentPosition + rep * note.duration
+      });
+    }
+    
+    currentPosition += n * note.duration + gapToNext;
+  }
+  
+  const newDuration = repeatedNotes.reduce(
+    (max, note) => Math.max(max, note.position + note.duration),
+    0
+  );
+  
+  return new AbletonClip(clip.name + "_repeated", newDuration, repeatedNotes);
+}
+
 
 // ─────────────────────────────────────────────
 // Symbol  →  Transformation-function registry
@@ -825,6 +857,13 @@ export const TRANSFORM_REGISTRY: Record<string, ClipTransform> = {
     transform: (clip, factor) => velocityMultiply(clip, factor),
     argParser: (args: string[]) => [numParse(args[0])],
     sliderScale: [(n, c) => Math.floor(n * 10)]
+  },
+
+  rep: {
+    name: 'rep',
+    transform: (clip, n) => repeatNotes(clip, n),
+    argParser: (args: string[]) => [numParse(args[0])],
+    sliderScale: [n => Math.floor(n * 8) + 1] // 1 to 8 repetitions
   }
 };
 
