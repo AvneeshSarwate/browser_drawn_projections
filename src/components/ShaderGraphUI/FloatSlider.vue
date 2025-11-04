@@ -49,6 +49,10 @@ const max = computed(() => {
 
 const step = computed(() => props.param.ui?.step ?? 0.001)
 
+const formattedMin = computed(() => min.value.toFixed(2))
+const formattedMax = computed(() => max.value.toFixed(2))
+const formattedCurrent = computed(() => currentValue.value.toFixed(3))
+
 function cancelAnimation() {
   if (animationFrameId !== null) {
     cancelAnimationFrame(animationFrameId)
@@ -121,7 +125,7 @@ function onInput(event: Event) {
     </label>
 
     <div class="slider-row">
-      <span class="value-label">{{ min.toFixed(3) }}</span>
+      <span class="value-label">{{ formattedMin }}</span>
 
       <input
         type="range"
@@ -135,24 +139,30 @@ function onInput(event: Event) {
         @input="onInput"
       />
 
-      <span class="value-label">{{ max.toFixed(3) }}</span>
+      <span class="value-label">{{ formattedMax }}</span>
     </div>
 
-    <div class="current-value">{{ currentValue.toFixed(3) }}</div>
+    <div class="current-value">{{ formattedCurrent }}</div>
   </div>
 </template>
 
 <style scoped>
 .float-slider {
-  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.25rem 0.3rem;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 label {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 0.9rem;
-  margin-bottom: 0.25rem;
+  font-size: 0.8rem;
+  letter-spacing: 0.01em;
 }
 
 .param-name {
@@ -160,11 +170,13 @@ label {
 }
 
 .dynamic-badge {
-  font-size: 0.7rem;
-  padding: 0.1rem 0.3rem;
-  background: #f90;
-  color: white;
-  border-radius: 3px;
+  font-size: 0.6rem;
+  padding: 0.05rem 0.3rem;
+  background: #c27c2c;
+  color: #fff;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .slider-row {
@@ -175,6 +187,7 @@ label {
 
 .slider {
   flex: 1;
+  accent-color: #2ea0fd;
 }
 
 .slider.dynamic {
@@ -183,16 +196,18 @@ label {
 }
 
 .value-label {
-  font-size: 0.7rem;
-  color: #666;
-  min-width: 3.5rem;
+  font-size: 0.65rem;
+  color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 0.08rem 0.3rem;
+  min-width: 3rem;
   text-align: center;
+  border-radius: 999px;
 }
 
 .current-value {
   text-align: center;
-  font-size: 0.8rem;
-  color: #333;
-  margin-top: 0.25rem;
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.72);
 }
 </style>

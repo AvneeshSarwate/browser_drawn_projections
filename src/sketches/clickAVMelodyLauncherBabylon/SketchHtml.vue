@@ -32,13 +32,12 @@ const shaderGraphEffect = computed(() => shaderGraphEndNodeRef.value ?? null)
 
 .sketch-layout {
   display: flex;
+  flex-direction: column;
   gap: 1rem;
-  align-items: flex-start;
 }
 
 #canvasContainer {
   background-color: black;
-  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -68,18 +67,17 @@ const shaderGraphEffect = computed(() => shaderGraphEndNodeRef.value ?? null)
 }
 
 .ui-panel {
-  width: 380px;
-  max-width: 380px;
+  width: 500px;
   border: 1px solid #1f1f1f;
   border-radius: 8px;
   background: #101010;
   padding: 0.75rem;
   color: #f0f0f0;
-  min-height: 400px;
+  min-height: 300px;
 }
 
 .ui-panel :deep(.shader-graph-ui) {
-  height: 100%;
+  height: auto;
 }
 
 .ui-placeholder {

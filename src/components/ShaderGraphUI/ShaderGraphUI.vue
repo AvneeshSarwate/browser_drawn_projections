@@ -8,7 +8,24 @@ const props = defineProps<{
   finalEffect: ShaderEffect | null | undefined
 }>()
 
+const selectedEffectId = ref<string | null>(null)
 const selectedEffect = ref<ShaderEffect | null>(null)
+
+function setSelectedNode(nodeId: string | null) {
+  if (!nodeId) {
+    selectedEffectId.value = null
+    selectedEffect.value = null
+    return
+  }
+  const node = graph.value.nodes.find((entry) => entry.id === nodeId)
+  if (!node) {
+    selectedEffectId.value = null
+    selectedEffect.value = null
+    return
+  }
+  selectedEffectId.value = node.id
+  selectedEffect.value = node.ref
+}
 
 const graph = computed<ShaderGraph>(() => {
   const effect = props.finalEffect
@@ -21,27 +38,32 @@ const graph = computed<ShaderGraph>(() => {
 watch(
   () => props.finalEffect,
   () => {
-    selectedEffect.value = null
+    setSelectedNode(null)
   },
 )
 
 watch(
   graph,
   (value) => {
-    if (!value.nodes.some((node) => node.ref === selectedEffect.value)) {
-      selectedEffect.value = null
+    if (selectedEffectId.value) {
+      const node = value.nodes.find((entry) => entry.id === selectedEffectId.value)
+      if (!node) {
+        setSelectedNode(null)
+      } else if (node.ref !== selectedEffect.value) {
+        selectedEffect.value = node.ref
+      }
+    } else if (value.nodes.length > 0) {
+      setSelectedNode(value.nodes[0].id)
     }
   },
+  { immediate: true },
 )
 
 function onNodeClick(nodeId: string) {
-  const node = graph.value.nodes.find((entry) => entry.id === nodeId)
-  if (node) {
-    selectedEffect.value = node.ref
-  }
+  setSelectedNode(nodeId)
 }
 
-const selectedId = computed(() => selectedEffect.value?.id ?? null)
+const selectedId = computed(() => selectedEffectId.value)
 </script>
 
 <template>
@@ -58,7 +80,7 @@ const selectedId = computed(() => selectedEffect.value?.id ?? null)
 
     <div class="params-section">
       <h3>Parameters</h3>
-      <ParamsPanel v-if="selectedEffect" :effect="selectedEffect" />
+      <ParamsPanel v-if="selectedEffect" :effect="selectedEffect as ShaderEffect" />
       <div v-else class="no-selection">
         Click a node to view parameters
       </div>
@@ -69,27 +91,32 @@ const selectedId = computed(() => selectedEffect.value?.id ?? null)
 <style scoped>
 .shader-graph-ui {
   display: flex;
+  flex-direction: column;
   gap: 1rem;
-  height: 100%;
-  max-height: 100%;
+  width: 100%;
 }
 
 .graph-section {
-  flex: 1;
-  min-width: 360px;
   display: flex;
   flex-direction: column;
+  width: 100%;
 }
 
 .params-section {
-  width: 320px;
-  max-width: 320px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
   overflow-y: auto;
-  padding-right: 0.5rem;
+  padding-right: 0.25rem;
 }
 
 .no-selection {
-  color: #888;
+  color: rgba(255, 255, 255, 0.55);
   font-style: italic;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+  padding: 0.75rem;
+  text-align: center;
 }
 </style>
