@@ -1,5 +1,24 @@
 import * as BABYLON from 'babylonjs'
 
+export interface UniformDescriptor {
+  name: string
+  kind: 'f32' | 'i32' | 'u32' | 'bool' | 'vec2f' | 'vec3f' | 'vec4f' | 'mat4x4f'
+  bindingName: string
+  default?: unknown
+  ui?: {
+    min?: number
+    max?: number
+    step?: number
+  }
+}
+
+export interface UniformRuntime {
+  isDynamic: boolean
+  current?: number
+  min?: number
+  max?: number
+}
+
 export type ShaderSource =
   | BABYLON.BaseTexture
   | BABYLON.RenderTargetTexture
@@ -150,8 +169,8 @@ export abstract class ShaderEffect<I extends ShaderInputShape<I> = ShaderInputs>
     }
   }
 
-  renderAll(engine: BABYLON.Engine): void {
-    const ordered: ShaderEffect[] = [] //topological sort order
+  protected buildOrderedEffects(): ShaderEffect[] {
+    const ordered: ShaderEffect[] = []
     const visited = new Set<string>()
     const visiting = new Set<string>()
 
@@ -174,11 +193,67 @@ export abstract class ShaderEffect<I extends ShaderInputShape<I> = ShaderInputs>
     }
 
     visit(this)
+    return ordered
+  }
 
+  public getOrderedEffects(): ShaderEffect[] {
+    return this.buildOrderedEffects()
+  }
+
+  public getGraph(): ShaderGraph {
+    const nodes: GraphNode[] = []
+    const edges: GraphEdge[] = []
+    const visited = new Set<string>()
+
+    const visit = (effect: ShaderEffect): void => {
+      if (visited.has(effect.id)) {
+        return
+      }
+      visited.add(effect.id)
+
+      nodes.push({
+        id: effect.id,
+        name: effect.effectName,
+        ref: effect,
+      })
+
+      for (const input of Object.values(effect.inputs)) {
+        if (input instanceof ShaderEffect) {
+          edges.push({
+            from: input.id,
+            to: effect.id,
+          })
+          visit(input)
+        }
+      }
+    }
+
+    visit(this)
+    return { nodes, edges }
+  }
+
+  renderAll(engine: BABYLON.Engine): void {
+    const ordered = this.getOrderedEffects()
     for (const effect of ordered) {
       effect.render(engine)
     }
   }
+}
+
+export interface GraphNode {
+  id: string
+  name: string
+  ref: ShaderEffect
+}
+
+export interface GraphEdge {
+  from: string
+  to: string
+}
+
+export interface ShaderGraph {
+  nodes: GraphNode[]
+  edges: GraphEdge[]
 }
 
 export interface MaterialHandles<U, TName extends string = string> {
@@ -203,6 +278,7 @@ export interface CustomShaderEffectOptions<U, I extends ShaderInputShape<I> = Sh
   materialName?: string
   sampleMode?: 'nearest' | 'linear'
   precision?: RenderPrecision
+  uniformMeta?: UniformDescriptor[]
 }
 
 export class CustomShaderEffect<U extends object, I extends ShaderInputShape<I> = ShaderInputs> extends ShaderEffect<I> {
@@ -224,6 +300,9 @@ export class CustomShaderEffect<U extends object, I extends ShaderInputShape<I> 
   protected readonly textureType: number
   protected readonly passTextureSources: RuntimePassTextureSource<I>[][]
   protected readonly passTargets: Array<BABYLON.RenderTargetTexture | undefined>
+  public readonly uniformMeta: UniformDescriptor[]
+  private readonly uniformMetaLookup: Map<string, UniformDescriptor>
+  private readonly uniformRuntime: Record<string, UniformRuntime> = {}
 
   get material(): BABYLON.ShaderMaterial {
     return this.passHandles[0].material
@@ -234,9 +313,104 @@ export class CustomShaderEffect<U extends object, I extends ShaderInputShape<I> 
     return this.passTargets[passIndex]
   }
 
+  public getUniformsMeta(): UniformDescriptor[] {
+    return this.uniformMeta
+  }
+
+  public getUniformRuntime(): Record<string, UniformRuntime> {
+    return this.uniformRuntime
+  }
+
+  public getFloatUniformNames(): string[] {
+    return this.uniformMeta.filter((descriptor) => descriptor.kind === 'f32').map((descriptor) => descriptor.name)
+  }
+
+  private findUniformDescriptor(name: string): UniformDescriptor | undefined {
+    return this.uniformMetaLookup.get(name)
+  }
+
+  private ensureUniformRuntime(name: string): UniformRuntime {
+    const existing = this.uniformRuntime[name]
+    if (existing) {
+      return existing
+    }
+    const descriptor = this.findUniformDescriptor(name)
+    const runtime: UniformRuntime = {
+      isDynamic: false,
+    }
+    if (descriptor) {
+      if (descriptor.ui) {
+        if (descriptor.ui.min !== undefined) {
+          runtime.min = descriptor.ui.min
+        }
+        if (descriptor.ui.max !== undefined) {
+          runtime.max = descriptor.ui.max
+        }
+      }
+      if (typeof descriptor.default === 'number') {
+        runtime.current = descriptor.default
+        if (runtime.min === undefined) {
+          runtime.min = descriptor.default
+        }
+        if (runtime.max === undefined) {
+          runtime.max = descriptor.default
+        }
+      }
+    }
+    this.uniformRuntime[name] = runtime
+    return runtime
+  }
+
+  private updateRuntimeFromSetValue(name: string, value: Dynamic<ShaderUniform>): void {
+    const descriptor = this.findUniformDescriptor(name)
+    if (!descriptor || descriptor.kind !== 'f32') {
+      return
+    }
+    if (typeof value === 'function') {
+      const runtime = this.ensureUniformRuntime(name)
+      runtime.isDynamic = true
+      return
+    }
+    if (typeof value === 'number') {
+      const runtime = this.ensureUniformRuntime(name)
+      runtime.isDynamic = false
+      runtime.current = value
+      if (runtime.min === undefined || value < runtime.min) {
+        runtime.min = value
+      }
+      if (runtime.max === undefined || value > runtime.max) {
+        runtime.max = value
+      }
+    }
+  }
+
+  private updateRuntimeFromResolvedValue(name: string, value: unknown): void {
+    const descriptor = this.findUniformDescriptor(name)
+    if (!descriptor || descriptor.kind !== 'f32' || typeof value !== 'number') {
+      return
+    }
+    const runtime = this.ensureUniformRuntime(name)
+    runtime.current = value
+    const source = this.uniforms[name]
+    runtime.isDynamic = typeof source === 'function'
+    if (runtime.min === undefined || value < runtime.min) {
+      runtime.min = value
+    }
+    if (runtime.max === undefined || value > runtime.max) {
+      runtime.max = value
+    }
+  }
+
   constructor(engine: BABYLON.WebGPUEngine, inputs: I, options: CustomShaderEffectOptions<U, I>) {
     super()
     this.engine = engine
+    this.uniformMeta = options.uniformMeta ? [...options.uniformMeta] : []
+    this.uniformMetaLookup = new Map(this.uniformMeta.map((descriptor) => [descriptor.name, descriptor]))
+    for (const descriptor of this.uniformMeta) {
+      if (descriptor.kind === 'f32') {
+        this.ensureUniformRuntime(descriptor.name)
+      }
+    }
     const width = options.width ?? this.width
     const height = options.height ?? this.height
     const sampleMode = options.sampleMode ?? 'linear'
@@ -465,14 +639,18 @@ export class CustomShaderEffect<U extends object, I extends ShaderInputShape<I> 
 
   setUniforms(uniforms: ShaderUniforms): void {
     for (const key in uniforms) {
-      this.uniforms[key] = uniforms[key]
+      const value = uniforms[key]
+      this.uniforms[key] = value
+      this.updateRuntimeFromSetValue(key, value)
     }
   }
 
   updateUniforms(): void {
     const resolvedUniforms: Record<string, unknown> = {}
     for (const key in this.uniforms) {
-      resolvedUniforms[key] = extract(this.uniforms[key])
+      const resolved = extract(this.uniforms[key])
+      resolvedUniforms[key] = resolved
+      this.updateRuntimeFromResolvedValue(key, resolved)
     }
     const partial = resolvedUniforms as Partial<U>
     for (const handles of this.passHandles) {

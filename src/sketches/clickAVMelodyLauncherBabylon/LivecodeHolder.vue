@@ -1,6 +1,6 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
-import { appStateName, type ClickAVAppState, engineRef } from './appState';
+import { appStateName, type ClickAVAppState, engineRef, shaderGraphEndNodeRef } from './appState';
 import { inject, onMounted, onUnmounted, watch, type WatchStopHandle } from 'vue';
 import { CanvasPaint, CustomShaderEffect, FeedbackNode, PassthruEffect, type ShaderEffect } from '@/rendering/shaderFXBabylon';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords, targetNormalizedCoords } from '@/io/keyboardAndMouse';
@@ -32,7 +32,8 @@ const clearDrawFuncs = () => {
   appState.drawFuncMap.clear()
 }
 
-const setupSketch = (engine: BABYLON.WebGPUEngine) => {
+const setupSketch = (engine: BABYLON.WebGPUEngine) => { 
+  shaderGraphEndNodeRef.value = undefined
   try {
 
     const p5i = appState.p5Instance!!
@@ -174,6 +175,7 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
 
       const canvasPaint = new CanvasPaint(engine, { src: chainEnd }, width, height)
       shaderGraphEndNode = canvasPaint
+      shaderGraphEndNodeRef.value = shaderGraphEndNode
       
       // Debug: Check engine and canvas setup
       console.log('Engine canvas:', engine.getRenderingCanvas()?.id)
@@ -246,6 +248,7 @@ onUnmounted(() => {
   console.log("disposing livecoded resources")
   shaderGraphEndNode?.disposeAll()
   shaderGraphEndNode = undefined
+  shaderGraphEndNodeRef.value = undefined
   clearListeners()
   timeLoops.forEach(tl => tl.cancel())
   timeLoops = []

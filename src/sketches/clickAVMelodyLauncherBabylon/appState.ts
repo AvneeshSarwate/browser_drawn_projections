@@ -1,6 +1,7 @@
 import p5 from 'p5'
 import * as BABYLON from 'babylonjs'
 import { Entity, EntityList } from '@/stores/undoCommands'
+import type { ShaderEffect } from '@/rendering/shaderFXBabylon'
 
 
 //@ts-ignore
@@ -125,6 +126,7 @@ export type ClickAVAppState = {
 
 // Separate reactive engine ref
 export const engineRef = shallowRef<BABYLON.WebGPUEngine | undefined>(undefined)
+export const shaderGraphEndNodeRef = shallowRef<ShaderEffect | undefined>(undefined)
 
 export const appState: ClickAVAppState = {
   circles: new EntityList(PulseCircle),

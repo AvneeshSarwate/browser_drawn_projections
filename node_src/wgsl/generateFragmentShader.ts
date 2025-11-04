@@ -29,6 +29,16 @@ interface UniformField {
   bindingName: string;
   wgslType: string;
   defaultExpression?: string;
+  uiMin?: number;
+  uiMax?: number;
+  uiStep?: number;
+}
+
+interface UniformCommentAnnotation {
+  defaultExpression?: string;
+  uiMin?: number;
+  uiMax?: number;
+  uiStep?: number;
 }
 
 interface TextureParam {
@@ -182,7 +192,7 @@ function validateSamplerArgument(argument: ArgumentInfo): void {
 }
 
 function collectUniformFields(struct: StructInfo, uniformArgName: string, shaderSource: string): UniformField[] {
-  const defaultMap = extractUniformDefaults(shaderSource, struct.name);
+  const annotationMap = extractUniformAnnotations(shaderSource, struct.name);
   return struct.members.map((member) => {
     if (member.type.isStruct || member.type.isArray) {
       throw new Error(`Uniform field ${member.name} uses unsupported type ${member.type.getTypeName()}. Nested structs/arrays are not supported.`);
@@ -192,25 +202,29 @@ function collectUniformFields(struct: StructInfo, uniformArgName: string, shader
       throw new Error(`Uniform field ${member.name} uses unsupported type ${typeName}.`);
     }
     const bindingName = `${uniformArgName}_${member.name}`;
+    const annotations = annotationMap[member.name];
     return {
       name: member.name,
       bindingName,
       wgslType: typeName,
-      defaultExpression: defaultMap[member.name],
+      defaultExpression: annotations?.defaultExpression,
+      uiMin: annotations?.uiMin,
+      uiMax: annotations?.uiMax,
+      uiStep: annotations?.uiStep,
     };
   });
 }
 
-function extractUniformDefaults(source: string, structName: string): Record<string, string> {
-  const defaults: Record<string, string> = {};
+function extractUniformAnnotations(source: string, structName: string): Record<string, UniformCommentAnnotation> {
+  const annotations: Record<string, UniformCommentAnnotation> = {};
   const structRegex = new RegExp(`struct\\s+${structName}\\s*\\{`, 'g');
   const match = structRegex.exec(source);
   if (!match) {
-    return defaults;
+    return annotations;
   }
   const braceStart = source.indexOf('{', match.index);
   if (braceStart === -1) {
-    return defaults;
+    return annotations;
   }
   let depth = 0;
   let endIndex = braceStart;
@@ -247,38 +261,111 @@ function extractUniformDefaults(source: string, structName: string): Record<stri
       continue;
     }
     const fieldName = fieldMatch[1];
-    const expression = parseDefaultExpression(comment);
-    if (expression !== null) {
-      defaults[fieldName] = expression;
+    const annotation = parseUniformComment(comment);
+    if (annotation) {
+      annotations[fieldName] = annotation;
     }
   }
-  return defaults;
+  return annotations;
 }
 
-function parseDefaultExpression(comment: string): string | null {
+function parseUniformComment(comment: string): UniformCommentAnnotation | null {
   const trimmed = comment.trim();
   if (!trimmed) {
     return null;
   }
+  const annotation: UniformCommentAnnotation = {};
+  const defaultExpression = parseDefaultExpression(trimmed);
+  if (defaultExpression !== null) {
+    annotation.defaultExpression = defaultExpression;
+  }
+  const minMatch = trimmed.match(/(?:^|\s)min=([-+]?\d*\.?\d+(?:[eE][-+]?\d+)?)/);
+  const maxMatch = trimmed.match(/(?:^|\s)max=([-+]?\d*\.?\d+(?:[eE][-+]?\d+)?)/);
+  const stepMatch = trimmed.match(/(?:^|\s)step=([-+]?\d*\.?\d+(?:[eE][-+]?\d+)?)/);
+  if (minMatch) {
+    const value = Number(minMatch[1]);
+    if (!Number.isNaN(value)) {
+      annotation.uiMin = value;
+    }
+  }
+  if (maxMatch) {
+    const value = Number(maxMatch[1]);
+    if (!Number.isNaN(value)) {
+      annotation.uiMax = value;
+    }
+  }
+  if (stepMatch) {
+    const value = Number(stepMatch[1]);
+    if (!Number.isNaN(value)) {
+      annotation.uiStep = value;
+    }
+  }
+  return Object.keys(annotation).length > 0 ? annotation : null;
+}
+
+function parseDefaultExpression(comment: string): string | null {
+  const trimmed = comment.trim();
+  if (!trimmed || /^(?:min|max|step)=/i.test(trimmed)) {
+    return null;
+  }
+
+  let candidate = trimmed;
+  const firstChar = trimmed[0];
+
+  if (firstChar === '[') {
+    const match = trimmed.match(/^\[[^\]]*\]/);
+    if (match) {
+      candidate = match[0];
+    }
+  } else if (firstChar === '{') {
+    const match = trimmed.match(/^\{[^}]*\}/);
+    if (match) {
+      candidate = match[0];
+    }
+  } else {
+    const quotedMatch = trimmed.match(/^(\"[^\"]*\"|\'[^\']*\')/);
+    if (quotedMatch) {
+      candidate = quotedMatch[0];
+    } else {
+      const boolMatch = trimmed.match(/^(true|false)/i);
+      if (boolMatch) {
+        candidate = boolMatch[1].toLowerCase();
+      } else {
+        const numericMatch = trimmed.match(/^[-+]?(?:\d+\.\d*|\d*\.\d+|\d+)(?:[eE][-+]?\d+)?/);
+        if (numericMatch && numericMatch[0] !== '') {
+          candidate = numericMatch[0];
+        } else {
+          const firstToken = trimmed.split(/\s+/)[0];
+          candidate = firstToken;
+        }
+      }
+    }
+  }
+
   try {
-    const parsed = JSON.parse(trimmed);
+    const parsed = JSON.parse(candidate);
     if (typeof parsed === 'boolean') {
       return parsed ? 'true' : 'false';
     }
-    return trimmed;
+    if (typeof parsed === 'number') {
+      return candidate;
+    }
+    if (typeof parsed === 'string') {
+      return JSON.stringify(parsed);
+    }
+    return candidate;
   } catch (error) {
-    const lower = trimmed.toLowerCase();
+    const lower = candidate.toLowerCase();
     if (lower === 'true' || lower === 'false') {
       return lower;
     }
-    const numeric = Number(trimmed);
+    const numeric = Number(candidate);
     if (!Number.isNaN(numeric)) {
-      return trimmed;
+      return candidate;
     }
   }
   return null;
 }
-
 function generateUniformStructConstruction(struct: StructInfo, fields: UniformField[]): string {
   if (fields.length === 0) {
     return '';
@@ -661,7 +748,12 @@ export async function generateFragmentShaderArtifacts(
       }
       return relative.replace(/\.ts$/, '');
     })();
-    const shaderFxImports = ['CustomShaderEffect', 'type ShaderSource', 'type RenderPrecision'];
+    const shaderFxImports = [
+      'CustomShaderEffect',
+      'type ShaderSource',
+      'type RenderPrecision',
+      'type UniformDescriptor',
+    ];
     if (uniformFields.length > 0) {
       shaderFxImports.push('type ShaderUniforms', 'type Dynamic');
     }
@@ -765,6 +857,7 @@ export async function generateFragmentShaderArtifacts(
     const materialHandlesName = `${shaderPrefix}MaterialHandles`;
     const materialOptionsName = `${shaderPrefix}MaterialOptions`;
     const setUniformsFunctionName = uniformStruct && uniformFields.length > 0 ? `set${uniformInterfaceName}` : null;
+    const uniformMetaConstName = `${shaderPrefix}UniformMeta`;
 
     const tsLines: string[] = [];
     tsLines.push(HEADER_COMMENT);
@@ -800,6 +893,39 @@ export async function generateFragmentShaderArtifacts(
     passTextureSourceLines.push(`] as const;`);
     passTextureSourceLines.push('');
     tsLines.push(...passTextureSourceLines);
+
+    const uniformMetaLines: string[] = [];
+    if (uniformFields.length > 0) {
+      uniformMetaLines.push(`export const ${uniformMetaConstName}: UniformDescriptor[] = [`);
+      uniformFields.forEach((field) => {
+        uniformMetaLines.push('  {');
+        uniformMetaLines.push(`    name: '${field.name}',`);
+        uniformMetaLines.push(`    kind: '${field.wgslType}',`);
+        uniformMetaLines.push(`    bindingName: '${field.bindingName}',`);
+        if (field.defaultExpression) {
+          uniformMetaLines.push(`    default: ${field.defaultExpression},`);
+        }
+        const uiEntries: string[] = [];
+        if (field.uiMin !== undefined) {
+          uiEntries.push(`min: ${field.uiMin}`);
+        }
+        if (field.uiMax !== undefined) {
+          uiEntries.push(`max: ${field.uiMax}`);
+        }
+        if (field.uiStep !== undefined) {
+          uiEntries.push(`step: ${field.uiStep}`);
+        }
+        if (uiEntries.length > 0) {
+          uniformMetaLines.push(`    ui: { ${uiEntries.join(', ')} },`);
+        }
+        uniformMetaLines.push('  },');
+      });
+      uniformMetaLines.push('];');
+    } else {
+      uniformMetaLines.push(`export const ${uniformMetaConstName}: UniformDescriptor[] = [];`);
+    }
+    uniformMetaLines.push('');
+    tsLines.push(...uniformMetaLines);
 
     if (helperBlocks.length > 0) {
       tsLines.push(...helperBlocks);
@@ -895,6 +1021,7 @@ export async function generateFragmentShaderArtifacts(
     effectLines.push(`      materialName: '${shaderPrefix}Material',`);
     effectLines.push('      sampleMode,');
     effectLines.push('      precision,');
+    effectLines.push(`      uniformMeta: ${uniformMetaConstName},`);
     effectLines.push('    })');
     const fieldsWithDefaults = uniformFields.filter((field) => field.defaultExpression);
     if (fieldsWithDefaults.length > 0) {
