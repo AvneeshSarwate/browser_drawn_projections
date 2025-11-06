@@ -29,29 +29,57 @@ const currentValue = computed(() => {
   return defaultValue.value
 })
 
-const min = computed(() => {
-  if (isDynamic.value) {
-    if (runtime.value?.min !== undefined) {
-      return runtime.value.min
+const min = computed(() => runtime.value?.min ?? props.param.ui?.min)
+
+const max = computed(() => runtime.value?.max ?? props.param.ui?.max)
+
+const sliderBounds = computed(() => {
+  const current = currentValue.value
+  let minVal = typeof min.value === 'number' ? min.value : undefined
+  let maxVal = typeof max.value === 'number' ? max.value : undefined
+
+  const ensureSpan = (base: number | undefined) => {
+    const magnitude = Math.max(Math.abs(base ?? current) || 0, 0.5)
+    return Math.max(magnitude, 0.5)
+  }
+
+  if (minVal === undefined && maxVal === undefined) {
+    const span = ensureSpan(current)
+    minVal = current - span
+    maxVal = current + span
+  } else {
+    if (minVal === undefined) {
+      const span = ensureSpan(maxVal)
+      minVal = (typeof current === 'number' ? current : maxVal ?? 0) - span
+    }
+    if (maxVal === undefined) {
+      const span = ensureSpan(minVal)
+      maxVal = (typeof current === 'number' ? current : minVal ?? 0) + span
     }
   }
-  return props.param.ui?.min ?? 0
+
+  if (minVal === maxVal) {
+    const delta = ensureSpan(minVal) * 0.5
+    minVal -= delta
+    maxVal += delta
+  }
+
+  if (maxVal < minVal) {
+    const midpoint = (minVal + maxVal) / 2
+    const span = ensureSpan(midpoint)
+    minVal = midpoint - span
+    maxVal = midpoint + span
+  }
+
+  return { min: minVal, max: maxVal }
 })
 
-const max = computed(() => {
-  if (isDynamic.value) {
-    if (runtime.value?.max !== undefined) {
-      return runtime.value.max
-    }
-  }
-  return props.param.ui?.max ?? 1
-})
+const sliderMin = computed(() => sliderBounds.value.min)
+const sliderMax = computed(() => sliderBounds.value.max)
+const formattedMin = computed(() => (typeof min.value === 'number' ? min.value.toFixed(2) : null))
+const formattedMax = computed(() => (typeof max.value === 'number' ? max.value.toFixed(2) : null))
 
 const step = computed(() => props.param.ui?.step ?? 0.001)
-
-const formattedMin = computed(() => min.value.toFixed(2))
-const formattedMax = computed(() => max.value.toFixed(2))
-const formattedCurrent = computed(() => currentValue.value.toFixed(3))
 
 function cancelAnimation() {
   if (animationFrameId !== null) {
@@ -112,26 +140,48 @@ function onInput(event: Event) {
   }
   const target = event.target as HTMLInputElement
   const value = Number(target.value)
-  sliderValue.value = value
-  ;(props.effect as any).setUniforms({ [props.param.name]: value })
+  applyValue(value, { fromSlider: true })
+}
+
+function onNumberInput(event: Event) {
+  if (isDynamic.value) {
+    return
+  }
+  const target = event.target as HTMLInputElement
+  const value = Number(target.value)
+  applyValue(value, { fromSlider: false })
+}
+
+function applyValue(rawValue: number, options: { fromSlider: boolean }) {
+  if (!props.effect || typeof (props.effect as any).setUniforms !== 'function') {
+    return
+  }
+  if (!Number.isFinite(rawValue)) {
+    return
+  }
+  let valueToApply = rawValue
+  if (options.fromSlider) {
+    const { min: lower, max: upper } = sliderBounds.value
+    valueToApply = Math.min(Math.max(valueToApply, lower), upper)
+  }
+  sliderValue.value = valueToApply
+  ;(props.effect as any).setUniforms({ [props.param.name]: valueToApply })
 }
 </script>
 
 <template>
-  <div class="float-slider">
-    <label>
-      <span class="param-name">{{ param.name }}</span>
+  <div class="float-slider" :class="{ dynamic: isDynamic }">
+    <div class="param-name">
+      {{ param.name }}
       <span v-if="isDynamic" class="dynamic-badge">Dynamic</span>
-    </label>
+    </div>
 
-    <div class="slider-row">
-      <span class="value-label">{{ formattedMin }}</span>
-
+    <div class="controls">
       <input
         type="range"
         :value="sliderValue"
-        :min="min"
-        :max="max"
+        :min="sliderMin"
+        :max="sliderMax"
         :step="step"
         :disabled="isDynamic"
         class="slider"
@@ -139,39 +189,48 @@ function onInput(event: Event) {
         @input="onInput"
       />
 
-      <span class="value-label">{{ formattedMax }}</span>
-    </div>
+      <span v-if="formattedMin || formattedMax" class="range-hint">
+        <span class="range-line">[{{ formattedMin ?? '—' }}</span>
+        <span class="range-line">{{ formattedMax ?? '—' }}]</span>
+      </span>
+      <span v-else class="range-hint placeholder"></span>
 
-    <div class="current-value">{{ formattedCurrent }}</div>
+      <input
+        type="number"
+        :value="sliderValue"
+        :step="step"
+        :disabled="isDynamic"
+        class="numeric-input"
+        @input="onNumberInput"
+      />
+    </div>
   </div>
 </template>
 
 <style scoped>
 .float-slider {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
+  display: grid;
+  grid-template-columns: minmax(120px, auto) 1fr;
+  align-items: center;
+  gap: 0.4rem;
   padding: 0.25rem 0.3rem;
   border-radius: 6px;
   background: rgba(0, 0, 0, 0.25);
   border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-label {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.8rem;
-  letter-spacing: 0.01em;
-}
-
 .param-name {
+  font-size: 0.8rem;
   font-weight: 600;
+  letter-spacing: 0.01em;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 
 .dynamic-badge {
   font-size: 0.6rem;
-  padding: 0.05rem 0.3rem;
+  padding: 0.05rem 0.25rem;
   background: #c27c2c;
   color: #fff;
   border-radius: 999px;
@@ -179,35 +238,64 @@ label {
   letter-spacing: 0.08em;
 }
 
-.slider-row {
-  display: flex;
+</style>
+
+<style scoped>
+.controls {
+  display: grid;
+  grid-template-columns: 1fr minmax(68px, auto) minmax(44px, auto);
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.3rem;
+}
+
+.range-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-size: 0.58rem;
+  color: rgba(255, 255, 255, 0.45);
+  line-height: 1.05;
+}
+
+.range-hint.placeholder {
+  visibility: hidden;
+  min-height: calc(2 * 0.58rem);
+}
+
+.range-line {
+  white-space: nowrap;
 }
 
 .slider {
-  flex: 1;
+  width: 100%;
   accent-color: #2ea0fd;
 }
 
-.slider.dynamic {
+.float-slider.dynamic .slider {
   opacity: 0.6;
   cursor: not-allowed;
 }
 
-.value-label {
-  font-size: 0.65rem;
-  color: rgba(255, 255, 255, 0.6);
-  background: rgba(255, 255, 255, 0.05);
-  padding: 0.08rem 0.3rem;
-  min-width: 3rem;
-  text-align: center;
-  border-radius: 999px;
+.numeric-input {
+  width: 4.2ch;
+  min-width: 42px;
+  padding: 0.16rem 0.22rem;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.4);
+  color: #f2f2f2;
+  font-size: 0.7rem;
+  font-family: inherit;
 }
 
-.current-value {
-  text-align: center;
-  font-size: 0.7rem;
-  color: rgba(255, 255, 255, 0.72);
+.numeric-input:focus {
+  outline: none;
+  border-color: rgba(46, 160, 253, 0.8);
+  box-shadow: 0 0 0 2px rgba(46, 160, 253, 0.2);
+}
+
+.numeric-input:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
 }
 </style>

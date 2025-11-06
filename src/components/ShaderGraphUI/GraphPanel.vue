@@ -29,7 +29,7 @@ function buildElements() {
 function runLayout() {
   if (!cy) return
   // @ts-expect-error layout options for dagre are not in core typings
-  cy.layout({ name: 'dagre', rankDir: 'LR', nodeSep: 50, rankSep: 100 }).run()
+  cy.layout({ name: 'dagre', rankDir: 'TB', nodeSep: 20, rankSep: 20 }).run()
 }
 
 onMounted(() => {

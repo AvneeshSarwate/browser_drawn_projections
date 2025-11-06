@@ -1018,6 +1018,7 @@ export class FeedbackNode extends ShaderEffect<FeedbackInputs> {
   private readonly sampleMode: 'nearest' | 'linear'
   private firstRender = true
   private feedbackSrc?: ShaderEffect
+  effectName = 'FeedbackNode'
 
   constructor(
     engine: BABYLON.WebGPUEngine,
