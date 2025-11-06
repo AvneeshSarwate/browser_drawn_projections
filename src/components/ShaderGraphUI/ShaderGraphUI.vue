@@ -82,9 +82,11 @@ const hasGraphData = computed(() => graph.value.nodes.length > 0)
 
       <div class="params-section">
         <h3>Parameters</h3>
-        <ParamsPanel v-if="selectedEffect" :effect="selectedEffect as ShaderEffect" />
-        <div v-else class="no-selection">
-          Click a node to view parameters
+        <div class="params-scroll">
+          <ParamsPanel v-if="selectedEffect" :effect="selectedEffect as ShaderEffect" />
+          <div v-else class="no-selection">
+            Click a node to view parameters
+          </div>
         </div>
       </div>
     </div>
@@ -104,6 +106,8 @@ const hasGraphData = computed(() => graph.value.nodes.length > 0)
   width: 750px;
   max-width: 100%;
   min-height: var(--shader-graph-panel-min-height, 300px);
+  height: 450px;
+  overflow: hidden;
   border: 1px solid #1f1f1f;
   border-radius: 8px;
   background: #101010;
@@ -118,6 +122,9 @@ const hasGraphData = computed(() => graph.value.nodes.length > 0)
   gap: 1rem;
   width: var(--shader-graph-ui-width, 100%);
   align-items: stretch;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .graph-section {
@@ -125,16 +132,26 @@ const hasGraphData = computed(() => graph.value.nodes.length > 0)
   flex-direction: column;
   flex: 1 1 0;
   min-width: 0;
+  min-height: 0;
 }
 
 .params-section {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  overflow-y: auto;
-  padding-right: 0.25rem;
+  overflow: hidden;
   flex: 1 1 0;
   min-width: 500px;
+  min-height: 0;
+}
+
+.params-scroll {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 0.25rem;
 }
 
 .loading-placeholder {
