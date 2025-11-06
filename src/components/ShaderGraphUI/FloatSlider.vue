@@ -278,7 +278,7 @@ function applyValue(rawValue: number, options: { fromSlider: boolean }) {
 
 .numeric-input {
   width: 4.2ch;
-  min-width: 42px;
+  min-width: 80px;
   padding: 0.16rem 0.22rem;
   border-radius: 5px;
   border: 1px solid rgba(255, 255, 255, 0.18);
