@@ -64,51 +64,88 @@ function onNodeClick(nodeId: string) {
 }
 
 const selectedId = computed(() => selectedEffectId.value)
+const hasGraphData = computed(() => graph.value.nodes.length > 0)
 </script>
 
 <template>
-  <div class="shader-graph-ui">
-    <div class="graph-section">
-      <h3>Effect Chain</h3>
-      <GraphPanel
-        :nodes="graph.nodes"
-        :edges="graph.edges"
-        :selected-node-id="selectedId ?? undefined"
-        @node-click="onNodeClick"
-      />
+  <div class="shader-graph-panel">
+    <div v-if="hasGraphData" class="shader-graph-ui">
+      <div class="graph-section">
+        <h3>Effect Chain</h3>
+        <GraphPanel
+          :nodes="graph.nodes"
+          :edges="graph.edges"
+          :selected-node-id="selectedId ?? undefined"
+          @node-click="onNodeClick"
+        />
+      </div>
+
+      <div class="params-section">
+        <h3>Parameters</h3>
+        <ParamsPanel v-if="selectedEffect" :effect="selectedEffect as ShaderEffect" />
+        <div v-else class="no-selection">
+          Click a node to view parameters
+        </div>
+      </div>
     </div>
 
-    <div class="params-section">
-      <h3>Parameters</h3>
-      <ParamsPanel v-if="selectedEffect" :effect="selectedEffect as ShaderEffect" />
-      <div v-else class="no-selection">
-        Click a node to view parameters
-      </div>
+    <div v-else class="loading-placeholder">
+      Shader graph loading…
     </div>
   </div>
 </template>
 
 <style scoped>
-.shader-graph-ui {
+.shader-graph-panel {
   display: flex;
   flex-direction: column;
+  justify-content: flex-start;
+  gap: 0.75rem;
+  width: 750px;
+  max-width: 100%;
+  min-height: var(--shader-graph-panel-min-height, 300px);
+  border: 1px solid #1f1f1f;
+  border-radius: 8px;
+  background: #101010;
+  padding: 0.75rem;
+  color: #f0f0f0;
+  box-sizing: border-box;
+}
+
+.shader-graph-ui {
+  display: flex;
+  flex-direction: row;
   gap: 1rem;
-  width: 100%;
+  width: var(--shader-graph-ui-width, 100%);
+  align-items: stretch;
 }
 
 .graph-section {
   display: flex;
   flex-direction: column;
-  width: 100%;
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 .params-section {
-  width: 100%;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
   overflow-y: auto;
   padding-right: 0.25rem;
+  flex: 1 1 0;
+  min-width: 500px;
+}
+
+.loading-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 auto;
+  color: #999;
+  font-style: italic;
+  height: 100%;
+  min-height: 200px;
 }
 
 .no-selection {

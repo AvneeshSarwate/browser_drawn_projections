@@ -13,10 +13,7 @@ const shaderGraphEffect = computed(() => shaderGraphEndNodeRef.value ?? null)
       <div id="divider"></div>
       <canvas id="threeCanvas" width="1280" height="720" abitrary-prop="somethi"></canvas>
     </div>
-    <div class="ui-panel">
-      <ShaderGraphUI v-if="shaderGraphEffect" :final-effect="shaderGraphEffect" />
-      <div v-else class="ui-placeholder">Shader graph loading…</div>
-    </div>
+    <ShaderGraphUI :final-effect="shaderGraphEffect" />
   </div>
   <div>
     click anywhere to start a loop. Press the "c" key to clear all loops. Press the "u" key to clear the last loop
@@ -66,26 +63,4 @@ const shaderGraphEffect = computed(() => shaderGraphEndNodeRef.value ?? null)
   background-color: white;
 }
 
-.ui-panel {
-  width: 500px;
-  border: 1px solid #1f1f1f;
-  border-radius: 8px;
-  background: #101010;
-  padding: 0.75rem;
-  color: #f0f0f0;
-  min-height: 300px;
-}
-
-.ui-panel :deep(.shader-graph-ui) {
-  height: auto;
-}
-
-.ui-placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  color: #999;
-  font-style: italic;
-}
 </style>
