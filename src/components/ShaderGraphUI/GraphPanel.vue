@@ -115,7 +115,12 @@ watch(
       const node = cy.$(`#${nodeId}`)
       if (node) {
         node.select()
-        cy.center(node)
+        cy.animate({
+          center: { eles: node }
+        }, {
+          duration: 250,
+          easing: 'ease-in-out'
+        })
       }
     }
   },
