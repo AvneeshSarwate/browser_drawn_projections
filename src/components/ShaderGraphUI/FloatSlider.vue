@@ -243,7 +243,7 @@ function applyValue(rawValue: number, options: { fromSlider: boolean }) {
 <style scoped>
 .controls {
   display: grid;
-  grid-template-columns: 1fr minmax(68px, auto) minmax(44px, auto);
+  grid-template-columns: 1fr minmax(44px, auto) minmax(68px, auto);
   align-items: center;
   gap: 0.3rem;
 }
