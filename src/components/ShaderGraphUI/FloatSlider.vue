@@ -8,6 +8,7 @@ const props = defineProps<{
 }>()
 
 const sliderValue = ref(0)
+const textInputValue = ref('0')
 let animationFrameId: number | null = null
 
 const runtime = computed(() => {
@@ -96,6 +97,7 @@ function updateDynamicSlider() {
 
 onMounted(() => {
   sliderValue.value = currentValue.value
+  textInputValue.value = currentValue.value.toString()
   if (isDynamic.value) {
     updateDynamicSlider()
   }
@@ -110,6 +112,7 @@ watch(
   () => {
     cancelAnimation()
     sliderValue.value = currentValue.value
+    textInputValue.value = currentValue.value.toString()
     if (isDynamic.value) {
       updateDynamicSlider()
     }
@@ -119,6 +122,7 @@ watch(
 watch(currentValue, (value) => {
   if (!isDynamic.value) {
     sliderValue.value = value
+    textInputValue.value = value.toString()
   }
 })
 
@@ -128,6 +132,7 @@ watch(isDynamic, (dynamic) => {
   } else {
     cancelAnimation()
     sliderValue.value = currentValue.value
+    textInputValue.value = currentValue.value.toString()
   }
 })
 
@@ -143,13 +148,30 @@ function onInput(event: Event) {
   applyValue(value, { fromSlider: true })
 }
 
-function onNumberInput(event: Event) {
+function onTextInput(event: Event) {
   if (isDynamic.value) {
     return
   }
   const target = event.target as HTMLInputElement
-  const value = Number(target.value)
-  applyValue(value, { fromSlider: false })
+  textInputValue.value = target.value
+}
+
+function onTextBlur() {
+  if (isDynamic.value) {
+    return
+  }
+  const value = Number(textInputValue.value)
+  if (Number.isFinite(value)) {
+    applyValue(value, { fromSlider: false })
+  } else {
+    textInputValue.value = sliderValue.value.toString()
+  }
+}
+
+function onTextKeydown(event: KeyboardEvent) {
+  if (event.key === 'Enter') {
+    (event.target as HTMLInputElement).blur()
+  }
 }
 
 function applyValue(rawValue: number, options: { fromSlider: boolean }) {
@@ -165,6 +187,7 @@ function applyValue(rawValue: number, options: { fromSlider: boolean }) {
     valueToApply = Math.min(Math.max(valueToApply, lower), upper)
   }
   sliderValue.value = valueToApply
+  textInputValue.value = valueToApply.toString()
   ;(props.effect as any).setUniforms({ [props.param.name]: valueToApply })
 }
 </script>
@@ -197,11 +220,13 @@ function applyValue(rawValue: number, options: { fromSlider: boolean }) {
 
       <input
         type="number"
-        :value="sliderValue"
+        :value="textInputValue"
         :step="step"
         :disabled="isDynamic"
         class="numeric-input"
-        @input="onNumberInput"
+        @input="onTextInput"
+        @blur="onTextBlur"
+        @keydown="onTextKeydown"
       />
     </div>
   </div>
