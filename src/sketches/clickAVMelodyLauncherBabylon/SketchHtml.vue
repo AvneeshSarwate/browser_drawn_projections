@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import ShaderGraphUI from '@/components/ShaderGraphUI/ShaderGraphUI.vue'
+import PopoutWindow from '@/components/PopoutWindow.vue'
 import { shaderGraphEndNodeRef } from './appState'
 
 const shaderGraphEffect = computed(() => shaderGraphEndNodeRef.value ?? null)
+const canvasPopped = ref(false)
+const controlsPopped = ref(false)
 </script>
 
 <template>
@@ -11,9 +14,26 @@ const shaderGraphEffect = computed(() => shaderGraphEndNodeRef.value ?? null)
     <div id="canvasContainer">
       <canvas id="p5Canvas" width="1280" height="720" abitrary-prop="somethi"></canvas>
       <div id="divider"></div>
-      <canvas id="threeCanvas" width="1280" height="720" abitrary-prop="somethi"></canvas>
+      <PopoutWindow 
+        v-model="canvasPopped" 
+        title="Canvas" 
+        :width="1280" 
+        :height="720"
+        fullscreen-target="canvas"
+      >
+        <canvas id="threeCanvas" width="1280" height="720" abitrary-prop="somethi"></canvas>
+      </PopoutWindow>
     </div>
-    <ShaderGraphUI :final-effect="shaderGraphEffect" />
+    
+    <PopoutWindow 
+      v-model="controlsPopped" 
+      title="Controls" 
+      :width="600" 
+      :height="900"
+      :fill="false"
+    >
+      <ShaderGraphUI :final-effect="shaderGraphEffect" />
+    </PopoutWindow>
   </div>
   <div>
     click anywhere to start a loop. Press the "c" key to clear all loops. Press the "u" key to clear the last loop
