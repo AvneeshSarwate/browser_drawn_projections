@@ -1,4 +1,20 @@
-2D TreeShapes brainstorm 
+gestalt motion graphics systems brainstorm 
+
+
+
+P5.js instrument ideas 
+- agent swarm gesture hijack - each agent is a stroke/spline (eg closed shape), and they all have sets of gestures they cycle between ( move in directions, color change, shape change, size, stroke, etc) 
+    - With a Ui interruption, you hijack whatever gesture is running and have all of them run the same one 
+    - Or gesture hijacking only runs on a random subset
+    - Can also divide agents up into subsets (eg - one is always blue, one always red), and  run gesture hijacks on one subset at a time 
+        - Subsets can be based on assignment, or selected based on some conditions (everything within r radius of a point, everything red, etc)
+        - Can have agents be in multiple subsets in a priority levels to create “assemble from randomness” effects when you consolidate subsets from a different priority level 
+    - Gesture can be lerping into an arrangement 
+    - An arrangement can be dynamically following a hand drawn stroke gesture, or points distributed across a polygon shape 
+    - This is an alternative way to get at the same “persistence of motion in a stateful environment” type effect that hierarchical tree shapes system is meant to hit 
+- Projection mapped polygon fill animations but polygons can smoothly swap places while fill animations are running 
+    - Combine this with annotation piano roll to compose the triggers 
+    - Add a music player to make a end user projection mapping animation tool 
 
 
 Don’t need the API to be slick right away, just need to build the “low level” api that exposes all the necessary operations. Can build the high level api after experimenting and letting abstractions emerge 
