@@ -1022,15 +1022,15 @@ const fmChain = getFMSynthChain()
 const instrument = fmChain.instrument
 
 const playNote = (pitch: number, velocity: number, ctx: TimeContext, noteDur: number) => {
-  // console.log('note', pitch, velocity, noteDur)
-  // piano.triggerAttack(m2f(pitch), undefined, velocity / 127)
-  // ctx.branch(async ctx => {
-  //   await ctx.wait(noteDur)
-  //   piano.triggerRelease(m2f(pitch))
-  // }).finally(() => {
-  //   piano.triggerRelease(m2f(pitch))
-  // })
-  instrument.triggerAttackRelease(m2f(pitch), noteDur * 2, Tone.now(), velocity/127)
+  console.log('note', pitch, velocity, noteDur)
+  instrument.triggerAttack(m2f(pitch), undefined, velocity / 127)
+  ctx.branch(async ctx => {
+    await ctx.wait(noteDur)
+    instrument.triggerRelease(m2f(pitch))
+  }).finally(() => {
+    instrument.triggerRelease(m2f(pitch))
+  })
+  // instrument.triggerAttackRelease(m2f(pitch), noteDur * 2, Tone.now(), velocity/127)
 }
 
 async function startPipeline(skipMusic: boolean = false, useTestData: boolean = false) {
@@ -1129,7 +1129,7 @@ function launchProgrammaticPointer(melodies: AbletonClip[], colors: {readonly r:
         const startTime = ctx.time
 
         if (melodies && melodies[i] && !skipMusic) {
-          launchLoop(async ctx => {
+          ctx.branch(async ctx => {
             const durBeats = melodies[i].duration
             const durSec = durBeats * ctx.bpm / 60
             const stretchFactor = runTime / durSec

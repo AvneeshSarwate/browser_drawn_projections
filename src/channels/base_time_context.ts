@@ -163,7 +163,7 @@ export abstract class TimeContext {
    * the call to branchRet() is what gets you the extra layer to only apply the time update if the branch is awaited
    */
   public branch<T>(block: (ctx: TimeContext) => Promise<T>, debugName: string = ""): LoopHandle {
-    //todo bug - instead of now(), should use this.rootContext!.mostRecentDescendentTime?
+    
     const promise = createAndLaunchContext(block, this.rootContext!.mostRecentDescendentTime, Object.getPrototypeOf(this).constructor, false, this, debugName)
     //todo api - this allows you to manage a branch without accidentally awaiting on it in a way that
     //would screw up parent context time. but in general, awaiting on anything other than
@@ -288,6 +288,7 @@ export class DateTimeContext extends TimeContext{
           else reject()
           if (this.isCanceled) return 
           
+          //todo bug - is this defensive time check a bug?
           //defensive check so that time never moves "backwards" due to setTimeout jitter between context children
           this.rootContext!.mostRecentDescendentTime = Math.max(this.rootContext!.mostRecentDescendentTime, targetTime)
 
