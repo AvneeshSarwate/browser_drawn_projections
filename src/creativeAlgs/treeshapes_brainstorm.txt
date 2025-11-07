@@ -1,6 +1,21 @@
 gestalt motion graphics systems brainstorm 
 
 
+A particular implementation idea
+  - definition - Parametric Path Function (PPF) - some function x,y => x,y that takes parameters for the path shape, and a [0-1] range for progress
+    - simple straight line
+    - sinusoidal wave (with the sine axis being the straight line)
+    - semi circle (above or below)
+    - some random procedural path that can double out or back before ending at the right place
+    - some scattershot set of random points that you spline thru before reaching the end
+  - arrangement set up v1
+    - you have a circle of points, and they all move over a time step - at each step, they lerp to the position of the NEXT point on a circle - this can be "smooth" (aka follow the PPF of the circle arc that mimics the main circle), or it can be some other funky thing, so you get this mix of pattern/continuity, but also a "pattern break" 
+  - arrangement setup v2 (more heirarchy)
+    - you can have some sets of points "break off" from the main circle - then these points can be their own smaller circle. For the remaining points moving around the main circle, they could either even out so the circle is still whole, or leave a gap where the break-off points left from, and the stepped points just "jump over" the gaps to the next point
+    - the break-off points will smoothly lerp out of the main circle
+      - managing this in code (defining arrangements, defining heirarchical break offs, lerping) in a way that is ergonomic and prone to discovery of new forms is the "core magic" to unlock
+
+
 
 P5.js instrument ideas 
 - agent swarm gesture hijack - each agent is a stroke/spline (eg closed shape), and they all have sets of gestures they cycle between ( move in directions, color change, shape change, size, stroke, etc) 
