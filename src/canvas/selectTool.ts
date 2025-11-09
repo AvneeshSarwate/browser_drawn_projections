@@ -5,7 +5,7 @@ import { getCanvasItem, createGroupItem, createPolygonItem, removeCanvasItem } f
 import { polygonShapes, freehandStrokes, freehandStrokeGroups, type CanvasRuntimeState } from './canvasState'
 
 import { executeCommand } from './commands'
-import { getCurrentFreehandStateString, deepCloneWithNewIds, updateBakedFreehandData, updateTimelineState, refreshStrokeConnections } from './freehandTool'
+import { getCurrentFreehandStateString, deepCloneWithNewIds, updateBakedFreehandData, updateTimelineState, refreshStrokeConnections, updateFreehandDraggableStates } from './freehandTool'
 import { getCurrentPolygonStateString, attachPolygonHandlers, serializePolygonState, updateBakedPolygonData } from './polygonTool'
 import { hasAncestorConflict } from './canvasUtils'
 import { uid } from './canvasUtils'
@@ -491,6 +491,9 @@ export function duplicateSelection(state: CanvasRuntimeState) {
         const item = getCanvasItem(state, node)
         if (item) selectionStore.add(state, item, true)
       })
+
+      // Ensure node-level dragging is disabled for freehand items (unified Select behavior)
+      updateFreehandDraggableStates(state)
 
       // Refresh visuals/state
       freehandShapeGroup?.getLayer()?.batchDraw()
