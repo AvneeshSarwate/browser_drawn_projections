@@ -54,7 +54,7 @@ const controlsPopped = ref(false)
 }
 
 #canvasContainer {
-  background-color: black;
+  /* background-color: black; */
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -67,6 +67,7 @@ const controlsPopped = ref(false)
   left: 0;
   z-index: -1;
   /* visibility: hidden; */
+  background-color: black;
 }
 
 #threeCanvas {
@@ -75,6 +76,7 @@ const controlsPopped = ref(false)
   /* top: 0; */
   /* left: 0; */
   visibility: visible;
+  background-color: black;
 }
 
 #divider {
