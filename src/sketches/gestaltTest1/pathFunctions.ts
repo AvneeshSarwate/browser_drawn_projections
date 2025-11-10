@@ -106,7 +106,7 @@ const sinusoidalWavePath: ParametricPathDefinition = {
     const fallback = distance || 100
     return {
       amplitude: fallback * 0.2,
-      frequency: 2,
+      frequency: 5,
       phase: 0,
     } satisfies SinusoidalParams
   },

@@ -1,19 +1,65 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
-import { computed, inject, onMounted, onUnmounted, ref } from 'vue';
+import { computed, inject, onMounted, onUnmounted, ref, watch } from 'vue';
 import { type TemplateAppState, appStateName } from './appState';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousemoveEvent, singleKeydownEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
-import { Ramp, now } from '@/channels/channels';
+import { Ramp, launch, now, type CancelablePromisePoxy, type TimeContext } from '@/channels/channels';
 import { parametricPathMap, parametricPaths, type ParametricPathDefinition, type PathFunctionParams, type Vec2 } from './pathFunctions';
+import { time } from 'console';
+import { logisticSigmoid } from '@/rendering/logisticSigmoid';
 
 const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
 
-const startPoint = ref<Vec2 | null>(null)
-const endPoint = ref<Vec2 | null>(null)
-const selectedPathId = ref(parametricPaths[0]?.id ?? '')
+const timeLoops: CancelablePromisePoxy<any>[] = []
+const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromisePoxy<any> => {
+  const loop = launch(block)
+  timeLoops.push(loop)
+  return loop
+}
+
+const STORAGE_KEYS = {
+  start: 'gestaltTest1.startPoint',
+  end: 'gestaltTest1.endPoint',
+}
+
+const hasWindow = typeof window !== 'undefined'
+
+const loadStoredPoint = (key: string): Vec2 | null => {
+  if (!hasWindow) return null
+  try {
+    const raw = window.localStorage.getItem(key)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (typeof parsed?.x === 'number' && typeof parsed?.y === 'number') {
+      return parsed
+    }
+  } catch (err) {
+    console.warn('Failed to load stored point', err)
+  }
+  return null
+}
+
+const initialStart = appState.gestaltStartPoint ?? loadStoredPoint(STORAGE_KEYS.start)
+const initialEnd = appState.gestaltEndPoint ?? loadStoredPoint(STORAGE_KEYS.end)
+
+const startPoint = ref<Vec2 | null>(initialStart ? { ...initialStart } : null)
+const endPoint = ref<Vec2 | null>(initialEnd ? { ...initialEnd } : null)
+
+if (initialStart && !appState.gestaltStartPoint) {
+  appState.gestaltStartPoint = { ...initialStart }
+}
+if (initialEnd && !appState.gestaltEndPoint) {
+  appState.gestaltEndPoint = { ...initialEnd }
+}
+
+const defaultPathId = parametricPaths[0]?.id ?? ''
+const selectedPathId = ref(appState.gestaltSelectedPathId || defaultPathId)
+if (!appState.gestaltSelectedPathId && selectedPathId.value) {
+  appState.gestaltSelectedPathId = selectedPathId.value
+}
 const canLaunch = computed(() => Boolean(startPoint.value && endPoint.value && parametricPathMap.has(selectedPathId.value)))
 
 type ActiveLaunch = {
@@ -41,6 +87,29 @@ const removeLaunchById = (id: number) => {
     activeLaunches.splice(index, 1)
   }
 }
+
+const persistPoint = (key: string, point: Vec2 | null) => {
+  if (!hasWindow) return
+  if (point) {
+    window.localStorage.setItem(key, JSON.stringify(point))
+  } else {
+    window.localStorage.removeItem(key)
+  }
+}
+
+watch(startPoint, (val) => {
+  appState.gestaltStartPoint = val ? { ...val } : null
+  persistPoint(STORAGE_KEYS.start, val ? { ...val } : null)
+}, { deep: true })
+
+watch(endPoint, (val) => {
+  appState.gestaltEndPoint = val ? { ...val } : null
+  persistPoint(STORAGE_KEYS.end, val ? { ...val } : null)
+}, { deep: true })
+
+watch(selectedPathId, (val) => {
+  appState.gestaltSelectedPathId = val
+})
 
 const drawMarker = (p: p5, point: Vec2, color: string, label: string) => {
   p.push()
@@ -131,6 +200,7 @@ onUnmounted(() => {
   shaderGraphEndNode?.disposeAll()
   clearListeners()
   clearDrawFuncs()
+  timeLoops.forEach(loop => loop.cancel())
 })
 
 const launchSelectedPath = () => {
@@ -159,6 +229,48 @@ const launchSelectedPath = () => {
   })
 }
 
+type Runner = {
+  lastPos: { x: number, y: number },
+  nextPos: { x: number, y: number }
+}
+
+const runners: Runner[] = new Array(100).fill({ lastPos: { x: 0, y: 0 }, nextPos: { x: 0, y: 0 } })
+/* 
+- each element of runnerGroupings is a group or "sub arrangement" of runner indices
+  - no need for heirarchy really - just decide what points to grap out of one subarrangement into another,
+    and pick the "functional arrangement shape" (see below) correctly to get lerp out to look good enough
+- a sub arrangement stepping through involves rotating the index list of what is last/next
+- the actual "spots" of an arrangement will be static (eg, N points along a circle of radius r, center xy)
+- should come up with a bunch of sample "functional arrangement shape" functional generators like above
+- a problem may be "clean lerp" when breaking a sub arrangement out of another 
+ */
+const runnerGroupings: number[][] = [new Array(100).fill(0).map((e, i) => i)]
+
+
+launchLoop(async ctx => {
+  const stepTime = 1
+  let lastStepStart = ctx.time
+
+  //branch that runs lerpings - arrangemnt manipulation happens separately outside this loop
+  ctx.branch(async ctx => {
+    // eslint-disable-next-line no-constant-condition
+    while(true) {
+      while (ctx.time < lastStepStart + stepTime) {
+        const progress = (ctx.time - lastStepStart) / stepTime
+        const sigProg = logisticSigmoid(progress, 0.5)
+
+        //step all runners from last pos to next pos - a naive lerp between by sigProg
+
+        await ctx.waitSec(0.016)
+      }
+      lastStepStart = lastStepStart + stepTime
+    }
+  })
+
+
+
+})
+
 const clamp01 = (val: number) => Math.max(0, Math.min(1, val))
 
 </script>
@@ -184,7 +296,7 @@ const clamp01 = (val: number) => Math.max(0, Math.min(1, val))
         :disabled="!canLaunch"
         @click="launchSelectedPath"
       >
-        Launch circle (2s)
+        Launch
       </button>
     </div>
 
@@ -257,10 +369,12 @@ select {
 .hint {
   font-size: 0.8rem;
   opacity: 0.8;
+  color: black
 }
 
 code {
-  background: #222;
+  background: #eee;
   padding: 0 0.2rem;
+  color: black;
 }
 </style>

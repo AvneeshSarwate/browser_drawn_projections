@@ -7,8 +7,7 @@ import { Ramp } from '@/channels/channels'
 import { defineStore, acceptHMRUpdate } from 'pinia'
 import { ref } from 'vue'
 
-
-
+export type SimpleVec2 = { x: number, y: number }
 
 export type TemplateAppState = {
   p5Instance: p5 | undefined
@@ -22,6 +21,9 @@ export type TemplateAppState = {
   stats?: { begin: () => void, end: () => void }
   paused: boolean
   drawing: boolean
+  gestaltStartPoint: SimpleVec2 | null
+  gestaltEndPoint: SimpleVec2 | null
+  gestaltSelectedPathId: string
 }
 
 export const appState: TemplateAppState = {
@@ -36,6 +38,9 @@ export const appState: TemplateAppState = {
   stats: undefined,
   paused: false,
   drawing: false,
+  gestaltStartPoint: null,
+  gestaltEndPoint: null,
+  gestaltSelectedPathId: '',
 } 
 
 export const appStateName = 'templateAppState'
