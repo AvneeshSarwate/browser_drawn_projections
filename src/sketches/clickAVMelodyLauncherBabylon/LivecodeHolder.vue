@@ -163,7 +163,6 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
         feedback.setFeedbackSrc(layerOverlay)
 
         const bloom = new BloomEffect(engine, { src: layerOverlay }, width, height)
-        // bloom.effectName = "BLOOOOOM"
         chainEnd = bloom
       
         transform.setUniforms({ rotate: 0, anchor: [0.5, 0.5], translate: [0, 0], scale: [0.995, 0.995] })
