@@ -382,6 +382,17 @@ alternative formulation:
 
 -  can then lerp between arrangement(n_i => n_i+1) and pathFunctions to get deviations in cycle-step behavior
 
+- at some point, there will have to be a "cut", eg some transformation that isn't lerp-able
+  - in the above case, it would be splitting the sub arrangements (eg, going from inner/outer circle steps
+    intertwined to being concentric circles)
+    - this is because the index/subset splitting is a fundamentally discontinuous operation
+  - however, the "step" motion lets you hide the discontinuity
+    - IMPORTANT - what are other tricks for hiding such discontinuities?
+      - is it all just different versions of "step" like motions, where the hard functional discontinuity
+        is like a change to the motion function or indexing, but the motion scheme picks up working on the 
+        existing elements where they are, so you don't get any visual discontinuities?
+      - this does track with the idea/feeling of "gestures on things" 
+
 */
 
 
