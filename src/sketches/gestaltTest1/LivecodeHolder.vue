@@ -247,6 +247,24 @@ const runners: Runner[] = new Array(100).fill({ lastPos: { x: 0, y: 0 }, nextPos
 const runnerGroupings: number[][] = [new Array(100).fill(0).map((e, i) => i)]
 
 
+/*
+case - smaller circle lerping out of a larger one
+[{pts: [all big circle points (same start and end)], lerpFunc: (circleArc lerp, center main circle center)}]
+to
+[
+  {pts: [all big circle points (same start and end)], lerpFunc: (circleArc lerp, center main circle center)}, 
+  {pts: [(start: subset of big circle points, end: small circle points)], lerpFunc
+]
+*/
+
+type Point = { x: number, y: number }
+type CycleRunner = {
+  pts: Point[],
+  lerpFunc: (a: Point, b: Point, l: number) => Point //this is a pathFunction
+}
+
+
+
 launchLoop(async ctx => {
   const stepTime = 1
   let lastStepStart = ctx.time
@@ -266,8 +284,6 @@ launchLoop(async ctx => {
       lastStepStart = lastStepStart + stepTime
     }
   })
-
-
 
 })
 

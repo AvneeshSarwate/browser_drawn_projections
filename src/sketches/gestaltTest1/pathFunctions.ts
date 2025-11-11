@@ -1,3 +1,5 @@
+import { catmullRomSpline } from '@/rendering/catmullRom'
+
 export type Vec2 = { x: number, y: number }
 
 export type PathDefaultsContext = {
@@ -47,40 +49,14 @@ const createBasis = (start: Vec2, end: Vec2) => {
   return { distance: dist, direction, normal }
 }
 
-const catmullRomAxis = (p0: number, p1: number, p2: number, p3: number, t: number) => {
-  const t2 = t * t
-  const t3 = t2 * t
-  return 0.5 * (
-    (2 * p1) +
-    (-p0 + p2) * t +
-    (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 +
-    (-p0 + 3 * p1 - 3 * p2 + p3) * t3
-  )
-}
-
-const sampleCatmullRom = (points: Vec2[], t: number): Vec2 => {
+const sampleCatmullPath = (points: Vec2[], t: number): Vec2 => {
   if (points.length === 0) {
     return { x: 0, y: 0 }
   }
   if (points.length === 1) {
     return points[0]
   }
-
-  const safeT = clamp01(t)
-  const segCount = points.length - 1
-  const scaledT = safeT * segCount
-  const segIndex = Math.min(Math.floor(scaledT), segCount - 1)
-  const localT = scaledT - segIndex
-
-  const p0 = points[segIndex - 1] ?? points[segIndex]
-  const p1 = points[segIndex]
-  const p2 = points[segIndex + 1] ?? points[segIndex]
-  const p3 = points[segIndex + 2] ?? points[segIndex + 1] ?? points[segIndex]
-
-  return {
-    x: catmullRomAxis(p0.x, p1.x, p2.x, p3.x, localT),
-    y: catmullRomAxis(p0.y, p1.y, p2.y, p3.y, localT),
-  }
+  return catmullRomSpline(points, clamp01(t))
 }
 
 const straightLinePath: ParametricPathDefinition = {
@@ -106,7 +82,7 @@ const sinusoidalWavePath: ParametricPathDefinition = {
     const fallback = distance || 100
     return {
       amplitude: fallback * 0.2,
-      frequency: 5,
+      frequency: 2,
       phase: 0,
     } satisfies SinusoidalParams
   },
@@ -182,7 +158,7 @@ const randomDetourPath: ParametricPathDefinition = {
   },
   sample: ({ start, end, t, params }) => {
     const points = [start, ...(params.controlPoints ?? []), end]
-    return sampleCatmullRom(points, t)
+    return sampleCatmullPath(points, t)
   },
 }
 
@@ -209,7 +185,7 @@ const scatterSplinePath: ParametricPathDefinition = {
   },
   sample: ({ start, end, t, params }) => {
     const points = [start, ...(params.scatterPoints ?? []), end]
-    return sampleCatmullRom(points, t)
+    return sampleCatmullPath(points, t)
   },
 }
 
