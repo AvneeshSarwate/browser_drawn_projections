@@ -24,6 +24,7 @@ export type TemplateAppState = {
   gestaltStartPoint: SimpleVec2 | null
   gestaltEndPoint: SimpleVec2 | null
   gestaltSelectedPathId: string
+  gestaltCenterPoint: SimpleVec2 | null
 }
 
 export const appState: TemplateAppState = {
@@ -41,6 +42,7 @@ export const appState: TemplateAppState = {
   gestaltStartPoint: null,
   gestaltEndPoint: null,
   gestaltSelectedPathId: '',
+  gestaltCenterPoint: null,
 } 
 
 export const appStateName = 'templateAppState'

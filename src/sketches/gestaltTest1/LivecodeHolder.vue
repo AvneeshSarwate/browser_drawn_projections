@@ -7,7 +7,6 @@ import { clearListeners, mousemoveEvent, singleKeydownEvent, targetToP5Coords } 
 import type p5 from 'p5';
 import { Ramp, launch, now, type CancelablePromisePoxy, type TimeContext } from '@/channels/channels';
 import { parametricPathMap, parametricPaths, type ParametricPathDefinition, type PathFunctionParams, type Vec2 } from './pathFunctions';
-import { time } from 'console';
 import { logisticSigmoid } from '@/rendering/logisticSigmoid';
 
 const appState = inject<TemplateAppState>(appStateName)!!
@@ -23,6 +22,7 @@ const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromis
 const STORAGE_KEYS = {
   start: 'gestaltTest1.startPoint',
   end: 'gestaltTest1.endPoint',
+  center: 'gestaltTest1.centerPoint',
 }
 
 const hasWindow = typeof window !== 'undefined'
@@ -44,15 +44,23 @@ const loadStoredPoint = (key: string): Vec2 | null => {
 
 const initialStart = appState.gestaltStartPoint ?? loadStoredPoint(STORAGE_KEYS.start)
 const initialEnd = appState.gestaltEndPoint ?? loadStoredPoint(STORAGE_KEYS.end)
+const initialCenter = appState.gestaltCenterPoint ?? loadStoredPoint(STORAGE_KEYS.center)
 
 const startPoint = ref<Vec2 | null>(initialStart ? { ...initialStart } : null)
 const endPoint = ref<Vec2 | null>(initialEnd ? { ...initialEnd } : null)
+const centerPoint = ref<Vec2 | null>(initialCenter ? { ...initialCenter } : null)
+const centerSelecting = ref(false)
+const centerDraftPoint = ref<Vec2 | null>(null)
+const mousePos = ref<Vec2>({ x: 0, y: 0 })
 
 if (initialStart && !appState.gestaltStartPoint) {
   appState.gestaltStartPoint = { ...initialStart }
 }
 if (initialEnd && !appState.gestaltEndPoint) {
   appState.gestaltEndPoint = { ...initialEnd }
+}
+if (initialCenter && !appState.gestaltCenterPoint) {
+  appState.gestaltCenterPoint = { ...initialCenter }
 }
 
 const defaultPathId = parametricPaths[0]?.id ?? ''
@@ -97,6 +105,41 @@ const persistPoint = (key: string, point: Vec2 | null) => {
   }
 }
 
+const computeCenterlineData = () => {
+  if (!startPoint.value || !endPoint.value) return null
+  const dx = endPoint.value.x - startPoint.value.x
+  const dy = endPoint.value.y - startPoint.value.y
+  const dist = Math.hypot(dx, dy)
+  if (dist < 1e-3) return null
+  const midpoint = {
+    x: (startPoint.value.x + endPoint.value.x) / 2,
+    y: (startPoint.value.y + endPoint.value.y) / 2,
+  }
+  const normal = { x: -dy / dist, y: dx / dist }
+  return { midpoint, normal }
+}
+
+const updateCenterDraftPoint = () => {
+  if (!centerSelecting.value) {
+    centerDraftPoint.value = null
+    return
+  }
+  const data = computeCenterlineData()
+  if (!data) {
+    centerDraftPoint.value = null
+    return
+  }
+  const diff = {
+    x: mousePos.value.x - data.midpoint.x,
+    y: mousePos.value.y - data.midpoint.y,
+  }
+  const projection = diff.x * data.normal.x + diff.y * data.normal.y
+  centerDraftPoint.value = {
+    x: data.midpoint.x + data.normal.x * projection,
+    y: data.midpoint.y + data.normal.y * projection,
+  }
+}
+
 watch(startPoint, (val) => {
   appState.gestaltStartPoint = val ? { ...val } : null
   persistPoint(STORAGE_KEYS.start, val ? { ...val } : null)
@@ -107,8 +150,24 @@ watch(endPoint, (val) => {
   persistPoint(STORAGE_KEYS.end, val ? { ...val } : null)
 }, { deep: true })
 
+watch(centerPoint, (val) => {
+  appState.gestaltCenterPoint = val ? { ...val } : null
+  persistPoint(STORAGE_KEYS.center, val ? { ...val } : null)
+}, { deep: true })
+
 watch(selectedPathId, (val) => {
   appState.gestaltSelectedPathId = val
+})
+
+watch([startPoint, endPoint], () => {
+  if (!startPoint.value || !endPoint.value) {
+    centerSelecting.value = false
+    centerDraftPoint.value = null
+    return
+  }
+  if (centerSelecting.value) {
+    updateCenterDraftPoint()
+  }
 })
 
 const drawMarker = (p: p5, point: Vec2, color: string, label: string) => {
@@ -131,17 +190,33 @@ onMounted(() => {
     const threeCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
 
 
-    let p5Mouse = { x: 0, y: 0 }
     mousemoveEvent((ev) => {
-      p5Mouse = targetToP5Coords(ev, p5i, threeCanvas)
+      mousePos.value = targetToP5Coords(ev, p5i, threeCanvas)
+      if (centerSelecting.value) {
+        updateCenterDraftPoint()
+      }
     }, threeCanvas)
 
     singleKeydownEvent('s', () => {
-      startPoint.value = { ...p5Mouse }
+      startPoint.value = { ...mousePos.value }
     })
 
     singleKeydownEvent('e', () => {
-      endPoint.value = { ...p5Mouse }
+      endPoint.value = { ...mousePos.value }
+    })
+
+    singleKeydownEvent('c', () => {
+      if (!startPoint.value || !endPoint.value) return
+      if (!centerSelecting.value) {
+        centerSelecting.value = true
+        updateCenterDraftPoint()
+      } else {
+        centerSelecting.value = false
+        if (centerDraftPoint.value) {
+          centerPoint.value = { ...centerDraftPoint.value }
+        }
+        centerDraftPoint.value = null
+      }
     })
 
     const drawPathTester = (p: p5) => {
@@ -159,6 +234,31 @@ onMounted(() => {
       }
       if (endPoint.value) {
         drawMarker(p, endPoint.value, '#F72585', 'E')
+      }
+      if (centerSelecting.value) {
+        const centerData = computeCenterlineData()
+        if (centerData) {
+          const lineLength = 2000
+          const lineStart = {
+            x: centerData.midpoint.x - centerData.normal.x * lineLength,
+            y: centerData.midpoint.y - centerData.normal.y * lineLength,
+          }
+          const lineEnd = {
+            x: centerData.midpoint.x + centerData.normal.x * lineLength,
+            y: centerData.midpoint.y + centerData.normal.y * lineLength,
+          }
+          p.push()
+          p.stroke('#F9C74F')
+          p.strokeWeight(2)
+          p.line(lineStart.x, lineStart.y, lineEnd.x, lineEnd.y)
+          const draft = centerDraftPoint.value ?? centerData.midpoint
+          p.noStroke()
+          p.fill('#F9C74F')
+          p.circle(draft.x, draft.y, 12)
+          p.pop()
+        }
+      } else if (centerPoint.value) {
+        drawMarker(p, centerPoint.value, '#F9C74F', 'C')
       }
 
       activeLaunches.forEach((launch) => {
@@ -211,6 +311,7 @@ const launchSelectedPath = () => {
   const params = definition.createParams({
     start: { ...startPoint.value },
     end: { ...endPoint.value },
+    center: centerPoint.value ? { ...centerPoint.value } : null,
   })
 
   const ramp = new Ramp(2)
@@ -327,10 +428,15 @@ const clamp01 = (val: number) => Math.max(0, Math.min(1, val))
         <span v-if="endPoint">({{ endPoint.x.toFixed(0) }}, {{ endPoint.y.toFixed(0) }})</span>
         <span v-else>Hover + press e</span>
       </div>
+      <div>
+        <span class="status-label">Center:</span>
+        <span v-if="centerPoint">({{ centerPoint.x.toFixed(0) }}, {{ centerPoint.y.toFixed(0) }})</span>
+        <span v-else>Optional: press c to enter centerline mode</span>
+      </div>
     </div>
 
     <p class="hint">
-      Hover the canvas, press <code>s</code> for the start point and <code>e</code> for the end point. Use the button to fire a circle along the selected Parametric Path Function.
+      Hover the canvas, press <code>s</code> for the start point, <code>e</code> for the end point, and press <code>c</code> once to enter centerline mode then again to commit the indicated center. Use the button to fire a circle along the selected Parametric Path Function.
     </p>
   </div>
 </template>
