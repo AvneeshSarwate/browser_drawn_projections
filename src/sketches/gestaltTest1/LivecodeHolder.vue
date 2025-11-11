@@ -380,6 +380,7 @@ alternative formulation:
   And then when you cleanly subset it by arrangeFunc type, the inner/outer circle are 'separate' (eg
   the ticks don't cross into each other, just move in a clean circle)
 
+-  can then lerp between arrangement(n_i => n_i+1) and pathFunctions to get deviations in cycle-step behavior
 
 */
 
