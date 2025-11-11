@@ -361,8 +361,27 @@ to
 type Point = { x: number, y: number }
 type CycleRunner = {
   pts: Point[],
-  lerpFunc: (a: Point, b: Point, l: number) => Point //this is a pathFunction
+  lerpFunc: (a: Point, b: Point, l: number) => Point //this is the "standard" circle path function
 }
+
+/*
+
+alternative formulation:
+- arrangements are given by mathetmatical implicit functions (eg, cirle(center, radius, n) => {x,y} for n in [0, 1])
+- points are a list of indices 0-N 
+- for the "tick" - you just move each point to the next NORMALIZED INDEX (i/len(pts))
+- so if you want to represent gaps, you just have a subset of (0-N) (but still norm by N)
+- and then you can cleanly interpolate between your gapped version vs your smooth version
+  by using pts[i]/origN vs i/len(pts) (as long as you keep the original point number in the metadata somewhere)
+- then, to lerp between arrangements, you just lerp between the outputs of the diff implicit functions at that normIndex  
+
+- if you have sometihing like {numPts, pts: [{ind, arrangeFunc}]} (each point has it's own associated func),
+  you can do things like: every odd point is for a smaller circle, so points tick in/out.
+  And then when you cleanly subset it by arrangeFunc type, the inner/outer circle are 'separate' (eg
+  the ticks don't cross into each other, just move in a clean circle)
+
+
+*/
 
 
 
