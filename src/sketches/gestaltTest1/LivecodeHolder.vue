@@ -392,6 +392,18 @@ alternative formulation:
         is like a change to the motion function or indexing, but the motion scheme picks up working on the 
         existing elements where they are, so you don't get any visual discontinuities?
       - this does track with the idea/feeling of "gestures on things" 
+  - it is automatic management/sequencing of these type of discontinuous operations that is not easy
+    to manage in environments like touchdesigner, and comming up with some common "format" for the
+    discontinuous operations is what allows them to be sequenced generally
+  - there are a few related but ultimately different concepts with regards to how motions relate to each other
+    - being sequenceable, parallelizable, composable, reversible
+    - sequenceable is easier - just have to make sure you're operating on the same set of points/data one after another
+    - parallelizable is similar to sequencable, meaning different operations are happening on different sets of points 
+      at the same time, you just have to make sure you don't have any points in the overlap
+    - composable is a little bit fuzzier and underdefined, but it's the idea that multiple transforms can be stacked in some way 
+    - reversible is hard - have to be able to undo the thing 
+      - this might be the CORE thing that needs to be figured out - gives a powerful visual effect, and having
+        some interface/data-format that's "automatically reversible" could help lock a lot of other stuff into place
 
 */
 
