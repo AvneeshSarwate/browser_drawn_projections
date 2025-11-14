@@ -1,5 +1,14 @@
 # notes
 
+# nov 22 2025 show algo-raag strategy
+- trigger a line() on a button press, and have an "algo-delay" - a second line() that takes the output of the first line
+- the algo-delay could also play immediately instead of on a delay and act as a harmony
+- control with LPD - can alternate between looping "source" melody vs trigger (one shot vs gate trigger)
+- can have different pads for different source melodies
+- to start with, just have a single "chain" of transform funcs each for source + delay melodies
+  - lets you get used to the slider mapping and actually be intentional 
+  - can use touchOSC as second sliderbank for more params
+
 ## bugs
 - race-conditions on barriers when looping and in sync
   - need to make it so that 
