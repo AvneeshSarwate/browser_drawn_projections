@@ -20,6 +20,7 @@ import TsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
 import { buildClipFromLine, splitTextToGroups, generateUUID, findLineCallMatches, preprocessJavaScript, transformToRuntime, createExecutableFunction, resolveSliderExpressionsInJavaScript, type UUIDMapping, parseRampLine, analyzeExecutableLines, executeParamSetterString } from './utils/transformHelpers'
 import { monacoEditors, codeMirrorEditors, setCodeMirrorContent, highlightCurrentLine, highlightScheduledLines, initializeMonacoEditorComplete, initializeCodeMirrorEditorComplete, highlightCurrentLineByUUID, applyScheduledHighlightByUUID, handleDslLineClick, setPianoRollFromDslLine, clickedDslRanges, highlightClickedDsl, updateDslOutlines, clearPianoRoll, clickedDslOriginalText, clearAllDslHighlights, extractDslFromLine, clickedDslSegmentCounts, codeMirrorEditorsByName } from './utils/editorManager'
 import { saveSnapshot as saveSnapshotSM, loadSnapshotStateOnly as loadSnapshotStateOnlySM, downloadSnapshotsFile, loadSnapshotsFromFile as loadSnapshotsFromFileSM, saveToLocalStorage as saveToLocalStorageSM, loadFromLocalStorage as loadFromLocalStorageSM, saveBank, loadBank, makeBankClickHandler, saveTopLevelSliderBank as saveTopLevelSliderBankSM, loadTopLevelSliderBank as loadTopLevelSliderBankSM, saveFxSliderBank as saveFxSliderBankSM, loadFxSliderBank as loadFxSliderBankSM, saveTopLevelToggleBank as saveTopLevelToggleBankSM, loadTopLevelToggleBank as loadTopLevelToggleBankSM, saveTopLevelOneShotBank as saveTopLevelOneShotBankSM, loadTopLevelOneShotBank as loadTopLevelOneShotBankSM, saveJsCodeBank as saveJsCodeBankSM, loadJsCodeBank as loadJsCodeBankSM } from './utils/snapshotManager'
+import type { LoopHandle } from '@/channels/base_time_context';
 
 // Monaco environment setup
 self.MonacoEnvironment = {
@@ -56,7 +57,7 @@ const mod2 = (n: number, m: number) =>  (n % m + m) % m
 const midiOuts: MIDIValOutput[] = [];
 
 //lets you switch between midi and web audio piano
-let playNote: (pitch: number, velocity: number, ctx?: TimeContext, noteDur?: number, instInd?: number) => void = () => {}
+let playNote: (pitch: number, velocity: number, ctx: TimeContext, noteDur: number, instInd: number) => void = () => {}
 
 
 // Slider bank management wrappers
@@ -275,6 +276,93 @@ const runLine = async (lineText: string, ctx: TimeContext, uuid: string, voiceIn
   return voice.hotSwapCued
 }
 
+
+const DELAY_SLIDER = 7
+const runLineWithDelay = (baseClipName: string, baseTransform: string, delayTransform: string, ctx: TimeContext) => {
+  const baseLine = baseClipName + ' : ' + baseTransform
+  const delayRootClipName = baseClipName + '-delayRoot'
+  const delayLine = delayRootClipName + ' : ' + delayTransform
+
+  const groups = splitTextToGroups(baseLine)
+  const { clip: delayRootClip, updatedClipLine } = buildClipFromLine(groups[0].clipLine, appState.sliders)
+  clipMap.set(delayRootClipName, delayRootClip!)
+
+  const delay = appState.sliders[DELAY_SLIDER]
+
+  const handle = ctx.branch(async ctx => {
+    runLineClean(baseLine, ctx, 0, appState.sliders, appState.voices, () => { }, () => { }, playNote, (() => { }) as any)
+
+    await ctx.wait(delay)
+
+    runLineClean(delayLine, ctx, 1, appState.sliders, appState.voices, () => { }, () => { }, playNote, (() => { }) as any)
+  })
+  
+  return handle
+}
+
+// runLine function - executes livecoding lines and manages highlighting
+type PlayNoteFunc = (pitch: number, velocity: number, ctx: TimeContext, noteDur: number, instInd: number) => void
+type LaunchRampFunc = (paramName: string, startVal: number, endVal: number, duration: number, voiceIdx: number, ctx: TimeContext) => LoopHandle
+const runLineClean = async (lineText: string, ctx: TimeContext, voiceIndex: number, sliders: number[], voices: VoiceState[], onVoiceStart: () => void, onVoiceEnd: () => void, playNoteF: PlayNoteFunc, launchParamRampF: LaunchRampFunc) => {
+  // Highlight the current line being executed using UUID
+  // highlightCurrentLineByUUID(voiceIndex, uuid, voiceActiveUUIDs, getMappingsForVoice)
+  onVoiceStart()
+
+  // Check if voice is still playing
+  const voice = voices[voiceIndex]
+  
+  try {
+    // Parse the line using existing parsing logic
+    const groups = splitTextToGroups(lineText)
+    if (!groups.length) return
+    
+    const group = groups[0] // runLine handles one group at a time
+    const { clip, updatedClipLine } = buildClipFromLine(group.clipLine, sliders)
+    if (!clip) return
+    
+    // Execute the clip similar to existing playClips logic
+    const notes = clip.noteBuffer()
+    const ramps = group.rampLines.map(parseRampLine).map(r => 
+      launchParamRampF(r.paramName, r.startVal, r.endVal, clip.duration, voiceIndex, ctx)
+    )
+
+    if (notes.length === 0 && clip.duration > 0) {
+      await ctx.wait(clip.duration)
+    }
+
+    // Play the notes
+    for (const nextNote of notes) {
+      await ctx.wait(nextNote.preDelta)
+      
+      if (!voice.isPlaying) {
+        ramps.forEach(r => r.cancel())
+        break
+      }
+      
+      playNoteF(nextNote.note.pitch, nextNote.note.velocity, ctx, nextNote.note.duration, voiceIndex)
+      if (nextNote.postDelta) await ctx.wait(nextNote.postDelta)
+    }
+    
+    // Clean up ramps if we completed normally
+    if (voices[voiceIndex].isPlaying) {
+      // Let ramps complete naturally
+    } else {
+      ramps.forEach(r => r.cancel())
+    }
+    
+  } catch (error) {
+    console.error('Error in runLine:', error)
+  } finally {
+    // Clear current line highlighting after execution
+    // highlightCurrentLineByUUID(voiceIndex, null, voiceActiveUUIDs, getMappingsForVoice)
+    onVoiceEnd()
+  }
+
+  return voice.hotSwapCued
+}
+
+
+
 const oneShot = (idx: number) => oneshotCall(idx, appState.oneShots)
 
 const initializeNewLoopWithNewSourceCode = (voiceIdx: number) => {
@@ -328,7 +416,7 @@ const startVoice = (voiceIdx: number) => {
     let hotSwapCued = false
     try {
       // Execute the JavaScript code with proper context
-      const execFunc = voiceExecutableFuncs.get(voiceIdx.toString())
+      const execFunc = voiceExecutableFuncs.get(voiceIdx.toString())!
       //todo barrier - add barrier arguments
       hotSwapCued = await execFunc(ctx, runLine, appState.toggles, oneShot, startBarrier, resolveBarrier, awaitBarrier) 
     } catch (error) {
@@ -415,7 +503,7 @@ const launchQueue: Array<(ctx: TimeContext) => Promise<void>> = []
 const instrumentChains = [getDriftChain(1), getDriftChain(2), getDriftChain(3), getDriftChain(4)]
 
 // Debug piano rolls - one per voice
-const debugPianoRolls: (PianoRoll<{}> | undefined)[] = []
+const debugPianoRolls: (PianoRoll<{}>)[] = []
 
 // Snapshot selection state
 const selectedSnapshot = ref(-1)
@@ -429,7 +517,7 @@ const formatParamName = (paramName: string) => {
 };
 
 // Function to get scaled parameter value using the modular scaling functions
-const getScaledParamValue = (paramName, paramScaling: Record<string, (val: number) => number>, normalizedValue: number): number => {
+const getScaledParamValue = (paramName: string, paramScaling: Record<string, (val: number) => number>, normalizedValue: number): number => {
   const val = paramScaling[paramName]?.(normalizedValue) ?? normalizedValue;
   if (val === undefined) debugger;
   return val
@@ -485,9 +573,11 @@ const runGlobalParamScript = () => {
   const paramEditor = codeMirrorEditorsByName.get(GLOBAL_PARAM_EDITOR_NAME)
   if (paramEditor) {
     const paramScript = paramEditor.state.doc.toString()
-    executeParamSetterString(paramScript, baseTimeContextHandle, appState)
+    executeParamSetterString(paramScript, baseTimeContextHandle!, appState)
   }
 }
+
+let rootTimeContext: TimeContext | null = null
 
 onMounted(async() => {
   try {
@@ -501,7 +591,7 @@ onMounted(async() => {
       'globals-livecode-editor-container',
       -1,
       () => "//livecode global params here - (sliders, toggles, oneShots)\n\n\n\n\n",
-      null,
+      () => { },
       false,
       GLOBAL_PARAM_EDITOR_NAME
     )
@@ -531,7 +621,6 @@ onMounted(async() => {
     const iac3 = midiOutputs.get('IAC Driver Bus 3')
     const iac4 = midiOutputs.get('IAC Driver Bus 4')
 
-        
     midiOuts.push(iac1, iac2, iac3, iac4)
 
     // Initialize any missing FX parameters based on the available parameter names
@@ -569,7 +658,34 @@ onMounted(async() => {
           appState.sliders[ind] = (midiNorm(msg.data2))
         })
       })
+
+      const baseClipNames = ['dscale5']
+      const baseTransform = ''
+      const delayTransform = ''
+      const gateButtonMelodies: Record<number, LoopHandle> = {}
+
+      Array.from({ length: 8 }, (_, i) => i).forEach(ind => {
+        if (ind < 4) {
+          //oneshot
+          lpd8.onNoteOn(lpdButtonMap[ind], (msg) => {
+            runLineWithDelay(baseClipNames[ind], baseTransform, delayTransform, rootTimeContext!)
+          })
+        } else {
+          //gate launch 
+          lpd8.onNoteOn(lpdButtonMap[ind], (msg) => {
+            const handle = runLineWithDelay(baseClipNames[ind-4], baseTransform, delayTransform, rootTimeContext!)
+            gateButtonMelodies[ind] = handle
+          })
+          lpd8.onNoteOff(lpdButtonMap[ind], (msg) => {
+            const handle = gateButtonMelodies[ind]
+            if(handle) handle.cancel()
+          })
+        }
+      })
+
     }
+
+
 
     const FBV3 = midiInputs.get("FBV 3")
     if (FBV3) {
@@ -596,15 +712,47 @@ onMounted(async() => {
       })
     }
 
+    // Note-off protector: tracks active notes per channel/pitch to prevent premature note-offs
+    const activeNotes = new Map<string, Set<symbol>>() // key: "channel-pitch", value: set of note IDs
+    
+    const getNoteKey = (channel: number, pitch: number) => `${channel}-${pitch}`
+    
     const playNoteMidi = (pitch: number, velocity: number, ctx: TimeContext, noteDur: number, voiceIdx: number) => {
       const inst = midiOuts[voiceIdx]
+      const noteId = Symbol() // Unique ID for this note instance
+      const noteKey = getNoteKey(voiceIdx, pitch)
+      
+      // Track this note
+      if (!activeNotes.has(noteKey)) {
+        activeNotes.set(noteKey, new Set())
+      }
+      activeNotes.get(noteKey)!.add(noteId)
+      
       inst.sendNoteOn(pitch, velocity)
+      
       ctx.branch(async ctx => {
         await ctx.wait((noteDur ?? 0.1) * 0.98)
-        inst.sendNoteOff(pitch)
+        
+        // Remove this note from active set
+        const noteSet = activeNotes.get(noteKey)
+        if (noteSet) {
+          noteSet.delete(noteId)
+          // Only send note-off if no other notes of this pitch are active
+          if (noteSet.size === 0) {
+            inst.sendNoteOff(pitch)
+            activeNotes.delete(noteKey)
+          }
+        }
       }).finally(() => {
         // console.log('loop canclled finally', pitch) //todo core - need to cancel child contexts properly (this doesn't fire immediately on parent cancel)
-        inst.sendNoteOff(pitch)
+        const noteSet = activeNotes.get(noteKey)
+        if (noteSet) {
+          noteSet.delete(noteId)
+          if (noteSet.size === 0) {
+            inst.sendNoteOff(pitch)
+            activeNotes.delete(noteKey)
+          }
+        }
       })
     }
 
@@ -646,6 +794,7 @@ onMounted(async() => {
     console.log('pre launch loop')
 
     launchLoop(async (ctx) => {
+      rootTimeContext = ctx
       ctx.bpm = 120
       console.log('launch loop')
       baseTimeContextHandle = ctx
@@ -668,7 +817,7 @@ onMounted(async() => {
     singleKeydownEvent('p', (ev) => { appState.paused = !appState.paused })
  
     // Set up auto-save interval (2 seconds) - now saves both snapshots and current state
-    const autoSaveInterval = setInterval(saveToLocalStorage, 2000)
+    const autoSaveInterval = setInterval(saveToLocalStorage, 2000) as unknown as number
     
     // Store interval ID for cleanup
     appState.autoSaveInterval = autoSaveInterval
