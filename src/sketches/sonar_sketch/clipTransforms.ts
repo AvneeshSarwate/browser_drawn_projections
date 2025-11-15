@@ -607,6 +607,31 @@ export function ease(clip: AbletonClip, easeType: string, amount: number = 1): A
   return newClip
 }
 
+export function easeCirc(clip: AbletonClip, amount: number): AbletonClip {
+  const newClip = clip.clone()
+  const duration = newClip.duration
+  
+  const blend = (amount: number, x: number) => {
+    if (amount < 0.5) {
+      const blendAmt = amount * 2
+      return mix(x, easingMap['easeOutCirc'](x), blendAmt)
+    } else {
+      const blendAmt = (amount - 0.5) * 2
+      return mix(x, easingMap['easeInCirc'](x), blendAmt)
+    }
+  }
+  
+  newClip.notes.forEach(note => {
+    const posNorm = note.position / duration
+    const endNorm = (note.position + note.duration) / duration
+    note.position = blend(amount, posNorm) * duration
+    const endTime = blend(amount, endNorm) * duration
+    note.duration = endTime - note.position
+  })
+  
+  return newClip
+}
+
 export function repeatNotes(clip: AbletonClip, n: number): AbletonClip {
   if (clip.notes.length === 0 || n <= 0) {
     return clip.clone();
@@ -637,6 +662,110 @@ export function repeatNotes(clip: AbletonClip, n: number): AbletonClip {
   );
   
   return new AbletonClip(clip.name + "_repeated", newDuration, repeatedNotes);
+}
+
+export function rotateClip(clip: AbletonClip, steps: number = 1, chordEpsilon: number = 0.01): AbletonClip {
+  if (clip.notes.length === 0 || steps === 0) {
+    return clip.clone();
+  }
+
+  const sortedNotes = [...clip.notes].sort((a, b) => a.position - b.position);
+  const normalizedSteps = ((steps % sortedNotes.length) + sortedNotes.length) % sortedNotes.length;
+  
+  if (normalizedSteps === 0) {
+    return clip.clone();
+  }
+
+  // Find the first and last note positions
+  const firstNotePos = sortedNotes[0].position;
+  const lastNoteEnd = Math.max(...sortedNotes.map(n => n.position + n.duration));
+  
+  // Group notes into chords (notes within epsilon of each other)
+  const chordGroups: AbletonNote[][] = [];
+  let currentChord: AbletonNote[] = [sortedNotes[0]];
+  
+  for (let i = 1; i < sortedNotes.length; i++) {
+    const prevNote = sortedNotes[i - 1];
+    const currNote = sortedNotes[i];
+    
+    if (Math.abs(currNote.position - prevNote.position) <= chordEpsilon) {
+      currentChord.push(currNote);
+    } else {
+      chordGroups.push(currentChord);
+      currentChord = [currNote];
+    }
+  }
+  chordGroups.push(currentChord);
+
+  // Calculate rotation by chord groups
+  const rotationIndex = normalizedSteps > 0 ? normalizedSteps : chordGroups.length + normalizedSteps;
+  
+  // Split into rotated and remaining groups
+  const rotatedGroups = chordGroups.slice(0, rotationIndex);
+  const remainingGroups = chordGroups.slice(rotationIndex);
+  
+  // Calculate timing offsets
+  const gapBefore = firstNotePos;
+  const gapAfter = clip.duration - lastNoteEnd;
+  
+  // Build the rotated clip
+  const newNotes: AbletonNote[] = [];
+  let currentPos = 0;
+  
+  // Add remaining groups first (they move to the front)
+  if (remainingGroups.length > 0) {
+    currentPos = gapBefore;
+    for (const group of remainingGroups) {
+      const groupStartPos = group[0].position;
+      for (const note of group) {
+        newNotes.push({
+          ...note,
+          position: currentPos + (note.position - groupStartPos)
+        });
+      }
+      // Move to next group position
+      if (group !== remainingGroups[remainingGroups.length - 1]) {
+        const nextGroup = remainingGroups[remainingGroups.indexOf(group) + 1];
+        const gap = nextGroup[0].position - (group[group.length - 1].position + group[group.length - 1].duration);
+        currentPos += Math.max(...group.map(n => n.position - groupStartPos + n.duration)) + gap;
+      } else {
+        currentPos += Math.max(...group.map(n => n.position - groupStartPos + n.duration));
+      }
+    }
+  }
+  
+  // Add rotated groups at the end
+  if (rotatedGroups.length > 0) {
+    const gapBetween = remainingGroups.length > 0 
+      ? (rotatedGroups[0][0].position - (remainingGroups[remainingGroups.length - 1][0].position + Math.max(...remainingGroups[remainingGroups.length - 1].map(n => n.duration))))
+      : 0;
+    
+    currentPos += gapBetween;
+    
+    for (const group of rotatedGroups) {
+      const groupStartPos = group[0].position;
+      for (const note of group) {
+        newNotes.push({
+          ...note,
+          position: currentPos + (note.position - groupStartPos)
+        });
+      }
+      // Move to next group position
+      if (group !== rotatedGroups[rotatedGroups.length - 1]) {
+        const nextGroup = rotatedGroups[rotatedGroups.indexOf(group) + 1];
+        const gap = nextGroup[0].position - (group[group.length - 1].position + group[group.length - 1].duration);
+        currentPos += Math.max(...group.map(n => n.position - groupStartPos + n.duration)) + gap;
+      } else {
+        currentPos += Math.max(...group.map(n => n.position - groupStartPos + n.duration));
+      }
+    }
+  }
+
+  return new AbletonClip(
+    clip.name + "_rotated",
+    clip.duration,
+    newNotes
+  );
 }
 
 
@@ -705,6 +834,13 @@ export const TRANSFORM_REGISTRY: Record<string, ClipTransform> = {
     transform: (clip, easeType, amount) => ease(clip, easeType, amount),
     argParser: (args: string[]) => [args[0], numParse(args[1])],
     sliderScale: [n => n, n => n]
+  },
+
+  easeCirc: {
+    name: 'easeCirc',
+    transform: (clip, amount) => easeCirc(clip, amount),
+    argParser: (args: string[]) => [numParse(args[0])],
+    sliderScale: [n => n]
   },
 
   tr: {
@@ -864,6 +1000,13 @@ export const TRANSFORM_REGISTRY: Record<string, ClipTransform> = {
     transform: (clip, n) => repeatNotes(clip, n),
     argParser: (args: string[]) => [numParse(args[0])],
     sliderScale: [n => Math.floor(n * 8) + 1] // 1 to 8 repetitions
+  },
+
+  rotate: {
+    name: 'rotate',
+    transform: (clip, steps, chordEpsilon = 0.01) => rotateClip(clip, steps, chordEpsilon),
+    argParser: (args: string[]) => [numParse(args[0]), numParse(args[1]) || 0.01],
+    sliderScale: [(n, c) => Math.floor(n * c.notes.length) - Math.floor(c.notes.length / 2), n => n * 0.1]
   }
 };
 

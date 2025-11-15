@@ -282,6 +282,7 @@ const runLineWithDelay = (baseClipName: string, baseTransform: string, delayTran
   const baseLine = baseClipName + ' : ' + baseTransform
   const delayRootClipName = baseClipName + '-delayRoot'
   const delayLine = delayRootClipName + ' : ' + delayTransform
+  console.log('play lines', baseLine, delayLine)
 
   const groups = splitTextToGroups(baseLine)
   const { clip: delayRootClip, updatedClipLine } = buildClipFromLine(groups[0].clipLine, appState.sliders)
@@ -289,12 +290,15 @@ const runLineWithDelay = (baseClipName: string, baseTransform: string, delayTran
 
   const delay = appState.sliders[DELAY_SLIDER]
 
+  const dummyVoices = appState.voices.map(v => ({...v, isPlaying: true}))
+
   const handle = ctx.branch(async ctx => {
-    runLineClean(baseLine, ctx, 0, appState.sliders, appState.voices, () => { }, () => { }, playNote, (() => { }) as any)
+    runLineClean(baseLine, ctx, 0, appState.sliders, dummyVoices, () => { }, () => { }, playNote, (() => { }) as any)
 
-    await ctx.wait(delay)
+    // await ctx.wait(delay)
+    await ctx.wait(2)
 
-    runLineClean(delayLine, ctx, 1, appState.sliders, appState.voices, () => { }, () => { }, playNote, (() => { }) as any)
+    runLineClean(delayLine, ctx, 1, appState.sliders, dummyVoices, () => { }, () => { }, playNote, (() => { }) as any)
   })
   
   return handle
@@ -319,6 +323,8 @@ const runLineClean = async (lineText: string, ctx: TimeContext, voiceIndex: numb
     const group = groups[0] // runLine handles one group at a time
     const { clip, updatedClipLine } = buildClipFromLine(group.clipLine, sliders)
     if (!clip) return
+
+    console.log("running line", lineText, clip.notes.map(n => n.pitch), playNoteF)
     
     // Execute the clip similar to existing playClips logic
     const notes = clip.noteBuffer()
@@ -653,26 +659,30 @@ onMounted(async() => {
     const lpdButtonMap = [40, 41, 42, 43, 36, 37, 38, 49]
     const midiNorm = (val: number) => Math.floor(val / 127 * 1000) / 1000
     if (lpd8) {
+      // console.log("lpd")
       Array.from({ length: 8 }, (_, i) => i).forEach(ind => {
         lpd8.onControlChange(ind + 70, (msg) => {
           appState.sliders[ind] = (midiNorm(msg.data2))
+          // console.log('slider change', msg)
         })
       })
 
-      const baseClipNames = ['dscale5']
-      const baseTransform = ''
-      const delayTransform = ''
+      const baseClipNames = ['dscale5', 'dscale7', 'd7mel']
+      const baseTransform = 's_tr s0 dR7'
+      const delayTransform = 'str s4'
       const gateButtonMelodies: Record<number, LoopHandle> = {}
 
       Array.from({ length: 8 }, (_, i) => i).forEach(ind => {
         if (ind < 4) {
           //oneshot
           lpd8.onNoteOn(lpdButtonMap[ind], (msg) => {
+            console.log('oneShot', ind, lpdButtonMap[ind], baseClipNames[ind])
             runLineWithDelay(baseClipNames[ind], baseTransform, delayTransform, rootTimeContext!)
           })
         } else {
           //gate launch 
           lpd8.onNoteOn(lpdButtonMap[ind], (msg) => {
+            console.log('gate', ind, lpdButtonMap[ind], baseClipNames[ind])
             const handle = runLineWithDelay(baseClipNames[ind-4], baseTransform, delayTransform, rootTimeContext!)
             gateButtonMelodies[ind] = handle
           })
@@ -729,6 +739,8 @@ onMounted(async() => {
       activeNotes.get(noteKey)!.add(noteId)
       
       inst.sendNoteOn(pitch, velocity)
+
+      console.log('note on', pitch, inst)
       
       ctx.branch(async ctx => {
         await ctx.wait((noteDur ?? 0.1) * 0.98)
