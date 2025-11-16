@@ -296,7 +296,7 @@ const runLineWithDelay = (baseClipName: string, baseTransform: string, delayTran
     runLineClean(baseLine, ctx, 0, appState.sliders, dummyVoices, () => { }, () => { }, playNote, (() => { }) as any)
 
     // await ctx.wait(delay)
-    await ctx.wait(2)
+    await ctx.wait(appState.sliders[15]**2 * 8)
 
     runLineClean(delayLine, ctx, 1, appState.sliders, dummyVoices, () => { }, () => { }, playNote, (() => { }) as any)
   })
@@ -324,7 +324,7 @@ const runLineClean = async (lineText: string, ctx: TimeContext, voiceIndex: numb
     const { clip, updatedClipLine } = buildClipFromLine(group.clipLine, sliders)
     if (!clip) return
 
-    console.log("running line", lineText, clip.notes.map(n => n.pitch), playNoteF)
+    console.log("running line", lineText, clip.notes.map(n => [n.position, n.pitch]), playNoteF)
     
     // Execute the clip similar to existing playClips logic
     const notes = clip.noteBuffer()
@@ -505,6 +505,7 @@ const stopAll = () => {
 let baseTimeContextHandle: (TimeContext | null) = null 
 
 const launchQueue: Array<(ctx: TimeContext) => Promise<void>> = []
+const immediateLaunchQueue: Array<(ctx: TimeContext) => Promise<void>> = []
 
 const instrumentChains = [getDriftChain(1), getDriftChain(2), getDriftChain(3), getDriftChain(4)]
 
@@ -669,7 +670,7 @@ onMounted(async() => {
 
       const baseClipNames = ['dscale5', 'dscale7', 'd7mel']
       const baseTransform = 's_tr s0 dR7'
-      const delayTransform = 'str s4'
+      const delayTransform = 'str s8'
       const gateButtonMelodies: Record<number, LoopHandle> = {}
 
       Array.from({ length: 8 }, (_, i) => i).forEach(ind => {
@@ -677,14 +678,20 @@ onMounted(async() => {
           //oneshot
           lpd8.onNoteOn(lpdButtonMap[ind], (msg) => {
             console.log('oneShot', ind, lpdButtonMap[ind], baseClipNames[ind])
-            runLineWithDelay(baseClipNames[ind], baseTransform, delayTransform, rootTimeContext!)
+            immediateLaunchQueue.push((ctx) => {
+              runLineWithDelay(baseClipNames[ind], baseTransform, delayTransform, ctx)
+              return Promise.resolve()
+            })
           })
         } else {
           //gate launch 
           lpd8.onNoteOn(lpdButtonMap[ind], (msg) => {
             console.log('gate', ind, lpdButtonMap[ind], baseClipNames[ind])
-            const handle = runLineWithDelay(baseClipNames[ind-4], baseTransform, delayTransform, rootTimeContext!)
-            gateButtonMelodies[ind] = handle
+            immediateLaunchQueue.push((ctx) => {
+              const handle = runLineWithDelay(baseClipNames[ind-4], baseTransform, delayTransform, ctx)
+              gateButtonMelodies[ind] = handle
+              return Promise.resolve()
+            })
           })
           lpd8.onNoteOff(lpdButtonMap[ind], (msg) => {
             const handle = gateButtonMelodies[ind]
@@ -695,7 +702,16 @@ onMounted(async() => {
 
     }
 
-
+    
+    //set up sliders midi 0-7 for TouchOSC Bridge midi device to sliderrs 8-15
+    const touchOSCBridge = midiInputs.get("TouchOSC Bridge")
+    if (touchOSCBridge) {
+      Array.from({ length: 8 }, (_, i) => i).forEach(ind => {
+        touchOSCBridge.onControlChange(ind, (msg) => {
+          appState.sliders[ind + 8] = (midiNorm(msg.data2))
+        })
+      })
+    }
 
     const FBV3 = midiInputs.get("FBV 3")
     if (FBV3) {
@@ -740,7 +756,7 @@ onMounted(async() => {
       
       inst.sendNoteOn(pitch, velocity)
 
-      console.log('note on', pitch, inst)
+      // console.log('note on', pitch, inst)
       
       ctx.branch(async ctx => {
         await ctx.wait((noteDur ?? 0.1) * 0.98)
@@ -813,10 +829,19 @@ onMounted(async() => {
 
       // eslint-disable-next-line no-constant-condition
       while (true) {
-        // console.log('launchQueue', launchQueue.length)
-        await ctx.wait(1)
         launchQueue.forEach(cb => cb(ctx))
         launchQueue.length = 0
+        await ctx.wait(1)
+      }
+    })
+
+    launchLoop(async (ctx) => {
+      ctx.bpm = 120
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        immediateLaunchQueue.forEach(cb => cb(ctx))
+        immediateLaunchQueue.length = 0
+        await ctx.waitSec(0.016)
       }
     })
 

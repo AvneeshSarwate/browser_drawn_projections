@@ -74,9 +74,24 @@ export function loadFromLocalStorage(app: SonarAppState) {
     const stateStr = localStorage.getItem(LOCAL_STATE_KEY)
     if (stateStr) {
       const state = JSON.parse(stateStr)
-      if (Array.isArray(state.sliders)) app.sliders = [...state.sliders]
-      if (Array.isArray(state.toggles)) app.toggles = [...state.toggles]
-      if (Array.isArray(state.oneShots)) app.oneShots = [...state.oneShots]
+      // Merge sliders: preserve loaded values, keep default values for new ones
+      if (Array.isArray(state.sliders)) {
+        state.sliders.forEach((s: number, i: number) => {
+          if (i < app.sliders.length) app.sliders[i] = s
+        })
+      }
+      // Merge toggles: preserve loaded values, keep default values for new ones
+      if (Array.isArray(state.toggles)) {
+        state.toggles.forEach((t: boolean, i: number) => {
+          if (i < app.toggles.length) app.toggles[i] = t
+        })
+      }
+      // Merge oneShots: preserve loaded values, keep default values for new ones
+      if (Array.isArray(state.oneShots)) {
+        state.oneShots.forEach((o: boolean, i: number) => {
+          if (i < app.oneShots.length) app.oneShots[i] = o
+        })
+      }
       if (Array.isArray(state.voices)) state.voices.forEach((sv:SaveableProperties,i:number)=>{
         if (i<app.voices.length) {
           // Backfill jsCodeBanks if it doesn't exist (for backward compatibility)
@@ -86,9 +101,36 @@ export function loadFromLocalStorage(app: SonarAppState) {
           app.voices[i].saveable = sv
         }
       })
-      if (state.sliderBanks?.topLevel) app.sliderBanks.topLevel = state.sliderBanks.topLevel.map((b:number[])=>[...b])
-      if (state.toggleBanks?.topLevel) app.toggleBanks.topLevel = state.toggleBanks.topLevel.map((b: boolean[]) => [...b])
-      if (state.oneShotBanks?.topLevel) app.oneShotBanks.topLevel = state.oneShotBanks.topLevel.map((b: boolean[]) => [...b])
+      // Merge slider banks: extend each bank to match current length
+      if (state.sliderBanks?.topLevel) {
+        app.sliderBanks.topLevel = state.sliderBanks.topLevel.map((b:number[]) => {
+          const merged = [...app.sliderBanks.topLevel[0]]
+          b.forEach((val, i) => {
+            if (i < merged.length) merged[i] = val
+          })
+          return merged
+        })
+      }
+      // Merge toggle banks: extend each bank to match current length
+      if (state.toggleBanks?.topLevel) {
+        app.toggleBanks.topLevel = state.toggleBanks.topLevel.map((b: boolean[]) => {
+          const merged = [...app.toggleBanks.topLevel[0]]
+          b.forEach((val, i) => {
+            if (i < merged.length) merged[i] = val
+          })
+          return merged
+        })
+      }
+      // Merge one-shot banks: extend each bank to match current length
+      if (state.oneShotBanks?.topLevel) {
+        app.oneShotBanks.topLevel = state.oneShotBanks.topLevel.map((b: boolean[]) => {
+          const merged = [...app.oneShotBanks.topLevel[0]]
+          b.forEach((val, i) => {
+            if (i < merged.length) merged[i] = val
+          })
+          return merged
+        })
+      }
       if (typeof state.currentTopLevelBank==='number') app.currentTopLevelBank = state.currentTopLevelBank
     }
   } catch (e) { console.error('localStorage load error', e) }

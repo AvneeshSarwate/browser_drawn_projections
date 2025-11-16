@@ -73,6 +73,7 @@ export function createAndLaunchContext<T, C extends TimeContext>(block: (ctx: C)
     parentContext.connectChildContext(newContext)
   } else {
     newContext.rootContext = newContext
+    newContext.mostRecentDescendentTime = rootTime
   }
   const blockPromise = block(newContext)
   promiseProxy.promise = blockPromise
@@ -283,14 +284,17 @@ export class DateTimeContext extends TimeContext{
 
           ctx.abortController.signal.removeEventListener('abort', listener)
           
-          resolve()
-          if (this.isCanceled) resolve()
-          else reject()
-          if (this.isCanceled) return 
+          if (!this.isCanceled) {
+            resolve()
+          } else {
+            reject()
+            return
+          } 
           
           //todo bug - is this defensive time check a bug?
           //defensive check so that time never moves "backwards" due to setTimeout jitter between context children
           this.rootContext!.mostRecentDescendentTime = Math.max(this.rootContext!.mostRecentDescendentTime, targetTime)
+          // this.rootContext!.mostRecentDescendentTime = targetTime
 
           const waitDuration = dateNow() - waitStart
           // console.log('wait duration', (waitDuration / 1000).toFixed(3), 'wait time', waitTime.toFixed(3))

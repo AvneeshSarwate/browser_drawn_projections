@@ -101,7 +101,7 @@ export const appState: SonarAppState = {
     currentFxBank: 0,
     currentJsBank: 0,
   })),
-  sliders: Array.from({ length: 8 }, (): number => 0),
+  sliders: Array.from({ length: 16 }, (): number => 0),
   toggles: Array.from({ length: 8 }, (): boolean => false),
   oneShots: Array.from({ length: 8 }, (): boolean => false),
   sliderBanks: {
