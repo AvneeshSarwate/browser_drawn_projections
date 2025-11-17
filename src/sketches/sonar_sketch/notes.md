@@ -1,5 +1,12 @@
 # notes
 
+[testLink](./clipTransforms.ts#L55)
+
+need to implement toggle to enable/disable computer delay phrase - piece starts with call and response between guitar and computer
+
+// const baseTransform =  's_tr s0 dR7 : str s1 : rot s2  : rev s3  : inv dR7 s4  : easeCirc s5  : rep s6     : acc s7'
+// const delayTransform = 's_tr s8 dR7 : str s9 : rot s10 : rev s11 : inv dR7 s12 : easeCirc s13 : s_tr_i s14 : acc s15'
+
 # nov 22 2025 show algo-raag strategy
 - trigger a line() on a button press, and have an "algo-delay" - a second line() that takes the output of the first line
 - the algo-delay could also play immediately instead of on a delay and act as a harmony

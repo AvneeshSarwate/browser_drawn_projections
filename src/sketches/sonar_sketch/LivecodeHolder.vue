@@ -277,7 +277,7 @@ const runLine = async (lineText: string, ctx: TimeContext, uuid: string, voiceIn
 }
 
 
-const DELAY_SLIDER = 7
+const DELAY_SLIDER = 16
 const runLineWithDelay = (baseClipName: string, baseTransform: string, delayTransform: string, ctx: TimeContext) => {
   const baseLine = baseClipName + ' : ' + baseTransform
   const delayRootClipName = baseClipName + '-delayRoot'
@@ -295,8 +295,8 @@ const runLineWithDelay = (baseClipName: string, baseTransform: string, delayTran
   const handle = ctx.branch(async ctx => {
     runLineClean(baseLine, ctx, 0, appState.sliders, dummyVoices, () => { }, () => { }, playNote, (() => { }) as any)
 
-    // await ctx.wait(delay)
-    await ctx.wait(appState.sliders[15]**2 * 8)
+    // await ctx.wait(4)
+    await ctx.wait(appState.sliders[DELAY_SLIDER]**2 * 8)
 
     runLineClean(delayLine, ctx, 1, appState.sliders, dummyVoices, () => { }, () => { }, playNote, (() => { }) as any)
   })
@@ -706,7 +706,7 @@ onMounted(async() => {
     //set up sliders midi 0-7 for TouchOSC Bridge midi device to sliderrs 8-15
     const touchOSCBridge = midiInputs.get("TouchOSC Bridge")
     if (touchOSCBridge) {
-      Array.from({ length: 8 }, (_, i) => i).forEach(ind => {
+      Array.from({ length: 9 }, (_, i) => i).forEach(ind => {
         touchOSCBridge.onControlChange(ind, (msg) => {
           appState.sliders[ind + 8] = (midiNorm(msg.data2))
         })

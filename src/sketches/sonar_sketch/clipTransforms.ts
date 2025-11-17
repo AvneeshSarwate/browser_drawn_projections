@@ -177,8 +177,8 @@ export function sliceAndTransposeByMarkers(
  * could then also have algorithms to generate slice definitions (or manual templates of slice definitions)
  */
 
-export function retrogradeClip(clip: AbletonClip): AbletonClip {
-  if (clip.notes.length === 0) {
+export function retrogradeClip(clip: AbletonClip, enable: number = 1): AbletonClip {
+  if (clip.notes.length === 0 || enable <= 0.5) {
     return clip.clone();
   }
 
@@ -202,16 +202,18 @@ export function retrogradeClip(clip: AbletonClip): AbletonClip {
 
 export function invertClip(
   clip: AbletonClip,
-  scale: Scale,
+  scaleKey: string = 'C',
+  enable: number = 1,
   axis?: number // optional - deviation of scale degree from the root
 ): AbletonClip {
-  if (clip.notes.length < 2) {
+  if (clip.notes.length < 2 || enable <= 0.5) {
     return clip.clone();
   }
 
+  const scale = scaleMap[scaleKey] || new Scale();
   const clonedNotes = clip.notes.map(note => ({ ...note }));
 
-  const axisIndex = axis ?? scale.getIndFromPitch(clonedNotes[0].pitch) + axis;
+  const axisIndex = axis ?? scale.getIndFromPitch(clonedNotes[0].pitch);
 
   const invertedNotes = clonedNotes.map(note => {
     const originalIndex = scale.getIndFromPitch(note.pitch);
@@ -614,10 +616,10 @@ export function easeCirc(clip: AbletonClip, amount: number): AbletonClip {
   const blend = (amount: number, x: number) => {
     if (amount < 0.5) {
       const blendAmt = amount * 2
-      return mix(x, easingMap['easeOutCirc'](x), blendAmt)
+      return mix(x, easingMap['outCirc'](x), blendAmt)
     } else {
       const blendAmt = (amount - 0.5) * 2
-      return mix(x, easingMap['easeInCirc'](x), blendAmt)
+      return mix(x, easingMap['inCirc'](x), blendAmt)
     }
   }
   
@@ -664,108 +666,24 @@ export function repeatNotes(clip: AbletonClip, n: number): AbletonClip {
   return new AbletonClip(clip.name + "_repeated", newDuration, repeatedNotes);
 }
 
-export function rotateClip(clip: AbletonClip, steps: number = 1, chordEpsilon: number = 0.01): AbletonClip {
-  if (clip.notes.length === 0 || steps === 0) {
+export function rotateClip(clip: AbletonClip, rotation: number = 0.5): AbletonClip {
+  if (clip.notes.length === 0 || Math.abs(rotation - 0.5) < 0.001) {
     return clip.clone();
   }
 
-  const sortedNotes = [...clip.notes].sort((a, b) => a.position - b.position);
-  const normalizedSteps = ((steps % sortedNotes.length) + sortedNotes.length) % sortedNotes.length;
+  const dur = clip.duration;
+  // Map [0..1] with 0.5 = identity, >0.5 forward, <0.5 backward, full sweep
+  const shift = (rotation - 0.5) * 2 * dur;
+  const cut = ((shift % dur) + dur) % dur; // 0 <= cut < dur
   
-  if (normalizedSteps === 0) {
+  if (cut < 0.001) {
     return clip.clone();
   }
-
-  // Find the first and last note positions
-  const firstNotePos = sortedNotes[0].position;
-  const lastNoteEnd = Math.max(...sortedNotes.map(n => n.position + n.duration));
   
-  // Group notes into chords (notes within epsilon of each other)
-  const chordGroups: AbletonNote[][] = [];
-  let currentChord: AbletonNote[] = [sortedNotes[0]];
+  const front = clip.timeSlice(cut, dur);
+  const back = clip.timeSlice(0, cut);
   
-  for (let i = 1; i < sortedNotes.length; i++) {
-    const prevNote = sortedNotes[i - 1];
-    const currNote = sortedNotes[i];
-    
-    if (Math.abs(currNote.position - prevNote.position) <= chordEpsilon) {
-      currentChord.push(currNote);
-    } else {
-      chordGroups.push(currentChord);
-      currentChord = [currNote];
-    }
-  }
-  chordGroups.push(currentChord);
-
-  // Calculate rotation by chord groups
-  const rotationIndex = normalizedSteps > 0 ? normalizedSteps : chordGroups.length + normalizedSteps;
-  
-  // Split into rotated and remaining groups
-  const rotatedGroups = chordGroups.slice(0, rotationIndex);
-  const remainingGroups = chordGroups.slice(rotationIndex);
-  
-  // Calculate timing offsets
-  const gapBefore = firstNotePos;
-  const gapAfter = clip.duration - lastNoteEnd;
-  
-  // Build the rotated clip
-  const newNotes: AbletonNote[] = [];
-  let currentPos = 0;
-  
-  // Add remaining groups first (they move to the front)
-  if (remainingGroups.length > 0) {
-    currentPos = gapBefore;
-    for (const group of remainingGroups) {
-      const groupStartPos = group[0].position;
-      for (const note of group) {
-        newNotes.push({
-          ...note,
-          position: currentPos + (note.position - groupStartPos)
-        });
-      }
-      // Move to next group position
-      if (group !== remainingGroups[remainingGroups.length - 1]) {
-        const nextGroup = remainingGroups[remainingGroups.indexOf(group) + 1];
-        const gap = nextGroup[0].position - (group[group.length - 1].position + group[group.length - 1].duration);
-        currentPos += Math.max(...group.map(n => n.position - groupStartPos + n.duration)) + gap;
-      } else {
-        currentPos += Math.max(...group.map(n => n.position - groupStartPos + n.duration));
-      }
-    }
-  }
-  
-  // Add rotated groups at the end
-  if (rotatedGroups.length > 0) {
-    const gapBetween = remainingGroups.length > 0 
-      ? (rotatedGroups[0][0].position - (remainingGroups[remainingGroups.length - 1][0].position + Math.max(...remainingGroups[remainingGroups.length - 1].map(n => n.duration))))
-      : 0;
-    
-    currentPos += gapBetween;
-    
-    for (const group of rotatedGroups) {
-      const groupStartPos = group[0].position;
-      for (const note of group) {
-        newNotes.push({
-          ...note,
-          position: currentPos + (note.position - groupStartPos)
-        });
-      }
-      // Move to next group position
-      if (group !== rotatedGroups[rotatedGroups.length - 1]) {
-        const nextGroup = rotatedGroups[rotatedGroups.indexOf(group) + 1];
-        const gap = nextGroup[0].position - (group[group.length - 1].position + group[group.length - 1].duration);
-        currentPos += Math.max(...group.map(n => n.position - groupStartPos + n.duration)) + gap;
-      } else {
-        currentPos += Math.max(...group.map(n => n.position - groupStartPos + n.duration));
-      }
-    }
-  }
-
-  return new AbletonClip(
-    clip.name + "_rotated",
-    clip.duration,
-    newNotes
-  );
+  return AbletonClip.concat(front, back);
 }
 
 
@@ -794,7 +712,7 @@ const silenceClip = (clip: AbletonClip, duration: number) => {
   return new AbletonClip(clip.name + "_silence", duration, [])
 }
 
-const scaleMap = {
+const scaleMap: Record<string, Scale> = {
   'C': new Scale(),
   'dR7': new Scale([0, 1, 4, 6, 7, 9, 11, 12], 62),
   'dR5': new Scale([0, 4, 6, 9, 11, 12], 62),
@@ -901,16 +819,16 @@ export const TRANSFORM_REGISTRY: Record<string, ClipTransform> = {
 
   rev: {
     name: 'rev',
-    transform: (clip) => retrogradeClip(clip),
-    argParser: (args: string[]) => [],
-    sliderScale: [n => n] //no scaling
+    transform: (clip, enable) => retrogradeClip(clip, enable),
+    argParser: (args: string[]) => [args[0] ? numParse(args[0]) : 1],
+    sliderScale: [n => n]
   },
   
   inv: {
     name: 'inv',
-    transform: (clip, axis) => invertClip(clip, new Scale(), axis),
-    argParser: (args: string[]) => [numParse(args[0])],
-    sliderScale: [n => n*24 - 12] //-12 to 12
+    transform: (clip, scaleKey, enable, axis) => invertClip(clip, scaleKey, enable, axis),
+    argParser: (args: string[]) => [args[0] || 'C', args[1] ? numParse(args[1]) : 1, args[2] ? numParse(args[2]) : undefined],
+    sliderScale: [n => n, n => n, n => n*24 - 12]
   },
 
   acc: {
@@ -918,8 +836,8 @@ export const TRANSFORM_REGISTRY: Record<string, ClipTransform> = {
     transform: (clip, noteInd, velMult, durMult) => accentClip(clip, noteInd, velMult, durMult),
     argParser: (args: string[]) => [
       args[0] ? numParse(args[0]) : undefined,
-      args[1] ? numParse(args[1]) : undefined,
-      args[2] ? numParse(args[2]) : undefined,
+      args[1] ? numParse(args[1]) : 2,
+      args[2] ? numParse(args[2]) : 2,
     ],
     sliderScale: [
       (n, clip) => Math.round(n * (clip.notes.length - 1)), 
@@ -1002,11 +920,11 @@ export const TRANSFORM_REGISTRY: Record<string, ClipTransform> = {
     sliderScale: [n => Math.floor(n * 8) + 1] // 1 to 8 repetitions
   },
 
-  rotate: {
-    name: 'rotate',
-    transform: (clip, steps, chordEpsilon = 0.01) => rotateClip(clip, steps, chordEpsilon),
-    argParser: (args: string[]) => [numParse(args[0]), numParse(args[1]) || 0.01],
-    sliderScale: [(n, c) => Math.floor(n * c.notes.length) - Math.floor(c.notes.length / 2), n => n * 0.1]
+  rot: {
+    name: 'rot',
+    transform: (clip, rotation) => rotateClip(clip, rotation),
+    argParser: (args: string[]) => [numParse(args[0])],
+    sliderScale: [n => n] // 0 to 1, where 0.5 is identity
   }
 };
 
