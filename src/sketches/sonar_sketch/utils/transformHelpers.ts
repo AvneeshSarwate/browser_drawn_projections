@@ -86,7 +86,12 @@ export function buildClipFromLine(
 
     parsedParams.forEach((param, idx) => {
       if (paramUsesSliderExpression(param)) {
-        const res = evaluateSliderExpression(param, tf.sliderScale[idx], curClip, sliders)
+        const sliderScaleFunc = tf.sliderScale[idx]
+        if (!sliderScaleFunc) {
+          console.warn(`Transform ${symbol} is missing sliderScale function at index ${idx}`)
+          return
+        }
+        const res = evaluateSliderExpression(param, sliderScaleFunc, curClip, sliders)
         if (res.success) {
           parsedParams[idx] = res.value
           updatedParams[idx] = `${res.value.toFixed(2)}-${Array.from(res.usedSliders).join('')}`

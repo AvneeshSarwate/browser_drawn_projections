@@ -743,8 +743,8 @@ export const TRANSFORM_REGISTRY: Record<string, ClipTransform> = {
   s_tr_i: {
     name: 's_tr_i',
     transform: (clip, degree, scaleKey = 'C', noteInd) => scaleTransposeOneNote(clip, degree, noteInd, scaleMap[scaleKey]),
-    argParser: (args: string[]) => [numParse(args[0]),  numParse(args[2]), args[1] || 'C'],
-    sliderScale: [n => Math.floor(n*16 - 8), (n, c) => Math.floor(n * (c.notes.length - 1))]
+    argParser: (args: string[]) => [numParse(args[0]),  args[1] || 'C', numParse(args[2])],
+    sliderScale: [n => Math.floor(n*16 - 8), n => n, (n, c) => Math.floor(n * (c.notes.length - 1))]
   },
 
   ease: {

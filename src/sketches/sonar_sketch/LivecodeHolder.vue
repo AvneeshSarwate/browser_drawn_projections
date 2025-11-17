@@ -669,8 +669,11 @@ onMounted(async() => {
       })
 
       const baseClipNames = ['dscale5', 'dscale7', 'd7mel']
-      const baseTransform = 's_tr s0 dR7'
-      const delayTransform = 'str s8'
+      const baseTransform =  's_tr s0 dR7 : str s1 : rot s2  : rev s3  : inv dR7 s4  '
+      const delayTransform = 's_tr s8 dR7 : str s9 : rot s10 : rev s11 : inv dR7 s12 ' //: s_tr_i 3 s14 dR7 
+
+      // const baseTransform = 's_tr s0 dR7'
+      // const delayTransform = 'str s8'
       const gateButtonMelodies: Record<number, LoopHandle> = {}
 
       Array.from({ length: 8 }, (_, i) => i).forEach(ind => {
