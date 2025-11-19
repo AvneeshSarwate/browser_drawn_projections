@@ -322,6 +322,7 @@ const runLineClean = async (lineText: string, ctx: TimeContext, voiceIndex: numb
     
     const group = groups[0] // runLine handles one group at a time
     const { clip, updatedClipLine } = buildClipFromLine(group.clipLine, sliders)
+    console.log("logged clip", clip)
     if (!clip) return
 
     console.log("running line", lineText, clip.notes.map(n => [n.position, n.pitch]), playNoteF)
@@ -669,8 +670,8 @@ onMounted(async() => {
       })
 
       const baseClipNames = ['dscale5', 'dscale7', 'd7mel']
-      const baseTransform =  's_tr s0 dR7 : str s1 : rot s2  : rev s3  : inv dR7 s4  '
-      const delayTransform = 's_tr s8 dR7 : str s9 : rot s10 : rev s11 : inv dR7 s12 ' //: s_tr_i 3 s14 dR7 
+      const baseTransform =  's_tr s0 dR7 : str s1 : rot s2  : rev s3  : inv dR7 s4  : easeCirc s5'
+      const delayTransform = 's_tr s8 dR7 : str s9 : rot s10 : rev s11 : inv dR7 s12 : easeCirc s13' //: s_tr_i 3 s14 dR7 
 
       // const baseTransform = 's_tr s0 dR7'
       // const delayTransform = 'str s8'

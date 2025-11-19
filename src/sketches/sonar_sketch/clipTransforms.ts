@@ -2,6 +2,23 @@ import { AbletonClip, type AbletonNote } from '@/io/abletonClips';
 import { Scale } from '@/music/scale';
 import { easingMap } from './easingMap';
 
+/**
+ * IMPORTANT: Clip Transform Invariants
+ * 
+ * When writing transform functions, ensure:
+ * 
+ * 1. Clip duration must accurately reflect note boundaries:
+ *    - After modifying notes, update clip.duration if notes extend beyond the original duration
+ *    - OR ensure notes never extend beyond clip.duration
+ *    - Failure to maintain this invariant can cause NaN in easing functions (see ease/easeCirc)
+ * 
+ * 2. Beware of floating point precision errors:
+ *    - Operations like timeStretch can produce note ends that are slightly > clip.duration
+ *      (e.g., 8.801856 vs 8.801855999999999)
+ *    - This can break assumptions in transforms that divide by duration
+ *    - See easeCirc and ease functions for examples of defensive clamping
+ */
+
 export type MarkerSegmentResult = {
   marker: AbletonNote;
   fullClip: AbletonClip;
@@ -182,22 +199,23 @@ export function retrogradeClip(clip: AbletonClip, enable: number = 1): AbletonCl
     return clip.clone();
   }
 
-  const timeToNextEvt: number[] = clip.notes.map((note, i) => {
-    if(i === clip.notes.length - 1) {
-      return clip.duration - note.position
-    }
-    return clip.notes[i+1].position - clip.notes[i].position
-  })
-
-  const newNotes: AbletonNote[] = clip.notes.map((note, i) => ({
+  const newNotes: AbletonNote[] = clip.notes.map((note) => ({
     ...note,
-    position: clip.duration - (note.position + timeToNextEvt[i]),
+    position: clip.duration - (note.position + note.duration),
   }));
 
   // Ensure notes are sorted by their new positions
   newNotes.sort((a, b) => a.position - b.position);
 
-  return new AbletonClip(clip.name + "_retrograde", clip.duration, newNotes);
+  const result = new AbletonClip(clip.name + "_retrograde", clip.duration, newNotes);
+  
+  // Check if any notes extend beyond clip duration
+  const maxEnd = result.notes.reduce((max, n) => Math.max(max, n.position + n.duration), 0);
+  if (maxEnd > result.duration) {
+    console.warn(`[retrogradeClip] Notes extend beyond duration: ${maxEnd} > ${result.duration}`);
+  }
+  
+  return result;
 }
 
 export function invertClip(
@@ -224,11 +242,19 @@ export function invertClip(
     };
   });
 
-  return new AbletonClip(
+  const result = new AbletonClip(
     clip.name + "_inverted",
     clip.duration,
     invertedNotes
   );
+  
+  // Check if any notes extend beyond clip duration
+  const maxEnd = result.notes.reduce((max, n) => Math.max(max, n.position + n.duration), 0);
+  if (maxEnd > result.duration) {
+    console.warn(`[invertClip] Notes extend beyond duration: ${maxEnd} > ${result.duration}`);
+  }
+  
+  return result;
 }
 
 export function accentClip(
@@ -284,7 +310,15 @@ export function accentClip(
 }
 
 export function timeStretch(clip: AbletonClip, factor: number): AbletonClip {
-  return clip.scale(Math.max(0.01, factor));
+  const result = clip.scale(Math.max(0.01, factor));
+  
+  // Check if any notes extend beyond clip duration
+  const maxEnd = result.notes.reduce((max, n) => Math.max(max, n.position + n.duration), 0);
+  if (maxEnd > result.duration) {
+    console.warn(`[timeStretch] Notes extend beyond duration: ${maxEnd} > ${result.duration}`);
+  }
+  
+  return result;
 }
 
 const stretchValues = [1/8, 1/4, 1/2, 1, 2, 4, 8, 16, 1/6, 1/3, 2/3, 1.5, 3, 6].sort((a, b) => a - b)
@@ -301,7 +335,15 @@ export function scaleTranspose(clip: AbletonClip, transpose: number, scale?: Sca
   if(!scale) {
     scale = new Scale();
   }
-  return clip.scaleTranspose(transpose, scale);
+  const result = clip.scaleTranspose(transpose, scale);
+  
+  // Check if any notes extend beyond clip duration
+  const maxEnd = result.notes.reduce((max, n) => Math.max(max, n.position + n.duration), 0);
+  if (maxEnd > result.duration) {
+    console.warn(`[scaleTranspose] Notes extend beyond duration: ${maxEnd} > ${result.duration}`);
+  }
+  
+  return result;
 }
 
 export function scaleTransposeOneNote(clip: AbletonClip, transpose: number, noteInd: number, scale?: Scale): AbletonClip {
@@ -596,6 +638,14 @@ const mix = (a: number, b: number, amount: number) => {
   return a * (1 - amount) + b * amount
 }
 
+/**
+ * Apply easing to note positions within a clip.
+ * 
+ * WARNING: This function assumes notes do not extend beyond clip.duration.
+ * Floating point errors from prior transforms (e.g., timeStretch producing 8.801856 > 8.801855999999999)
+ * can cause posNorm/endNorm to slightly exceed 1.0, leading to NaN in some easing functions.
+ * If you encounter NaN issues, add clamping like in easeCirc.
+ */
 export function ease(clip: AbletonClip, easeType: string, amount: number = 1): AbletonClip {
   const newClip = clip.clone()
   const duration = newClip.duration
@@ -609,6 +659,17 @@ export function ease(clip: AbletonClip, easeType: string, amount: number = 1): A
   return newClip
 }
 
+/**
+ * Apply circular easing with bidirectional blending.
+ * - amount = 0: ease out circ
+ * - amount = 0.5: linear (no easing)
+ * - amount = 1: ease in circ
+ * 
+ * WARNING: Circular easing functions use Math.sqrt(1 - x*x), which produces NaN when x > 1.
+ * Due to floating point errors from prior transforms (e.g., timeStretch producing 
+ * note ends slightly > clip.duration), we MUST clamp normalized positions to [0, 1].
+ * Even tiny errors like 1.0000000000000001 will cause NaN!
+ */
 export function easeCirc(clip: AbletonClip, amount: number): AbletonClip {
   const newClip = clip.clone()
   const duration = newClip.duration
@@ -616,7 +677,7 @@ export function easeCirc(clip: AbletonClip, amount: number): AbletonClip {
   const blend = (amount: number, x: number) => {
     if (amount < 0.5) {
       const blendAmt = amount * 2
-      return mix(x, easingMap['outCirc'](x), blendAmt)
+      return mix(easingMap['outCirc'](x), x, blendAmt)
     } else {
       const blendAmt = (amount - 0.5) * 2
       return mix(x, easingMap['inCirc'](x), blendAmt)
@@ -624,12 +685,19 @@ export function easeCirc(clip: AbletonClip, amount: number): AbletonClip {
   }
   
   newClip.notes.forEach(note => {
-    const posNorm = note.position / duration
-    const endNorm = (note.position + note.duration) / duration
+    // CRITICAL: Clamp to [0, 1] to prevent NaN from sqrt(1 - x*x) when x > 1 due to floating point errors
+    const posNorm = Math.max(0, Math.min(1, note.position / duration))
+    const endNorm = Math.max(0, Math.min(1, (note.position + note.duration) / duration))
     note.position = blend(amount, posNorm) * duration
     const endTime = blend(amount, endNorm) * duration
     note.duration = endTime - note.position
   })
+  
+  // Check if any notes extend beyond clip duration
+  const maxEnd = newClip.notes.reduce((max, n) => Math.max(max, n.position + n.duration), 0);
+  if (maxEnd > newClip.duration) {
+    console.warn(`[easeCirc] Notes extend beyond duration: ${maxEnd} > ${newClip.duration}`);
+  }
   
   return newClip
 }
@@ -683,7 +751,15 @@ export function rotateClip(clip: AbletonClip, rotation: number = 0.5): AbletonCl
   const front = clip.timeSlice(cut, dur);
   const back = clip.timeSlice(0, cut);
   
-  return AbletonClip.concat(front, back);
+  const result = AbletonClip.concat(front, back);
+  
+  // Check if any notes extend beyond clip duration
+  const maxEnd = result.notes.reduce((max, n) => Math.max(max, n.position + n.duration), 0);
+  if (maxEnd > result.duration) {
+    console.warn(`[rotateClip] Notes extend beyond duration: ${maxEnd} > ${result.duration}`);
+  }
+  
+  return result;
 }
 
 
