@@ -280,7 +280,7 @@ const runLine = async (lineText: string, ctx: TimeContext, uuid: string, voiceIn
 const DELAY_SLIDER = 16
 const runLineWithDelay = (baseClipName: string, baseTransform: string, delayTransform: string, ctx: TimeContext) => {
   const baseLine = baseClipName + ' : ' + baseTransform
-  const delayRootClipName = baseClipName + '-delayRoot'
+  const delayRootClipName = baseClipName + '-delayRoot-' + crypto.randomUUID()
   const delayLine = delayRootClipName + ' : ' + delayTransform
   console.log('play lines', baseLine, delayLine)
 
