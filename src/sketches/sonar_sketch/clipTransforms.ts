@@ -762,6 +762,84 @@ export function rotateClip(clip: AbletonClip, rotation: number = 0.5): AbletonCl
   return result;
 }
 
+export function ornamentClip(
+  clip: AbletonClip,
+  probability: number = 0.5,
+  scaleKey: string = 'C'
+): AbletonClip {
+  if (clip.notes.length === 0) {
+    return clip.clone();
+  }
+
+  const scale = scaleMap[scaleKey] || new Scale();
+  // Sort notes by position to handle time-shifting correctly for monophonic lines
+  const sortedNotes = [...clip.notes].sort((a, b) => a.position - b.position);
+  const newNotes: AbletonNote[] = [];
+  let timeShift = 0;
+
+  sortedNotes.forEach(note => {
+    // Apply accumulated shift to current note's position
+    const shiftedStart = note.position + timeShift;
+
+    if (note.duration <= 0.25 || Math.random() > probability) {
+      newNotes.push({ 
+        ...note, 
+        position: shiftedStart 
+      });
+      return;
+    }
+
+    const ornamentType = Math.floor(Math.random() * 4);
+    const durFactor = 0.25 + Math.random() * 0.5;
+    const unitDur = note.duration * durFactor;
+    const totalOrnDur = unitDur * 3;
+    
+    // Update time shift for subsequent notes based on duration change
+    // (newDuration - oldDuration)
+    timeShift += (totalOrnDur - note.duration);
+
+    const baseIndex = scale.getIndFromPitch(note.pitch);
+    
+    const createNote = (pitchIndex: number, offsetIndex: number) => ({
+      ...note,
+      pitch: scale.getByIndex(pitchIndex),
+      position: shiftedStart + (offsetIndex * unitDur),
+      duration: unitDur
+    });
+
+    // 0: Trill Up (A, A+1, A)
+    // 1: Trill Down (A, A-1, A)
+    // 2: Run Up (A, A+1, A+2)
+    // 3: Run Down (A, A-1, A-2)
+
+    if (ornamentType === 0) {
+      newNotes.push(createNote(baseIndex, 0));
+      newNotes.push(createNote(baseIndex + 1, 1));
+      newNotes.push(createNote(baseIndex, 2));
+    } else if (ornamentType === 1) {
+      newNotes.push(createNote(baseIndex, 0));
+      newNotes.push(createNote(baseIndex - 1, 1));
+      newNotes.push(createNote(baseIndex, 2));
+    } else if (ornamentType === 2) {
+      newNotes.push(createNote(baseIndex, 0));
+      newNotes.push(createNote(baseIndex + 1, 1));
+      newNotes.push(createNote(baseIndex + 2, 2));
+    } else {
+      newNotes.push(createNote(baseIndex, 0));
+      newNotes.push(createNote(baseIndex - 1, 1));
+      newNotes.push(createNote(baseIndex - 2, 2));
+    }
+  });
+  
+  // No need to resort as we processed in order and preserved relative order
+  
+  const newDuration = newNotes.reduce((max, n) => Math.max(max, n.position + n.duration), 0);
+  // Ensure clip is at least as long as original, plus any net expansion
+  const finalDur = Math.max(clip.duration + timeShift, newDuration);
+
+  return new AbletonClip(clip.name + "_ornamented", finalDur, newNotes);
+}
+
 
 // ─────────────────────────────────────────────
 // Symbol  →  Transformation-function registry
@@ -802,6 +880,13 @@ const scaleMap: Record<string, Scale> = {
  *  parameters parsed from the text (numbers or strings, some of which may be references to sliders).
  */
 export const TRANSFORM_REGISTRY: Record<string, ClipTransform> = {
+  orn: {
+    name: 'orn',
+    transform: (clip, prob, scaleKey) => ornamentClip(clip, prob, scaleKey),
+    argParser: (args: string[]) => [numParse(args[0]), args[1] || 'C'],
+    sliderScale: [n => n]
+  },
+
   seg: {
     name: 'seg',
     transform: (clip, index) => segment(clip, index),
