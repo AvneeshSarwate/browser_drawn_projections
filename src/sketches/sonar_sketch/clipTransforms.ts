@@ -671,6 +671,7 @@ export function ease(clip: AbletonClip, easeType: string, amount: number = 1): A
  * Even tiny errors like 1.0000000000000001 will cause NaN!
  */
 export function easeCirc(clip: AbletonClip, amount: number): AbletonClip {
+  amount = 1 - amount
   const newClip = clip.clone()
   const duration = newClip.duration
   

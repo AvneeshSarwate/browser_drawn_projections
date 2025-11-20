@@ -670,9 +670,9 @@ onMounted(async() => {
       })
 
       const baseClipNames = ['dscale5', 'dscale7', 'd7mel']
-      const baseTransform =  's_tr s0 dR7 : str s1 : rot s2  : rev s3 : orn s4 dR7 : easeCirc s5'
+      const baseTransform =  's_tr s0 dR7 : str s1 : rot s2  : rev s3  : orn s4 dR7 : easeCirc s5'
       // const baseTransform =  'orn 0.2 dR7'
-      const delayTransform = 's_tr s8 dR7 : str s9 : rot s10 : rev s11 : easeCirc s13' //: s_tr_i 3 s14 dR7 
+      const delayTransform = 's_tr s8 dR7 : str s9 : rot s10 : rev s11 : orn s12 dR7 : easeCirc s13' //: s_tr_i 3 s14 dR7 
 
       // const baseTransform = 's_tr s0 dR7'
       // const delayTransform = 'str s8'
@@ -719,7 +719,7 @@ onMounted(async() => {
     }
 
     const FBV3 = midiInputs.get("FBV 3")
-    if (FBV3) {
+    if (FBV3 && false) {
       FBV3.onControlChange(2, (msg) => {
         if (msg.data2 > 64) {
           //swap to previous code bank for voice 0
