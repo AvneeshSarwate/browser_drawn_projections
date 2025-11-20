@@ -1,12 +1,13 @@
 import Konva from 'konva'
 
 import * as selectionStore from './selectionStore'
-import { getCanvasItem, createGroupItem, createPolygonItem, removeCanvasItem } from './CanvasItem'
-import { polygonShapes, freehandStrokes, freehandStrokeGroups, type CanvasRuntimeState } from './canvasState'
+import { getCanvasItem, createGroupItem, createPolygonItem, createCircleItem, removeCanvasItem } from './CanvasItem'
+import { polygonShapes, freehandStrokes, freehandStrokeGroups, circleShapes, type CanvasRuntimeState } from './canvasState'
 
 import { executeCommand } from './commands'
 import { getCurrentFreehandStateString, deepCloneWithNewIds, updateBakedFreehandData, updateTimelineState, refreshStrokeConnections, updateFreehandDraggableStates } from './freehandTool'
 import { getCurrentPolygonStateString, attachPolygonHandlers, serializePolygonState, updateBakedPolygonData } from './polygonTool'
+import { getCurrentCircleStateString, attachCircleHandlers, serializeCircleState, updateBakedCircleData } from './circleTool'
 import { hasAncestorConflict } from './canvasUtils'
 import { uid } from './canvasUtils'
 import { pushCommandWithStates } from './commands'
@@ -192,7 +193,7 @@ function completeSelectionRect(state: CanvasRuntimeState, isShiftHeld: boolean =
   // Helper: filter only selectable nodes (exclude transformers and helpers)
   const isSelectableNode = (node: Konva.Node): boolean => {
     if (node instanceof Konva.Transformer) return false
-    return node instanceof Konva.Path || node instanceof Konva.Line || node instanceof Konva.Group
+    return node instanceof Konva.Path || node instanceof Konva.Line || node instanceof Konva.Circle || node instanceof Konva.Group
   }
 
   // Check only canonical shape containers first; fallback to stage layers if not ready yet
@@ -201,6 +202,7 @@ function completeSelectionRect(state: CanvasRuntimeState, isShiftHeld: boolean =
   if (stage) {
     if (state.groups.freehandShape) containersToCheck.push(state.groups.freehandShape)
     if (state.groups.polygonShapes) containersToCheck.push(state.groups.polygonShapes)
+    if (state.groups.circleShapes) containersToCheck.push(state.groups.circleShapes)
 
     if (containersToCheck.length === 0) {
       stage.getLayers().forEach(layer => {
@@ -275,7 +277,8 @@ function startSelectionDrag(state: CanvasRuntimeState, stage: Konva.Stage) {
   // Capture before-state for undo/redo
   state.selection.selectionDragState.beforeState = JSON.stringify({
     freehand: getCurrentFreehandStateString(state),
-    polygon: getCurrentPolygonStateString(state)
+    polygon: getCurrentPolygonStateString(state),
+    circle: getCurrentCircleStateString(state)
   })
 
   // Store absolute start positions so we can move across different parents
@@ -310,7 +313,8 @@ function finishSelectionDrag(state: CanvasRuntimeState) {
   // Capture after-state and push a unified command if changed
   const afterState = JSON.stringify({
     freehand: getCurrentFreehandStateString(state),
-    polygon: getCurrentPolygonStateString(state)
+    polygon: getCurrentPolygonStateString(state),
+    circle: getCurrentCircleStateString(state)
   })
 
   if (state.selection.selectionDragState.beforeState !== afterState) {
@@ -361,8 +365,8 @@ export function canGroupSelection(state: CanvasRuntimeState): boolean {
   // Must all be in the same layer
   const layers = new Set(nodes.map(n => nodeLayer(n)))
   if (layers.size !== 1) return false
-  // Groupable nodes are Paths or Groups
-  const groupable = nodes.filter(n => (n instanceof Konva.Path) || (n instanceof Konva.Group))
+  // Groupable nodes are Paths, Circles, or Groups
+  const groupable = nodes.filter(n => (n instanceof Konva.Path) || (n instanceof Konva.Circle) || (n instanceof Konva.Group))
   if (groupable.length < 1) return false
   // Prevent ancestor/descendant conflicts
   if (hasAncestorConflict(groupable)) return false
@@ -371,7 +375,7 @@ export function canGroupSelection(state: CanvasRuntimeState): boolean {
 
 export function groupSelection(state: CanvasRuntimeState) {
   if (!canGroupSelection(state)) return
-  const nodes = state.selection.selectedKonvaNodes.value.filter(n => (n instanceof Konva.Path) || (n instanceof Konva.Group))
+  const nodes = state.selection.selectedKonvaNodes.value.filter(n => (n instanceof Konva.Path) || (n instanceof Konva.Circle) || (n instanceof Konva.Group))
   if (nodes.length < 1) return
 
   executeCommand(state, 'Group Selection', () => {
@@ -483,6 +487,31 @@ export function duplicateSelection(state: CanvasRuntimeState) {
 
           duplicates.push(clone)
         }
+        // Circles
+        else if (node instanceof Konva.Circle) {
+          const clone = node.clone({ x: node.x() + 50, y: node.y() + 50 }) as Konva.Circle
+          // assign new id and register in circle state
+          const newId = uid('circle_')
+          const creationTime = Date.now()
+          clone.id(newId)
+          clone.setAttr('creationTime', creationTime)
+          const parent = node.getParent()
+          if (parent) parent.add(clone)
+
+          // register data structures and handlers
+          createCircleItem(state, clone)
+          attachCircleHandlers(state, clone)
+          circleShapes(state).set(newId, {
+            id: newId,
+            x: clone.x(),
+            y: clone.y(),
+            r: clone.radius(),
+            creationTime: creationTime,
+            shape: clone
+          } as any)
+
+          duplicates.push(clone)
+        }
       })
 
       // Update selection to new duplicates
@@ -498,9 +527,12 @@ export function duplicateSelection(state: CanvasRuntimeState) {
       // Refresh visuals/state
       freehandShapeGroup?.getLayer()?.batchDraw()
       state.groups.polygonShapes?.getLayer()?.batchDraw()
+      state.groups.circleShapes?.getLayer()?.batchDraw()
       updateBakedFreehandData(state)
       updateBakedPolygonData(state)
+      updateBakedCircleData(state)
       serializePolygonState(state)
+      serializeCircleState(state)
     })
   })
 }
@@ -547,6 +579,10 @@ export function deleteSelection(state: CanvasRuntimeState) {
         if (n instanceof Konva.Line) {
           polygonShapes(state).delete(n.id())
         }
+        // Circle record cleanup
+        if (n instanceof Konva.Circle) {
+          circleShapes(state).delete(n.id())
+        }
         // Remove from CanvasItem registry
         removeCanvasItem(state, n.id())
       })
@@ -560,9 +596,12 @@ export function deleteSelection(state: CanvasRuntimeState) {
     // Redraw/refresh
     freehandShapeGroup?.getLayer()?.batchDraw()
     state.groups.polygonShapes?.getLayer()?.batchDraw()
+    state.groups.circleShapes?.getLayer()?.batchDraw()
     updateBakedFreehandData(state)
     updateBakedPolygonData(state)
+    updateBakedCircleData(state)
     serializePolygonState(state)
+    serializeCircleState(state)
 
     // Ancillary viz cleanup (best-effort)
     import('./ancillaryVisualizations').then(({ refreshAnciliaryViz }) => refreshAnciliaryViz(state)).catch(() => {})

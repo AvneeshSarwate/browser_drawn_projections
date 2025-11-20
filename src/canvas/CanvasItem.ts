@@ -3,7 +3,7 @@ import type { FreehandStroke } from "./freehandTool"
 import { uid } from "./canvasUtils"
 import type { CanvasRuntimeState } from "./canvasState"
 
-export type ItemType = 'stroke' | 'strokeGroup' | 'polygon'
+export type ItemType = 'stroke' | 'strokeGroup' | 'polygon' | 'circle'
 
 export interface CanvasItem {
   id: string
@@ -106,6 +106,39 @@ export const createPolygonItem = (state: CanvasRuntimeState, line: Konva.Line): 
         line.setAttr('metadata', undefined)
       } else {
         line.setAttr('metadata', meta)
+      }
+    }
+  }
+  
+  state.canvasItems.set(item.id, item)
+  return item
+}
+
+export const createCircleItem = (state: CanvasRuntimeState, circle: Konva.Circle): CanvasItem => {
+  if (!circle.id()) {
+    circle.id(uid('circle_'))
+  }
+  const item: CanvasItem = {
+    id: circle.id(),
+    type: 'circle',
+    konvaNode: circle,
+    getBounds() {
+      const clientRect = circle.getClientRect()
+      return {
+        minX: clientRect.x,
+        maxX: clientRect.x + clientRect.width,
+        minY: clientRect.y,
+        maxY: clientRect.y + clientRect.height
+      }
+    },
+    getMetadata() {
+      return circle.getAttr('metadata')
+    },
+    setMetadata(meta: Record<string, any> | undefined) {
+      if (meta === undefined || Object.keys(meta).length === 0) {
+        circle.setAttr('metadata', undefined)
+      } else {
+        circle.setAttr('metadata', meta)
       }
     }
   }

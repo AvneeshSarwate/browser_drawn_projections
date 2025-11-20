@@ -15,6 +15,7 @@ import { getPointsBounds } from './canvasUtils';
 import { CommandStack } from './commandStack';
 import { ensureHighlightLayer, createMetadataToolkit } from './metadata';
 import { clearPolygonSelection as clearPolygonSelectionImpl, updatePolygonControlPoints as updatePolygonControlPointsImpl, deserializePolygonState, handlePolygonClick as handlePolygonClickImpl, handlePolygonMouseMove as handlePolygonMouseMoveImpl, handlePolygonEditMouseMove as handlePolygonEditMouseMoveImpl, finishPolygon as finishPolygonImpl, clearCurrentPolygon as clearCurrentPolygonImpl, serializePolygonState, updateBakedPolygonData, initPolygonLayers, setupPolygonModeWatcher as setupPolygonModeWatcherImpl } from './polygonTool';
+import { handleCirclePointerDown as handleCirclePointerDownImpl, handleCirclePointerMove as handleCirclePointerMoveImpl, handleCirclePointerUp as handleCirclePointerUpImpl, serializeCircleState, deserializeCircleState, updateBakedCircleData as updateBakedCircleDataCircle, initCircleLayers } from './circleTool';
 import { initAVLayer, refreshAnciliaryViz } from './ancillaryVisualizations';
 import { initializeTransformer } from './transformerManager';
 import {
@@ -105,6 +106,8 @@ const createSnapshot = (state: CanvasRuntimeState): CanvasStateSnapshot => {
   const freehandRenderData = snapshotFreehandRenderData(state.freehand.bakedRenderData)
   const freehandGroupMap = snapshotGroupMap(state.freehand.bakedGroupMap)
   const polygonRenderData = snapshotPolygonRenderData(state.polygon.bakedRenderData)
+  const circleRenderData = state.circle.bakedRenderData
+  const circleGroupMap = snapshotGroupMap(state.circle.bakedGroupMap)
 
   return {
     freehand: {
@@ -115,6 +118,11 @@ const createSnapshot = (state: CanvasRuntimeState): CanvasStateSnapshot => {
     polygon: {
       serializedState: state.polygon.serializedState ?? '',
       bakedRenderData: polygonRenderData ?? [],
+    },
+    circle: {
+      serializedState: state.circle.serializedState ?? '',
+      bakedRenderData: circleRenderData ?? [],
+      bakedGroupMap: circleGroupMap ?? {},
     },
   }
 }
@@ -166,6 +174,11 @@ const finishPolygon = () => finishPolygonImpl(canvasState)
 const clearCurrentPolygon = () => clearCurrentPolygonImpl(canvasState)
 const setupPolygonModeWatcher = () => setupPolygonModeWatcherImpl(canvasState)
 
+// Stateful wrappers for circle helpers
+const handleCirclePointerDown = (pos: { x: number, y: number }) => handleCirclePointerDownImpl(canvasState, pos)
+const handleCirclePointerMove = () => handleCirclePointerMoveImpl(canvasState)
+const handleCirclePointerUp = () => handleCirclePointerUpImpl(canvasState)
+
 const selectedKonvaNodes = canvasState.selection.selectedKonvaNodes
 const singleSelectedNode = computed(() => selectionStore.getActiveSingleNode(canvasState))
 const multiSelected = computed(() => selectionStore.count(canvasState) > 1)
@@ -197,6 +210,7 @@ const canRedoReactive = ref(false)
 const onCanvasStateChange = () => {
   updateBakedFreehandData(canvasState)
   updateBakedPolygonData(canvasState)
+  updateBakedCircleDataCircle(canvasState)
   refreshAnciliaryViz(canvasState)
   // Update reactive button states after any command stack change
   canUndoReactive.value = commandStack.canUndo()
@@ -294,7 +308,7 @@ const konvaContainer = ref<HTMLDivElement>()
 
 
 // Helper to consistently apply layer listening per tool
-const applyToolMode = (state: CanvasRuntimeState, tool: 'select' | 'freehand' | 'polygon') => {
+const applyToolMode = (state: CanvasRuntimeState, tool: 'select' | 'freehand' | 'polygon' | 'circle') => {
   const freehandShapeGroup = state.groups.freehandShape
   const freehandDrawingGroup = state.groups.freehandDrawing
   const selectionGroup = state.groups.selectionOverlay
@@ -302,6 +316,8 @@ const applyToolMode = (state: CanvasRuntimeState, tool: 'select' | 'freehand' | 
   const polygonPreviewGroup = state.groups.polygonPreview
   const polygonControlsGroup = state.groups.polygonControls
   const polygonSelectionGroup = state.groups.polygonSelection
+  const circleShapesGroup = state.groups.circleShapes
+  const circlePreviewGroup = state.groups.circlePreview
   const stageRef = state.stage
   // Clear selections when switching tools
   selectionStore.clear(state)
@@ -310,11 +326,13 @@ const applyToolMode = (state: CanvasRuntimeState, tool: 'select' | 'freehand' | 
     // Enable interaction with shape layers for selection
     freehandShapeGroup?.listening(true)
     polygonShapesGroup?.listening(true)
+    circleShapesGroup?.listening(true)
 
     // Disable drawing-specific layers
     freehandDrawingGroup?.listening(false)
     polygonPreviewGroup?.listening(false)
     polygonControlsGroup?.listening(false)
+    circlePreviewGroup?.listening(false)
 
     // Keep selection layers active (transformer lives here)
     selectionGroup?.listening(true)
@@ -329,11 +347,13 @@ const applyToolMode = (state: CanvasRuntimeState, tool: 'select' | 'freehand' | 
     freehandDrawingGroup?.listening(true)
     selectionGroup?.listening(true)
 
-    // Disable polygon interactive layers
+    // Disable polygon and circle interactive layers
     polygonShapesGroup?.listening(false)
     polygonPreviewGroup?.listening(false)
     polygonControlsGroup?.listening(false)
     polygonSelectionGroup?.listening(false)
+    circleShapesGroup?.listening(false)
+    circlePreviewGroup?.listening(false)
   } else if (tool === 'polygon') {
     // Polygon mode
     polygonShapesGroup?.listening(true)
@@ -341,10 +361,25 @@ const applyToolMode = (state: CanvasRuntimeState, tool: 'select' | 'freehand' | 
     polygonControlsGroup?.listening(true)
     polygonSelectionGroup?.listening(true)
 
-    // Disable freehand interactive layers
+    // Disable freehand and circle interactive layers
     freehandShapeGroup?.listening(false)
     freehandDrawingGroup?.listening(false)
     selectionGroup?.listening(false)
+    circleShapesGroup?.listening(false)
+    circlePreviewGroup?.listening(false)
+  } else if (tool === 'circle') {
+    // Circle mode
+    circleShapesGroup?.listening(true)
+    circlePreviewGroup?.listening(true)
+
+    // Disable freehand and polygon interactive layers
+    freehandShapeGroup?.listening(false)
+    freehandDrawingGroup?.listening(false)
+    selectionGroup?.listening(false)
+    polygonShapesGroup?.listening(false)
+    polygonPreviewGroup?.listening(false)
+    polygonControlsGroup?.listening(false)
+    polygonSelectionGroup?.listening(false)
   }
 
   // Manage polygon control points visibility lifecycle across tools
@@ -453,6 +488,7 @@ onMounted(async () => {
     // Create grouped containers within the layers
     initFreehandLayers(canvasState, stageInstance)
     initPolygonLayers(canvasState, stageInstance)
+    initCircleLayers(canvasState, stageInstance)
 
     // Shared overlay group for selection rectangle and transformer
     const selectionOverlayGroup = new Konva.Group({ name: 'selection-overlay' })
@@ -559,7 +595,7 @@ onMounted(async () => {
     emitStateUpdate(canvasState)
 
 
-    // Mouse/touch event handlers - new three-tool system
+    // Mouse/touch event handlers - new four-tool system
     stageInstance.on('mousedown touchstart', (e) => {
       const pos = stageInstance.getPointerPosition()
       if (!pos) return
@@ -583,6 +619,11 @@ onMounted(async () => {
         if (!isControlPoint) {
           handlePolygonClick(pos)
         }
+      } else if (activeTool.value === 'circle') {
+        // Circle tool handles circle-specific interactions only (no selection)
+        handleCirclePointerDown(pos)
+        // Clear selection when starting to draw
+        selectionStore.clear(canvasState)
       }
     })
 
@@ -617,6 +658,10 @@ onMounted(async () => {
           handlePolygonEditMouseMove()
         }
         // Note: selection drag is handled by select tool when appropriate
+      } else if (activeTool.value === 'circle') {
+        if (canvasState.circle.isDrawing.value) {
+          handleCirclePointerMove()
+        }
       }
     })
 
@@ -669,6 +714,8 @@ onMounted(async () => {
 
         canvasState.freehand.currentPoints = []
         canvasState.freehand.currentTimestamps = []
+      } else if (activeTool.value === 'circle' && canvasState.circle.isDrawing.value) {
+        handleCirclePointerUp()
       } else {
         // Delegate to select tool for all other cases
         handleSelectPointerUpStateful(stageInstance, e)
@@ -705,6 +752,7 @@ onUnmounted(() => {
   // Save state before unmounting (for hot reload)
   serializeFreehandState(canvasState)
   serializePolygonState(canvasState)
+  serializeCircleState(canvasState)
 
   disposeEscapeListener?.()
   disposeEscapeListener = undefined
@@ -724,6 +772,7 @@ onUnmounted(() => {
         <option value="select">👆 Select</option>
         <option value="freehand">✏️ Freehand</option>
         <option value="polygon">⬟ Polygon</option>
+        <option value="circle">◯ Circle</option>
       </select>
       <span class="separator">|</span>
 
@@ -817,6 +866,11 @@ onUnmounted(() => {
         </div>
         <span class="separator">|</span>
         <span v-if="canvasState.polygon.isDrawing.value" class="info">Drawing: {{ canvasState.polygon.currentPoints.value.length / 2 }} points</span>
+      </template>
+
+      <!-- Circle Tool Toolbar -->
+      <template v-if="activeTool === 'circle'">
+        <span v-if="canvasState.circle.isDrawing.value" class="info">Radius: {{ Math.round(canvasState.circle.currentRadius.value) }}px</span>
       </template>
       <span class="separator">|</span>
       <span class="info">{{ selectionStore.count(canvasState) }} selected</span>

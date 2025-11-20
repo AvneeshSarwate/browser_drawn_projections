@@ -1,5 +1,6 @@
 import { getCurrentFreehandStateString, restoreFreehandState } from './freehandTool'
 import { getCurrentPolygonStateString, restorePolygonState } from './polygonTool'
+import { getCurrentCircleStateString, restoreCircleState } from './circleTool'
 import type { CanvasRuntimeState } from './canvasState'
 
 export interface CanvasPersistenceOptions {
@@ -9,6 +10,7 @@ export interface CanvasPersistenceOptions {
 interface NormalizedCanvasState {
   freehand?: string
   polygon?: string
+  circle?: string
 }
 
 const parseStateString = (stateString: string | null | undefined) => {
@@ -26,7 +28,7 @@ const normalizeParsedState = (parsed: any): NormalizedCanvasState => {
     return {}
   }
 
-  if ('freehand' in parsed || 'polygon' in parsed) {
+  if ('freehand' in parsed || 'polygon' in parsed || 'circle' in parsed) {
     const result: NormalizedCanvasState = {}
 
     if (parsed.freehand !== undefined) {
@@ -41,6 +43,12 @@ const normalizeParsedState = (parsed: any): NormalizedCanvasState => {
         : JSON.stringify(parsed.polygon)
     }
 
+    if (parsed.circle !== undefined) {
+      result.circle = typeof parsed.circle === 'string'
+        ? parsed.circle
+        : JSON.stringify(parsed.circle)
+    }
+
     return result
   }
 
@@ -52,20 +60,27 @@ const normalizeParsedState = (parsed: any): NormalizedCanvasState => {
     return { polygon: JSON.stringify(parsed) }
   }
 
+  if ('layer' in parsed && parsed.circles) {
+    return { circle: JSON.stringify(parsed) }
+  }
+
   return {}
 }
 
 export const serializeCanvasState = (state: CanvasRuntimeState): string => {
   const freehandString = getCurrentFreehandStateString(state)
   const polygonString = getCurrentPolygonStateString(state)
+  const circleString = getCurrentCircleStateString(state)
 
   const freehand = parseStateString(freehandString)
   const polygon = parseStateString(polygonString)
+  const circle = parseStateString(circleString)
 
   const payload = {
     version: 1,
     freehand,
-    polygon
+    polygon,
+    circle
   }
 
   return JSON.stringify(payload)
@@ -86,10 +101,10 @@ export const deserializeCanvasState = (
     return false
   }
 
-  const { freehand, polygon } = normalizeParsedState(parsed)
+  const { freehand, polygon, circle } = normalizeParsedState(parsed)
 
-  if (!freehand && !polygon) {
-    console.warn('Canvas state payload missing freehand and polygon data')
+  if (!freehand && !polygon && !circle) {
+    console.warn('Canvas state payload missing freehand, polygon, and circle data')
     return false
   }
 
@@ -99,6 +114,10 @@ export const deserializeCanvasState = (
 
   if (polygon) {
     restorePolygonState(canvasState, polygon)
+  }
+
+  if (circle) {
+    restoreCircleState(canvasState, circle)
   }
 
   return true

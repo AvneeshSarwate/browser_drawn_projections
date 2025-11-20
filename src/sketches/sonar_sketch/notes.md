@@ -1,5 +1,13 @@
 # notes
 
+add "neighbor ornament" transforms - probabilitiy knob for how many notes get it, randomly pick from 2-4 diff ones, scale aware
+get computer "preset" that can easily enable Jor transition
+alternate chikari strings with in time composition from computer - then alternate in time playing with guitar, then full guitar takeover
+learn composition rhythm in diff transpositions
+gotta practice playing to the computer - play lush/peacefull - don't be on top of the beat
+maybe play over computer jor transition a little - add color
+focus on getting transitions tight and just getting from point A to B - sections are already logistically complicated
+
 [testLink](./clipTransforms.ts#L55)
 
 need to implement toggle to enable/disable computer delay phrase - piece starts with call and response between guitar and computer

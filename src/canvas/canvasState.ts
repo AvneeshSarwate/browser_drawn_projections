@@ -25,6 +25,18 @@ export type FlattenedPolygon = {
 
 export type PolygonRenderData = FlattenedPolygon[]
 
+export type FlattenedCircle = {
+  type: 'circle'
+  center: { x: number, y: number }
+  r?: number  // Present if circle is not distorted (rx ≈ ry)
+  rx: number
+  ry: number
+  rotation: number
+  metadata?: any
+}
+
+export type CircleRenderData = FlattenedCircle[]
+
 export type CanvasStateSnapshot = {
   freehand: {
     serializedState: string
@@ -34,6 +46,11 @@ export type CanvasStateSnapshot = {
   polygon: {
     serializedState: string
     bakedRenderData: PolygonRenderData
+  }
+  circle: {
+    serializedState: string
+    bakedRenderData: CircleRenderData
+    bakedGroupMap: Record<string, number[]>
   }
 }
 
@@ -74,10 +91,19 @@ export interface AncillaryVisualizationInstance {
   nodes: Konva.Node | Konva.Node[]
 }
 
+export interface CircleShapeRuntime {
+  id: string
+  x: number
+  y: number
+  r: number
+  shape?: Konva.Circle
+  creationTime: number
+}
+
 export interface CanvasRuntimeState {
   stage?: Konva.Stage
   konvaContainer?: HTMLDivElement
-  activeTool: Ref<'select' | 'freehand' | 'polygon'>
+  activeTool: Ref<'select' | 'freehand' | 'polygon' | 'circle'>
   layers: {
     grid?: Konva.Layer
     drawing?: Konva.Layer
@@ -91,6 +117,8 @@ export interface CanvasRuntimeState {
     polygonPreview?: Konva.Group
     polygonControls?: Konva.Group
     polygonSelection?: Konva.Group
+    circleShapes?: Konva.Group
+    circlePreview?: Konva.Group
     ancillaryViz?: Konva.Group
     metadataHighlight?: Konva.Group
     selectionOverlay?: Konva.Group
@@ -142,6 +170,16 @@ export interface CanvasRuntimeState {
     proximityThreshold: number
     serializedState: string
     bakedRenderData: PolygonRenderData
+  }
+  circle: {
+    shapes: Map<string, CircleShapeRuntime>
+    isDrawing: Ref<boolean>
+    currentCenter: Ref<{ x: number, y: number } | null>
+    currentRadius: Ref<number>
+    dragStartState: string | null
+    serializedState: string
+    bakedRenderData: CircleRenderData
+    bakedGroupMap: Record<string, number[]>
   }
   selection: {
     items: ShallowReactive<Set<CanvasItem>>
@@ -258,6 +296,16 @@ export const createCanvasRuntimeState = (): CanvasRuntimeState => {
       serializedState: '',
       bakedRenderData: []
     },
+    circle: {
+      shapes: new Map(),
+      isDrawing: ref(false),
+      currentCenter: ref(null),
+      currentRadius: ref(0),
+      dragStartState: null,
+      serializedState: '',
+      bakedRenderData: [],
+      bakedGroupMap: {}
+    },
     selection: {
       items: selectionItems,
       originalStyles,
@@ -300,4 +348,5 @@ export const freehandStrokeGroups = (state: CanvasRuntimeState) => state.freehan
 export const freehandLayers = (state: CanvasRuntimeState) => state.layers
 export const polygonShapes = (state: CanvasRuntimeState) => state.polygon.shapes
 export const polygonGroups = (state: CanvasRuntimeState) => state.polygon.groups
+export const circleShapes = (state: CanvasRuntimeState) => state.circle.shapes
 export const canvasItems = (state: CanvasRuntimeState) => state.canvasItems
