@@ -14,9 +14,13 @@ import type p5 from 'p5'
 import { sinN } from '@/channels/channels'
 import type { DrawingScene } from '@/rendering/gpuStrokes/drawingScene'
 import { getPreset } from './presets'
+import { DropAndScrollManager } from './dropAndScroll'
 
 const appState = inject<TemplateAppState>(appStateName)!!
 const canvasRootRef = ref<InstanceType<typeof CanvasRoot> | null>(null)
+const dropAndScrollManager = new DropAndScrollManager(() => appState.p5Instance)
+const DROP_FONT_FAMILY = 'Courier New'
+const DROP_FONT_SIZE = 14
 
 const syncCanvasState = (state: CanvasStateSnapshot) => {
   appState.freehandStateString = state.freehand.serializedState
@@ -24,6 +28,7 @@ const syncCanvasState = (state: CanvasStateSnapshot) => {
   appState.freehandGroupMap = state.freehand.bakedGroupMap
   appState.polygonStateString = state.polygon.serializedState
   appState.polygonRenderData = state.polygon.bakedRenderData
+  dropAndScrollManager.syncPolygons(appState.polygonRenderData)
   updateGPUStrokes()
 }
 
@@ -93,18 +98,48 @@ onMounted(async () => {
 
   // Main p5 drawing function for this sketch
   appState.drawFunctions.push((p: p5) => {
+    const dropStates = dropAndScrollManager.getRenderStates()
+
     if (appState.polygonRenderData.length > 0) {
       p.push()
       appState.polygonRenderData.forEach((polygon, idx) => {
         const polygonMetadataColor = polygon.metadata?.color
         const color = polygonMetadataColor ?? randColor(idx)
-        p.fill(color.r, color.g, color.b, color.a)
-        p.noStroke()
-        p.beginShape()
-        polygon.points.forEach(point => {
-          p.vertex(point.x, point.y)
-        })
-        p.endShape()
+        const isDropAndScroll = polygon.metadata?.fillAnim === 'dropAndScroll'
+
+        if (isDropAndScroll) {
+          const renderState = dropStates.get(idx)
+          p.noStroke()
+          p.fill(color.r, color.g, color.b, color.a)
+          p.textFont(DROP_FONT_FAMILY)
+          p.textSize(DROP_FONT_SIZE)
+
+          if (renderState && renderState.letters.length > 0 && renderState.text.length > 0) {
+            renderState.letters.forEach(({ pos, idx: letterIdx }) => {
+              const char = renderState.text[(letterIdx + renderState.textOffset) % renderState.text.length]
+              p.text(char, pos.x, pos.y)
+            })
+          } else {
+            // fallback: outline the polygon while waiting for animation state
+            p.push()
+            p.noFill()
+            p.stroke(color.r, color.g, color.b, color.a)
+            p.beginShape()
+            polygon.points.forEach(point => {
+              p.vertex(point.x, point.y)
+            })
+            p.endShape(p.CLOSE)
+            p.pop()
+          }
+        } else {
+          p.fill(color.r, color.g, color.b, color.a)
+          p.noStroke()
+          p.beginShape()
+          polygon.points.forEach(point => {
+            p.vertex(point.x, point.y)
+          })
+          p.endShape()
+        }
       })
       p.pop()
     }
@@ -188,6 +223,7 @@ onUnmounted(() => {
   gpuCanvasPaint = undefined
   drawingSceneRef = undefined
   appState.shaderDrawFunc = undefined
+  dropAndScrollManager.dispose()
   clearListeners()
   clearDrawFuncs()
 })
