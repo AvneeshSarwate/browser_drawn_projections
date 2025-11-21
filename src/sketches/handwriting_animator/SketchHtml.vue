@@ -4,12 +4,13 @@ import { resolution } from './appState'
 
 const resRef = ref(resolution)
 
+const dpr = window.devicePixelRatio || 1
 </script>
 
 <template>
   <div id="canvasContainer" :style="{width: resRef.width + 'px', height: resRef.height + 'px'}">
-    <canvas id="p5Canvas" :width="resRef.width" :height="resRef.height" abitrary-prop="somethi"></canvas>
-    <canvas id="threeCanvas" :width="resRef.width" :height="resRef.height" abitrary-prop="somethi"></canvas>
+    <canvas id="p5Canvas" :width="resRef.width * dpr" :height="resRef.height * dpr" :style="{width: resRef.width + 'px', height: resRef.height + 'px'}" abitrary-prop="somethi"></canvas>
+    <canvas id="threeCanvas" :width="resRef.width * dpr" :height="resRef.height * dpr" :style="{width: resRef.width + 'px', height: resRef.height + 'px'}" abitrary-prop="somethi"></canvas>
   </div>
   <div id="description">
     <p>Press D to enter draw mode</p>

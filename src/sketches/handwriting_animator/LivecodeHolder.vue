@@ -150,8 +150,12 @@ onMounted(async () => {
   })
 
   // Wire p5 canvas through shader graph to three renderer
-  const passthru = new Passthru({ src: p5Canvas })
-  const canvasPaint = new GLCanvasPaint({ src: passthru })
+  const dpr = window.devicePixelRatio || 1
+  const renderWidth = resolution.width * dpr
+  const renderHeight = resolution.height * dpr
+
+  const passthru = new Passthru({ src: p5Canvas }, renderWidth, renderHeight, undefined, 'nearest')
+  const canvasPaint = new GLCanvasPaint({ src: passthru }, renderWidth, renderHeight)
   glShaderGraph = canvasPaint
 
   if (gpuReady) {
