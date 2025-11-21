@@ -128,6 +128,11 @@ export type ClickAVAppState = {
 export const engineRef = shallowRef<BABYLON.WebGPUEngine | undefined>(undefined)
 export const shaderGraphEndNodeRef = shallowRef<ShaderEffect | undefined>(undefined)
 
+export const resolution = {
+  width: 1280,
+  height: 720
+}
+
 export const appState: ClickAVAppState = {
   circles: new EntityList(PulseCircle),
   p5Instance: undefined,

@@ -2,26 +2,29 @@
 import { computed, ref } from 'vue'
 import ShaderGraphUI from '@/components/ShaderGraphUI/ShaderGraphUI.vue'
 import PopoutWindow from '@/components/PopoutWindow.vue'
-import { shaderGraphEndNodeRef } from './appState'
+import { shaderGraphEndNodeRef, resolution } from './appState'
 
 const shaderGraphEffect = computed(() => shaderGraphEndNodeRef.value ?? null)
 const canvasPopped = ref(false)
 const controlsPopped = ref(false)
+const dpr = window.devicePixelRatio || 1
+const width = resolution.width
+const height = resolution.height
 </script>
 
 <template>
   <div class="sketch-layout">
     <div id="canvasContainer">
-      <canvas id="p5Canvas" width="1280" height="720" abitrary-prop="somethi"></canvas>
+      <canvas id="p5Canvas" :width="width * dpr" :height="height * dpr" :style="{ width: width + 'px', height: height + 'px' }" abitrary-prop="somethi"></canvas>
       <div id="divider"></div>
       <PopoutWindow 
         v-model="canvasPopped" 
         title="Canvas" 
-        :width="1280" 
-        :height="720"
+        :width="width" 
+        :height="height"
         fullscreen-target="canvas"
       >
-        <canvas id="threeCanvas" width="1280" height="720" abitrary-prop="somethi"></canvas>
+        <canvas id="threeCanvas" :width="width * dpr" :height="height * dpr" :style="{ width: width + 'px', height: height + 'px' }" abitrary-prop="somethi"></canvas>
       </PopoutWindow>
     </div>
     

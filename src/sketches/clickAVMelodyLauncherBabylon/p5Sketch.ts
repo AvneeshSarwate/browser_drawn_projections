@@ -1,4 +1,4 @@
-import { type ClickAVAppState } from './appState'
+import { type ClickAVAppState, resolution } from './appState'
 import p5 from 'p5'
 
 export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => ClickAVAppState): p5 {
@@ -6,7 +6,7 @@ export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => ClickA
   const sketch = (p: p5) => {
 
     p.setup = () => {
-      p.createCanvas(1280, 720, canvas)
+      p.createCanvas(resolution.width, resolution.height, canvas)
       p.noSmooth()
       // p.noLoop()
     }

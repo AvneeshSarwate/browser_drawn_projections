@@ -145,8 +145,9 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
 
       }, threeCanvas)
 
-      const width = p5i.width
-      const height = p5i.height
+      const dpr = window.devicePixelRatio || 1
+      const width = p5i.width * dpr
+      const height = p5i.height * dpr
 
       const debug = false
 
