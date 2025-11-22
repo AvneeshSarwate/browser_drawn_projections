@@ -355,6 +355,44 @@ export function scaleTransposeOneNote(clip: AbletonClip, transpose: number, note
   return newClip;
 }
 
+/**
+ * Widen each melodic interval by a fixed number of scale degrees.
+ * Direction is preserved; positive amount widens both upward and downward moves.
+ */
+export function spread(
+  clip: AbletonClip,
+  amount: number = 1,
+  scaleKey: string = 'C'
+): AbletonClip {
+  if (clip.notes.length <= 1 || amount === 0) {
+    return clip.clone();
+  }
+
+  const scale = scaleMap[scaleKey] || new Scale();
+  const newNotes = [...clip.notes].map(n => ({ ...n })).sort((a, b) => a.position - b.position);
+  const originalIndices = newNotes.map(n => scale.getIndFromPitch(n.pitch));
+
+  const firstInd = originalIndices[0];
+  let prevNewInd = firstInd;
+  newNotes[0].pitch = scale.getByIndex(prevNewInd);
+
+  for (let i = 1; i < newNotes.length; i++) {
+    const interval = originalIndices[i] - originalIndices[i - 1];
+    if (interval === 0) {
+      newNotes[i].pitch = scale.getByIndex(prevNewInd);
+      continue;
+    }
+    const direction = Math.sign(interval);
+    const widenedInterval = interval + direction * amount;
+
+    const nextInd = prevNewInd + widenedInterval;
+    prevNewInd = nextInd;
+    newNotes[i].pitch = scale.getByIndex(nextInd);
+  }
+
+  return new AbletonClip(clip.name + "_spread", clip.duration, newNotes);
+}
+
 //note - input clips need to have exactly blocked chords. no slight start time deviation allowed
 //"chords" are grouped by start time, and last as long as the longest note in the group
 const arpeggioPatterns = ['up', 'down', 'updown', 'downup', 'converge', 'diverge', 'random', 'chord'];
@@ -937,6 +975,16 @@ export const TRANSFORM_REGISTRY: Record<string, ClipTransform> = {
     sliderScale: [n => Math.floor(n*16 - 8)]
   },
 
+  spread: {
+    name: 'spread',
+    transform: (clip, amount, scaleKey = 'C') => spread(clip, amount, scaleKey),
+    argParser: (args: string[]) => [
+      args[0] ? numParse(args[0]) : 1,
+      args[1] || 'C'
+    ],
+    sliderScale: [n => Math.floor(n * 4), n => n] // 0 - 4 scale degrees
+  },
+
   str: {
     name: 'str',
     transform: (clip, factor) => timeStretch(clip, factor),
@@ -1089,7 +1137,4 @@ export const TRANSFORM_REGISTRY: Record<string, ClipTransform> = {
     sliderScale: [n => n] // 0 to 1, where 0.5 is identity
   }
 };
-
-
-
 

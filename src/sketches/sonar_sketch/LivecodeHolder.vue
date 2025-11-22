@@ -293,7 +293,8 @@ const runLineWithDelay = (baseClipName: string, baseTransform: string, delayTran
   const dummyVoices = appState.voices.map(v => ({...v, isPlaying: true}))
 
   const handle = ctx.branch(async ctx => {
-    runLineClean(baseLine, ctx, 0, appState.sliders, dummyVoices, () => { }, () => { }, playNote, (() => { }) as any)
+    // runLineClean(baseLine, ctx, 0, appState.sliders, dummyVoices, () => { }, () => { }, playNote, (() => { }) as any)
+    playClipSimple(delayRootClip!, ctx, 0, playNote)
 
     // await ctx.wait(4)
     await ctx.wait(appState.sliders[DELAY_SLIDER]**2 * 8)
@@ -368,6 +369,17 @@ const runLineClean = async (lineText: string, ctx: TimeContext, voiceIndex: numb
   return voice.hotSwapCued
 }
 
+const playClipSimple = async (clip: AbletonClip, ctx: TimeContext, voiceIndex: number, playNoteF: (pitch: number, velocity: number, ctx: TimeContext, duration: number, voiceIndex: number) => void) => {
+  // Play the notes
+    const notes = clip.noteBuffer()
+  ctx.branch(async ctx => {
+    for (const nextNote of notes) {
+      await ctx.wait(nextNote.preDelta)
+      playNoteF(nextNote.note.pitch, nextNote.note.velocity, ctx, nextNote.note.duration, voiceIndex)
+      if (nextNote.postDelta) await ctx.wait(nextNote.postDelta)
+    }
+  })
+}
 
 
 const oneShot = (idx: number) => oneshotCall(idx, appState.oneShots)
@@ -670,8 +682,9 @@ onMounted(async() => {
       })
 
       const baseClipNames = ['dscale5', 'dscale7', 'd7mel']
-      const baseTransform =  's_tr s0 dR7 : str s1 : rot s2  : rev s3  : orn s4 dR7 : easeCirc s5'
-      // const baseTransform =  'orn 0.2 dR7'
+      //s6 is mapped to note duration directly via ableton
+      const baseTransform =  's_tr s0 dR7 : str s1 : rot s2  : rev s3  : orn s4 dR7 : easeCirc s5 : spread s7 dR7'
+      // const baseTransform =  'spread s6 dR7'
       const delayTransform = 's_tr s8 dR7 : str s9 : rot s10 : rev s11 : orn s12 dR7 : easeCirc s13' //: s_tr_i 3 s14 dR7 
 
       // const baseTransform = 's_tr s0 dR7'
@@ -720,7 +733,7 @@ onMounted(async() => {
 
     const FBV3 = midiInputs.get("FBV 3")
     if (FBV3 && false) {
-      FBV3.onControlChange(2, (msg) => {
+      FBV3!.onControlChange(2, (msg) => {
         if (msg.data2 > 64) {
           //swap to previous code bank for voice 0
           const newBankIdx = mod2(appState.voices[0].currentJsBank - 1, 8)
@@ -728,7 +741,7 @@ onMounted(async() => {
           handleJsBankClick(0, newBankIdx, me)
         }
       })
-      FBV3.onControlChange(3, (msg) => {
+      FBV3!.onControlChange(3, (msg) => {
         if (msg.data2 > 64) {
           //swap to next code bank for voice 0
           const newBankIdx = mod2(appState.voices[0].currentJsBank + 1, 8)
@@ -736,7 +749,7 @@ onMounted(async() => {
           handleJsBankClick(0, newBankIdx, me)
         }
       })
-      FBV3.onControlChange(4, (msg) => {
+      FBV3!.onControlChange(4, (msg) => {
         if(msg.data2 > 64) {
           togglePlay(0)
         }

@@ -9,6 +9,13 @@ import { appState, appStateName } from './appState';
 
 provide(appStateName, appState)
 
+/*
+// Get the reactive store
+const store = globalStore();
+// Provide the reactive appState reference
+provide(appStateName, store.appStateRef);
+*/
+
 
 </script>
 
