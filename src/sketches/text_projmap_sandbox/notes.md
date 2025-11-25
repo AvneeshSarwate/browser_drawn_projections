@@ -18,6 +18,11 @@ new features
   - make sure hierarchical metadata "just works" (good for adding new shapes)
 
 
+structured metadata editor plan
+- be able to provide a list of zod schemas ({name:str, schema:ZodSchema}) - get option to switch between base json editor and diff schemas
+- individual schema editors add a field to top level json with their name, and body being the schema type
+  - see if you can get that to be nicely typed, with default values and stuff?
+
 
 
 remove tool-specific selection functions in freehandTool.ts and polygonTool.ts
