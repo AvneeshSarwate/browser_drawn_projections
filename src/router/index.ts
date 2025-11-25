@@ -49,7 +49,8 @@ export const sketchNames = [
   'fluidSimChat',
   'pianoRollChatbot',
   'haikuToFluidSong',
-  'gestaltTest1'
+  'gestaltTest1',
+  'text_projmap_sandbox'
 ]
 
 const sketchRoutes = sketchNames.map(name => {
