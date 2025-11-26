@@ -24,6 +24,10 @@ structured metadata editor plan
   - see if you can get that to be nicely typed, with default values and stuff?
 
 
+{
+  "fillAnim": "dropAndScroll",
+  "textInd": 0
+}
 
 remove tool-specific selection functions in freehandTool.ts and polygonTool.ts
 update/remove tool specific metadata setting calls

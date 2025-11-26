@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { watch, computed, shallowRef, onUnmounted } from 'vue'
 import Konva from 'konva'
+import { type ZodTypeAny } from 'zod'
 import MetadataEditor from './MetadataEditor.vue'
 import type { HierarchyEntry } from './metadata/hierarchy'
 
@@ -13,9 +14,12 @@ interface Props {
   updateMetadataHighlight: (node?: Konva.Node) => void
   updateHoverHighlight: (node?: Konva.Node) => void
   onApplyMetadata: (node: Konva.Node, metadata: any) => void
+  schemaOptions?: { name: string; schema: ZodTypeAny }[]
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  schemaOptions: () => []
+})
 
 const selectedNodes = computed(() => props.selectedNodes)
 const singleNode = computed(() => props.singleNode)
@@ -156,6 +160,7 @@ const handleMouseLeave = () => {
         :metadata="singleNodeMetadata"
         :visible="true"
         :can-edit="!!singleNode"
+        :schema-options="props.schemaOptions"
         @apply="applyMetadataSingle"
       />
     </template>
@@ -196,6 +201,7 @@ const handleMouseLeave = () => {
           :metadata="activeNodeMetadata"
           :visible="true"
           :can-edit="true"
+          :schema-options="props.schemaOptions"
           @apply="applyMetadata"
         />
         

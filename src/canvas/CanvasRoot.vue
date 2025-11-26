@@ -31,6 +31,7 @@ import {
   deleteSelection as deleteSelectionImpl
 } from './selectTool';
 import { downloadCanvasState as downloadCanvasStateImpl, uploadCanvasState as uploadCanvasStateImpl, serializeCanvasState as serializeCanvasStateImpl, deserializeCanvasState as deserializeCanvasStateImpl } from './canvasPersistence';
+import type { ZodTypeAny } from 'zod';
 
 const DEFAULT_GRID_SIZE = 20
 
@@ -43,6 +44,7 @@ const props = withDefaults(defineProps<{
   height?: number | string
   showTimeline?: boolean
   showVisualizations?: boolean
+  metadataSchemas?: { name: string; schema: ZodTypeAny }[]
 }>(), {
   initialFreehandState: '',
   initialPolygonState: '',
@@ -50,6 +52,7 @@ const props = withDefaults(defineProps<{
   height: 500,
   showTimeline: false,
   showVisualizations: false,
+  metadataSchemas: () => [],
 })
 
 const emit = defineEmits<{
@@ -893,6 +896,7 @@ onUnmounted(() => {
           :update-metadata-highlight="metadataToolkit.updateMetadataHighlight"
           :update-hover-highlight="metadataToolkit.updateHoverHighlight"
           :on-apply-metadata="handleApplyMetadata"
+          :schema-options="props.metadataSchemas"
         />
       </div>
 
