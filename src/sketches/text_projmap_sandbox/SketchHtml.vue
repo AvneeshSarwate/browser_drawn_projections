@@ -8,38 +8,54 @@ const dpr = window.devicePixelRatio || 1
 </script>
 
 <template>
-  <div id="canvasContainer" :style="{width: resRef.width + 'px', height: resRef.height + 'px'}">
-    <canvas id="p5Canvas" :width="resRef.width * dpr" :height="resRef.height * dpr" :style="{width: resRef.width + 'px', height: resRef.height + 'px'}" abitrary-prop="somethi"></canvas>
-    <canvas id="threeCanvas" :width="resRef.width * dpr" :height="resRef.height * dpr" :style="{width: resRef.width + 'px', height: resRef.height + 'px'}" abitrary-prop="somethi"></canvas>
+  <div class="canvas-page">
+    <div id="canvasContainer" :style="{width: resRef.width + 'px', height: resRef.height + 'px'}">
+      <canvas id="p5Canvas" :width="resRef.width * dpr" :height="resRef.height * dpr" :style="{width: resRef.width + 'px', height: resRef.height + 'px'}" abitrary-prop="somethi"></canvas>
+      <canvas id="threeCanvas" :width="resRef.width * dpr" :height="resRef.height * dpr" :style="{width: resRef.width + 'px', height: resRef.height + 'px'}" abitrary-prop="somethi"></canvas>
+    </div>
+    <div id="description">
+      <p>Press D to enter draw mode</p>
+      <p>Press S to add a circle</p>
+      <p>Press F to animate the circle arrangement</p>
+    </div>
+    <div id="debugInfo"></div>
   </div>
-  <div id="description">
-    <p>Press D to enter draw mode</p>
-    <p>Press S to add a circle</p>
-    <p>Press F to animate the circle arrangement</p>
-  </div>
-  <div id="debugInfo"></div>
 </template>
 
 
 <style scoped>
+.canvas-page {
+  /* min-height: 100vh; */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 12px;
+}
+
 #canvasContainer {
+  position: relative;
   background-color: black;
+  display: inline-block;
+}
+
+#canvasContainer canvas {
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
 }
 
 #p5Canvas {
   border: 1px solid black;
-  /* position: absolute; */
-  top: 0;
-  left: 0;
-  z-index: -1;
+  z-index: 0;
   visibility: hidden;
 }
 
 #threeCanvas {
   border: 1px solid black;
-  position: absolute;
-  top: 0;
-  left: 0;
+  z-index: 1;
   visibility: visible;
 }
 </style>

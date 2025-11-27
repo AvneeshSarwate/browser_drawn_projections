@@ -329,7 +329,7 @@ export const createCanvasRuntimeState = (): CanvasRuntimeState => {
     metadata: {
       activeNode: ref(null),
       metadataText: ref(''),
-      showEditor: ref(false),
+      showEditor: ref(true),
       highlight: {}
     },
     ancillary: {

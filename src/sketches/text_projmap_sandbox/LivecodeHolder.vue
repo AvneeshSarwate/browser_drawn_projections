@@ -260,9 +260,9 @@ onUnmounted(() => {
     :show-visualizations="false"
     :metadata-schemas="metadataSchemas"
   />
-  <button type="button" @click="saveFreehandRenderData">
+  <!-- <button type="button" @click="saveFreehandRenderData">
     Save Freehand JSON
-  </button>
+  </button> -->
   <div v-if="USE_GPU_STROKES">
     <StrokeLaunchControls />
   </div>
