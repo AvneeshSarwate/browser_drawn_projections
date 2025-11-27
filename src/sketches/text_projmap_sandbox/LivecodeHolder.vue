@@ -64,6 +64,8 @@ const saveFreehandRenderData = () => {
 
 const sleepWait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
+const USE_GPU_STROKES = ref(false)
+
 onMounted(async () => {
   const params = new URLSearchParams(window.location.search)
   const presetName = params.get('preset')
@@ -87,10 +89,12 @@ onMounted(async () => {
   const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
   const threeCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
 
-  while (!appState.gpuStrokesReadyPromise) {
-    await sleepWait(16)
+  if (USE_GPU_STROKES.value) {
+    while (!appState.gpuStrokesReadyPromise) {
+      await sleepWait(16)
+    }
   }
-  const gpuReady = await appState.gpuStrokesReadyPromise
+  const gpuReady = USE_GPU_STROKES.value ? await appState.gpuStrokesReadyPromise : true
 
   // Track mouse in p5 coordinates (available for future use)
   let p5Mouse = { x: 0, y: 0 }
@@ -252,12 +256,14 @@ onUnmounted(() => {
     :initial-polygon-state="appState.polygonStateString"
     :width="resolution.width"
     :height="resolution.height"
-    :show-timeline="true"
-    :show-visualizations="true"
+    :show-timeline="false"
+    :show-visualizations="false"
     :metadata-schemas="metadataSchemas"
   />
   <button type="button" @click="saveFreehandRenderData">
     Save Freehand JSON
   </button>
-  <StrokeLaunchControls />
+  <div v-if="USE_GPU_STROKES">
+    <StrokeLaunchControls />
+  </div>
 </template>
