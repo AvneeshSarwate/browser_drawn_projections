@@ -103,7 +103,8 @@ const generateSpots = (polygonPoints: Point[], p: p5): PreparedPolygon | null =>
 }
 
 const makeSignature = (points: Point[], meta: any) => {
-  const metaSig = meta ? JSON.stringify({ fillAnim: meta.fillAnim, textInd: meta.textInd }) : ''
+  const anim = meta?.textAnim ?? meta ?? {}
+  const metaSig = JSON.stringify({ fillAnim: anim.fillAnim, textInd: anim.textInd })
   const ptsSig = points.map(p => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join('|')
   return `${ptsSig}::${metaSig}`
 }
@@ -140,7 +141,8 @@ export class DropAndScrollManager {
     if (LOG_ENABLED) console.log('[dropAndScroll] syncing polygons', polygons.length)
     const keep = new Set<number>()
     polygons.forEach((poly, idx) => {
-      if (poly.metadata?.fillAnim !== 'dropAndScroll') {
+      const anim = poly.metadata?.textAnim ?? poly.metadata
+      if (anim?.fillAnim !== 'dropAndScroll') {
         if (LOG_ENABLED && this.loops.has(idx)) console.log(`[dropAndScroll] removing loop ${idx} (fillAnim not set)`)
         this.teardown(idx)
         return
@@ -169,8 +171,9 @@ export class DropAndScrollManager {
   }
 
   private launchLoop(idx: number, poly: PolygonRenderData[number], signature: string) {
-    const text = chooseText(poly.metadata?.textInd)
-    if (LOG_ENABLED) console.log(`[dropAndScroll] launching loop ${idx}`, { textInd: poly.metadata?.textInd, textLen: text.length })
+    const anim = poly.metadata?.textAnim ?? poly.metadata
+    const text = chooseText(anim?.textInd)
+    if (LOG_ENABLED) console.log(`[dropAndScroll] launching loop ${idx}`, { textInd: anim?.textInd, textLen: text.length })
 
     const loop = launch(async (ctx) => {
       while (!ctx.isCanceled) {

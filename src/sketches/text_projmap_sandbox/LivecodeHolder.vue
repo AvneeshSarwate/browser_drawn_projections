@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { inject, onMounted, onUnmounted, ref } from 'vue'
+import { z } from 'zod'
 import CanvasRoot from '@/canvas/CanvasRoot.vue'
 import StrokeLaunchControls from './StrokeLaunchControls.vue'
 import { appStateName, type TemplateAppState, drawFlattenedStrokeGroup, resolution } from './appState'
@@ -21,6 +22,16 @@ const canvasRootRef = ref<InstanceType<typeof CanvasRoot> | null>(null)
 const dropAndScrollManager = new DropAndScrollManager(() => appState.p5Instance)
 const DROP_FONT_FAMILY = 'Courier New'
 const DROP_FONT_SIZE = 14
+
+const metadataSchemas = [
+  {
+    name: 'textAnim',
+    schema: z.object({
+      fillAnim: z.enum(['dropAndScroll', 'gravity']),
+      textInd: z.number()
+    })
+  }
+]
 
 const syncCanvasState = (state: CanvasStateSnapshot) => {
   appState.freehandStateString = state.freehand.serializedState
@@ -105,7 +116,7 @@ onMounted(async () => {
       appState.polygonRenderData.forEach((polygon, idx) => {
         const polygonMetadataColor = polygon.metadata?.color
         const color = polygonMetadataColor ?? randColor(idx)
-        const isDropAndScroll = polygon.metadata?.fillAnim === 'dropAndScroll'
+        const isDropAndScroll = polygon.metadata?.textAnim?.fillAnim === 'dropAndScroll'
 
         if (isDropAndScroll) {
           const renderState = dropStates.get(idx)
@@ -243,6 +254,7 @@ onUnmounted(() => {
     :height="resolution.height"
     :show-timeline="true"
     :show-visualizations="true"
+    :metadata-schemas="metadataSchemas"
   />
   <button type="button" @click="saveFreehandRenderData">
     Save Freehand JSON

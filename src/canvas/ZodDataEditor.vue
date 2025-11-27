@@ -1,10 +1,31 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { ZodBoolean, ZodEnum, ZodNumber, ZodObject, ZodString } from 'zod'
-import type { ZodIssue, ZodRawShape, ZodTypeAny } from 'zod'
+import {
+  ZodBoolean,
+  ZodEnum,
+  ZodDefault,
+  ZodReadonly,
+  ZodNullable,
+  ZodNumber,
+  ZodObject,
+  ZodOptional,
+  ZodString,
+  type ZodRawShape
+} from 'zod'
+import type { $ZodIssue } from 'zod/v4/core'
+
+type StringEnumSchema = ZodEnum<Record<string, string>>
+type PrimitiveSchema = ZodString | ZodNumber | ZodBoolean | StringEnumSchema
+type FlatSchema =
+  | PrimitiveSchema
+  | ZodOptional<PrimitiveSchema>
+  | ZodNullable<PrimitiveSchema>
+  | ZodDefault<PrimitiveSchema>
+  | ZodReadonly<PrimitiveSchema>
+type SupportedSchema = FlatSchema | ZodObject<Record<string, FlatSchema>>
 
 interface Props {
-  schema: ZodTypeAny
+  schema: SupportedSchema
   modelValue: any
   disabled?: boolean
 }
@@ -71,11 +92,11 @@ const objectFields = computed(() => {
   if (!(normalizedSchema.value instanceof ZodObject)) return []
   const shape = normalizedSchema.value.shape as ZodRawShape
   return Object.entries(shape)
-    .filter(([, schema]) => getKind(unwrapSchema(schema as ZodTypeAny)) !== 'unsupported')
+    .filter(([, schema]) => getKind(unwrapSchema(schema as SupportedSchema)) !== 'unsupported')
     .map(([key, schema]) => ({
       key,
-      schema: schema as ZodTypeAny,
-      kind: getKind(unwrapSchema(schema as ZodTypeAny)) as SupportedKind
+      schema: schema as SupportedSchema,
+      kind: getKind(unwrapSchema(schema as SupportedSchema)) as SupportedKind
     }))
 })
 
@@ -160,7 +181,7 @@ function buildObjectState(val: any) {
   const shape = normalizedSchema.value.shape as ZodRawShape
   const initial: Record<string, any> = {}
   Object.entries(shape).forEach(([key, schema]) => {
-    const base = unwrapSchema(schema as ZodTypeAny)
+    const base = unwrapSchema(schema as SupportedSchema)
     const kind = getKind(base)
     const fieldVal = val?.[key]
     if (kind === 'string') {
@@ -186,7 +207,7 @@ function buildObjectCandidate() {
   const shape = normalizedSchema.value.shape as ZodRawShape
   const candidate: Record<string, any> = {}
   Object.entries(shape).forEach(([key, schema]) => {
-    const base = unwrapSchema(schema as ZodTypeAny)
+    const base = unwrapSchema(schema as SupportedSchema)
     const kind = getKind(base)
     const rawVal = objectState.value[key]
     if (kind === 'string') {
@@ -208,9 +229,9 @@ function buildObjectCandidate() {
   return candidate
 }
 
-function unwrapSchema(schema: ZodTypeAny): ZodTypeAny {
-  const type = schema._def?.type
-  if (type === 'optional' || type === 'nullable' || type === 'default' || type === 'readonly' || type === 'catch') {
+function unwrapSchema(schema: SupportedSchema): SupportedSchema {
+  const type = (schema as any)._def?.type
+  if (type === 'optional' || type === 'nullable' || type === 'default' || type === 'readonly') {
     const inner = (schema as any)._def?.innerType
     return inner ? unwrapSchema(inner) : schema
   }
@@ -221,10 +242,10 @@ function unwrapSchema(schema: ZodTypeAny): ZodTypeAny {
   return schema
 }
 
-function isOptional(schema: ZodTypeAny): boolean {
-  const type = schema._def?.type
+function isOptional(schema: SupportedSchema): boolean {
+  const type = (schema as any)._def?.type
   if (type === 'optional' || type === 'nullable') return true
-  if (type === 'default' || type === 'readonly' || type === 'catch') {
+  if (type === 'default' || type === 'readonly') {
     const inner = (schema as any)._def?.innerType
     return inner ? isOptional(inner) : false
   }
@@ -235,8 +256,8 @@ function isOptional(schema: ZodTypeAny): boolean {
   return false
 }
 
-function getKind(schema: ZodTypeAny): SupportedKind | 'unsupported' {
-  const type = schema._def?.type
+function getKind(schema: SupportedSchema): SupportedKind | 'unsupported' {
+  const type = (schema as any)._def?.type
   if (type === 'string') return 'string'
   if (type === 'number') return 'number'
   if (type === 'boolean') return 'boolean'
@@ -245,15 +266,15 @@ function getKind(schema: ZodTypeAny): SupportedKind | 'unsupported' {
   return 'unsupported'
 }
 
-function enumOptionsFor(schema: ZodTypeAny): string[] {
+function enumOptionsFor(schema: SupportedSchema): string[] {
   const base = unwrapSchema(schema)
-  if (getKind(base) !== 'enum') return []
-  const entries = (base as any)._def?.entries ?? (base as any)._def?.values ?? []
+  if (!(base instanceof ZodEnum)) return []
+  const entries = (base as any)._def?.values ?? (base as any)._def?.entries ?? []
   const raw = Array.isArray(entries) ? entries : Object.values(entries)
   return raw.filter((v: unknown): v is string => typeof v === 'string')
 }
 
-function formatIssue(issue: ZodIssue) {
+function formatIssue(issue: $ZodIssue) {
   const path = issue.path.map((segment) => segment?.toString?.() ?? String(segment)).join('.')
   return path ? `${path}: ${issue.message}` : issue.message
 }
