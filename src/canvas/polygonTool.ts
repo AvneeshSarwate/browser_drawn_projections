@@ -120,8 +120,13 @@ export const generateBakedPolygonData = (
       // Extract metadata from the Konva node
       const metadata = child.getAttr('metadata')
       
+      // Find the runtime polygon to get its ID
+      const polygonRuntime = Array.from(canvasState.polygon.shapes.values()).find(p => p.konvaShape === child)
+      const polygonId = polygonRuntime?.id || child.id()
+      
       bakedPolygons.push({
         type: 'polygon',
+        id: polygonId,
         points: transformedPoints,
         ...(metadata && { metadata }) // Only include metadata if it exists
       })

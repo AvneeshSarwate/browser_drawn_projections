@@ -1,6 +1,7 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
-import { createCanvasRuntimeState, type CanvasRuntimeState, type CanvasStateSnapshot, type FreehandRenderData, type PolygonRenderData } from './canvasState';
+import { createCanvasRuntimeState, type CanvasRuntimeState, type CanvasStateSnapshot, type CanvasStateSnapshotBase, type FreehandRenderData, type PolygonRenderData } from './canvasState';
+import { diff, type IChange } from 'json-diff-ts';
 import * as selectionStore from './selectionStore';
 import { getCanvasItem } from './CanvasItem';
 import { computed, onMounted, onUnmounted, ref, toRaw, watch } from 'vue';
@@ -105,11 +106,20 @@ const snapshotGroupMap = (map: Record<string, number[]> | undefined) => {
   return (cloneValue(toRaw(map)) ?? {}) as Record<string, number[]>
 }
 
-const createSnapshot = (state: CanvasRuntimeState): CanvasStateSnapshot => {
+// Store the previous snapshot for diffing (per-instance via ref)
+const previousSnapshot = ref<CanvasStateSnapshotBase | null>(null)
+
+const createEmptySnapshotBase = (): CanvasStateSnapshotBase => ({
+  freehand: { serializedState: '', bakedRenderData: [], bakedGroupMap: {} },
+  polygon: { serializedState: '', bakedRenderData: [] },
+  circle: { serializedState: '', bakedRenderData: [], bakedGroupMap: {} }
+})
+
+const createSnapshotBase = (state: CanvasRuntimeState): CanvasStateSnapshotBase => {
   const freehandRenderData = snapshotFreehandRenderData(state.freehand.bakedRenderData)
   const freehandGroupMap = snapshotGroupMap(state.freehand.bakedGroupMap)
   const polygonRenderData = snapshotPolygonRenderData(state.polygon.bakedRenderData)
-  const circleRenderData = state.circle.bakedRenderData
+  const circleRenderData = cloneValue(toRaw(state.circle.bakedRenderData)) ?? []
   const circleGroupMap = snapshotGroupMap(state.circle.bakedGroupMap)
 
   return {
@@ -127,6 +137,98 @@ const createSnapshot = (state: CanvasRuntimeState): CanvasStateSnapshot => {
       bakedRenderData: circleRenderData ?? [],
       bakedGroupMap: circleGroupMap ?? {},
     },
+  }
+}
+
+// Extract items from diff changes by type
+const extractChangesFromDiff = (
+  changes: IChange[],
+  currentBase: CanvasStateSnapshotBase
+): { added: CanvasStateSnapshotBase; deleted: CanvasStateSnapshotBase; changed: CanvasStateSnapshotBase } => {
+  const added = createEmptySnapshotBase()
+  const deleted = createEmptySnapshotBase()
+  const changed = createEmptySnapshotBase()
+
+  const renderDataPaths = ['freehand.bakedRenderData', 'polygon.bakedRenderData', 'circle.bakedRenderData'] as const
+  type RenderDataPath = (typeof renderDataPaths)[number]
+
+  const pushToResult = (result: CanvasStateSnapshotBase, path: RenderDataPath, item: any) => {
+    if (path === 'freehand.bakedRenderData') result.freehand.bakedRenderData.push(item)
+    else if (path === 'polygon.bakedRenderData') result.polygon.bakedRenderData.push(item)
+    else if (path === 'circle.bakedRenderData') result.circle.bakedRenderData.push(item)
+  }
+
+  const getCollectionByPath = (path: RenderDataPath): any[] => {
+    if (path === 'freehand.bakedRenderData') return currentBase.freehand.bakedRenderData
+    if (path === 'polygon.bakedRenderData') return currentBase.polygon.bakedRenderData
+    return currentBase.circle.bakedRenderData
+  }
+
+  const processChange = (change: IChange, parentPath: string = '') => {
+    const currentPath = parentPath ? `${parentPath}.${change.key}` : change.key
+
+    if (renderDataPaths.includes(currentPath as RenderDataPath) && change.changes) {
+      const path = currentPath as RenderDataPath
+      const collection = getCollectionByPath(path)
+
+      for (const itemChange of change.changes) {
+        if (itemChange.type === 'ADD') {
+          const value = itemChange.value ?? itemChange.oldValue
+          if (value) pushToResult(added, path, value)
+        } else if (itemChange.type === 'REMOVE') {
+          const value = itemChange.value ?? itemChange.oldValue
+          if (value) pushToResult(deleted, path, value)
+        } else if (itemChange.type === 'UPDATE') {
+          // For keyed arrays, itemChange.key is the id - look up full object from current snapshot
+          const id = itemChange.key
+          const updatedItem = collection.find((x: any) => x.id === id)
+          if (updatedItem) pushToResult(changed, path, updatedItem)
+        }
+      }
+    } else if (change.changes) {
+      for (const nestedChange of change.changes) {
+        processChange(nestedChange, currentPath)
+      }
+    }
+  }
+
+  for (const change of changes) {
+    processChange(change)
+  }
+
+  return { added, deleted, changed }
+}
+
+const createSnapshot = (state: CanvasRuntimeState): CanvasStateSnapshot => {
+  const currentBase = createSnapshotBase(state)
+  
+  // Compute diff against previous snapshot
+  const diffOptions = {
+    embeddedObjKeys: {
+      'freehand.bakedRenderData': 'id',
+      'freehand.bakedRenderData.children': 'id',
+      'polygon.bakedRenderData': 'id',
+      'circle.bakedRenderData': 'id'
+    }
+  }
+  
+  const prev = previousSnapshot.value
+  const changes = prev 
+    ? diff(prev, currentBase, diffOptions)
+    : []
+  
+  const { added, deleted, changed } = prev
+    ? extractChangesFromDiff(changes, currentBase)
+    : { added: createEmptySnapshotBase(), deleted: createEmptySnapshotBase(), changed: createEmptySnapshotBase() }
+  
+  // Store current as previous for next diff
+  previousSnapshot.value = cloneValue(currentBase)
+
+  return {
+    ...currentBase,
+    added,
+    deleted,
+    changed
   }
 }
 

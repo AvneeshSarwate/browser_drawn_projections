@@ -48,6 +48,7 @@
     "fast-xml-parser": "^4.3.2",
     "fit-curve": "^0.2.0",
     "hyperformula": "^2.6.1",
+    "json-diff-ts": "^4.8.2",
     "jssm": "^5.96.1",
     "konva": "^9.3.21",
     "mermaid": "^11.12.1",

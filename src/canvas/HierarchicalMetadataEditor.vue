@@ -156,6 +156,9 @@ const handleMouseLeave = () => {
   <div class="smart-metadata-editor">
     <!-- Simple mode for single selections -->
     <template v-if="mode === 'simple'">
+      <div class="single-node-header" v-if="singleNode">
+        <span class="node-id">{{ nodeLabel(singleNode as any) }}</span>
+      </div>
       <MetadataEditor
         :metadata="singleNodeMetadata"
         :visible="true"
@@ -222,6 +225,21 @@ const handleMouseLeave = () => {
 <style scoped>
 .smart-metadata-editor {
   margin-top: 8px;
+}
+
+.single-node-header {
+  background: white;
+  border: 1px solid #ddd;
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  padding: 8px 16px;
+  font-family: 'Monaco', 'Consolas', monospace;
+  font-size: 13px;
+  color: #333;
+}
+
+.node-id {
+  font-weight: 500;
 }
 
 .hierarchical-editor {

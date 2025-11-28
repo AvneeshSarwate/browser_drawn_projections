@@ -5,12 +5,14 @@ import { CommandStack } from './commandStack'
 
 export type FlattenedStroke = {
   type: 'stroke'
+  id: string
   points: { x: number, y: number, ts: number }[]
   metadata?: any
 }
 
 export type FlattenedStrokeGroup = {
   type: 'strokeGroup'
+  id: string
   children: (FlattenedStroke | FlattenedStrokeGroup)[]
   metadata?: any
 }
@@ -19,6 +21,7 @@ export type FreehandRenderData = FlattenedStrokeGroup[]
 
 export type FlattenedPolygon = {
   type: 'polygon'
+  id: string
   points: { x: number, y: number }[]
   metadata?: any
 }
@@ -27,6 +30,7 @@ export type PolygonRenderData = FlattenedPolygon[]
 
 export type FlattenedCircle = {
   type: 'circle'
+  id: string
   center: { x: number, y: number }
   r?: number  // Present if circle is not distorted (rx ≈ ry)
   rx: number
@@ -37,7 +41,7 @@ export type FlattenedCircle = {
 
 export type CircleRenderData = FlattenedCircle[]
 
-export type CanvasStateSnapshot = {
+export type CanvasStateSnapshotBase = {
   freehand: {
     serializedState: string
     bakedRenderData: FreehandRenderData
@@ -52,6 +56,12 @@ export type CanvasStateSnapshot = {
     bakedRenderData: CircleRenderData
     bakedGroupMap: Record<string, number[]>
   }
+}
+
+export type CanvasStateSnapshot = CanvasStateSnapshotBase & {
+  added: CanvasStateSnapshotBase
+  deleted: CanvasStateSnapshotBase
+  changed: CanvasStateSnapshotBase
 }
 
 export interface FreehandStrokeRuntime {

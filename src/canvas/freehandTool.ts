@@ -1004,6 +1004,7 @@ const generateBakedStrokeData = (
 
       return {
         type: 'stroke',
+        id: stroke.id,
         points: flattenedPoints,
         ...(metadata && { metadata }) // Only include metadata if it exists
       } as FlattenedStroke
@@ -1026,22 +1027,21 @@ const generateBakedStrokeData = (
       // Extract metadata from the group node
       const metadata = node.getAttr('metadata')
 
-      // If this group has a "name" in metadata, record its stroke indices
-      if (metadata && metadata.name && typeof metadata.name === 'string') {
-        const groupStrokeIndices: number[] = []
-        for (let i = groupStartIndex; i < strokeIndex; i++) {
-          groupStrokeIndices.push(i)
-        }
-
-        //sort groupStrokeIndices according to the "order" metadata on the children strokes (filling missing orders with Infinity)
-        // const childOrders = children.map(child => child.metadata?.order ?? Infinity)
-
-
-        groupMap[metadata.name] = groupStrokeIndices
+      // Record group in groupMap using metadata.name or fallback to node id
+      const groupStrokeIndices: number[] = []
+      for (let i = groupStartIndex; i < strokeIndex; i++) {
+        groupStrokeIndices.push(i)
+      }
+      const groupKey = (metadata && metadata.name && typeof metadata.name === 'string') 
+        ? metadata.name 
+        : node.id()
+      if (groupKey) {
+        groupMap[groupKey] = groupStrokeIndices
       }
 
       return {
         type: 'strokeGroup',
+        id: node.id(),
         children,
         ...(metadata && { metadata }) // Only include metadata if it exists
       } as FlattenedStrokeGroup
@@ -1057,8 +1057,8 @@ const generateBakedStrokeData = (
     const processed = processNode(child)
     if (processed) {
       if (processed.type === 'stroke') {
-        // Single stroke - wrap in a group
-        strokeGroups.push({ type: 'strokeGroup', children: [processed] })
+        // Single stroke - wrap in a group using stroke's id as group id
+        strokeGroups.push({ type: 'strokeGroup', id: processed.id, children: [processed] })
       } else {
         // Already a group
         strokeGroups.push(processed)

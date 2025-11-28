@@ -353,6 +353,10 @@ export const generateBakedCircleData = (
       // Extract metadata from the Konva node
       const metadata = node.getAttr('metadata')
       
+      // Find the runtime circle to get its ID
+      const circleRuntime = Array.from(canvasState.circle.shapes.values()).find(c => c.shape === node)
+      const circleId = circleRuntime?.id || node.id()
+      
       // If circle metadata has a "name", add it to the group map as a group with 1 circle
       if (metadata && metadata.name && typeof metadata.name === 'string') {
         if (!groupMap[metadata.name]) {
@@ -366,6 +370,7 @@ export const generateBakedCircleData = (
 
       return {
         type: 'circle',
+        id: circleId,
         center: { x: c.x, y: c.y },
         r: Math.abs(rx - ry) < 1e-3 ? rx : undefined,  // Only include r if it's a true circle
         rx,
@@ -385,13 +390,16 @@ export const generateBakedCircleData = (
       // Extract metadata from the group node
       const metadata = node.getAttr('metadata')
 
-      // If this group has a "name" in metadata, record its circle indices
-      if (metadata && metadata.name && typeof metadata.name === 'string') {
-        const groupCircleIndices: number[] = []
-        for (let i = groupStartIndex; i < circleIndex; i++) {
-          groupCircleIndices.push(i)
-        }
-        groupMap[metadata.name] = groupCircleIndices
+      // Record group in groupMap using metadata.name or fallback to node id
+      const groupCircleIndices: number[] = []
+      for (let i = groupStartIndex; i < circleIndex; i++) {
+        groupCircleIndices.push(i)
+      }
+      const groupKey = (metadata && metadata.name && typeof metadata.name === 'string') 
+        ? metadata.name 
+        : node.id()
+      if (groupKey) {
+        groupMap[groupKey] = groupCircleIndices
       }
 
       return null
