@@ -39,7 +39,12 @@ const syncCanvasState = (state: CanvasStateSnapshot) => {
   appState.freehandGroupMap = state.freehand.bakedGroupMap
   appState.polygonStateString = state.polygon.serializedState
   appState.polygonRenderData = state.polygon.bakedRenderData
-  dropAndScrollManager.syncPolygons(appState.polygonRenderData)
+  dropAndScrollManager.syncPolygons({
+    current: state.polygon.bakedRenderData,
+    added: state.added.polygon.bakedRenderData,
+    deleted: state.deleted.polygon.bakedRenderData,
+    changed: state.changed.polygon.bakedRenderData
+  })
   updateGPUStrokes()
 }
 
@@ -123,7 +128,7 @@ onMounted(async () => {
         const isDropAndScroll = polygon.metadata?.textAnim?.fillAnim === 'dropAndScroll'
 
         if (isDropAndScroll) {
-          const renderState = dropStates.get(idx)
+          const renderState = dropStates.get(polygon.id)
           p.noStroke()
           p.fill(color.r, color.g, color.b, color.a)
           p.textFont(DROP_FONT_FAMILY)

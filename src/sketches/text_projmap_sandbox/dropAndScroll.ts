@@ -20,6 +20,13 @@ type PreparedPolygon = {
   polygon: Point[]
 }
 
+type PolygonSyncPayload = {
+  current: PolygonRenderData
+  added?: PolygonRenderData
+  deleted?: PolygonRenderData
+  changed?: PolygonRenderData
+}
+
 const FONT_FAMILY = 'Courier New'
 const FONT_SIZE = 14
 const COURIER_RATIO = 0.42
@@ -115,12 +122,12 @@ const chooseText = (textInd: unknown) => {
 }
 
 export class DropAndScrollManager {
-  private renderStates = new Map<number, RenderState>()
-  private loops = new Map<number, CancelablePromisePoxy<void>>()
-  private signatures = new Map<number, string>()
+  private renderStates = new Map<string, RenderState>()
+  private loops = new Map<string, CancelablePromisePoxy<void>>()
+  private signatures = new Map<string, string>()
   private getP5: () => p5 | undefined
-  private noPrepLogged = new Set<number>()
-  private noP5Logged = new Set<number>()
+  private noPrepLogged = new Set<string>()
+  private noP5Logged = new Set<string>()
 
   constructor(getP5Instance: () => p5 | undefined) {
     this.getP5 = getP5Instance
@@ -131,93 +138,117 @@ export class DropAndScrollManager {
     this.loops.clear()
     this.renderStates.clear()
     this.signatures.clear()
+    this.noPrepLogged.clear()
+    this.noP5Logged.clear()
   }
 
   public getRenderStates() {
     return this.renderStates
   }
 
-  public syncPolygons(polygons: PolygonRenderData) {
-    if (LOG_ENABLED) console.log('[dropAndScroll] syncing polygons', polygons.length)
-    const keep = new Set<number>()
-    polygons.forEach((poly, idx) => {
+  public syncPolygons(payload: PolygonRenderData | PolygonSyncPayload) {
+    const { current, added = [], deleted = [], changed = [] } = Array.isArray(payload)
+      ? { current: payload, added: [], deleted: [], changed: [] }
+      : payload
+
+    if (LOG_ENABLED) {
+      console.log('[dropAndScroll] syncing polygons', {
+        total: current.length,
+        added: added.length,
+        deleted: deleted.length,
+        changed: changed.length
+      })
+    }
+
+    const currentIds = new Set(current.map(poly => poly.id))
+    const deletedIds = new Set(deleted.map(poly => poly.id))
+
+    // Remove polygons that no longer exist or were explicitly deleted
+    Array.from(this.loops.keys()).forEach(id => {
+      if (!currentIds.has(id) || deletedIds.has(id)) {
+        if (LOG_ENABLED) console.log(`[dropAndScroll] removing loop ${id} (deleted or missing)`)
+        this.teardown(id)
+      }
+    })
+
+    const refreshPolygon = (poly: PolygonRenderData[number], forceRestart = false) => {
       const anim = poly.metadata?.textAnim ?? poly.metadata
+      const id = poly.id
+
       if (anim?.fillAnim !== 'dropAndScroll') {
-        if (LOG_ENABLED && this.loops.has(idx)) console.log(`[dropAndScroll] removing loop ${idx} (fillAnim not set)`)
-        this.teardown(idx)
+        if (LOG_ENABLED && this.loops.has(id)) console.log(`[dropAndScroll] removing loop ${id} (fillAnim not set)`)
+        this.teardown(id)
         return
       }
-      keep.add(idx)
-      const sig = makeSignature(poly.points as Point[], poly.metadata)
-      const prevSig = this.signatures.get(idx)
-      if (prevSig === sig && this.loops.has(idx)) return
-      this.teardown(idx)
-      this.launchLoop(idx, poly, sig)
-    })
 
-    Array.from(this.loops.keys()).forEach(idx => {
-      if (!keep.has(idx)) {
-        if (LOG_ENABLED) console.log(`[dropAndScroll] removing loop ${idx} (polygon missing)`)
-        this.teardown(idx)
-      }
-    })
+      const signature = makeSignature(poly.points as Point[], poly.metadata)
+      const prevSig = this.signatures.get(id)
+      if (!forceRestart && prevSig === signature && this.loops.has(id)) return
+
+      this.teardown(id)
+      this.launchLoop(id, poly, signature)
+    }
+
+    added.forEach(poly => refreshPolygon(poly, true))
+    changed.forEach(poly => refreshPolygon(poly, true))
+    current.forEach(poly => refreshPolygon(poly, false))
   }
 
-  private teardown(idx: number) {
-    this.loops.get(idx)?.cancel()
-    this.loops.delete(idx)
-    this.renderStates.delete(idx)
-    this.signatures.delete(idx)
+  private teardown(id: string) {
+    this.loops.get(id)?.cancel()
+    this.loops.delete(id)
+    this.renderStates.delete(id)
+    this.signatures.delete(id)
   }
 
-  private launchLoop(idx: number, poly: PolygonRenderData[number], signature: string) {
+  private launchLoop(id: string, poly: PolygonRenderData[number], signature: string) {
     const anim = poly.metadata?.textAnim ?? poly.metadata
     const text = chooseText(anim?.textInd)
-    if (LOG_ENABLED) console.log(`[dropAndScroll] launching loop ${idx}`, { textInd: anim?.textInd, textLen: text.length })
+    if (LOG_ENABLED) console.log(`[dropAndScroll] launching loop ${id}`, { textInd: anim?.textInd, textLen: text.length })
 
     const loop = launch(async (ctx) => {
       while (!ctx.isCanceled) {
         const p = this.getP5()
         if (!p) {
-          if (!this.noP5Logged.has(idx) && LOG_ENABLED) {
-            console.warn(`[dropAndScroll] p5 instance not ready for poly ${idx}`)
-            this.noP5Logged.add(idx)
+          if (!this.noP5Logged.has(id) && LOG_ENABLED) {
+            console.warn(`[dropAndScroll] p5 instance not ready for poly ${id}`)
+            this.noP5Logged.add(id)
           }
           await ctx.waitSec(FRAME_WAIT)
           continue
         }
-        this.noP5Logged.delete(idx)
+        this.noP5Logged.delete(id)
 
         const prep = generateSpots(poly.points as Point[], p)
         if (!prep) {
-          if (!this.noPrepLogged.has(idx) && LOG_ENABLED) {
-            console.warn(`[dropAndScroll] no grid spots for poly ${idx} (maybe too small or self-intersecting)`)
-            this.noPrepLogged.add(idx)
+          if (!this.noPrepLogged.has(id) && LOG_ENABLED) {
+            console.warn(`[dropAndScroll] no grid spots for poly ${id} (maybe too small or self-intersecting)`)
+            this.noPrepLogged.add(id)
           }
-          this.renderStates.set(idx, { letters: [], textOffset: 0, text })
+          this.renderStates.set(id, { letters: [], textOffset: 0, text })
           await ctx.waitSec(0.25)
           continue
         }
-        if (this.noPrepLogged.has(idx) && LOG_ENABLED) {
-          console.log(`[dropAndScroll] grid ready for poly ${idx}`, { spots: prep.flatSpots.length, rows: prep.spots.length, openSpots: prep.openSpots })
-          this.noPrepLogged.delete(idx)
+        if (this.noPrepLogged.has(id) && LOG_ENABLED) {
+          console.log(`[dropAndScroll] grid ready for poly ${id}`, { spots: prep.flatSpots.length, rows: prep.spots.length, openSpots: prep.openSpots })
+          this.noPrepLogged.delete(id)
         }
 
         let textOffset = 0
         while (!ctx.isCanceled) {
-          textOffset = await this.runCycle(idx, prep, text, textOffset, ctx)
+          textOffset = await this.runCycle(id, prep, text, textOffset, ctx)
         }
       }
     })
 
-    this.loops.set(idx, loop)
-    this.signatures.set(idx, signature)
+    this.loops.set(id, loop)
+    this.signatures.set(id, signature)
   }
 
-  private async runCycle(idx: number, prep: PreparedPolygon, text: string, prevTextOffset: number, ctx: TimeContext) {
+  private async runCycle(id: string, prep: PreparedPolygon, text: string, prevTextOffset: number, ctx: TimeContext) {
     const totalSpots = prep.flatSpots.length
     if (totalSpots === 0) {
-      this.renderStates.set(idx, { letters: [], textOffset: prevTextOffset, text })
+      this.renderStates.set(id, { letters: [], textOffset: prevTextOffset, text })
       await ctx.waitSec(0.05)
       return prevTextOffset
     }
@@ -225,7 +256,7 @@ export class DropAndScrollManager {
     const openSpots = clamp(prep.openSpots, 0, totalSpots)
     const textLen = Math.max(totalSpots - openSpots, 0)
     const startTime = ctx.time
-    if (LOG_ENABLED) console.log(`[dropAndScroll] cycle start poly ${idx}`, { totalSpots, openSpots, textLen, textChars: text.length })
+    if (LOG_ENABLED) console.log(`[dropAndScroll] cycle start poly ${id}`, { totalSpots, openSpots, textLen, textChars: text.length })
 
     // Stage 1: drop the first openSpots letters
     type Dropping = { start: Point, delay: number, idx: number }
@@ -251,7 +282,7 @@ export class DropAndScrollManager {
         }
       })
       dropping = stillDropping
-      this.renderStates.set(idx, { letters: [...active, ...stationary], textOffset: prevTextOffset, text })
+      this.renderStates.set(id, { letters: [...active, ...stationary], textOffset: prevTextOffset, text })
       await ctx.waitSec(FRAME_WAIT)
     }
 
@@ -262,7 +293,7 @@ export class DropAndScrollManager {
     for (let startInd = openSpots - 1; startInd >= 0 && !ctx.isCanceled; startInd--) {
       const windowSpots = prep.flatSpots.slice(startInd, startInd + textLen)
       const letters = windowSpots.map((pos, i) => ({ pos, idx: i }))
-      this.renderStates.set(idx, { letters, textOffset, text })
+      this.renderStates.set(id, { letters, textOffset, text })
       await ctx.waitSec(FRAME_WAIT)
     }
 
@@ -272,7 +303,7 @@ export class DropAndScrollManager {
     let typed = [...otherLetters]
     for (let i = 0; i < lastLine.length && !ctx.isCanceled; i++) {
       typed = [...typed, { pos: lastLine[i], idx: otherLetters.length + i }]
-      this.renderStates.set(idx, { letters: typed, textOffset, text })
+      this.renderStates.set(id, { letters: typed, textOffset, text })
       await ctx.waitSec(FRAME_WAIT)
     }
 
