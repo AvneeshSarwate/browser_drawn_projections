@@ -7,20 +7,30 @@ import {
   type PreparedPolygon,
   type PolygonSyncPayload,
   FRAME_WAIT,
-  clamp,
   generateSpots,
   makeSignature,
-  chooseText,
-  isPointInsidePolygon
+  chooseText
 } from './textRegionUtils'
+import Matter from 'matter-js'
 
-const DROP_SPEED = 80
+const { Engine, Bodies, Body, Composite } = Matter
+
+const EXPLOSION_FORCE = 10
+const PHYSICS_DURATION = 2.0
+const LERP_DURATION = 1.0
+const LERP_SPEED = 0.15
+const WALL_THICKNESS = 4
+const LETTER_RADIUS = 3
 const LOG_ENABLED = false
 
-export class DropAndScrollManager {
+const WALL_CATEGORY = 0x0001
+const LETTER_CATEGORY = 0x0002
+
+export class MatterExplodeManager {
   private renderStates = new Map<string, RenderState>()
   private loops = new Map<string, CancelablePromisePoxy<void>>()
   private signatures = new Map<string, string>()
+  private engines = new Map<string, Matter.Engine>()
   private getP5: () => p5 | undefined
   private noPrepLogged = new Set<string>()
   private noP5Logged = new Set<string>()
@@ -34,6 +44,7 @@ export class DropAndScrollManager {
     this.loops.clear()
     this.renderStates.clear()
     this.signatures.clear()
+    this.engines.clear()
     this.noPrepLogged.clear()
     this.noP5Logged.clear()
   }
@@ -48,7 +59,7 @@ export class DropAndScrollManager {
       : payload
 
     if (LOG_ENABLED) {
-      console.log('[dropAndScroll] syncing polygons', {
+      console.log('[matterExplode] syncing polygons', {
         total: current.length,
         added: added.length,
         deleted: deleted.length,
@@ -61,7 +72,7 @@ export class DropAndScrollManager {
 
     Array.from(this.loops.keys()).forEach((id) => {
       if (!currentIds.has(id) || deletedIds.has(id)) {
-        if (LOG_ENABLED) console.log(`[dropAndScroll] removing loop ${id} (deleted or missing)`)
+        if (LOG_ENABLED) console.log(`[matterExplode] removing loop ${id} (deleted or missing)`)
         this.teardown(id)
       }
     })
@@ -70,9 +81,9 @@ export class DropAndScrollManager {
       const anim = poly.metadata?.textAnim ?? poly.metadata
       const id = poly.id
 
-      if (anim?.fillAnim !== 'dropAndScroll') {
+      if (anim?.fillAnim !== 'matterExplode') {
         if (LOG_ENABLED && this.loops.has(id))
-          console.log(`[dropAndScroll] removing loop ${id} (fillAnim not set)`)
+          console.log(`[matterExplode] removing loop ${id} (fillAnim not set)`)
         this.teardown(id)
         return
       }
@@ -95,13 +106,51 @@ export class DropAndScrollManager {
     this.loops.delete(id)
     this.renderStates.delete(id)
     this.signatures.delete(id)
+    this.engines.delete(id)
+  }
+
+  private createWallsFromPolygon(polygon: Point[], engine: Matter.Engine) {
+    const walls: Matter.Body[] = []
+    for (let i = 0; i < polygon.length; i++) {
+      const p1 = polygon[i]
+      const p2 = polygon[(i + 1) % polygon.length]
+      const midX = (p1.x + p2.x) / 2
+      const midY = (p1.y + p2.y) / 2
+      const length = Math.hypot(p2.x - p1.x, p2.y - p1.y)
+      const angle = Math.atan2(p2.y - p1.y, p2.x - p1.x)
+
+      const wall = Bodies.rectangle(midX, midY, length, WALL_THICKNESS, {
+        isStatic: true,
+        angle,
+        collisionFilter: { category: WALL_CATEGORY, mask: LETTER_CATEGORY },
+        restitution: 0.6,
+        friction: 0.1
+      })
+      walls.push(wall)
+    }
+    Composite.add(engine.world, walls)
+    return walls
+  }
+
+  private createLetterBodies(spots: Point[], engine: Matter.Engine) {
+    const bodies = spots.map((spot) => {
+      const body = Bodies.circle(spot.x, spot.y, LETTER_RADIUS, {
+        collisionFilter: { category: LETTER_CATEGORY, mask: WALL_CATEGORY },
+        restitution: 0.4,
+        friction: 0.05,
+        frictionAir: 0.01
+      })
+      return body
+    })
+    Composite.add(engine.world, bodies)
+    return bodies
   }
 
   private launchLoop(id: string, poly: PolygonRenderData[number], signature: string) {
     const anim = poly.metadata?.textAnim ?? poly.metadata
     const text = chooseText(anim?.textInd)
     if (LOG_ENABLED)
-      console.log(`[dropAndScroll] launching loop ${id}`, {
+      console.log(`[matterExplode] launching loop ${id}`, {
         textInd: anim?.textInd,
         textLen: text.length
       })
@@ -111,7 +160,7 @@ export class DropAndScrollManager {
         const p = this.getP5()
         if (!p) {
           if (!this.noP5Logged.has(id) && LOG_ENABLED) {
-            console.warn(`[dropAndScroll] p5 instance not ready for poly ${id}`)
+            console.warn(`[matterExplode] p5 instance not ready for poly ${id}`)
             this.noP5Logged.add(id)
           }
           await ctx.waitSec(FRAME_WAIT)
@@ -123,7 +172,7 @@ export class DropAndScrollManager {
         if (!prep) {
           if (!this.noPrepLogged.has(id) && LOG_ENABLED) {
             console.warn(
-              `[dropAndScroll] no grid spots for poly ${id} (maybe too small or self-intersecting)`
+              `[matterExplode] no grid spots for poly ${id} (maybe too small or self-intersecting)`
             )
             this.noPrepLogged.add(id)
           }
@@ -132,10 +181,9 @@ export class DropAndScrollManager {
           continue
         }
         if (this.noPrepLogged.has(id) && LOG_ENABLED) {
-          console.log(`[dropAndScroll] grid ready for poly ${id}`, {
+          console.log(`[matterExplode] grid ready for poly ${id}`, {
             spots: prep.flatSpots.length,
-            rows: prep.spots.length,
-            openSpots: prep.openSpots
+            rows: prep.spots.length
           })
           this.noPrepLogged.delete(id)
         }
@@ -165,68 +213,78 @@ export class DropAndScrollManager {
       return prevTextOffset
     }
 
-    const openSpots = clamp(prep.openSpots, 0, totalSpots)
-    const textLen = Math.max(totalSpots - openSpots, 0)
-    const startTime = ctx.time
+    const engine = Engine.create({
+      gravity: { x: 0, y: 1, scale: 0.001 }
+    })
+    this.engines.set(id, engine)
+
+    const initialPositions = prep.flatSpots.map((p) => ({ x: p.x, y: p.y }))
+
+    this.createWallsFromPolygon(prep.polygon, engine)
+    const letterBodies = this.createLetterBodies(prep.flatSpots, engine)
+
     if (LOG_ENABLED)
-      console.log(`[dropAndScroll] cycle start poly ${id}`, {
+      console.log(`[matterExplode] cycle start poly ${id}`, {
         totalSpots,
-        openSpots,
-        textLen,
-        textChars: text.length
+        bodies: letterBodies.length
       })
 
-    type Dropping = { start: Point; delay: number; idx: number }
-    let dropping: Dropping[] = prep.flatSpots
-      .slice(0, openSpots)
-      .map((start, i) => ({ start, delay: Math.random(), idx: i }))
-    const stationary = prep.flatSpots.slice(openSpots).map((pos, i) => ({ pos, idx: i + openSpots }))
-    const bbox = prep.bbox
+    this.updateRenderState(id, letterBodies, prevTextOffset, text)
+    await ctx.waitSec(FRAME_WAIT)
 
-    while (dropping.length > 0 && !ctx.isCanceled) {
-      const nowTime = ctx.time - startTime
-      const active: { pos: Point; idx: number }[] = []
-      const stillDropping: Dropping[] = []
-      dropping.forEach((d) => {
-        if (nowTime <= d.delay) {
-          active.push({ pos: d.start, idx: d.idx })
-          stillDropping.push(d)
-          return
+    letterBodies.forEach((body) => {
+      const vx = (Math.random() - 0.5) * EXPLOSION_FORCE * 2
+      const vy = -Math.random() * EXPLOSION_FORCE * 0.3
+      Body.setVelocity(body, { x: vx, y: vy })
+    })
+
+    const physicsStartTime = ctx.time
+    while (!ctx.isCanceled && ctx.time - physicsStartTime < PHYSICS_DURATION) {
+      Engine.update(engine, 16.666)
+      this.updateRenderState(id, letterBodies, prevTextOffset, text)
+      await ctx.waitSec(FRAME_WAIT)
+    }
+
+    const lerpStartTime = ctx.time
+    while (!ctx.isCanceled && ctx.time - lerpStartTime < LERP_DURATION) {
+      letterBodies.forEach((body, i) => {
+        const target = initialPositions[i]
+        const current = body.position
+        const newPos = {
+          x: current.x + (target.x - current.x) * LERP_SPEED,
+          y: current.y + (target.y - current.y) * LERP_SPEED
         }
-        const dropTime = nowTime - d.delay
-        const pos = { x: d.start.x, y: d.start.y + dropTime * dropTime * DROP_SPEED }
-        if (isPointInsidePolygon(pos, prep.polygon, bbox)) {
-          active.push({ pos, idx: d.idx })
-          stillDropping.push(d)
-        }
+        Body.setPosition(body, newPos)
+        Body.setVelocity(body, { x: 0, y: 0 })
       })
-      dropping = stillDropping
-      this.renderStates.set(id, { letters: [...active, ...stationary], textOffset: prevTextOffset, text })
+      this.updateRenderState(id, letterBodies, prevTextOffset, text)
       await ctx.waitSec(FRAME_WAIT)
     }
 
-    let textOffset = prevTextOffset
-    textOffset = text.length === 0 ? 0 : (textOffset + openSpots) % text.length
+    letterBodies.forEach((body, i) => {
+      Body.setPosition(body, initialPositions[i])
+      Body.setVelocity(body, { x: 0, y: 0 })
+    })
+    this.updateRenderState(id, letterBodies, prevTextOffset, text)
 
-    for (let startInd = openSpots - 1; startInd >= 0 && !ctx.isCanceled; startInd--) {
-      const windowSpots = prep.flatSpots.slice(startInd, startInd + textLen)
-      const letters = windowSpots.map((pos, i) => ({ pos, idx: i }))
-      this.renderStates.set(id, { letters, textOffset, text })
-      await ctx.waitSec(FRAME_WAIT)
-    }
+    Composite.clear(engine.world, false)
+    Engine.clear(engine)
+    this.engines.delete(id)
 
-    const otherLetters = prep.spots
-      .slice(0, -1)
-      .flat()
-      .map((pos, i) => ({ pos, idx: i }))
-    const lastLine = prep.spots.slice(-1)[0] ?? []
-    let typed = [...otherLetters]
-    for (let i = 0; i < lastLine.length && !ctx.isCanceled; i++) {
-      typed = [...typed, { pos: lastLine[i], idx: otherLetters.length + i }]
-      this.renderStates.set(id, { letters: typed, textOffset, text })
-      await ctx.waitSec(FRAME_WAIT)
-    }
-
+    const textOffset = text.length === 0 ? 0 : (prevTextOffset + totalSpots) % text.length
     return textOffset
+  }
+
+  private updateRenderState(
+    id: string,
+    bodies: Matter.Body[],
+    textOffset: number,
+    text: string
+  ) {
+    const letters = bodies.map((body, idx) => ({
+      pos: { x: body.position.x, y: body.position.y },
+      idx
+    }))
+    this.renderStates.set(id, { letters, textOffset, text })
   }
 }

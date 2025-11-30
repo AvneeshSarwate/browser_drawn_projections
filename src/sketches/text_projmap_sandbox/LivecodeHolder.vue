@@ -16,10 +16,12 @@ import { sinN } from '@/channels/channels'
 import type { DrawingScene } from '@/rendering/gpuStrokes/drawingScene'
 import { getPreset } from './presets'
 import { DropAndScrollManager } from './dropAndScroll'
+import { MatterExplodeManager } from './matterExplode'
 
 const appState = inject<TemplateAppState>(appStateName)!!
 const canvasRootRef = ref<InstanceType<typeof CanvasRoot> | null>(null)
 const dropAndScrollManager = new DropAndScrollManager(() => appState.p5Instance)
+const matterExplodeManager = new MatterExplodeManager(() => appState.p5Instance)
 const DROP_FONT_FAMILY = 'Courier New'
 const DROP_FONT_SIZE = 14
 
@@ -27,7 +29,7 @@ const metadataSchemas = [
   {
     name: 'textAnim',
     schema: z.object({
-      fillAnim: z.enum(['dropAndScroll', 'gravity']),
+      fillAnim: z.enum(['dropAndScroll', 'matterExplode']),
       textInd: z.number()
     })
   }
@@ -39,12 +41,14 @@ const syncCanvasState = (state: CanvasStateSnapshot) => {
   appState.freehandGroupMap = state.freehand.bakedGroupMap
   appState.polygonStateString = state.polygon.serializedState
   appState.polygonRenderData = state.polygon.bakedRenderData
-  dropAndScrollManager.syncPolygons({
+  const polygonSyncPayload = {
     current: state.polygon.bakedRenderData,
     added: state.added.polygon.bakedRenderData,
     deleted: state.deleted.polygon.bakedRenderData,
     changed: state.changed.polygon.bakedRenderData
-  })
+  }
+  dropAndScrollManager.syncPolygons(polygonSyncPayload)
+  matterExplodeManager.syncPolygons(polygonSyncPayload)
   updateGPUStrokes()
 }
 
@@ -119,16 +123,23 @@ onMounted(async () => {
   // Main p5 drawing function for this sketch
   appState.drawFunctions.push((p: p5) => {
     const dropStates = dropAndScrollManager.getRenderStates()
+    const matterStates = matterExplodeManager.getRenderStates()
 
     if (appState.polygonRenderData.length > 0) {
       p.push()
       appState.polygonRenderData.forEach((polygon, idx) => {
         const polygonMetadataColor = polygon.metadata?.color
         const color = polygonMetadataColor ?? randColor(idx)
-        const isDropAndScroll = polygon.metadata?.textAnim?.fillAnim === 'dropAndScroll'
+        const fillAnim = polygon.metadata?.textAnim?.fillAnim
+        const isDropAndScroll = fillAnim === 'dropAndScroll'
+        const isMatterExplode = fillAnim === 'matterExplode'
+        const renderState = isDropAndScroll
+          ? dropStates.get(polygon.id)
+          : isMatterExplode
+            ? matterStates.get(polygon.id)
+            : undefined
 
-        if (isDropAndScroll) {
-          const renderState = dropStates.get(polygon.id)
+        if (isDropAndScroll || isMatterExplode) {
           p.noStroke()
           p.fill(color.r, color.g, color.b, color.a)
           p.textFont(DROP_FONT_FAMILY)
@@ -140,7 +151,6 @@ onMounted(async () => {
               p.text(char, pos.x, pos.y)
             })
           } else {
-            // fallback: outline the polygon while waiting for animation state
             p.push()
             p.noFill()
             p.stroke(color.r, color.g, color.b, color.a)
@@ -248,6 +258,7 @@ onUnmounted(() => {
   drawingSceneRef = undefined
   appState.shaderDrawFunc = undefined
   dropAndScrollManager.dispose()
+  matterExplodeManager.dispose()
   clearListeners()
   clearDrawFuncs()
 })
