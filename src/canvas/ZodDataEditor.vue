@@ -149,19 +149,18 @@ const updateString = (val: string) => {
 }
 
 const updateNumber = (val: string) => {
-  // Allow free typing (leading zeros / partial decimals) without validation jitter
   numberText.value = val
-}
-
-const commitNumber = () => {
-  const trimmed = numberText.value.trim()
+  const trimmed = val.trim()
   if (!trimmed) {
     validateAndEmit(undefined)
     return
   }
+  if (isPartialNumber(trimmed)) {
+    issues.value = []
+    return
+  }
   const asNumber = Number(trimmed)
-  const candidate = Number.isFinite(asNumber) ? asNumber : trimmed
-  validateAndEmit(candidate)
+  validateAndEmit(Number.isFinite(asNumber) ? asNumber : trimmed)
 }
 
 const updateEnum = (val: string) => {
@@ -209,12 +208,18 @@ const updateObjectField = (key: string, rawVal: any) => {
   validateObject()
 }
 
-// Number fields: let users type freely; commit validation on blur/enter
+// Number fields: live tolerant validation (allow partial input)
 const updateObjectNumberInput = (key: string, rawVal: string) => {
   objectState.value = { ...objectState.value, [key]: rawVal }
-}
-
-const commitObjectNumber = (key: string) => {
+  const trimmed = rawVal.trim()
+  if (!trimmed) {
+    validateObject()
+    return
+  }
+  if (isPartialNumber(trimmed)) {
+    issues.value = []
+    return
+  }
   validateObject()
 }
 
@@ -281,16 +286,17 @@ function buildObjectCandidate() {
       if (rawVal !== undefined) candidate[key] = rawVal
     } else if (kind === 'number') {
       if (rawVal === '' || rawVal === undefined) return
-      if (typeof rawVal === 'string' && isPartialNumber(rawVal.trim())) {
-        candidate[key] = rawVal
-        return
-      }
+      if (typeof rawVal === 'string' && isPartialNumber(rawVal.trim())) return
       if (typeof rawVal === 'number') {
         candidate[key] = rawVal
         return
       }
       const asNumber = Number(rawVal)
-      candidate[key] = Number.isFinite(asNumber) ? asNumber : rawVal
+      if (Number.isFinite(asNumber)) {
+        candidate[key] = asNumber
+        return
+      }
+      candidate[key] = rawVal
     } else if (kind === 'enum') {
       if (rawVal === '' || rawVal === undefined) return
       candidate[key] = rawVal
@@ -359,11 +365,12 @@ function isEmptyObject(val: unknown): boolean {
 }
 
 function isPartialNumber(str: string): boolean {
-  if (str === '-' || str === '+') return true
+  if (str === '' || str === '-' || str === '+') return true
   if (str === '.') return true
-  if (str.endsWith('.')) return /^[-+]?\d*\.?$/.test(str)
+  if (/^[-+]?\d*\.$/.test(str)) return true // trailing dot
   return false
 }
+
 </script>
 
 <template>
@@ -392,8 +399,6 @@ function isPartialNumber(str: string): boolean {
           :disabled="disabled"
           inputmode="decimal"
           @input="updateNumber(($event.target as HTMLInputElement).value)"
-          @blur="commitNumber"
-          @keydown.enter.prevent="commitNumber"
         />
         <button class="tiny-btn" type="button" :disabled="disabled || (!isOptionalSchema && numberText === '')" @click="clearValue">
           Clear
@@ -454,13 +459,11 @@ function isPartialNumber(str: string): boolean {
             <input
               class="input"
               type="text"
-              :value="objectState[field.key] ?? ''"
-              :disabled="disabled"
-              inputmode="decimal"
-              @input="updateObjectNumberInput(field.key, ($event.target as HTMLInputElement).value)"
-              @blur="commitObjectNumber(field.key)"
-              @keydown.enter.prevent="commitObjectNumber(field.key)"
-            />
+          :value="objectState[field.key] ?? ''"
+          :disabled="disabled"
+          inputmode="decimal"
+          @input="updateObjectNumberInput(field.key, ($event.target as HTMLInputElement).value)"
+        />
           </template>
           <template v-else-if="field.kind === 'enum'">
             <select
