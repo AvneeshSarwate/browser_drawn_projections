@@ -9,7 +9,8 @@ import {
   FRAME_WAIT,
   generateSpots,
   makeSignature,
-  chooseText
+  chooseText,
+  getTextAnim
 } from './textRegionUtils'
 import Matter from 'matter-js'
 
@@ -78,7 +79,7 @@ export class MatterExplodeManager {
     })
 
     const refreshPolygon = (poly: PolygonRenderData[number], forceRestart = false) => {
-      const anim = poly.metadata?.textAnim ?? poly.metadata
+      const anim = getTextAnim(poly.metadata)
       const id = poly.id
 
       if (anim?.fillAnim !== 'matterExplode') {
@@ -147,7 +148,7 @@ export class MatterExplodeManager {
   }
 
   private launchLoop(id: string, poly: PolygonRenderData[number], signature: string) {
-    const anim = poly.metadata?.textAnim ?? poly.metadata
+    const anim = getTextAnim(poly.metadata)
     const text = chooseText(anim?.textInd)
     if (LOG_ENABLED)
       console.log(`[matterExplode] launching loop ${id}`, {

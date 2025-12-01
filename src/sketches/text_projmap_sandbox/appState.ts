@@ -8,6 +8,28 @@ import { defineStore, acceptHMRUpdate } from 'pinia'
 import { ref, shallowReactive, shallowRef, type ShallowReactive } from 'vue'
 import Konva from 'konva'
 import type { FlattenedStroke, FlattenedStrokeGroup, FreehandRenderData, PolygonRenderData } from '@/canvas/canvasState'
+import { z } from 'zod'
+import { switchedSchema, type InferFlat } from '@/canvas/switchedSchema'
+
+export const textAnimSchema = switchedSchema(
+  z.object({
+    fillAnim: z.enum(['dropAndScroll', 'matterExplode']),
+    textInd: z.number()
+  }),
+  'fillAnim',
+  {
+    dropAndScroll: { minCharsDrop: z.number() },
+    matterExplode: {}
+  }
+)
+
+// Flat type with all fields optional - fully inferred from schema
+export type TextAnimFlat = InferFlat<typeof textAnimSchema>
+
+export const textAnimMetadataSchema = {
+  name: 'textAnim' as const,
+  schema: textAnimSchema
+}
 
 export type TemplateAppState = {
   p5Instance: p5 | undefined

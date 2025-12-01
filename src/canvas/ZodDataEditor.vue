@@ -13,6 +13,7 @@ import {
   type ZodRawShape
 } from 'zod'
 import type { $ZodIssue } from 'zod/v4/core'
+import { hasSwitchMeta, getVariantFields, getSharedFields, type SwitchMeta } from './switchedSchema'
 
 type StringEnumSchema = ZodEnum<Record<string, string>>
 type PrimitiveSchema = ZodString | ZodNumber | ZodBoolean | StringEnumSchema
@@ -48,6 +49,39 @@ const booleanValue = ref<boolean | undefined>(undefined)
 const objectState = ref<Record<string, any>>({})
 
 const enumOptions = computed<string[]>(() => enumOptionsFor(normalizedSchema.value))
+
+// Switch meta handling
+const switchMeta = computed<SwitchMeta | null>(() => {
+  if (hasSwitchMeta(props.schema)) {
+    return props.schema._switchMeta
+  }
+  return null
+})
+
+const currentSwitchValue = computed<string>(() => {
+  if (!switchMeta.value) return ''
+  return objectState.value[switchMeta.value.switchKey] ?? ''
+})
+
+const visibleVariantFields = computed<Set<string>>(() => {
+  if (!switchMeta.value || !currentSwitchValue.value) return new Set()
+  return new Set(getVariantFields(switchMeta.value, currentSwitchValue.value))
+})
+
+const sharedFieldKeys = computed<Set<string>>(() => {
+  if (!switchMeta.value) return new Set()
+  return new Set(getSharedFields(switchMeta.value))
+})
+
+const isFieldVisible = (fieldKey: string): boolean => {
+  if (!switchMeta.value) return true
+  // Switch key is always visible
+  if (fieldKey === switchMeta.value.switchKey) return true
+  // Shared fields are always visible
+  if (sharedFieldKeys.value.has(fieldKey)) return true
+  // Variant fields only visible if matching current switch value
+  return visibleVariantFields.value.has(fieldKey)
+}
 
 watch(
   () => props.modelValue,
@@ -92,11 +126,17 @@ const objectFields = computed(() => {
   if (!(normalizedSchema.value instanceof ZodObject)) return []
   const shape = normalizedSchema.value.shape as ZodRawShape
   return Object.entries(shape)
-    .filter(([, schema]) => getKind(unwrapSchema(schema as SupportedSchema)) !== 'unsupported')
+    .filter(([key, schema]) => {
+      // Filter out unsupported schema kinds
+      if (getKind(unwrapSchema(schema as SupportedSchema)) === 'unsupported') return false
+      // Filter by switch visibility
+      return isFieldVisible(key)
+    })
     .map(([key, schema]) => ({
       key,
       schema: schema as SupportedSchema,
-      kind: getKind(unwrapSchema(schema as SupportedSchema)) as SupportedKind
+      kind: getKind(unwrapSchema(schema as SupportedSchema)) as SupportedKind,
+      isSwitchKey: switchMeta.value?.switchKey === key
     }))
 })
 
@@ -207,6 +247,9 @@ function buildObjectCandidate() {
   const shape = normalizedSchema.value.shape as ZodRawShape
   const candidate: Record<string, any> = {}
   Object.entries(shape).forEach(([key, schema]) => {
+    // Only include fields that are currently visible
+    if (!isFieldVisible(key)) return
+    
     const base = unwrapSchema(schema as SupportedSchema)
     const kind = getKind(base)
     const rawVal = objectState.value[key]

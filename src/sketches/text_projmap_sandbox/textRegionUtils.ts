@@ -1,5 +1,6 @@
 import type p5 from 'p5'
 import { quotes } from './quotes'
+import { textAnimSchema, type TextAnimFlat } from './appState'
 
 export type Point = { x: number; y: number }
 
@@ -88,7 +89,7 @@ export const isPointInsidePolygon = (
   return numIntersections % 2 === 1
 }
 
-export const generateSpots = (polygonPoints: Point[], p: p5): PreparedPolygon | null => {
+export const generateSpots = (polygonPoints: Point[], p: p5, minCharsDrop?: number): PreparedPolygon | null => {
   if (!polygonPoints.length) return null
   const bbox = bboxOfPoints(polygonPoints)
 
@@ -114,13 +115,33 @@ export const generateSpots = (polygonPoints: Point[], p: p5): PreparedPolygon | 
 
   const firstRowLen = spots[0]?.length ?? 0
   const lastRowLen = spots[spots.length - 1]?.length ?? 0
-  const openSpots = Math.max(firstRowLen, lastRowLen)
+  let openSpots = Math.max(firstRowLen, lastRowLen)
+
+  if (minCharsDrop !== undefined && minCharsDrop > 0 && firstRowLen < minCharsDrop) {
+    let cumulative = 0
+    for (let i = 0; i < spots.length; i++) {
+      cumulative += spots[i].length
+      if (cumulative >= minCharsDrop) {
+        openSpots = cumulative
+        break
+      }
+    }
+    if (cumulative < minCharsDrop) {
+      openSpots = cumulative
+    }
+  }
 
   return { spots, flatSpots, openSpots, bbox, letterHeight, letterWidth, polygon: polygonPoints }
 }
 
-export const makeSignature = (points: Point[], meta: any) => {
-  const anim = meta?.textAnim ?? meta ?? {}
+export const getTextAnim = (meta: unknown): TextAnimFlat | undefined => {
+  const raw = (meta as any)?.textAnim ?? meta
+  const result = textAnimSchema.safeParse(raw)
+  return result.success ? result.data as TextAnimFlat : undefined
+}
+
+export const makeSignature = (points: Point[], meta: unknown) => {
+  const anim = getTextAnim(meta) ?? {}
   const metaSig = JSON.stringify({ fillAnim: anim.fillAnim, textInd: anim.textInd })
   const ptsSig = points.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join('|')
   return `${ptsSig}::${metaSig}`

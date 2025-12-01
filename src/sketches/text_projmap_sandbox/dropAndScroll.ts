@@ -11,7 +11,8 @@ import {
   generateSpots,
   makeSignature,
   chooseText,
-  isPointInsidePolygon
+  isPointInsidePolygon,
+  getTextAnim
 } from './textRegionUtils'
 
 const DROP_SPEED = 80
@@ -67,7 +68,7 @@ export class DropAndScrollManager {
     })
 
     const refreshPolygon = (poly: PolygonRenderData[number], forceRestart = false) => {
-      const anim = poly.metadata?.textAnim ?? poly.metadata
+      const anim = getTextAnim(poly.metadata)
       const id = poly.id
 
       if (anim?.fillAnim !== 'dropAndScroll') {
@@ -98,12 +99,14 @@ export class DropAndScrollManager {
   }
 
   private launchLoop(id: string, poly: PolygonRenderData[number], signature: string) {
-    const anim = poly.metadata?.textAnim ?? poly.metadata
+    const anim = getTextAnim(poly.metadata)
     const text = chooseText(anim?.textInd)
+    const minCharsDrop = anim?.minCharsDrop
     if (LOG_ENABLED)
       console.log(`[dropAndScroll] launching loop ${id}`, {
         textInd: anim?.textInd,
-        textLen: text.length
+        textLen: text.length,
+        minCharsDrop
       })
 
     const loop = launch(async (ctx) => {
@@ -119,7 +122,7 @@ export class DropAndScrollManager {
         }
         this.noP5Logged.delete(id)
 
-        const prep = generateSpots(poly.points as Point[], p)
+        const prep = generateSpots(poly.points as Point[], p, minCharsDrop)
         if (!prep) {
           if (!this.noPrepLogged.has(id) && LOG_ENABLED) {
             console.warn(

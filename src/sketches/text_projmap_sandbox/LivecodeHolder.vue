@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { inject, onMounted, onUnmounted, ref } from 'vue'
-import { z } from 'zod'
 import CanvasRoot from '@/canvas/CanvasRoot.vue'
 import StrokeLaunchControls from './StrokeLaunchControls.vue'
-import { appStateName, type TemplateAppState, drawFlattenedStrokeGroup, resolution } from './appState'
+import { appStateName, type TemplateAppState, drawFlattenedStrokeGroup, resolution, textAnimMetadataSchema } from './appState'
 import { updateGPUStrokes, getDrawingScene } from './strokeLauncher'
 import type { CanvasStateSnapshot } from '@/canvas/canvasState'
 import { CanvasPaint as GLCanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX'
@@ -25,15 +24,7 @@ const matterExplodeManager = new MatterExplodeManager(() => appState.p5Instance)
 const DROP_FONT_FAMILY = 'Courier New'
 const DROP_FONT_SIZE = 14
 
-const metadataSchemas = [
-  {
-    name: 'textAnim',
-    schema: z.object({
-      fillAnim: z.enum(['dropAndScroll', 'matterExplode']),
-      textInd: z.number()
-    })
-  }
-]
+const metadataSchemas = [textAnimMetadataSchema]
 
 const syncCanvasState = (state: CanvasStateSnapshot) => {
   appState.freehandStateString = state.freehand.serializedState
