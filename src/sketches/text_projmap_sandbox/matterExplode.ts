@@ -10,7 +10,8 @@ import {
   generateSpots,
   makeSignature,
   chooseText,
-  getTextAnim
+  getTextAnim,
+  getTextStyle
 } from './textRegionUtils'
 import Matter from 'matter-js'
 
@@ -169,7 +170,8 @@ export class MatterExplodeManager {
         }
         this.noP5Logged.delete(id)
 
-        const prep = generateSpots(poly.points as Point[], p)
+        const textStyle = getTextStyle(poly.metadata)
+        const prep = generateSpots(poly.points as Point[], p, { textSize: textStyle.textSize })
         if (!prep) {
           if (!this.noPrepLogged.has(id) && LOG_ENABLED) {
             console.warn(

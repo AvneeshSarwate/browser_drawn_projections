@@ -1,6 +1,6 @@
 import type p5 from 'p5'
 import { quotes } from './quotes'
-import { textAnimSchema, type TextAnimFlat } from './appState'
+import { textAnimSchema, textStyleSchema, type TextAnimFlat, type TextStyle } from './appState'
 
 export type Point = { x: number; y: number }
 
@@ -33,6 +33,10 @@ export const FONT_FAMILY = 'Courier New'
 export const FONT_SIZE = 14
 export const COURIER_RATIO = 0.42
 export const FRAME_WAIT = 0.016
+export type GenerateSpotsOptions = {
+  minCharsDrop?: number
+  textSize?: number
+}
 
 export const clamp = (v: number, min: number, max: number) => Math.min(Math.max(v, min), max)
 
@@ -89,13 +93,19 @@ export const isPointInsidePolygon = (
   return numIntersections % 2 === 1
 }
 
-export const generateSpots = (polygonPoints: Point[], p: p5, minCharsDrop?: number): PreparedPolygon | null => {
+export const generateSpots = (
+  polygonPoints: Point[],
+  p: p5,
+  options: GenerateSpotsOptions = {}
+): PreparedPolygon | null => {
   if (!polygonPoints.length) return null
+  const { minCharsDrop, textSize } = options
+  const fontSize = textSize ?? FONT_SIZE
   const bbox = bboxOfPoints(polygonPoints)
 
   p.push()
   p.textFont(FONT_FAMILY)
-  p.textSize(FONT_SIZE)
+  p.textSize(fontSize)
   const letterWidth = p.textWidth('a')
   const letterHeight = letterWidth / COURIER_RATIO
   p.pop()
@@ -140,9 +150,20 @@ export const getTextAnim = (meta: unknown): TextAnimFlat | undefined => {
   return result.success ? result.data as TextAnimFlat : undefined
 }
 
+export const getTextStyle = (meta: unknown): TextStyle => {
+  const raw = (meta as any)?.textStyle ?? meta
+  const result = textStyleSchema.safeParse(raw)
+  return result.success ? result.data : {}
+}
+
 export const makeSignature = (points: Point[], meta: unknown) => {
   const anim = getTextAnim(meta) ?? {}
-  const metaSig = JSON.stringify({ fillAnim: anim.fillAnim, textInd: anim.textInd })
+  const style = getTextStyle(meta)
+  const metaSig = JSON.stringify({
+    fillAnim: anim.fillAnim,
+    textInd: anim.textInd,
+    textSize: style.textSize ?? FONT_SIZE
+  })
   const ptsSig = points.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join('|')
   return `${ptsSig}::${metaSig}`
 }

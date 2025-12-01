@@ -12,7 +12,8 @@ import {
   makeSignature,
   chooseText,
   isPointInsidePolygon,
-  getTextAnim
+  getTextAnim,
+  getTextStyle
 } from './textRegionUtils'
 
 const DROP_SPEED = 80
@@ -122,7 +123,11 @@ export class DropAndScrollManager {
         }
         this.noP5Logged.delete(id)
 
-        const prep = generateSpots(poly.points as Point[], p, minCharsDrop)
+        const textStyle = getTextStyle(poly.metadata)
+        const prep = generateSpots(poly.points as Point[], p, {
+          minCharsDrop,
+          textSize: textStyle.textSize
+        })
         if (!prep) {
           if (!this.noPrepLogged.has(id) && LOG_ENABLED) {
             console.warn(

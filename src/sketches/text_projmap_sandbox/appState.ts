@@ -31,6 +31,24 @@ export const textAnimMetadataSchema = {
   schema: textAnimSchema
 }
 
+export const textStyleSchema = z.object({
+  textSize: z.number().positive().optional(),
+  textColor: z
+    .object({
+      r: z.number().min(0).max(1),
+      g: z.number().min(0).max(1),
+      b: z.number().min(0).max(1)
+    })
+    .optional()
+})
+
+export type TextStyle = z.infer<typeof textStyleSchema>
+
+export const textStyleMetadataSchema = {
+  name: 'textStyle' as const,
+  schema: textStyleSchema
+}
+
 export type TemplateAppState = {
   p5Instance: p5 | undefined
   threeRenderer: THREE.WebGLRenderer | undefined

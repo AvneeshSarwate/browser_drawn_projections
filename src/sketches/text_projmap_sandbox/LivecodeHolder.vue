@@ -2,7 +2,7 @@
 import { inject, onMounted, onUnmounted, ref } from 'vue'
 import CanvasRoot from '@/canvas/CanvasRoot.vue'
 import StrokeLaunchControls from './StrokeLaunchControls.vue'
-import { appStateName, type TemplateAppState, drawFlattenedStrokeGroup, resolution, textAnimMetadataSchema } from './appState'
+import { appStateName, type TemplateAppState, drawFlattenedStrokeGroup, resolution, textAnimMetadataSchema, textStyleMetadataSchema } from './appState'
 import { updateGPUStrokes, getDrawingScene } from './strokeLauncher'
 import type { CanvasStateSnapshot } from '@/canvas/canvasState'
 import { CanvasPaint as GLCanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX'
@@ -16,15 +16,14 @@ import type { DrawingScene } from '@/rendering/gpuStrokes/drawingScene'
 import { getPreset } from './presets'
 import { DropAndScrollManager } from './dropAndScroll'
 import { MatterExplodeManager } from './matterExplode'
+import { FONT_FAMILY, FONT_SIZE, getTextStyle } from './textRegionUtils'
 
 const appState = inject<TemplateAppState>(appStateName)!!
 const canvasRootRef = ref<InstanceType<typeof CanvasRoot> | null>(null)
 const dropAndScrollManager = new DropAndScrollManager(() => appState.p5Instance)
 const matterExplodeManager = new MatterExplodeManager(() => appState.p5Instance)
-const DROP_FONT_FAMILY = 'Courier New'
-const DROP_FONT_SIZE = 14
 
-const metadataSchemas = [textAnimMetadataSchema]
+const metadataSchemas = [textAnimMetadataSchema, textStyleMetadataSchema]
 
 const syncCanvasState = (state: CanvasStateSnapshot) => {
   appState.freehandStateString = state.freehand.serializedState
@@ -119,8 +118,15 @@ onMounted(async () => {
     if (appState.polygonRenderData.length > 0) {
       p.push()
       appState.polygonRenderData.forEach((polygon, idx) => {
-        const polygonMetadataColor = polygon.metadata?.color
-        const color = polygonMetadataColor ?? randColor(idx)
+        const textStyle = getTextStyle(polygon.metadata)
+        const textColor = textStyle.textColor
+        const baseColor = textColor
+          ? { r: textColor.r * 255, g: textColor.g * 255, b: textColor.b * 255, a: 1 }
+          : polygon.metadata?.color
+            ? { ...polygon.metadata.color }
+            : randColor(idx)
+        const color = { ...baseColor, a: baseColor.a ?? 1 }
+        const textSize = textStyle.textSize ?? FONT_SIZE
         const fillAnim = polygon.metadata?.textAnim?.fillAnim
         const isDropAndScroll = fillAnim === 'dropAndScroll'
         const isMatterExplode = fillAnim === 'matterExplode'
@@ -133,8 +139,8 @@ onMounted(async () => {
         if (isDropAndScroll || isMatterExplode) {
           p.noStroke()
           p.fill(color.r, color.g, color.b, color.a)
-          p.textFont(DROP_FONT_FAMILY)
-          p.textSize(DROP_FONT_SIZE)
+          p.textFont(FONT_FAMILY)
+          p.textSize(textSize)
 
           if (renderState && renderState.letters.length > 0 && renderState.text.length > 0) {
             renderState.letters.forEach(({ pos, idx: letterIdx }) => {
