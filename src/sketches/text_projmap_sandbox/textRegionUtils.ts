@@ -162,7 +162,8 @@ export const makeSignature = (points: Point[], meta: unknown) => {
   const metaSig = JSON.stringify({
     fillAnim: anim.fillAnim,
     textInd: anim.textInd,
-    textSize: style.textSize ?? FONT_SIZE
+    textSize: style.textSize ?? FONT_SIZE,
+    textColor: style.textColor
   })
   const ptsSig = points.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join('|')
   return `${ptsSig}::${metaSig}`

@@ -15,6 +15,8 @@ import {
 import type { $ZodIssue } from 'zod/v4/core'
 import { hasSwitchMeta, getVariantFields, getSharedFields, type SwitchMeta } from './switchedSchema'
 
+defineOptions({ name: 'ZodDataEditor' })
+
 type StringEnumSchema = ZodEnum<Record<string, string>>
 type PrimitiveSchema = ZodString | ZodNumber | ZodBoolean | StringEnumSchema
 type FlatSchema =
@@ -142,18 +144,23 @@ const objectFields = computed(() => {
 
 const updateString = (val: string) => {
   stringValue.value = val
-  validateAndEmit(val)
+  const isBlankOptional = isOptionalSchema.value && val.trim() === ''
+  validateAndEmit(isBlankOptional ? undefined : val)
 }
 
 const updateNumber = (val: string) => {
+  // Allow free typing (leading zeros / partial decimals) without validation jitter
   numberText.value = val
-  const trimmed = val.trim()
+}
+
+const commitNumber = () => {
+  const trimmed = numberText.value.trim()
   if (!trimmed) {
     validateAndEmit(undefined)
     return
   }
   const asNumber = Number(trimmed)
-  const candidate = Number.isFinite(asNumber) ? asNumber : val
+  const candidate = Number.isFinite(asNumber) ? asNumber : trimmed
   validateAndEmit(candidate)
 }
 
@@ -202,9 +209,23 @@ const updateObjectField = (key: string, rawVal: any) => {
   validateObject()
 }
 
+// Number fields: let users type freely; commit validation on blur/enter
+const updateObjectNumberInput = (key: string, rawVal: string) => {
+  objectState.value = { ...objectState.value, [key]: rawVal }
+}
+
+const commitObjectNumber = (key: string) => {
+  validateObject()
+}
+
 function validateObject() {
   if (!(normalizedSchema.value instanceof ZodObject)) return
   const candidate = buildObjectCandidate()
+  if (isOptionalSchema.value && isEmptyObject(candidate)) {
+    issues.value = []
+    emit('update:modelValue', undefined)
+    return
+  }
   const result = props.schema.safeParse(candidate)
   issues.value = result.success ? [] : result.error.issues.map(formatIssue)
   emit('update:modelValue', result.success ? result.data : candidate)
@@ -237,6 +258,8 @@ function buildObjectState(val: any) {
       initial[key] = typeof fieldVal === 'string' ? fieldVal : ''
     } else if (kind === 'boolean') {
       initial[key] = typeof fieldVal === 'boolean' ? fieldVal : undefined
+    } else if (kind === 'object') {
+      initial[key] = fieldVal
     }
   })
   return initial
@@ -254,9 +277,14 @@ function buildObjectCandidate() {
     const kind = getKind(base)
     const rawVal = objectState.value[key]
     if (kind === 'string') {
+      if (rawVal === '' && isOptional(schema as SupportedSchema)) return
       if (rawVal !== undefined) candidate[key] = rawVal
     } else if (kind === 'number') {
       if (rawVal === '' || rawVal === undefined) return
+      if (typeof rawVal === 'string' && isPartialNumber(rawVal.trim())) {
+        candidate[key] = rawVal
+        return
+      }
       if (typeof rawVal === 'number') {
         candidate[key] = rawVal
         return
@@ -264,9 +292,13 @@ function buildObjectCandidate() {
       const asNumber = Number(rawVal)
       candidate[key] = Number.isFinite(asNumber) ? asNumber : rawVal
     } else if (kind === 'enum') {
-      if (rawVal !== undefined && rawVal !== '') candidate[key] = rawVal
+      if (rawVal === '' || rawVal === undefined) return
+      candidate[key] = rawVal
     } else if (kind === 'boolean') {
       if (rawVal !== undefined) candidate[key] = !!rawVal
+    } else if (kind === 'object') {
+      if (isEmptyObject(rawVal) && isOptional(schema as SupportedSchema)) return
+      if (rawVal !== undefined) candidate[key] = rawVal
     }
   })
   return candidate
@@ -321,6 +353,17 @@ function formatIssue(issue: $ZodIssue) {
   const path = issue.path.map((segment) => segment?.toString?.() ?? String(segment)).join('.')
   return path ? `${path}: ${issue.message}` : issue.message
 }
+
+function isEmptyObject(val: unknown): boolean {
+  return val !== null && typeof val === 'object' && !Array.isArray(val) && Object.keys(val as any).length === 0
+}
+
+function isPartialNumber(str: string): boolean {
+  if (str === '-' || str === '+') return true
+  if (str === '.') return true
+  if (str.endsWith('.')) return /^[-+]?\d*\.?$/.test(str)
+  return false
+}
 </script>
 
 <template>
@@ -349,6 +392,8 @@ function formatIssue(issue: $ZodIssue) {
           :disabled="disabled"
           inputmode="decimal"
           @input="updateNumber(($event.target as HTMLInputElement).value)"
+          @blur="commitNumber"
+          @keydown.enter.prevent="commitNumber"
         />
         <button class="tiny-btn" type="button" :disabled="disabled || (!isOptionalSchema && numberText === '')" @click="clearValue">
           Clear
@@ -412,7 +457,9 @@ function formatIssue(issue: $ZodIssue) {
               :value="objectState[field.key] ?? ''"
               :disabled="disabled"
               inputmode="decimal"
-              @input="updateObjectField(field.key, ($event.target as HTMLInputElement).value)"
+              @input="updateObjectNumberInput(field.key, ($event.target as HTMLInputElement).value)"
+              @blur="commitObjectNumber(field.key)"
+              @keydown.enter.prevent="commitObjectNumber(field.key)"
             />
           </template>
           <template v-else-if="field.kind === 'enum'">
@@ -438,6 +485,22 @@ function formatIssue(issue: $ZodIssue) {
               />
               <span>{{ objectState[field.key] === undefined ? 'Unset' : objectState[field.key] ? 'True' : 'False' }}</span>
             </label>
+            <button
+              class="tiny-btn"
+              type="button"
+              :disabled="disabled || !isOptional(field.schema)"
+              @click="updateObjectField(field.key, undefined)"
+            >
+              Clear
+            </button>
+          </template>
+          <template v-else-if="field.kind === 'object'">
+            <ZodDataEditor
+              :schema="field.schema"
+              :model-value="objectState[field.key]"
+              :disabled="disabled"
+              @update:modelValue="(val: any) => updateObjectField(field.key, val)"
+            />
             <button
               class="tiny-btn"
               type="button"

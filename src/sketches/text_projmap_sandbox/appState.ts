@@ -32,12 +32,12 @@ export const textAnimMetadataSchema = {
 }
 
 export const textStyleSchema = z.object({
-  textSize: z.number().positive().optional(),
+  textSize: z.coerce.number().positive().optional(),
   textColor: z
     .object({
-      r: z.number().min(0).max(1),
-      g: z.number().min(0).max(1),
-      b: z.number().min(0).max(1)
+      r: z.coerce.number().min(0).max(1),
+      g: z.coerce.number().min(0).max(1),
+      b: z.coerce.number().min(0).max(1)
     })
     .optional()
 })

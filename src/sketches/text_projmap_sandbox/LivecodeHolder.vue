@@ -120,12 +120,13 @@ onMounted(async () => {
       appState.polygonRenderData.forEach((polygon, idx) => {
         const textStyle = getTextStyle(polygon.metadata)
         const textColor = textStyle.textColor
+        const to255 = (c: number) => c <= 1 ? c * 255 : c
         const baseColor = textColor
-          ? { r: textColor.r * 255, g: textColor.g * 255, b: textColor.b * 255, a: 1 }
+          ? { r: to255(textColor.r), g: to255(textColor.g), b: to255(textColor.b), a: 255 }
           : polygon.metadata?.color
             ? { ...polygon.metadata.color }
             : randColor(idx)
-        const color = { ...baseColor, a: baseColor.a ?? 1 }
+        const color = { ...baseColor, a: baseColor.a ?? 255 }
         const textSize = textStyle.textSize ?? FONT_SIZE
         const fillAnim = polygon.metadata?.textAnim?.fillAnim
         const isDropAndScroll = fillAnim === 'dropAndScroll'
