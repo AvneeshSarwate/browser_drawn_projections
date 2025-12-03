@@ -1,18 +1,22 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { resolution } from './appState'
+import PopoutWindow from '@/components/PopoutWindow.vue'
 
 const resRef = ref(resolution)
 
 const dpr = window.devicePixelRatio || 1
+const popped = ref(false)
 </script>
 
 <template>
   <div class="canvas-page">
-    <div id="canvasContainer" :style="{width: resRef.width + 'px', height: resRef.height + 'px'}">
-      <canvas id="p5Canvas" :width="resRef.width * dpr" :height="resRef.height * dpr" :style="{width: resRef.width + 'px', height: resRef.height + 'px'}" abitrary-prop="somethi"></canvas>
-      <canvas id="threeCanvas" :width="resRef.width * dpr" :height="resRef.height * dpr" :style="{width: resRef.width + 'px', height: resRef.height + 'px'}" abitrary-prop="somethi"></canvas>
-    </div>
+    <PopoutWindow v-model="popped" title="Canvas" :width="resRef.width" :height="resRef.height">
+      <div id="canvasContainer" :style="{width: resRef.width + 'px', height: resRef.height + 'px'}">
+        <canvas id="p5Canvas" :width="resRef.width * dpr" :height="resRef.height * dpr" :style="{width: resRef.width + 'px', height: resRef.height + 'px'}" abitrary-prop="somethi"></canvas>
+        <canvas id="threeCanvas" :width="resRef.width * dpr" :height="resRef.height * dpr" :style="{width: resRef.width + 'px', height: resRef.height + 'px'}" abitrary-prop="somethi"></canvas>
+      </div>
+    </PopoutWindow>
     <div id="description">
       <p>Press D to enter draw mode</p>
       <p>Press S to add a circle</p>
