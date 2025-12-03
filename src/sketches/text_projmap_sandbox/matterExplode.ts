@@ -171,7 +171,11 @@ export class MatterExplodeManager {
         this.noP5Logged.delete(id)
 
         const textStyle = getTextStyle(poly.metadata)
-        const prep = generateSpots(poly.points as Point[], p, { textSize: textStyle.textSize })
+        const prep = generateSpots(poly.points as Point[], p, {
+          textSize: textStyle.textSize,
+          fontFamily: textStyle.fontFamily,
+          fontStyle: textStyle.fontStyle
+        })
         if (!prep) {
           if (!this.noPrepLogged.has(id) && LOG_ENABLED) {
             console.warn(

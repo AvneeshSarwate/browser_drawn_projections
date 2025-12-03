@@ -41,7 +41,7 @@ export const textStyleSchema = z.object({
     })
     .optional(),
   fontStyle: z.enum(['NORMAL', 'ITALIC', 'BOLD', 'BOLDITALIC']).optional(),
-  fontFamily: z.enum(['Courier New', 'Consolas', 'Monaco', 'Menlo']).optional()
+  fontFamily: z.enum(['Courier New', 'Monaco', 'Menlo']).optional()
 })
 
 export type TextStyle = z.infer<typeof textStyleSchema>

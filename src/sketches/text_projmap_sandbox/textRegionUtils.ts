@@ -36,6 +36,8 @@ export const FRAME_WAIT = 0.016
 export type GenerateSpotsOptions = {
   minCharsDrop?: number
   textSize?: number
+  fontFamily?: string
+  fontStyle?: 'NORMAL' | 'ITALIC' | 'BOLD' | 'BOLDITALIC'
 }
 
 export const clamp = (v: number, min: number, max: number) => Math.min(Math.max(v, min), max)
@@ -99,13 +101,21 @@ export const generateSpots = (
   options: GenerateSpotsOptions = {}
 ): PreparedPolygon | null => {
   if (!polygonPoints.length) return null
-  const { minCharsDrop, textSize } = options
+  const { minCharsDrop, textSize, fontFamily, fontStyle } = options
   const fontSize = textSize ?? FONT_SIZE
+  const font = fontFamily ?? FONT_FAMILY
+  const style = fontStyle ?? 'NORMAL'
   const bbox = bboxOfPoints(polygonPoints)
 
   p.push()
-  p.textFont(FONT_FAMILY)
+  p.textFont(font)
   p.textSize(fontSize)
+  // Apply font style before measuring to get accurate dimensions
+  if (style === 'ITALIC') p.textStyle(p.ITALIC)
+  else if (style === 'BOLD') p.textStyle(p.BOLD)
+  else if (style === 'BOLDITALIC') p.textStyle(p.BOLDITALIC)
+  else p.textStyle(p.NORMAL)
+
   const letterWidth = p.textWidth('a')
   const letterHeight = letterWidth / COURIER_RATIO
   p.pop()
@@ -163,7 +173,9 @@ export const makeSignature = (points: Point[], meta: unknown) => {
     fillAnim: anim.fillAnim,
     textInd: anim.textInd,
     textSize: style.textSize ?? FONT_SIZE,
-    textColor: style.textColor
+    textColor: style.textColor,
+    fontFamily: style.fontFamily ?? FONT_FAMILY,
+    fontStyle: style.fontStyle ?? 'NORMAL'
   })
   const ptsSig = points.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join('|')
   return `${ptsSig}::${metaSig}`

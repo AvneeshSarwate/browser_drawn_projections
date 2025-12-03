@@ -126,7 +126,9 @@ export class DropAndScrollManager {
         const textStyle = getTextStyle(poly.metadata)
         const prep = generateSpots(poly.points as Point[], p, {
           minCharsDrop,
-          textSize: textStyle.textSize
+          textSize: textStyle.textSize,
+          fontFamily: textStyle.fontFamily,
+          fontStyle: textStyle.fontStyle
         })
         if (!prep) {
           if (!this.noPrepLogged.has(id) && LOG_ENABLED) {
