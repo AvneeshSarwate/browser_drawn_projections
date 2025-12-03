@@ -128,6 +128,8 @@ onMounted(async () => {
             : randColor(idx)
         const color = { ...baseColor, a: baseColor.a ?? 255 }
         const textSize = textStyle.textSize ?? FONT_SIZE
+        const fontFamily = textStyle.fontFamily ?? FONT_FAMILY
+        const fontStyle = textStyle.fontStyle ?? 'NORMAL'
         const fillAnim = polygon.metadata?.textAnim?.fillAnim
         const isDropAndScroll = fillAnim === 'dropAndScroll'
         const isMatterExplode = fillAnim === 'matterExplode'
@@ -140,8 +142,13 @@ onMounted(async () => {
         if (isDropAndScroll || isMatterExplode) {
           p.noStroke()
           p.fill(color.r, color.g, color.b, color.a)
-          p.textFont(FONT_FAMILY)
+          p.textFont(fontFamily)
           p.textSize(textSize)
+          // Apply font style (p5 constants: NORMAL, ITALIC, BOLD, BOLDITALIC)
+          if (fontStyle === 'NORMAL') p.textStyle(p.NORMAL)
+          else if (fontStyle === 'ITALIC') p.textStyle(p.ITALIC)
+          else if (fontStyle === 'BOLD') p.textStyle(p.BOLD)
+          else if (fontStyle === 'BOLDITALIC') p.textStyle(p.BOLDITALIC)
 
           if (renderState && renderState.letters.length > 0 && renderState.text.length > 0) {
             renderState.letters.forEach(({ pos, idx: letterIdx }) => {
@@ -182,7 +189,7 @@ onMounted(async () => {
   const renderWidth = resolution.width * dpr
   const renderHeight = resolution.height * dpr
 
-  const passthru = new Passthru({ src: p5Canvas }, renderWidth, renderHeight, undefined, 'nearest')
+  const passthru = new Passthru({ src: p5Canvas }, renderWidth, renderHeight, undefined, 'linear')
   const canvasPaint = new GLCanvasPaint({ src: passthru }, renderWidth, renderHeight)
   glShaderGraph = canvasPaint
 

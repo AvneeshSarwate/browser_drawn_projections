@@ -18,7 +18,7 @@ export const textAnimSchema = switchedSchema(
   }),
   'fillAnim',
   {
-    dropAndScroll: { minCharsDrop: z.number() },
+    dropAndScroll: { minCharsDrop: z.number().optional() },
     matterExplode: {}
   }
 )
@@ -39,7 +39,9 @@ export const textStyleSchema = z.object({
       g: z.coerce.number().min(0).max(1),
       b: z.coerce.number().min(0).max(1)
     })
-    .optional()
+    .optional(),
+  fontStyle: z.enum(['NORMAL', 'ITALIC', 'BOLD', 'BOLDITALIC']).optional(),
+  fontFamily: z.enum(['Courier New', 'Consolas', 'Monaco', 'Menlo']).optional()
 })
 
 export type TextStyle = z.infer<typeof textStyleSchema>
