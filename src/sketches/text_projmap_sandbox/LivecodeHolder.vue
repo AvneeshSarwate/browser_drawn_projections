@@ -16,7 +16,7 @@ import type { DrawingScene } from '@/rendering/gpuStrokes/drawingScene'
 import { getPreset } from './presets'
 import { DropAndScrollManager } from './dropAndScroll'
 import { MatterExplodeManager } from './matterExplode'
-import { FONT_FAMILY, FONT_SIZE, getTextStyle } from './textRegionUtils'
+import { FONT_FAMILY, FONT_SIZE, getTextStyle, getTextAnim } from './textRegionUtils'
 
 const appState = inject<TemplateAppState>(appStateName)!!
 const canvasRootRef = ref<InstanceType<typeof CanvasRoot> | null>(null)
@@ -130,7 +130,8 @@ onMounted(async () => {
         const textSize = textStyle.textSize ?? FONT_SIZE
         const fontFamily = textStyle.fontFamily ?? FONT_FAMILY
         const fontStyle = textStyle.fontStyle ?? 'NORMAL'
-        const fillAnim = polygon.metadata?.textAnim?.fillAnim
+        const textAnim = getTextAnim(polygon.metadata)
+        const fillAnim = textAnim.fillAnim
         const isDropAndScroll = fillAnim === 'dropAndScroll'
         const isMatterExplode = fillAnim === 'matterExplode'
         const renderState = isDropAndScroll

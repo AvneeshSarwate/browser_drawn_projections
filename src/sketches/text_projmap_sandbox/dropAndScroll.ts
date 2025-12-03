@@ -72,7 +72,7 @@ export class DropAndScrollManager {
       const anim = getTextAnim(poly.metadata)
       const id = poly.id
 
-      if (anim?.fillAnim !== 'dropAndScroll') {
+      if (anim.fillAnim !== 'dropAndScroll') {
         if (LOG_ENABLED && this.loops.has(id))
           console.log(`[dropAndScroll] removing loop ${id} (fillAnim not set)`)
         this.teardown(id)
@@ -101,11 +101,11 @@ export class DropAndScrollManager {
 
   private launchLoop(id: string, poly: PolygonRenderData[number], signature: string) {
     const anim = getTextAnim(poly.metadata)
-    const text = chooseText(anim?.textInd)
-    const minCharsDrop = anim?.minCharsDrop
+    const text = chooseText(anim.textInd)
+    const minCharsDrop = anim.minCharsDrop
     if (LOG_ENABLED)
       console.log(`[dropAndScroll] launching loop ${id}`, {
-        textInd: anim?.textInd,
+        textInd: anim.textInd,
         textLen: text.length,
         minCharsDrop
       })

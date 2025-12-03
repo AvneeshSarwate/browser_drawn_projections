@@ -154,10 +154,16 @@ export const generateSpots = (
   return { spots, flatSpots, openSpots, bbox, letterHeight, letterWidth, polygon: polygonPoints }
 }
 
-export const getTextAnim = (meta: unknown): TextAnimFlat | undefined => {
+export const getTextAnim = (meta: unknown): TextAnimFlat => {
   const raw = (meta as any)?.textAnim ?? meta
   const result = textAnimSchema.safeParse(raw)
-  return result.success ? result.data as TextAnimFlat : undefined
+
+  // Return default if metadata missing or invalid
+  if (!result.success) {
+    return { fillAnim: 'dropAndScroll', textInd: 0 }
+  }
+
+  return result.data as TextAnimFlat
 }
 
 export const getTextStyle = (meta: unknown): TextStyle => {
@@ -167,7 +173,7 @@ export const getTextStyle = (meta: unknown): TextStyle => {
 }
 
 export const makeSignature = (points: Point[], meta: unknown) => {
-  const anim = getTextAnim(meta) ?? {}
+  const anim = getTextAnim(meta)
   const style = getTextStyle(meta)
   const metaSig = JSON.stringify({
     fillAnim: anim.fillAnim,

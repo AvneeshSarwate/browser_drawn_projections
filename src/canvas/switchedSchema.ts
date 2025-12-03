@@ -111,10 +111,16 @@ export function switchedSchema(
   }
 
   const baseShape = { ...baseSchema.shape } as Record<string, ZodTypeAny>
-  const switchEnumSchema = baseShape[switchKey]
+  let switchEnumSchema = baseShape[switchKey]
+
+  // Unwrap if it's a ZodDefault to get the underlying enum
+  let defType = (switchEnumSchema as any)?._def?.type
+  if (defType === 'default') {
+    switchEnumSchema = (switchEnumSchema as any)._def.innerType
+    defType = (switchEnumSchema as any)?._def?.type
+  }
 
   // Check if the switch key field is a ZodEnum (Zod v4 uses _def.type === 'enum')
-  const defType = (switchEnumSchema as any)?._def?.type
   if (!switchEnumSchema || defType !== 'enum') {
     throw new Error(`switchedSchema: "${switchKey}" must be a z.enum() field in the base schema`)
   }

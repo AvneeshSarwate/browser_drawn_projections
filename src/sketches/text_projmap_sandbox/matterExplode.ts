@@ -83,7 +83,7 @@ export class MatterExplodeManager {
       const anim = getTextAnim(poly.metadata)
       const id = poly.id
 
-      if (anim?.fillAnim !== 'matterExplode') {
+      if (anim.fillAnim !== 'matterExplode') {
         if (LOG_ENABLED && this.loops.has(id))
           console.log(`[matterExplode] removing loop ${id} (fillAnim not set)`)
         this.teardown(id)
@@ -150,10 +150,10 @@ export class MatterExplodeManager {
 
   private launchLoop(id: string, poly: PolygonRenderData[number], signature: string) {
     const anim = getTextAnim(poly.metadata)
-    const text = chooseText(anim?.textInd)
+    const text = chooseText(anim.textInd)
     if (LOG_ENABLED)
       console.log(`[matterExplode] launching loop ${id}`, {
-        textInd: anim?.textInd,
+        textInd: anim.textInd,
         textLen: text.length
       })
 
