@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { createP5Sketch } from './p5Sketch';
-import { appStateName, type TemplateAppState } from './appState';
+import { appStateName, engineRef, type TemplateAppState } from './appState';
 import type p5 from 'p5';
-import * as THREE from 'three';
+import * as BABYLON from 'babylonjs';
 import { inject, onMounted, onUnmounted } from 'vue';
 
 //@ts-ignore
@@ -10,6 +10,7 @@ import Stats from '@/rendering/Stats';
 
 
 const appState = inject<TemplateAppState>(appStateName)!!
+let resizeListener: (() => void) | undefined
 
 const neutralizeSketch = (instance: p5) => {
   instance.noLoop()
@@ -35,7 +36,7 @@ const neutralizeSketch = (instance: p5) => {
 }
 
 
-onMounted(() => {
+onMounted(async () => {
   const stats = new Stats();
   stats.showPanel(1); // 0: fps, 1: ms, 2: mb, 3+: custom
   appState.stats = stats
@@ -49,7 +50,14 @@ onMounted(() => {
   p5Instance.disableFriendlyErrors = true //explanation - for performance
   appState.p5Instance = p5Instance
 
-  appState.threeRenderer = new THREE.WebGLRenderer({canvas: document.getElementById('threeCanvas') as HTMLCanvasElement})
+  const renderCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
+  const engine = new BABYLON.WebGPUEngine(renderCanvas, { antialias: false })
+  await engine.initAsync()
+  engine.resize()
+  resizeListener = () => engine.resize()
+  window.addEventListener('resize', resizeListener)
+
+  engineRef.value = engine
 })
 
 onUnmounted(() => {
@@ -58,8 +66,14 @@ onUnmounted(() => {
   }
   document.getElementsByClassName('frameRateStats')[0]?.remove()
 
-  //todo hotreload - for cleaning up threeRenderer, anything more than calling dispose()?
-  appState.threeRenderer?.dispose()
+  //todo hotreload - for cleaning up engine, anything more than calling dispose()?
+  if (resizeListener) {
+    window.removeEventListener('resize', resizeListener)
+    resizeListener = undefined
+  }
+
+  engineRef.value?.dispose()
+  engineRef.value = undefined
   
 })
 

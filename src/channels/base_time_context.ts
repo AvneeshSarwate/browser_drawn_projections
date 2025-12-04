@@ -278,7 +278,7 @@ export class DateTimeContext extends TimeContext{
       const waitTime = targetTime - nowTime //todo bug - in usage in musicAgentTest sketch, time is not properly set and this becomes negative, causing problems
       if (waitTime < 0) {
         const x = 5
-        console.log("sketchLog", "negative wait time", this.debugName, nowTime.toFixed(3), targetTime.toFixed(3), waitTime.toFixed(3))
+        // console.log("sketchLog", "negative wait time", this.debugName, nowTime.toFixed(3), targetTime.toFixed(3), waitTime.toFixed(3))
       }
       const waitStart = dateNow()
       setTimeout(() => {

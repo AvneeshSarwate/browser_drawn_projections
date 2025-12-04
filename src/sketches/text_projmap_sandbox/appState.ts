@@ -1,5 +1,5 @@
 import p5 from 'p5'
-import * as THREE from 'three'
+import * as BABYLON from 'babylonjs'
 import { Entity, EntityList } from '@/stores/undoCommands'
 
 
@@ -53,7 +53,6 @@ export const textStyleMetadataSchema = {
 
 export type TemplateAppState = {
   p5Instance: p5 | undefined
-  threeRenderer: THREE.WebGLRenderer | undefined
   codeStack: (() => void)[]
   codeStackIndex: number
   drawFunctions: ((p5: p5) => void)[]
@@ -70,12 +69,13 @@ export type TemplateAppState = {
   freehandGroupMap: Record<string, number[]>
   polygonStateString: string
   polygonRenderData: PolygonRenderData
-  gpuStrokesReadyPromise: Promise<boolean> | null
 }
+
+// Separate reactive engine ref (mirrors clickAVMelodyLauncherBabylon pattern)
+export const engineRef = shallowRef<BABYLON.WebGPUEngine | undefined>(undefined)
 
 export const appState: TemplateAppState = {
   p5Instance: undefined,
-  threeRenderer: undefined,
   codeStack: [],
   codeStackIndex: 0,
   drawFunctions: [],
@@ -90,7 +90,6 @@ export const appState: TemplateAppState = {
   freehandGroupMap: {},
   polygonStateString: '',
   polygonRenderData: [],
-  gpuStrokesReadyPromise: null,
 } 
 
 export const appStateName = 'text_projmap_sandbox'
@@ -99,36 +98,6 @@ export const resolution = {
   width: 1000,
   height: 500
 }
-
-//todo api - add caching/rehydrating of appState from local storage
-
-
-//canvas state
-// UI refs that should persist across hot reloads
-export const activeTool = ref<'select' | 'freehand' | 'polygon'>('select')
-export const availableStrokes = ref<Array<{index: number, name: string}>>([])
-export const animationParams = ref({
-  strokeA: 0,
-  strokeB: 0,
-  interpolationT: 0.0,
-  duration: 2.0,
-  scale: 1.0,
-  position: 'center' as 'start' | 'center' | 'end' | 'bbox-center' | 'bbox-tl' | 'bbox-tr' | 'bbox-bl' | 'bbox-br',
-  loop: false,
-  startPhase: 0.0
-})
-export const gpuStrokesReady = ref(false)
-export const launchByName = ref(false)
-export const selectedGroupName = ref('')
-
-// Script editor state
-export const SCRIPT_STORAGE_KEY = 'handwriting-animator-script'
-const defaultScript = `// Launch multiple strokes in patterns
-launchStroke(100, 100, 0, 1)
-launchStroke(200, 200, 0, 1, { duration: 3.0, loop: true })
-launchStroke(300, 300, 1, 0, { startPhase: 0.5 })`
-export const scriptCode = ref(localStorage.getItem(SCRIPT_STORAGE_KEY) || defaultScript)
-export const scriptExecuting = ref(false)
 
 export const globalStore = defineStore(appStateName, () => {
   const appStateRef = ref(appState)

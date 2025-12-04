@@ -1,18 +1,12 @@
 <script setup lang="ts">
 import { inject, onMounted, onUnmounted, ref } from 'vue'
 import CanvasRoot from '@/canvas/CanvasRoot.vue'
-import StrokeLaunchControls from './StrokeLaunchControls.vue'
-import { appStateName, type TemplateAppState, drawFlattenedStrokeGroup, resolution, textAnimMetadataSchema, textStyleMetadataSchema } from './appState'
-import { updateGPUStrokes, getDrawingScene } from './strokeLauncher'
+import { appStateName, engineRef, type TemplateAppState, drawFlattenedStrokeGroup, resolution, textAnimMetadataSchema, textStyleMetadataSchema } from './appState'
 import type { CanvasStateSnapshot } from '@/canvas/canvasState'
-import { CanvasPaint as GLCanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX'
-import { CanvasPaint as BabylonCanvasPaint, PassthruEffect, FeedbackNode } from '@/rendering/shaderFXBabylon'
-import { AlphaTimeTagEffect } from '@/rendering/postFX/alphaTimeTag.frag.generated'
-import { FloodFillStepEffect } from '@/rendering/postFX/floodFillStep.frag.generated'
+import { CanvasPaint, PassthruEffect, type ShaderEffect } from '@/rendering/shaderFXBabylon'
 import { clearListeners, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse'
 import type p5 from 'p5'
 import { sinN } from '@/channels/channels'
-import type { DrawingScene } from '@/rendering/gpuStrokes/drawingScene'
 import { getPreset } from './presets'
 import { DropAndScrollManager } from './dropAndScroll'
 import { MatterExplodeManager } from './matterExplode'
@@ -37,33 +31,24 @@ const syncCanvasState = (state: CanvasStateSnapshot) => {
     deleted: state.deleted.polygon.bakedRenderData,
     changed: state.changed.polygon.bakedRenderData
   }
-  dropAndScrollManager.syncPolygons(polygonSyncPayload)
+
+  const preManagerTime = performance.now()
   matterExplodeManager.syncPolygons(polygonSyncPayload)
-  updateGPUStrokes()
+  
+  const midManagerTime = performance.now()
+  
+  dropAndScrollManager.syncPolygons(polygonSyncPayload)
+  const postManagerTime = performance.now()
+  console.log("manager update", postManagerTime-preManagerTime, postManagerTime-midManagerTime)
 }
 
 let glShaderGraph: ShaderEffect | undefined = undefined
-let gpuCanvasPaint: BabylonCanvasPaint | undefined = undefined
-let drawingSceneRef: DrawingScene | undefined = undefined
 const clearDrawFuncs = () => {
   appState.drawFunctions = []
   appState.drawFuncMap = new Map()
 }
 
-const saveFreehandRenderData = () => {
-  const json = JSON.stringify(appState.freehandRenderData, null, 2)
-  const blob = new Blob([json], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-  const downloader = document.createElement('a')
-  downloader.href = url
-  downloader.download = `freehandRenderData-${new Date().toISOString().replace(/[:.]/g, '-')}.json`
-  downloader.click()
-  URL.revokeObjectURL(url)
-}
-
 const sleepWait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
-
-const USE_GPU_STROKES = ref(false)
 
 onMounted(async () => {
   const params = new URLSearchParams(window.location.search)
@@ -88,12 +73,10 @@ onMounted(async () => {
   const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
   const threeCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
 
-  if (USE_GPU_STROKES.value) {
-    while (!appState.gpuStrokesReadyPromise) {
-      await sleepWait(16)
-    }
+  while (!engineRef.value) {
+    await sleepWait(16)
   }
-  const gpuReady = USE_GPU_STROKES.value ? await appState.gpuStrokesReadyPromise : true
+  const engine = engineRef.value!
 
   // Track mouse in p5 coordinates (available for future use)
   let p5Mouse = { x: 0, y: 0 }
@@ -190,65 +173,19 @@ onMounted(async () => {
   const renderWidth = resolution.width * dpr
   const renderHeight = resolution.height * dpr
 
-  const passthru = new Passthru({ src: p5Canvas }, renderWidth, renderHeight, undefined, 'linear')
-  const canvasPaint = new GLCanvasPaint({ src: passthru }, renderWidth, renderHeight)
+  const passthru = new PassthruEffect(engine, { src: p5Canvas }, renderWidth, renderHeight, 'linear')
+  const canvasPaint = new CanvasPaint(engine, { src: passthru }, renderWidth, renderHeight)
   glShaderGraph = canvasPaint
 
-  if (gpuReady) {
-    gpuCanvasPaint?.disposeAll()
-    gpuCanvasPaint = undefined
-    drawingSceneRef = undefined
-
-    const drawingScene = getDrawingScene()
-    const renderTarget = drawingScene?.getRenderTarget()
-    if (drawingScene && renderTarget) {
-      const size = renderTarget.getSize()
-      const width = size.width
-      const height = size.height
-      const engine = drawingScene.getEngine()
-      const sampleMode: 'nearest' | 'linear' = 'nearest'
-
-      const timeTag = new AlphaTimeTagEffect(engine, { src: renderTarget }, width, height, sampleMode)
-      timeTag.setUniforms({ drawTime: () => performance.now() * 0.001 })
-
-      const floodFillSeed = new FloodFillStepEffect(engine, { seed: timeTag, feedback: timeTag }, width, height, sampleMode)
-
-      const passThruForFeedback = new PassthruEffect(engine, { src: floodFillSeed }, width, height, sampleMode, 'half_float')
-
-      const feedbackNode = new FeedbackNode(engine, passThruForFeedback, width, height, sampleMode, 'half_float')
-
-      const floodFillFinal = new FloodFillStepEffect(engine, { seed: timeTag, feedback: feedbackNode }, width, height, sampleMode)
-      feedbackNode.setFeedbackSrc(floodFillFinal)
-
-      gpuCanvasPaint = new BabylonCanvasPaint(engine, { src: renderTarget }, width, height)
-      drawingSceneRef = drawingScene
-    } else {
-      console.warn('DrawingScene render target unavailable; GPU strokes will not render to canvas')
-      gpuCanvasPaint = undefined
-      drawingSceneRef = undefined
-    }
-  } else {
-    gpuCanvasPaint?.disposeAll()
-    gpuCanvasPaint = undefined
-    drawingSceneRef = undefined
-  }
 
   appState.shaderDrawFunc = () => {
-    if (glShaderGraph && appState.threeRenderer) {
-      glShaderGraph.renderAll(appState.threeRenderer)
+    const eng = engineRef.value
+    if (glShaderGraph && eng) {
+      eng.beginFrame()
+      glShaderGraph.renderAll(eng)
+      eng.endFrame()
     }
 
-    //codex - add  
-    if (drawingSceneRef && gpuCanvasPaint) {
-      const engine = drawingSceneRef.getEngine()
-      engine.beginFrame()
-      try {
-        drawingSceneRef.renderFrame()
-        gpuCanvasPaint.renderAll(engine as any)
-      } finally {
-        engine.endFrame()
-      }
-    }
   }
 
   // Pause toggle
@@ -259,9 +196,6 @@ onUnmounted(() => {
   // Dispose shader graph and input listeners, and clear any registered draw funcs
   glShaderGraph?.disposeAll()
   glShaderGraph = undefined
-  gpuCanvasPaint?.disposeAll()
-  gpuCanvasPaint = undefined
-  drawingSceneRef = undefined
   appState.shaderDrawFunc = undefined
   dropAndScrollManager.dispose()
   matterExplodeManager.dispose()
@@ -282,10 +216,4 @@ onUnmounted(() => {
     :show-visualizations="false"
     :metadata-schemas="metadataSchemas"
   />
-  <!-- <button type="button" @click="saveFreehandRenderData">
-    Save Freehand JSON
-  </button> -->
-  <div v-if="USE_GPU_STROKES">
-    <StrokeLaunchControls />
-  </div>
 </template>
