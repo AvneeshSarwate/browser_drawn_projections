@@ -1,6 +1,6 @@
 import type p5 from 'p5'
 import { quotes } from './quotes'
-import { textAnimSchema, textStyleSchema, type TextAnimFlat, type TextStyle } from './appState'
+import { textAnimSchema, textStyleSchema, fxChainSchema, type TextAnimFlat, type TextStyle, type FxChainMeta } from './appState'
 
 export type Point = { x: number; y: number }
 
@@ -170,6 +170,13 @@ export const getTextStyle = (meta: unknown): TextStyle => {
   const raw = (meta as any)?.textStyle ?? meta
   const result = textStyleSchema.safeParse(raw)
   return result.success ? result.data : {}
+}
+
+export const getFxMeta = (meta: unknown): FxChainMeta => {
+  const raw = (meta as any)?.fx ?? meta
+  const parsed = fxChainSchema.safeParse(raw)
+  if (parsed.success) return parsed.data
+  return fxChainSchema.parse({})
 }
 
 export const makeSignature = (points: Point[], meta: unknown) => {

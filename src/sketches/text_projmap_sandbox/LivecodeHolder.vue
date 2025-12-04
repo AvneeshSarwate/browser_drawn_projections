@@ -1,23 +1,27 @@
 <script setup lang="ts">
 import { inject, onMounted, onUnmounted, ref } from 'vue'
+import * as BABYLON from 'babylonjs'
+import { PassthruEffect } from '@/rendering/shaderFXBabylon'
 import CanvasRoot from '@/canvas/CanvasRoot.vue'
-import { appStateName, engineRef, type TemplateAppState, drawFlattenedStrokeGroup, resolution, textAnimMetadataSchema, textStyleMetadataSchema } from './appState'
+import { appStateName, engineRef, type TemplateAppState, drawFlattenedStrokeGroup, resolution, textAnimMetadataSchema, textStyleMetadataSchema, fxChainMetadataSchema } from './appState'
 import type { CanvasStateSnapshot } from '@/canvas/canvasState'
-import { CanvasPaint, PassthruEffect, type ShaderEffect } from '@/rendering/shaderFXBabylon'
 import { clearListeners, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse'
 import type p5 from 'p5'
 import { sinN } from '@/channels/channels'
 import { getPreset } from './presets'
 import { DropAndScrollManager } from './dropAndScroll'
 import { MatterExplodeManager } from './matterExplode'
+import { syncChainsAndMeshes, renderPolygonFx, disposePolygonFx, type PolygonFxSyncOptions } from './polygonFx'
 import { FONT_FAMILY, FONT_SIZE, getTextStyle, getTextAnim } from './textRegionUtils'
 
 const appState = inject<TemplateAppState>(appStateName)!!
 const canvasRootRef = ref<InstanceType<typeof CanvasRoot> | null>(null)
 const dropAndScrollManager = new DropAndScrollManager(() => appState.p5Instance)
 const matterExplodeManager = new MatterExplodeManager(() => appState.p5Instance)
+let polygonFxOpts: PolygonFxSyncOptions | null = null
+let p5Passthru: PassthruEffect | null = null
 
-const metadataSchemas = [textAnimMetadataSchema, textStyleMetadataSchema]
+const metadataSchemas = [textAnimMetadataSchema, textStyleMetadataSchema, fxChainMetadataSchema]
 
 const syncCanvasState = (state: CanvasStateSnapshot) => {
   appState.freehandStateString = state.freehand.serializedState
@@ -38,11 +42,13 @@ const syncCanvasState = (state: CanvasStateSnapshot) => {
   const midManagerTime = performance.now()
   
   dropAndScrollManager.syncPolygons(polygonSyncPayload)
+  if (polygonFxOpts) {
+    syncChainsAndMeshes(polygonSyncPayload, polygonFxOpts)
+  }
   const postManagerTime = performance.now()
   console.log("manager update", postManagerTime-preManagerTime, postManagerTime-midManagerTime)
 }
 
-let glShaderGraph: ShaderEffect | undefined = undefined
 const clearDrawFuncs = () => {
   appState.drawFunctions = []
   appState.drawFuncMap = new Map()
@@ -109,7 +115,12 @@ onMounted(async () => {
           : polygon.metadata?.color
             ? { ...polygon.metadata.color }
             : randColor(idx)
-        const color = { ...baseColor, a: baseColor.a ?? 255 }
+        const alpha255 = baseColor.a === undefined
+          ? 255
+          : baseColor.a <= 1
+            ? baseColor.a * 255
+            : baseColor.a
+        const color = { ...baseColor, a: alpha255 }
         const textSize = textStyle.textSize ?? FONT_SIZE
         const fontFamily = textStyle.fontFamily ?? FONT_FAMILY
         const fontStyle = textStyle.fontStyle ?? 'NORMAL'
@@ -124,6 +135,7 @@ onMounted(async () => {
             : undefined
 
         if (isDropAndScroll || isMatterExplode) {
+          console.log("draw polygon")
           p.noStroke()
           p.fill(color.r, color.g, color.b, color.a)
           p.textFont(fontFamily)
@@ -139,6 +151,7 @@ onMounted(async () => {
               const char = renderState.text[(letterIdx + renderState.textOffset) % renderState.text.length]
               p.text(char, pos.x, pos.y)
             })
+            console.log("draw polygon 0")
           } else {
             p.push()
             p.noFill()
@@ -149,6 +162,7 @@ onMounted(async () => {
             })
             p.endShape(p.CLOSE)
             p.pop()
+            console.log("draw polygon 1")
           }
         } else {
           p.fill(color.r, color.g, color.b, color.a)
@@ -158,6 +172,7 @@ onMounted(async () => {
             p.vertex(point.x, point.y)
           })
           p.endShape()
+          console.log("draw polygon 2")
         }
       })
       p.pop()
@@ -168,24 +183,27 @@ onMounted(async () => {
     }
   })
 
-  // Wire p5 canvas through shader graph to three renderer
+  // Babylon overlay uses p5 canvas as source; no full-screen canvas paint
   const dpr = window.devicePixelRatio || 1
   const renderWidth = resolution.width * dpr
   const renderHeight = resolution.height * dpr
 
-  const passthru = new PassthruEffect(engine, { src: p5Canvas }, renderWidth, renderHeight, 'linear')
-  const canvasPaint = new CanvasPaint(engine, { src: passthru }, renderWidth, renderHeight)
-  glShaderGraph = canvasPaint
+  p5Passthru = new PassthruEffect(engine, { src: p5Canvas }, renderWidth, renderHeight, 'linear')
 
+  polygonFxOpts = {
+    engine,
+    p5Canvas,
+    src: p5Passthru,
+    dpr,
+  }
 
   appState.shaderDrawFunc = () => {
     const eng = engineRef.value
-    if (glShaderGraph && eng) {
-      eng.beginFrame()
-      glShaderGraph.renderAll(eng)
-      eng.endFrame()
-    }
-
+    if (!eng) return
+    eng.beginFrame()
+    p5Passthru?.renderAll(eng)
+    renderPolygonFx(eng)
+    eng.endFrame()
   }
 
   // Pause toggle
@@ -194,11 +212,13 @@ onMounted(async () => {
 
 onUnmounted(() => {
   // Dispose shader graph and input listeners, and clear any registered draw funcs
-  glShaderGraph?.disposeAll()
-  glShaderGraph = undefined
   appState.shaderDrawFunc = undefined
   dropAndScrollManager.dispose()
   matterExplodeManager.dispose()
+  disposePolygonFx()
+  polygonFxOpts = null
+  p5Passthru?.disposeAll()
+  p5Passthru = null
   clearListeners()
   clearDrawFuncs()
 })

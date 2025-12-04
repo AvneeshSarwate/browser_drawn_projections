@@ -51,6 +51,24 @@ export const textStyleMetadataSchema = {
   schema: textStyleSchema
 }
 
+// Simple per-polygon FX parameters
+export const fxChainSchema = z.object({
+  chain: z.enum(['basicBlur']).default('basicBlur'),
+  enabled: z.boolean().default(true),
+  wobbleX: z.coerce.number().default(0.003),
+  wobbleY: z.coerce.number().default(0.003),
+  blurX: z.coerce.number().default(2),
+  blurY: z.coerce.number().default(2),
+  pad: z.coerce.number().default(2),
+})
+
+export type FxChainMeta = z.infer<typeof fxChainSchema>
+
+export const fxChainMetadataSchema = {
+  name: 'fx' as const,
+  schema: fxChainSchema,
+}
+
 export type TemplateAppState = {
   p5Instance: p5 | undefined
   codeStack: (() => void)[]

@@ -11,10 +11,33 @@ const popped = ref(false)
 
 <template>
   <div class="canvas-page">
-    <PopoutWindow v-model="popped" title="Canvas" :width="resRef.width" :height="resRef.height">
-      <div id="canvasContainer" :style="{width: resRef.width + 'px', height: resRef.height + 'px'}">
-        <canvas id="p5Canvas" :width="resRef.width * dpr" :height="resRef.height * dpr" :style="{width: resRef.width + 'px', height: resRef.height + 'px'}" abitrary-prop="somethi"></canvas>
-        <canvas id="threeCanvas" :width="resRef.width * dpr" :height="resRef.height * dpr" :style="{width: resRef.width + 'px', height: resRef.height + 'px'}" abitrary-prop="somethi"></canvas>
+    <PopoutWindow
+      v-model="popped"
+      title="Canvas"
+      :width="resRef.width * 2 + 24"
+      :height="resRef.height + 40"
+    >
+      <div id="canvasContainer">
+        <div class="canvas-wrap">
+          <div class="label">p5.js</div>
+          <canvas
+            id="p5Canvas"
+            :width="resRef.width * dpr"
+            :height="resRef.height * dpr"
+            :style="{ width: resRef.width + 'px', height: resRef.height + 'px' }"
+            abitrary-prop="somethi"
+          ></canvas>
+        </div>
+        <div class="canvas-wrap">
+          <div class="label">BabylonJS</div>
+          <canvas
+            id="threeCanvas"
+            :width="resRef.width * dpr"
+            :height="resRef.height * dpr"
+            :style="{ width: resRef.width + 'px', height: resRef.height + 'px' }"
+            abitrary-prop="somethi"
+          ></canvas>
+        </div>
       </div>
     </PopoutWindow>
     <div id="description">
@@ -39,27 +62,30 @@ const popped = ref(false)
 }
 
 #canvasContainer {
-  position: relative;
-  background-color: black;
-  display: inline-block;
+  display: flex;
+  gap: 12px;
+  background-color: #0d0d0d;
+  padding: 8px;
+  border: 1px solid #222;
+  border-radius: 6px;
+}
+
+.canvas-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.label {
+  color: #ccc;
+  font-size: 12px;
+  letter-spacing: 0.5px;
 }
 
 #canvasContainer canvas {
   display: block;
-  position: absolute;
-  top: 0;
-  left: 0;
-}
-
-#p5Canvas {
-  border: 1px solid black;
-  z-index: 0;
-  visibility: hidden;
-}
-
-#threeCanvas {
-  border: 1px solid black;
-  z-index: 1;
-  visibility: visible;
+  border: 1px solid #444;
+  background: #111;
 }
 </style>
