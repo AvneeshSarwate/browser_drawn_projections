@@ -7,6 +7,7 @@ export function createP5Sketch(canvas: HTMLCanvasElement, appState: () => Templa
 
     p.setup = () => {
       p.createCanvas(resolution.width, resolution.height, canvas)
+      p.pixelDensity(window.devicePixelRatio || 1)
       // p.noSmooth()
       // p.noLoop()
     }

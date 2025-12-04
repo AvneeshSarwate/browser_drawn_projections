@@ -53,6 +53,9 @@ onMounted(async () => {
   const renderCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
   const engine = new BABYLON.WebGPUEngine(renderCanvas, { antialias: false })
   await engine.initAsync()
+  const dpr = window.devicePixelRatio || 1
+  // Keep Babylon rendering at device pixel ratio to avoid blurry output
+  engine.setHardwareScalingLevel(1 / dpr)
   engine.resize()
   resizeListener = () => engine.resize()
   window.addEventListener('resize', resizeListener)
