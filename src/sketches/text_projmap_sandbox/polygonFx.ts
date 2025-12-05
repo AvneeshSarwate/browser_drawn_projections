@@ -21,6 +21,7 @@ type ChainBundle = {
   height: number
   bboxKey: string
   fxKey: string
+  owned: ShaderEffect[]
 }
 
 type MeshBundle = {
@@ -53,8 +54,8 @@ const ensureOverlayScene = (engine: BABYLON.WebGPUEngine) => {
   return overlayScene
 }
 
-const makeKeys = (bbox: { w: number; h: number }, fx: FxChainMeta) => ({
-  bboxKey: `${bbox.w.toFixed(1)}x${bbox.h.toFixed(1)}`,
+const makeKeys = (bbox: { minX: number; minY: number; w: number; h: number }, fx: FxChainMeta) => ({
+  bboxKey: `${bbox.minX.toFixed(1)},${bbox.minY.toFixed(1)}_${bbox.w.toFixed(1)}x${bbox.h.toFixed(1)}`,
   fxKey: JSON.stringify({ ...fx }),
 })
 
@@ -88,8 +89,8 @@ const createChain = (
   hBlur.setUniforms({ pixels: fx.blurX, resolution: w })
   vBlur.setUniforms({ pixels: fx.blurY, resolution: h })
 
-  const { bboxKey, fxKey } = makeKeys({ w, h }, fx)
-  return { end: vBlur, width: w, height: h, bboxKey, fxKey }
+  const { bboxKey, fxKey } = makeKeys({ minX: bboxPx.minX, minY: bboxPx.minY, w, h }, fx)
+  return { end: vBlur, width: w, height: h, bboxKey, fxKey, owned: [vBlur, hBlur, wobble, crop] }
 }
 
 const createOrUpdateMesh = (
@@ -133,7 +134,8 @@ const createOrUpdateMesh = (
 const disposeEntry = (id: string) => {
   const chain = chains.get(id)
   if (chain) {
-    chain.end.disposeAll()
+    // Dispose only the per-polygon nodes, not shared sources
+    chain.owned.forEach((fx) => fx.dispose())
     chains.delete(id)
   }
   const mesh = meshes.get(id)
@@ -190,7 +192,7 @@ export const syncChainsAndMeshes = (
       h: Math.max(1, clampedMaxY - clampedMinY),
     }
 
-    const keys = makeKeys({ w: bboxPx.w, h: bboxPx.h }, fx)
+    const keys = makeKeys({ minX: bboxPx.minX, minY: bboxPx.minY, w: bboxPx.w, h: bboxPx.h }, fx)
     const prev = chains.get(poly.id)
     const needsRecreate =
       forceRecreate || !prev || prev.bboxKey !== keys.bboxKey || prev.fxKey !== keys.fxKey

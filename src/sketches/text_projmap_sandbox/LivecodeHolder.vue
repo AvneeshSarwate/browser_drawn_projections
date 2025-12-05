@@ -135,7 +135,7 @@ onMounted(async () => {
             : undefined
 
         if (isDropAndScroll || isMatterExplode) {
-          console.log("draw polygon")
+          // console.log("draw polygon")
           p.noStroke()
           p.fill(color.r, color.g, color.b, color.a)
           p.textFont(fontFamily)
@@ -151,7 +151,7 @@ onMounted(async () => {
               const char = renderState.text[(letterIdx + renderState.textOffset) % renderState.text.length]
               p.text(char, pos.x, pos.y)
             })
-            console.log("draw polygon 0")
+            // console.log("draw polygon 0")
           } else {
             p.push()
             p.noFill()
@@ -162,7 +162,7 @@ onMounted(async () => {
             })
             p.endShape(p.CLOSE)
             p.pop()
-            console.log("draw polygon 1")
+            // console.log("draw polygon 1")
           }
         } else {
           p.fill(color.r, color.g, color.b, color.a)
@@ -172,7 +172,7 @@ onMounted(async () => {
             p.vertex(point.x, point.y)
           })
           p.endShape()
-          console.log("draw polygon 2")
+          // console.log("draw polygon 2")
         }
       })
       p.pop()
