@@ -31,7 +31,9 @@ struct InputCropUniforms {
 };
 
 fn pass0(uv: vec2f, uniforms: InputCropUniforms, src: texture_2d<f32>, srcSampler: sampler) -> vec4f {
-  let sampleUv = uniforms.origin + uv * uniforms.size;
+  // Map origin from p5's Y-down into texture Y-up: flip origin and keep uv as-is.
+  let originFlipped = vec2f(uniforms.origin.x, 1.0 - uniforms.origin.y - uniforms.size.y);
+  let sampleUv = originFlipped + uv * uniforms.size;
   let uvClamped = clamp(sampleUv, vec2f(0.0, 0.0), vec2f(1.0, 1.0));
 
   // mask is 1 when inside [0,1] range, else 0; keeps control flow uniform
