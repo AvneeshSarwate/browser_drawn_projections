@@ -64,7 +64,7 @@ const popped = ref(false)
 #canvasContainer {
   display: flex;
   gap: 12px;
-  background-color: #0d0d0d;
+  background-color: #000000;
   padding: 8px;
   border: 1px solid #222;
   border-radius: 6px;
@@ -86,6 +86,6 @@ const popped = ref(false)
 #canvasContainer canvas {
   display: block;
   border: 1px solid #444;
-  background: #111;
+  background: #000000;
 }
 </style>

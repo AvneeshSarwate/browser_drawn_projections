@@ -116,7 +116,7 @@ const createOrUpdateMesh = (
     material.emissiveColor = new BABYLON.Color3(1, 1, 1)
     material.alphaMode = BABYLON.Engine.ALPHA_COMBINE
     material.disableDepthWrite = true
-    material.useAlphaFromDiffuseTexture = false
+    material.useAlphaFromDiffuseTexture = true
     material.alpha = 1
     mesh.material = material
     bundle = { mesh, material }
@@ -124,8 +124,9 @@ const createOrUpdateMesh = (
   }
   bundle.mesh.position.set(posX, posY, 0)
   bundle.mesh.scaling.set(scaleX, scaleY, 1)
+  bundle.material.diffuseTexture = chain.end.output
   bundle.material.emissiveTexture = chain.end.output
-  bundle.material.opacityTexture = chain.end.output
+  bundle.material.opacityTexture = null
   bundle.mesh.renderingGroupId = 1
 }
 
