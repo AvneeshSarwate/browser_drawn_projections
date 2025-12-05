@@ -723,13 +723,52 @@ export const updatePolygonControlPoints = (state: CanvasRuntimeState) => {
           controlPoint.radius(8)
           polygonControlsGroup?.getLayer()?.batchDraw()
         })
-        
+
         controlPoint.on('mouseleave', () => {
           controlPoint.fill('#ff6600')
           controlPoint.radius(6)
           polygonControlsGroup?.getLayer()?.batchDraw()
         })
-        
+
+        // Prevent context menu on ctrl-click (macOS triggers context menu on ctrl-click)
+        controlPoint.on('contextmenu', (e) => {
+          e.evt.preventDefault()
+        })
+
+        // Add ctrl-click to delete point (use mousedown to catch before context menu)
+        controlPoint.on('mousedown', (e) => {
+          const evt = e.evt as MouseEvent
+          // Only handle left mouse button with ctrl/meta modifier
+          if (evt.button === 0 && (evt.ctrlKey || evt.metaKey)) {
+            evt.preventDefault()
+
+            // Need at least 3 points (6 values in array) for a valid polygon
+            if (polygon.points.length <= 6) {
+              console.log('Cannot delete point: polygon must have at least 3 points')
+              return
+            }
+
+            executeCommand(state, 'Delete Polygon Point', () => {
+              // Remove the point at this index
+              polygon.points.splice(pointIndex, 2)
+
+              // Update the Konva shape
+              if (polygon.konvaShape) {
+                polygon.konvaShape.points(polygon.points)
+                polygonShapesGroup?.getLayer()?.batchDraw()
+              }
+
+              // Refresh control points to show updated points
+              updatePolygonControlPoints(state)
+              serializePolygonState(state)
+              updateBakedPolygonData(state)
+            })
+
+            // Prevent drag from starting
+            e.cancelBubble = true
+          }
+        })
+
         // Add drag start handler to track initial state
         controlPoint.on('dragstart', () => {
           startPolygonDragTracking(state)

@@ -565,6 +565,13 @@ onMounted(async () => {
     canvasState.stage = stageInstance
     canvasState.konvaContainer = konvaContainer.value
 
+    // Prevent context menu on ctrl-click (for polygon point deletion)
+    konvaContainer.value.addEventListener('contextmenu', (e) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault()
+      }
+    })
+
     // Update cursor based on active tool
     const updateCursorFn = () => {
       if (konvaContainer.value) {
