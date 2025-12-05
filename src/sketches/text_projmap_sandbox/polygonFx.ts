@@ -6,6 +6,7 @@ import { PassthruEffect } from '@/rendering/shaderFXBabylon'
 import { WobbleEffect } from '@/rendering/postFX/wobble.frag.generated'
 import { HorizontalBlurEffect } from '@/rendering/postFX/horizontalBlur.frag.generated'
 import { VerticalBlurEffect } from '@/rendering/postFX/verticalBlur.frag.generated'
+import { AlphaThresholdEffect } from '@/rendering/postFX/alphaThreshold.frag.generated'
 import type { ShaderEffect } from '@/rendering/shaderFXBabylon'
 import type { RenderState } from './textRegionUtils'
 import { getTextStyle, getTextAnim, FONT_FAMILY, FONT_SIZE } from './textRegionUtils'
@@ -85,6 +86,7 @@ const createChain = (
   const wobble = new WobbleEffect(engine, { src: srcPass }, w, h)
   const hBlur = new HorizontalBlurEffect(engine, { src: wobble }, w, h)
   const vBlur = new VerticalBlurEffect(engine, { src: hBlur }, w, h)
+  const alphaThresh = new AlphaThresholdEffect(engine, { src: vBlur }, w, h)
 
   wobble.setUniforms({
     xStrength: fx.wobbleX,
@@ -94,9 +96,10 @@ const createChain = (
 
   hBlur.setUniforms({ pixels: fx.blurX, resolution: w })
   vBlur.setUniforms({ pixels: fx.blurY, resolution: h })
+  alphaThresh.setUniforms({ threshold: 0 })
 
   const { bboxKey, fxKey } = makeKeys({ minX: bboxPx.minX, minY: bboxPx.minY, w, h }, fx)
-  return { end: vBlur, width: w, height: h, bboxKey, fxKey, owned: [vBlur, hBlur, wobble, srcPass], graphics, bboxPx, bboxLogical, poly }
+  return { end: alphaThresh, width: w, height: h, bboxKey, fxKey, owned: [alphaThresh, vBlur, hBlur, wobble, srcPass], graphics, bboxPx, bboxLogical, poly }
 }
 
 const createOrUpdateMesh = (
