@@ -1022,16 +1022,55 @@ onUnmounted(() => {
         </div>
       </template>
     </div>
+
+    <!-- Notification Toast -->
+    <Transition name="notification">
+      <div v-if="canvasState.notification.visible.value" class="notification-toast">
+        {{ canvasState.notification.message.value }}
+      </div>
+    </Transition>
   </div>
 </template>
 
 <style scoped>
 .canvas-root {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 20px;
   padding: 20px;
+}
+
+.notification-toast {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #333;
+  color: white;
+  padding: 12px 24px;
+  border-radius: 6px;
+  font-size: 14px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 10000;
+  max-width: 500px;
+  text-align: center;
+}
+
+.notification-enter-active,
+.notification-leave-active {
+  transition: all 0.3s ease;
+}
+
+.notification-enter-from {
+  opacity: 0;
+  transform: translateX(-50%) translateY(20px);
+}
+
+.notification-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-20px);
 }
 
 .control-panel {

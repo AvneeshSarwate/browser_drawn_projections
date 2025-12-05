@@ -142,6 +142,10 @@ export interface CanvasRuntimeState {
     size: number
   }
   canvasItems: Map<string, CanvasItem>
+  notification: {
+    message: Ref<string>
+    visible: Ref<boolean>
+  }
   callbacks: {
     refreshAncillaryViz?: () => void
     syncAppState?: (state: CanvasRuntimeState) => void
@@ -272,6 +276,10 @@ export const createCanvasRuntimeState = (): CanvasRuntimeState => {
       size: 20
     },
     canvasItems: new Map(),
+    notification: {
+      message: ref(''),
+      visible: ref(false)
+    },
     callbacks: {},
     keyboardDisposables: [],
     freehand: {
@@ -364,4 +372,20 @@ export const freehandLayers = (state: CanvasRuntimeState) => state.layers
 export const polygonShapes = (state: CanvasRuntimeState) => state.polygon.shapes
 export const polygonGroups = (state: CanvasRuntimeState) => state.polygon.groups
 export const circleShapes = (state: CanvasRuntimeState) => state.circle.shapes
+
+// Notification helper
+let notificationTimeout: ReturnType<typeof setTimeout> | null = null
+export const showNotification = (state: CanvasRuntimeState, message: string, duration = 2000) => {
+  state.notification.message.value = message
+  state.notification.visible.value = true
+
+  if (notificationTimeout) {
+    clearTimeout(notificationTimeout)
+  }
+
+  notificationTimeout = setTimeout(() => {
+    state.notification.visible.value = false
+    notificationTimeout = null
+  }, duration)
+}
 export const canvasItems = (state: CanvasRuntimeState) => state.canvasItems

@@ -9,7 +9,7 @@ import { getCurrentFreehandStateString } from './freehandTool'
 import { uid } from './canvasUtils'
 import { createPolygonItem, createGroupItem, getCanvasItem, removeCanvasItem } from './CanvasItem'
 import * as selectionStore from './selectionStore'
-import { polygonShapes } from './canvasState'
+import { polygonShapes, showNotification } from './canvasState'
 import type { CanvasRuntimeState } from './canvasState'
 
 // State-based layer initialization
@@ -744,7 +744,7 @@ export const updatePolygonControlPoints = (state: CanvasRuntimeState) => {
 
             // Need at least 3 points (6 values in array) for a valid polygon
             if (polygon.points.length <= 6) {
-              console.log('Cannot delete point: polygon must have at least 3 points')
+              showNotification(state, 'Cannot delete point: polygon must have at least 3 points')
               return
             }
 
