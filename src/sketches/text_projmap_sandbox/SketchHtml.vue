@@ -25,7 +25,7 @@ const popped = ref(false)
         <li>For each shape, you can select it to see it's metadata - there are menus that let you control the text styling and animation parameters for each shape</li>
         <li>To draw polygons, select the polygon tool, and then click on the canvas to add points. Press the end shape button (or escape key) to end the polygon - it will autoclose (or press cancel shape to delete the in progress polygon)</li>
         <li>To drag polygons around or stretch and rotate them, use the select tool - click on them an a transform handle will appear for rotation/stretch</li>
-        <li>To edit the actual shape of the polygon, use the polygon tool and make sure you've selected Edit Shape. You can drag individual points around, or click to add new points where the green highlight shows they will be added</li>
+        <li>To edit the actual shape of the polygon, use the polygon tool and make sure you've selected Edit Shape. You can drag individual points around, or click to add new points where the green highlight shows they will be added. Use ctrl-click to delete a point.</li>
       </ul>
     </div>
     <div id="debugInfo"></div>
