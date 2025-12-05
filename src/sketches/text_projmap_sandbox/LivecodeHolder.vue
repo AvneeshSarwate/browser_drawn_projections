@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { inject, onMounted, onUnmounted, ref } from 'vue'
 import * as BABYLON from 'babylonjs'
-import { PassthruEffect } from '@/rendering/shaderFXBabylon'
 import CanvasRoot from '@/canvas/CanvasRoot.vue'
 import { appStateName, engineRef, type TemplateAppState, drawFlattenedStrokeGroup, resolution, textAnimMetadataSchema, textStyleMetadataSchema, fxChainMetadataSchema } from './appState'
 import type { CanvasStateSnapshot } from '@/canvas/canvasState'
@@ -12,14 +11,14 @@ import { getPreset } from './presets'
 import { DropAndScrollManager } from './dropAndScroll'
 import { MatterExplodeManager } from './matterExplode'
 import { syncChainsAndMeshes, renderPolygonFx, disposePolygonFx, type PolygonFxSyncOptions } from './polygonFx'
-import { FONT_FAMILY, FONT_SIZE, getTextStyle, getTextAnim } from './textRegionUtils'
+import { FONT_FAMILY, FONT_SIZE, getTextStyle, getTextAnim, type RenderState } from './textRegionUtils'
 
 const appState = inject<TemplateAppState>(appStateName)!!
 const canvasRootRef = ref<InstanceType<typeof CanvasRoot> | null>(null)
 const dropAndScrollManager = new DropAndScrollManager(() => appState.p5Instance)
 const matterExplodeManager = new MatterExplodeManager(() => appState.p5Instance)
 let polygonFxOpts: PolygonFxSyncOptions | null = null
-let p5Passthru: PassthruEffect | null = null
+let frameCounter = 0
 
 const metadataSchemas = [textAnimMetadataSchema, textStyleMetadataSchema, fxChainMetadataSchema]
 
@@ -43,7 +42,13 @@ const syncCanvasState = (state: CanvasStateSnapshot) => {
   
   dropAndScrollManager.syncPolygons(polygonSyncPayload)
   if (polygonFxOpts) {
-    syncChainsAndMeshes(polygonSyncPayload, polygonFxOpts)
+    const dropStates = dropAndScrollManager.getRenderStates()
+    const matterStates = matterExplodeManager.getRenderStates()
+    const mergedStates = new Map<string, RenderState>()
+    dropStates.forEach((v, k) => mergedStates.set(k, v))
+    matterStates.forEach((v, k) => mergedStates.set(k, v))
+
+    syncChainsAndMeshes(polygonSyncPayload, { ...polygonFxOpts, renderStates: mergedStates })
   }
   const postManagerTime = performance.now()
   console.log("manager update", postManagerTime-preManagerTime, postManagerTime-midManagerTime)
@@ -188,21 +193,28 @@ onMounted(async () => {
   const renderWidth = resolution.width * dpr
   const renderHeight = resolution.height * dpr
 
-  p5Passthru = new PassthruEffect(engine, { src: p5Canvas }, renderWidth, renderHeight, 'linear')
-
   polygonFxOpts = {
     engine,
     p5Canvas,
-    src: p5Passthru,
     dpr,
+    mainP5: appState.p5Instance!!,
+    renderStates: new Map(),
   }
 
   appState.shaderDrawFunc = () => {
     const eng = engineRef.value
     if (!eng) return
+    const frameId = `f${frameCounter++}`
+
+    // Get fresh render states each frame for animations
+    const dropStates = dropAndScrollManager.getRenderStates()
+    const matterStates = matterExplodeManager.getRenderStates()
+    const mergedStates = new Map<string, RenderState>()
+    dropStates.forEach((v, k) => mergedStates.set(k, v))
+    matterStates.forEach((v, k) => mergedStates.set(k, v))
+
     eng.beginFrame()
-    p5Passthru?.renderAll(eng)
-    renderPolygonFx(eng)
+    renderPolygonFx(eng as any, mergedStates, frameId)
     eng.endFrame()
   }
 
@@ -217,8 +229,6 @@ onUnmounted(() => {
   matterExplodeManager.dispose()
   disposePolygonFx()
   polygonFxOpts = null
-  p5Passthru?.disposeAll()
-  p5Passthru = null
   clearListeners()
   clearDrawFuncs()
 })

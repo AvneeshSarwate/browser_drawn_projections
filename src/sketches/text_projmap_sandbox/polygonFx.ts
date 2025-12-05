@@ -2,17 +2,22 @@ import * as BABYLON from 'babylonjs'
 import { bboxOfPoints, getFxMeta } from './textRegionUtils'
 import type { PolygonRenderData } from '@/canvas/canvasState'
 import type { FxChainMeta } from './appState'
-import { InputCropEffect } from '@/rendering/postFX/inputCrop.frag.generated'
+import { PassthruEffect } from '@/rendering/shaderFXBabylon'
 import { WobbleEffect } from '@/rendering/postFX/wobble.frag.generated'
 import { HorizontalBlurEffect } from '@/rendering/postFX/horizontalBlur.frag.generated'
 import { VerticalBlurEffect } from '@/rendering/postFX/verticalBlur.frag.generated'
 import type { ShaderEffect } from '@/rendering/shaderFXBabylon'
+import type { RenderState } from './textRegionUtils'
+import { getTextStyle, getTextAnim, FONT_FAMILY, FONT_SIZE } from './textRegionUtils'
+import { sinN } from '@/channels/channels'
+import type p5 from 'p5'
 
 export type PolygonFxSyncOptions = {
   engine: BABYLON.WebGPUEngine
   p5Canvas: HTMLCanvasElement
-  src: ShaderEffect
   dpr: number
+  renderStates: Map<string, RenderState>
+  mainP5: p5
 }
 
 type ChainBundle = {
@@ -22,6 +27,10 @@ type ChainBundle = {
   bboxKey: string
   fxKey: string
   owned: ShaderEffect[]
+  graphics: p5.Graphics
+  bboxPx: { minX: number; minY: number; w: number; h: number }
+  bboxLogical: { minX: number; minY: number; w: number; h: number }
+  poly: PolygonRenderData[number]
 }
 
 type MeshBundle = {
@@ -62,23 +71,20 @@ const makeKeys = (bbox: { minX: number; minY: number; w: number; h: number }, fx
 const createChain = (
   engine: BABYLON.WebGPUEngine,
   p5Canvas: HTMLCanvasElement,
-  srcEffect: ShaderEffect,
+  graphics: p5.Graphics,
   bboxPx: { minX: number; minY: number; w: number; h: number },
+  bboxLogical: { minX: number; minY: number; w: number; h: number },
+  poly: PolygonRenderData[number],
   fx: FxChainMeta,
 ): ChainBundle | null => {
   const w = Math.max(1, Math.round(bboxPx.w))
   const h = Math.max(1, Math.round(bboxPx.h))
   if (w < 1 || h < 1) return null
 
-  const crop = new InputCropEffect(engine, { src: srcEffect }, w, h)
-  const wobble = new WobbleEffect(engine, { src: crop }, w, h)
+  const srcPass = new PassthruEffect(engine, { src: graphics.elt as HTMLCanvasElement }, w, h)
+  const wobble = new WobbleEffect(engine, { src: srcPass }, w, h)
   const hBlur = new HorizontalBlurEffect(engine, { src: wobble }, w, h)
   const vBlur = new VerticalBlurEffect(engine, { src: hBlur }, w, h)
-
-  crop.setUniforms({
-    origin: [bboxPx.minX / p5Canvas.width, bboxPx.minY / p5Canvas.height],
-    size: [bboxPx.w / p5Canvas.width, bboxPx.h / p5Canvas.height],
-  })
 
   wobble.setUniforms({
     xStrength: fx.wobbleX,
@@ -90,7 +96,7 @@ const createChain = (
   vBlur.setUniforms({ pixels: fx.blurY, resolution: h })
 
   const { bboxKey, fxKey } = makeKeys({ minX: bboxPx.minX, minY: bboxPx.minY, w, h }, fx)
-  return { end: vBlur, width: w, height: h, bboxKey, fxKey, owned: [vBlur, hBlur, wobble, crop] }
+  return { end: vBlur, width: w, height: h, bboxKey, fxKey, owned: [vBlur, hBlur, wobble, srcPass], graphics, bboxPx, bboxLogical, poly }
 }
 
 const createOrUpdateMesh = (
@@ -126,7 +132,8 @@ const createOrUpdateMesh = (
   bundle.mesh.position.set(posX, posY, 0)
   bundle.mesh.scaling.set(scaleX, scaleY, 1)
   bundle.material.diffuseTexture = chain.end.output
-  bundle.material.emissiveTexture = chain.end.output
+  bundle.material.diffuseTexture.hasAlpha = true
+  bundle.material.emissiveTexture = null //chain.end.output
   bundle.material.opacityTexture = null
   bundle.mesh.renderingGroupId = 1
 }
@@ -136,6 +143,7 @@ const disposeEntry = (id: string) => {
   if (chain) {
     // Dispose only the per-polygon nodes, not shared sources
     chain.owned.forEach((fx) => fx.dispose())
+    chain.graphics.remove()
     chains.delete(id)
   }
   const mesh = meshes.get(id)
@@ -146,11 +154,92 @@ const disposeEntry = (id: string) => {
   }
 }
 
+// Deterministic color from seed (matches LivecodeHolder.vue)
+const rand = (n: number) => sinN(n * 123.23)
+const randColor = (seed: number) => ({
+  r: rand(seed) * 255,
+  g: rand(seed + 1) * 255,
+  b: rand(seed + 2) * 255,
+})
+
+// Simple hash of string to number for deterministic colors
+const hashString = (s: string) => {
+  let hash = 0
+  for (let i = 0; i < s.length; i++) {
+    hash = (hash << 5) - hash + s.charCodeAt(i)
+    hash |= 0
+  }
+  return Math.abs(hash)
+}
+
+const redrawGraphics = (g: p5.Graphics, poly: PolygonRenderData[number], bboxLogical: { minX: number; minY: number }, renderState?: RenderState) => {
+  const p = g as unknown as p5
+  g.clear()
+
+  const textStyle = getTextStyle(poly.metadata)
+  const textColor = textStyle.textColor
+  const to255 = (c: number) => (c <= 1 ? c * 255 : c)
+  const baseColor = textColor
+    ? { r: to255(textColor.r), g: to255(textColor.g), b: to255(textColor.b) }
+    : poly.metadata?.color
+      ? { r: poly.metadata.color.r, g: poly.metadata.color.g, b: poly.metadata.color.b }
+      : randColor(hashString(poly.id))
+  const color = { ...baseColor, a: 255 }
+  const textSize = textStyle.textSize ?? FONT_SIZE
+  const fontFamily = textStyle.fontFamily ?? FONT_FAMILY
+  const fontStyle = textStyle.fontStyle ?? 'NORMAL'
+  const textAnim = getTextAnim(poly.metadata)
+  const fillAnim = textAnim.fillAnim
+  const isDropAndScroll = fillAnim === 'dropAndScroll'
+  const isMatterExplode = fillAnim === 'matterExplode'
+
+  g.push()
+  g.translate(-bboxLogical.minX, -bboxLogical.minY)
+
+  if (isDropAndScroll || isMatterExplode) {
+    g.noStroke()
+    g.fill(color.r, color.g, color.b, color.a)
+    g.textFont(fontFamily)
+    g.textSize(textSize)
+    if (fontStyle === 'NORMAL') g.textStyle(p.NORMAL)
+    else if (fontStyle === 'ITALIC') g.textStyle(p.ITALIC)
+    else if (fontStyle === 'BOLD') g.textStyle(p.BOLD)
+    else if (fontStyle === 'BOLDITALIC') g.textStyle(p.BOLDITALIC)
+
+    if (renderState && renderState.letters.length > 0 && renderState.text.length > 0) {
+      renderState.letters.forEach(({ pos, idx }) => {
+        const char = renderState.text[(idx + renderState.textOffset) % renderState.text.length]
+        g.text(char, pos.x, pos.y)
+      })
+    } else {
+      g.push()
+      g.noFill()
+      g.stroke(color.r, color.g, color.b, color.a)
+      g.beginShape()
+      poly.points.forEach((point) => {
+        g.vertex(point.x, point.y)
+      })
+      g.endShape(p.CLOSE)
+      g.pop()
+    }
+  } else {
+    g.fill(color.r, color.g, color.b, color.a)
+    g.noStroke()
+    g.beginShape()
+    poly.points.forEach((point) => {
+      g.vertex(point.x, point.y)
+    })
+    g.endShape()
+  }
+
+  g.pop()
+}
+
 export const syncChainsAndMeshes = (
   payload: { current: PolygonRenderData; added?: PolygonRenderData; deleted?: PolygonRenderData; changed?: PolygonRenderData },
   opts: PolygonFxSyncOptions,
 ) => {
-  const { engine, p5Canvas, dpr, src } = opts
+  const { engine, p5Canvas, dpr, renderStates } = opts
   ensureOverlayScene(engine)
 
   const currentIds = new Set(payload.current.map((p) => p.id))
@@ -191,6 +280,13 @@ export const syncChainsAndMeshes = (
       w: Math.max(1, clampedMaxX - clampedMinX),
       h: Math.max(1, clampedMaxY - clampedMinY),
     }
+    const bboxLogical = {
+      minX,
+      minY,
+      w: maxX - minX,
+      h: maxY - minY,
+    }
+    const canvasLogical = { width: p5Canvas.width / dpr, height: p5Canvas.height / dpr }
 
     const keys = makeKeys({ minX: bboxPx.minX, minY: bboxPx.minY, w: bboxPx.w, h: bboxPx.h }, fx)
     const prev = chains.get(poly.id)
@@ -199,13 +295,26 @@ export const syncChainsAndMeshes = (
 
     if (needsRecreate) {
       disposeEntry(poly.id)
-      const chain = createChain(engine, p5Canvas, src, bboxPx, fx)
-      if (!chain) return
+      const graphics = opts.mainP5.createGraphics(Math.max(1, Math.round(bboxLogical.w)), Math.max(1, Math.round(bboxLogical.h))) as p5.Graphics
+      graphics.pixelDensity(dpr)
+      const chain = createChain(engine, p5Canvas, graphics, bboxPx, bboxLogical, poly, fx)
+      if (!chain) {
+        graphics.remove()
+        return
+      }
+      const rs = renderStates.get(poly.id)
+      redrawGraphics(graphics, poly, bboxLogical, rs)
+      chain.bboxLogical = bboxLogical
+      chain.bboxPx = bboxPx
+      chain.poly = poly
       chains.set(poly.id, chain)
-      createOrUpdateMesh(poly.id, engine, chain, bboxPx, { width: p5Canvas.width, height: p5Canvas.height })
+      createOrUpdateMesh(poly.id, engine, chain, bboxLogical, canvasLogical)
     } else if (prev) {
-      // Only update position if needed
-      createOrUpdateMesh(poly.id, engine, prev, bboxPx, { width: p5Canvas.width, height: p5Canvas.height })
+      // Update stored polygon data; redrawGraphics happens per-frame in renderPolygonFx
+      prev.bboxLogical = bboxLogical
+      prev.bboxPx = bboxPx
+      prev.poly = poly
+      createOrUpdateMesh(poly.id, engine, prev, bboxLogical, canvasLogical)
     }
   }
 
@@ -214,9 +323,16 @@ export const syncChainsAndMeshes = (
   payload.current.forEach((poly) => processPoly(poly, false))
 }
 
-export const renderPolygonFx = (engine: BABYLON.Engine) => {
+export const renderPolygonFx = (engine: BABYLON.Engine, renderStates: Map<string, RenderState>, frameId?: string) => {
+  // Redraw all graphics with current render states each frame
+  chains.forEach((chain, id) => {
+    const rs = renderStates.get(id)
+    redrawGraphics(chain.graphics, chain.poly, chain.bboxLogical, rs)
+  })
+
+  // Render shader chains
   chains.forEach((chain) => {
-    chain.end.renderAll(engine)
+    chain.end.renderAll(engine, frameId)
   })
   if (overlayScene) {
     overlayScene.render()

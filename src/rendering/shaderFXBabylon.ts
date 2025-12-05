@@ -143,7 +143,7 @@ type RuntimePassTextureSource<I extends ShaderInputShape<I>> =
 export abstract class ShaderEffect<I extends ShaderInputShape<I> = ShaderInputs> {
   readonly id: string
   abstract setSrcs(fx: Partial<I>): void
-  abstract render(engine: BABYLON.Engine): void
+  abstract render(engine: BABYLON.Engine, frameId?: string): void
   abstract setUniforms(uniforms: ShaderUniforms): void
   abstract updateUniforms(): void
   abstract output: BABYLON.RenderTargetTexture
@@ -153,6 +153,7 @@ export abstract class ShaderEffect<I extends ShaderInputShape<I> = ShaderInputs>
   height = 720
   inputs: Partial<I> = {}
   uniforms: ShaderUniforms = {}
+  lastRenderedFrameId?: string
 
   protected constructor() {
     this.id = generateShaderEffectId()
@@ -232,10 +233,16 @@ export abstract class ShaderEffect<I extends ShaderInputShape<I> = ShaderInputs>
     return { nodes, edges }
   }
 
-  renderAll(engine: BABYLON.Engine): void {
+  renderAll(engine: BABYLON.Engine, frameId?: string): void {
     const ordered = this.getOrderedEffects()
     for (const effect of ordered) {
-      effect.render(engine)
+      if (frameId && effect.lastRenderedFrameId === frameId) {
+        // still update uniforms so dynamic values stay fresh
+        effect.updateUniforms()
+        continue
+      }
+      effect.render(engine, frameId)
+      effect.lastRenderedFrameId = frameId
     }
   }
 }
@@ -865,7 +872,7 @@ export class CanvasPaint extends CustomShaderEffect<Record<string, never>, Canva
     this.targetCanvas = targetCanvas
   }
 
-  override render(engine: BABYLON.Engine): void {
+  override render(engine: BABYLON.Engine, _frameId?: string): void {
     const resolved = this.resolveInputTextures()
     this.applySourcesForPass(0, resolved)
     this.updateUniforms()
@@ -1056,7 +1063,7 @@ export class FeedbackNode extends ShaderEffect<FeedbackInputs> {
 
   updateUniforms(): void { }
 
-  render(engine: BABYLON.Engine): void {
+  render(engine: BABYLON.Engine, _frameId?: string): void {
     this.passthrough.render(engine)
     if (this.firstRender) {
       this.firstRender = false
