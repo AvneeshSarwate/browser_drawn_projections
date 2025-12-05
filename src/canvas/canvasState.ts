@@ -2,6 +2,9 @@ import { computed, ref, shallowReactive, type ComputedRef, type Ref, type Shallo
 import Konva from 'konva'
 import type { CanvasItem } from './CanvasItem'
 import { CommandStack } from './commandStack'
+import type { ZodTypeAny } from 'zod'
+
+export type MetadataSchemaEntry = { name: string; schema: ZodTypeAny }
 
 export type FlattenedStroke = {
   type: 'stroke'
@@ -114,6 +117,7 @@ export interface CanvasRuntimeState {
   stage?: Konva.Stage
   konvaContainer?: HTMLDivElement
   activeTool: Ref<'select' | 'freehand' | 'polygon' | 'circle'>
+  metadataSchemas: MetadataSchemaEntry[]
   layers: {
     grid?: Konva.Layer
     drawing?: Konva.Layer
@@ -245,6 +249,7 @@ export const createCanvasRuntimeState = (): CanvasRuntimeState => {
     stage: undefined,
     konvaContainer: undefined,
     activeTool: ref('select'),
+    metadataSchemas: [],
     layers: {
       grid: undefined,
       drawing: undefined,

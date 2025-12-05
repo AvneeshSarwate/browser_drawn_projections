@@ -3,6 +3,19 @@ import type { FreehandStroke } from "./freehandTool"
 import { uid } from "./canvasUtils"
 import type { CanvasRuntimeState } from "./canvasState"
 
+/**
+ * Applies default metadata from registered schemas to a Konva node.
+ * Only applies if schemas are registered and the node doesn't already have metadata.
+ */
+const applyDefaultMetadata = (state: CanvasRuntimeState, node: Konva.Node) => {
+  if (state.metadataSchemas.length > 0 && !node.getAttr('metadata')) {
+    const defaults = Object.fromEntries(
+      state.metadataSchemas.map(s => [s.name, s.schema.parse({})])
+    )
+    node.setAttr('metadata', defaults)
+  }
+}
+
 export type ItemType = 'stroke' | 'strokeGroup' | 'polygon' | 'circle'
 
 export interface CanvasItem {
@@ -19,6 +32,7 @@ export const createStrokeItem = (state: CanvasRuntimeState, shape: Konva.Path, s
   if (!shape.id()) {
     shape.id(uid('stroke_'))
   }
+  applyDefaultMetadata(state, shape)
   const item: CanvasItem = {
     id: shape.id(),
     type: 'stroke',
@@ -52,6 +66,7 @@ export const createGroupItem = (state: CanvasRuntimeState, group: Konva.Group): 
   if (!group.id()) {
     group.id(uid('group_'))
   }
+  applyDefaultMetadata(state, group)
   const item: CanvasItem = {
     id: group.id(),
     type: 'strokeGroup',
@@ -85,6 +100,7 @@ export const createPolygonItem = (state: CanvasRuntimeState, line: Konva.Line): 
   if (!line.id()) {
     line.id(uid('poly_'))
   }
+  applyDefaultMetadata(state, line)
   const item: CanvasItem = {
     id: line.id(),
     type: 'polygon',
@@ -118,6 +134,7 @@ export const createCircleItem = (state: CanvasRuntimeState, circle: Konva.Circle
   if (!circle.id()) {
     circle.id(uid('circle_'))
   }
+  applyDefaultMetadata(state, circle)
   const item: CanvasItem = {
     id: circle.id(),
     type: 'circle',

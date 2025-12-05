@@ -13,8 +13,8 @@ import { switchedSchema, type InferFlat } from '@/canvas/switchedSchema'
 
 export const textAnimSchema = switchedSchema(
   z.object({
-    fillAnim: z.enum(['dropAndScroll', 'matterExplode']),
-    textInd: z.number()
+    fillAnim: z.enum(['dropAndScroll', 'matterExplode']).default('dropAndScroll'),
+    textInd: z.number().default(0)
   }),
   'fillAnim',
   {
@@ -32,16 +32,16 @@ export const textAnimMetadataSchema = {
 }
 
 export const textStyleSchema = z.object({
-  textSize: z.coerce.number().positive().optional(),
+  textSize: z.coerce.number().positive().default(14),
   textColor: z
     .object({
       r: z.coerce.number().min(0).max(1),
       g: z.coerce.number().min(0).max(1),
       b: z.coerce.number().min(0).max(1)
     })
-    .optional(),
-  fontStyle: z.enum(['NORMAL', 'ITALIC', 'BOLD', 'BOLDITALIC']).optional(),
-  fontFamily: z.enum(['Courier New', 'Monaco', 'Menlo']).optional()
+    .default({ r: 1, g: 1, b: 1 }),
+  fontStyle: z.enum(['NORMAL', 'ITALIC', 'BOLD', 'BOLDITALIC']).default('NORMAL'),
+  fontFamily: z.enum(['Courier New', 'Monaco', 'Menlo']).default('Courier New')
 })
 
 export type TextStyle = z.infer<typeof textStyleSchema>

@@ -157,19 +157,13 @@ export const generateSpots = (
 export const getTextAnim = (meta: unknown): TextAnimFlat => {
   const raw = (meta as any)?.textAnim ?? meta
   const result = textAnimSchema.safeParse(raw)
-
-  // Return default if metadata missing or invalid
-  if (!result.success) {
-    return { fillAnim: 'dropAndScroll', textInd: 0 }
-  }
-
-  return result.data as TextAnimFlat
+  return result.success ? (result.data as TextAnimFlat) : (textAnimSchema.parse({}) as TextAnimFlat)
 }
 
 export const getTextStyle = (meta: unknown): TextStyle => {
   const raw = (meta as any)?.textStyle ?? meta
   const result = textStyleSchema.safeParse(raw)
-  return result.success ? result.data : {}
+  return result.success ? result.data : textStyleSchema.parse({})
 }
 
 export const getFxMeta = (meta: unknown): FxChainMeta => {
@@ -185,10 +179,10 @@ export const makeSignature = (points: Point[], meta: unknown) => {
   const metaSig = JSON.stringify({
     fillAnim: anim.fillAnim,
     textInd: anim.textInd,
-    textSize: style.textSize ?? FONT_SIZE,
+    textSize: style.textSize,
     textColor: style.textColor,
-    fontFamily: style.fontFamily ?? FONT_FAMILY,
-    fontStyle: style.fontStyle ?? 'NORMAL'
+    fontFamily: style.fontFamily,
+    fontStyle: style.fontStyle
   })
   const ptsSig = points.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join('|')
   return `${ptsSig}::${metaSig}`

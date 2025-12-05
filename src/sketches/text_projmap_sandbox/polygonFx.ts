@@ -9,8 +9,7 @@ import { VerticalBlurEffect } from '@/rendering/postFX/verticalBlur.frag.generat
 import { AlphaThresholdEffect } from '@/rendering/postFX/alphaThreshold.frag.generated'
 import type { ShaderEffect } from '@/rendering/shaderFXBabylon'
 import type { RenderState } from './textRegionUtils'
-import { getTextStyle, getTextAnim, FONT_FAMILY, FONT_SIZE } from './textRegionUtils'
-import { sinN } from '@/channels/channels'
+import { getTextStyle, getTextAnim } from './textRegionUtils'
 import type p5 from 'p5'
 
 export type PolygonFxSyncOptions = {
@@ -157,24 +156,6 @@ const disposeEntry = (id: string) => {
   }
 }
 
-// Deterministic color from seed (matches LivecodeHolder.vue)
-const rand = (n: number) => sinN(n * 123.23)
-const randColor = (seed: number) => ({
-  r: rand(seed) * 255,
-  g: rand(seed + 1) * 255,
-  b: rand(seed + 2) * 255,
-})
-
-// Simple hash of string to number for deterministic colors
-const hashString = (s: string) => {
-  let hash = 0
-  for (let i = 0; i < s.length; i++) {
-    hash = (hash << 5) - hash + s.charCodeAt(i)
-    hash |= 0
-  }
-  return Math.abs(hash)
-}
-
 const redrawGraphics = (g: p5.Graphics, poly: PolygonRenderData[number], bboxLogical: { minX: number; minY: number }, renderState?: RenderState) => {
   const p = g as unknown as p5
   g.clear()
@@ -182,15 +163,15 @@ const redrawGraphics = (g: p5.Graphics, poly: PolygonRenderData[number], bboxLog
   const textStyle = getTextStyle(poly.metadata)
   const textColor = textStyle.textColor
   const to255 = (c: number) => (c <= 1 ? c * 255 : c)
-  const baseColor = textColor
-    ? { r: to255(textColor.r), g: to255(textColor.g), b: to255(textColor.b) }
-    : poly.metadata?.color
-      ? { r: poly.metadata.color.r, g: poly.metadata.color.g, b: poly.metadata.color.b }
-      : randColor(hashString(poly.id))
-  const color = { ...baseColor, a: 255 }
-  const textSize = textStyle.textSize ?? FONT_SIZE
-  const fontFamily = textStyle.fontFamily ?? FONT_FAMILY
-  const fontStyle = textStyle.fontStyle ?? 'NORMAL'
+  const color = {
+    r: to255(textColor.r),
+    g: to255(textColor.g),
+    b: to255(textColor.b),
+    a: 255
+  }
+  const textSize = textStyle.textSize
+  const fontFamily = textStyle.fontFamily
+  const fontStyle = textStyle.fontStyle
   const textAnim = getTextAnim(poly.metadata)
   const fillAnim = textAnim.fillAnim
   const isDropAndScroll = fillAnim === 'dropAndScroll'

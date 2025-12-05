@@ -6,12 +6,11 @@ import { appStateName, engineRef, type TemplateAppState, drawFlattenedStrokeGrou
 import type { CanvasStateSnapshot } from '@/canvas/canvasState'
 import { clearListeners, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse'
 import type p5 from 'p5'
-import { sinN } from '@/channels/channels'
 import { getPreset } from './presets'
 import { DropAndScrollManager } from './dropAndScroll'
 import { MatterExplodeManager } from './matterExplode'
 import { syncChainsAndMeshes, renderPolygonFx, disposePolygonFx, type PolygonFxSyncOptions } from './polygonFx'
-import { FONT_FAMILY, FONT_SIZE, getTextStyle, getTextAnim, type RenderState } from './textRegionUtils'
+import { getTextStyle, getTextAnim, type RenderState } from './textRegionUtils'
 
 const appState = inject<TemplateAppState>(appStateName)!!
 const canvasRootRef = ref<InstanceType<typeof CanvasRoot> | null>(null)
@@ -95,15 +94,6 @@ onMounted(async () => {
     p5Mouse = targetToP5Coords(ev, p5i, threeCanvas)
   }, threeCanvas)
 
-  // Simple deterministic color helper
-  const rand = (n: number) => sinN(n * 123.23)
-  const randColor = (seed: number) => ({
-    r: rand(seed) * 255,
-    g: rand(seed + 1) * 255,
-    b: rand(seed + 2) * 255,
-    a: 1
-  })
-
   // Main p5 drawing function for this sketch
   appState.drawFunctions.push((p: p5) => {
     const dropStates = dropAndScrollManager.getRenderStates()
@@ -111,24 +101,19 @@ onMounted(async () => {
 
     if (appState.polygonRenderData.length > 0) {
       p.push()
-      appState.polygonRenderData.forEach((polygon, idx) => {
+      appState.polygonRenderData.forEach((polygon) => {
         const textStyle = getTextStyle(polygon.metadata)
         const textColor = textStyle.textColor
         const to255 = (c: number) => c <= 1 ? c * 255 : c
-        const baseColor = textColor
-          ? { r: to255(textColor.r), g: to255(textColor.g), b: to255(textColor.b), a: 255 }
-          : polygon.metadata?.color
-            ? { ...polygon.metadata.color }
-            : randColor(idx)
-        const alpha255 = baseColor.a === undefined
-          ? 255
-          : baseColor.a <= 1
-            ? baseColor.a * 255
-            : baseColor.a
-        const color = { ...baseColor, a: alpha255 }
-        const textSize = textStyle.textSize ?? FONT_SIZE
-        const fontFamily = textStyle.fontFamily ?? FONT_FAMILY
-        const fontStyle = textStyle.fontStyle ?? 'NORMAL'
+        const color = {
+          r: to255(textColor.r),
+          g: to255(textColor.g),
+          b: to255(textColor.b),
+          a: 255
+        }
+        const textSize = textStyle.textSize
+        const fontFamily = textStyle.fontFamily
+        const fontStyle = textStyle.fontStyle
         const textAnim = getTextAnim(polygon.metadata)
         const fillAnim = textAnim.fillAnim
         const isDropAndScroll = fillAnim === 'dropAndScroll'

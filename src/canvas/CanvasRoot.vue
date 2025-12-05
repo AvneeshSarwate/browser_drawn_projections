@@ -73,6 +73,7 @@ const resolution = computed(() => {
 
 // Create and initialize canvas runtime state
 const canvasState: CanvasRuntimeState = createCanvasRuntimeState()
+canvasState.metadataSchemas = props.metadataSchemas
 const metadataToolkit = createMetadataToolkit(canvasState)
 
 let disposeEscapeListener: (() => void) | undefined
