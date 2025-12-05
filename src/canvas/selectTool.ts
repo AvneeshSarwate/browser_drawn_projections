@@ -11,8 +11,7 @@ import { getCurrentCircleStateString, attachCircleHandlers, serializeCircleState
 import { hasAncestorConflict } from './canvasUtils'
 import { uid } from './canvasUtils'
 import { pushCommandWithStates } from './commands'
-
-
+import { updateMetadataHighlight } from './metadata/highlight'
 
 
 export function initializeSelectTool(state: CanvasRuntimeState, container: Konva.Group) {
@@ -307,6 +306,12 @@ function updateSelectionDrag(state: CanvasRuntimeState, stage: Konva.Stage) {
     if (p instanceof Konva.Layer) layers.add(p)
   })
   layers.forEach(l => l.batchDraw())
+
+  // Keep metadata highlight aligned with the active single selection while dragging
+  const selected = state.selection.selectedKonvaNodes.value
+  if (selected.length === 1) {
+    updateMetadataHighlight(state, selected[0])
+  }
 }
 
 function finishSelectionDrag(state: CanvasRuntimeState) {
@@ -324,6 +329,14 @@ function finishSelectionDrag(state: CanvasRuntimeState) {
 
   state.selection.selectionDragState.isDragging = false
   state.selection.selectionDragState.startNodePositions.clear()
+
+  // Final align of metadata highlight after drag ends
+  const selected = state.selection.selectedKonvaNodes.value
+  if (selected.length === 1) {
+    updateMetadataHighlight(state, selected[0])
+  } else {
+    updateMetadataHighlight(state, undefined)
+  }
 }
 
 // ---------------- Grouping / Ungrouping (freehand-only groups) ----------------

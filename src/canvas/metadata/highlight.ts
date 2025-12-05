@@ -58,16 +58,34 @@ export const updateMetadataHighlight = (state: CanvasRuntimeState, node?: Konva.
 
   if (!node) {
     metadataHighlightRect.visible(false)
+    metadataHighlightRect.rotation(0)
     metadataHighlightGroup.getLayer()?.batchDraw()
     return
   }
 
-  const bbox = node.getClientRect({ relativeTo: node.getStage()! })
+  // Use the node's untransformed bounds and apply absolute transform so the outline
+  // matches rotation/scale instead of an axis-aligned clientRect.
+  const bbox = node.getClientRect({ skipTransform: true })
+  const absScale = node.getAbsoluteScale()
+  const scaleX = Math.abs(absScale.x)
+  const scaleY = Math.abs(absScale.y)
+
+  const width = bbox.width * scaleX
+  const height = bbox.height * scaleY
+
+  const absCenter = node.getAbsoluteTransform().point({
+    x: bbox.x + bbox.width / 2,
+    y: bbox.y + bbox.height / 2
+  })
+
   metadataHighlightRect.setAttrs({
-    x: bbox.x,
-    y: bbox.y,
-    width: bbox.width,
-    height: bbox.height,
+    x: absCenter.x,
+    y: absCenter.y,
+    width,
+    height,
+    offsetX: width / 2,
+    offsetY: height / 2,
+    rotation: node.getAbsoluteRotation(),
     visible: true
   })
   metadataHighlightGroup.getLayer()?.batchDraw()
@@ -80,16 +98,32 @@ export const updateHoverHighlight = (state: CanvasRuntimeState, node?: Konva.Nod
 
   if (!node) {
     hoverHighlightRect.visible(false)
+    hoverHighlightRect.rotation(0)
     metadataHighlightGroup.getLayer()?.batchDraw()
     return
   }
 
-  const bbox = node.getClientRect({ relativeTo: node.getStage()! })
+  const bbox = node.getClientRect({ skipTransform: true })
+  const absScale = node.getAbsoluteScale()
+  const scaleX = Math.abs(absScale.x)
+  const scaleY = Math.abs(absScale.y)
+
+  const width = bbox.width * scaleX
+  const height = bbox.height * scaleY
+
+  const absCenter = node.getAbsoluteTransform().point({
+    x: bbox.x + bbox.width / 2,
+    y: bbox.y + bbox.height / 2
+  })
+
   hoverHighlightRect.setAttrs({
-    x: bbox.x,
-    y: bbox.y,
-    width: bbox.width,
-    height: bbox.height,
+    x: absCenter.x,
+    y: absCenter.y,
+    width,
+    height,
+    offsetX: width / 2,
+    offsetY: height / 2,
+    rotation: node.getAbsoluteRotation(),
     visible: true
   })
   metadataHighlightGroup.getLayer()?.batchDraw()

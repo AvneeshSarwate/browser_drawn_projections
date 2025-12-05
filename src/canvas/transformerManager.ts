@@ -3,6 +3,7 @@ import { watch } from 'vue'
 
 import { pushCommandWithStates } from './commands'
 import type { CanvasRuntimeState } from './canvasState'
+import { updateMetadataHighlight } from './metadata/highlight'
 
 const createTransformer = (state: CanvasRuntimeState, container: Konva.Group) => {
   const transformer = new Konva.Transformer({
@@ -17,9 +18,20 @@ const createTransformer = (state: CanvasRuntimeState, container: Konva.Group) =>
     startTransformTrackingWithState(state)
   })
 
+  const syncHighlight = () => {
+    const nodes = state.selection.selectedKonvaNodes.value
+    if (nodes.length === 1) {
+      updateMetadataHighlight(state, nodes[0])
+    }
+  }
+
   transformer.on('transformend', () => {
     finishTransformTrackingWithState(state, 'Transform')
+    syncHighlight()
   })
+
+  transformer.on('transform', syncHighlight)
+  transformer.on('dragmove', syncHighlight)
 
   container.add(transformer)
 
