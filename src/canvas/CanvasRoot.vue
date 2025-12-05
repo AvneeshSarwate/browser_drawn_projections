@@ -951,13 +951,15 @@ onUnmounted(() => {
 
       <!-- Polygon Tool Toolbar -->
       <template v-if="activeTool === 'polygon'">
-        <div class="button-group vertical">
+        <div class="radio-button-group">
           <button @click="canvasState.polygon.mode.value = 'draw'" :class="{ active: canvasState.polygon.mode.value === 'draw' }"
-            :disabled="canvasState.freehand.isAnimating.value">
+            :disabled="canvasState.freehand.isAnimating.value" class="radio-button">
+            <span class="radio-indicator"></span>
             ✏️ New Shape
           </button>
           <button @click="canvasState.polygon.mode.value = 'edit'" :class="{ active: canvasState.polygon.mode.value === 'edit' }"
-            :disabled="canvasState.freehand.isAnimating.value">
+            :disabled="canvasState.freehand.isAnimating.value" class="radio-button">
+            <span class="radio-indicator"></span>
             ✏️ Edit Shape
           </button>
         </div>
@@ -1079,6 +1081,69 @@ onUnmounted(() => {
   margin: 0;
   padding: 3px 10px;
   font-size: 12px;
+}
+
+.radio-button-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.radio-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px !important;
+  font-size: 13px !important;
+  background: white !important;
+  border: 1px solid #ccc !important;
+  text-align: left;
+}
+
+.radio-button:hover:not(:disabled) {
+  background: #f5f5f5 !important;
+  border-color: #999 !important;
+}
+
+.radio-button.active {
+  background: #e8f0fe !important;
+  border-color: #0066ff !important;
+  color: inherit !important;
+}
+
+.radio-button.active .radio-indicator {
+  border-color: #0066ff;
+  background: #0066ff;
+}
+
+.radio-button.active .radio-indicator::after {
+  opacity: 1;
+}
+
+.radio-indicator {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #999;
+  border-radius: 50%;
+  background: white;
+  position: relative;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+
+.radio-indicator::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: white;
+  opacity: 0;
+  transition: opacity 0.2s;
 }
 
 .tool-dropdown {
