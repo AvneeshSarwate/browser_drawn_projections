@@ -52,6 +52,9 @@ const objectState = ref<Record<string, any>>({})
 
 const enumOptions = computed<string[]>(() => enumOptionsFor(normalizedSchema.value))
 
+// Flag to prevent syncFromModel when changes originate from this component
+const isInternalUpdate = ref(false)
+
 // Switch meta handling
 const switchMeta = computed<SwitchMeta | null>(() => {
   if (hasSwitchMeta(props.schema)) {
@@ -88,9 +91,13 @@ const isFieldVisible = (fieldKey: string): boolean => {
 watch(
   () => props.modelValue,
   (val) => {
+    if (isInternalUpdate.value) {
+      isInternalUpdate.value = false
+      return
+    }
     syncFromModel(val)
   },
-  { immediate: true, deep: true }
+  { immediate: true, deep: true, flush: 'sync' }
 )
 
 watch([schemaKind, normalizedSchema], () => {
@@ -198,6 +205,7 @@ const clearValue = () => {
     case 'object':
       objectState.value = buildObjectState(undefined)
       issues.value = []
+      isInternalUpdate.value = true
       emit('update:modelValue', undefined)
       break
   }
@@ -228,17 +236,20 @@ function validateObject() {
   const candidate = buildObjectCandidate()
   if (isOptionalSchema.value && isEmptyObject(candidate)) {
     issues.value = []
+    isInternalUpdate.value = true
     emit('update:modelValue', undefined)
     return
   }
   const result = props.schema.safeParse(candidate)
   issues.value = result.success ? [] : result.error.issues.map(formatIssue)
+  isInternalUpdate.value = true
   emit('update:modelValue', result.success ? result.data : candidate)
 }
 
 function validateAndEmit(value: any) {
   const result = props.schema.safeParse(value)
   issues.value = result.success ? [] : result.error.issues.map(formatIssue)
+  isInternalUpdate.value = true
   emit('update:modelValue', result.success ? result.data : value)
 }
 
@@ -397,7 +408,6 @@ function isPartialNumber(str: string): boolean {
           type="text"
           :value="numberText"
           :disabled="disabled"
-          inputmode="decimal"
           @input="updateNumber(($event.target as HTMLInputElement).value)"
         />
         <button class="tiny-btn" type="button" :disabled="disabled || (!isOptionalSchema && numberText === '')" @click="clearValue">
@@ -459,11 +469,10 @@ function isPartialNumber(str: string): boolean {
             <input
               class="input"
               type="text"
-          :value="objectState[field.key] ?? ''"
-          :disabled="disabled"
-          inputmode="decimal"
-          @input="updateObjectNumberInput(field.key, ($event.target as HTMLInputElement).value)"
-        />
+              :value="objectState[field.key] ?? ''"
+              :disabled="disabled"
+              @input="updateObjectNumberInput(field.key, ($event.target as HTMLInputElement).value)"
+            />
           </template>
           <template v-else-if="field.kind === 'enum'">
             <select
