@@ -229,6 +229,7 @@ onUnmounted(() => {
     :height="resolution.height"
     :show-timeline="false"
     :show-visualizations="false"
+    :show-snapshots="true"
     :metadata-schemas="metadataSchemas"
   />
 </template>

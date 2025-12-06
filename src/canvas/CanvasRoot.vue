@@ -10,6 +10,7 @@ import Konva from 'konva';
 import Timeline from './Timeline.vue';
 import HierarchicalMetadataEditor from './HierarchicalMetadataEditor.vue';
 import VisualizationToggles from './VisualizationToggles.vue';
+import SnapshotsPanel from './SnapshotsPanel.vue';
 import { clearFreehandSelection as clearFreehandSelectionImpl, createStrokeShape as createStrokeShapeImpl, deserializeFreehandState, getStrokePath, serializeFreehandState, updateBakedFreehandData, updateFreehandDraggableStates as updateFreehandDraggableStatesImpl, updateTimelineState as updateTimelineStateImpl, type FreehandStroke, handleTimeUpdate as handleTimeUpdateImpl, maxInterStrokeDelay, initFreehandLayers } from './freehandTool';
 import { freehandStrokes } from './canvasState';
 import { getPointsBounds } from './canvasUtils';
@@ -45,6 +46,7 @@ const props = withDefaults(defineProps<{
   height?: number | string
   showTimeline?: boolean
   showVisualizations?: boolean
+  showSnapshots?: boolean
   metadataSchemas?: { name: string; schema: ZodTypeAny }[]
 }>(), {
   initialFreehandState: '',
@@ -53,6 +55,7 @@ const props = withDefaults(defineProps<{
   height: 500,
   showTimeline: false,
   showVisualizations: false,
+  showSnapshots: false,
   metadataSchemas: () => [],
 })
 
@@ -80,6 +83,9 @@ let disposeEscapeListener: (() => void) | undefined
 
 const activeTool = canvasState.activeTool
 const metadataEditorVisible = canvasState.metadata.showEditor
+const snapshotsPanelVisible = canvasState.snapshots.showPanel
+const snapshotItems = canvasState.snapshots.items
+const snapshotSelectedId = canvasState.snapshots.selectedId
 
 //vue specific - comma needed in <T,> to disambigate generics from html parsing
 const cloneValue = <T,>(value: T): T => {
@@ -944,6 +950,10 @@ onUnmounted(() => {
           :disabled="canvasState.freehand.isAnimating.value">
           📝 Metadata
         </button>
+        <button v-if="props.showSnapshots" @click="snapshotsPanelVisible = !snapshotsPanelVisible" :class="{ active: snapshotsPanelVisible }"
+          :disabled="canvasState.freehand.isAnimating.value">
+          📷 Snapshots
+        </button>
         <span class="separator">|</span>
       </template>
 
@@ -996,20 +1006,35 @@ onUnmounted(() => {
         height: resolution.height + 'px',
       }"></div>
 
-      <!-- Smart Metadata Editor -->
-      <div class="metadata-suite" v-if="metadataEditorVisible">
-        <VisualizationToggles v-if="props.showVisualizations" :canvas-state="canvasState" />
-        <HierarchicalMetadataEditor
-          :selected-nodes="selectedKonvaNodes"
-          :single-node="singleSelectedNode"
-          :multi-selected="multiSelected"
-          :group-selected="groupSelected"
-          :collect-hierarchy-from-root="metadataToolkit.collectHierarchyFromRoot"
-          :update-metadata-highlight="metadataToolkit.updateMetadataHighlight"
-          :update-hover-highlight="metadataToolkit.updateHoverHighlight"
-          :on-apply-metadata="handleApplyMetadata"
-          :schema-options="props.metadataSchemas"
+      <!-- Panels Container -->
+      <div class="panels-container" v-if="metadataEditorVisible || snapshotsPanelVisible">
+        <!-- Snapshots Panel -->
+        <SnapshotsPanel
+          v-if="snapshotsPanelVisible"
+          :snapshots="snapshotItems"
+          :selected-id="snapshotSelectedId"
+          :on-save-snapshot="captureCanvasState"
+          :on-restore-snapshot="restoreCanvasState"
+          :execute-command="executeCommand"
+          @update:snapshots="(val) => snapshotItems = val"
+          @update:selected-id="(val) => snapshotSelectedId = val"
         />
+
+        <!-- Smart Metadata Editor -->
+        <div class="metadata-suite" v-if="metadataEditorVisible">
+          <VisualizationToggles v-if="props.showVisualizations" :canvas-state="canvasState" />
+          <HierarchicalMetadataEditor
+            :selected-nodes="selectedKonvaNodes"
+            :single-node="singleSelectedNode"
+            :multi-selected="multiSelected"
+            :group-selected="groupSelected"
+            :collect-hierarchy-from-root="metadataToolkit.collectHierarchyFromRoot"
+            :update-metadata-highlight="metadataToolkit.updateMetadataHighlight"
+            :update-hover-highlight="metadataToolkit.updateHoverHighlight"
+            :on-apply-metadata="handleApplyMetadata"
+            :schema-options="props.metadataSchemas"
+          />
+        </div>
       </div>
 
       <template v-if="props.showTimeline">
@@ -1264,6 +1289,13 @@ onUnmounted(() => {
 
 
 
+
+.panels-container {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  align-items: flex-start;
+}
 
 .metadata-suite {
   display: flex;

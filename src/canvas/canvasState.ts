@@ -104,6 +104,12 @@ export interface AncillaryVisualizationInstance {
   nodes: Konva.Node | Konva.Node[]
 }
 
+export interface CanvasSnapshot {
+  id: string
+  name: string
+  data: string
+}
+
 export interface CircleShapeRuntime {
   id: string
   x: number
@@ -242,6 +248,11 @@ export interface CanvasRuntimeState {
     rafToken: number | null
     activeWatchStop?: WatchStopHandle
   }
+  snapshots: {
+    showPanel: Ref<boolean>
+    items: Ref<CanvasSnapshot[]>
+    selectedId: Ref<string | null>
+  }
 }
 
 export const createCanvasRuntimeState = (): CanvasRuntimeState => {
@@ -361,6 +372,11 @@ export const createCanvasRuntimeState = (): CanvasRuntimeState => {
       listenersAttached: false,
       rafToken: null,
       activeWatchStop: undefined
+    },
+    snapshots: {
+      showPanel: ref(false),
+      items: ref([]),
+      selectedId: ref(null)
     }
   }
 }
