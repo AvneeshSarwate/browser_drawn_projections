@@ -848,7 +848,7 @@ onMounted(async() => {
 
     launchLoop(async (ctx) => {
       rootTimeContext = ctx
-      ctx.setBpm(120)
+      ctx.setBpm(appState.bpm)
       console.log('launch loop')
       baseTimeContextHandle = ctx
 
@@ -1040,19 +1040,56 @@ appState.voices.forEach((voice, vIdx) => {
 // Update FX parameters for all voices
 appState.voices.forEach((_, idx) => updateFxParams(idx))
 
+// Debounced BPM update function (100ms = 10 times per second)
+const debouncedBpmUpdate = debounce((newBpm: number) => {
+  if (rootTimeContext) {
+    rootTimeContext.setBpm(newBpm)
+  }
+}, 100)
 
+// Watch for BPM changes and update the root time context
+watch(
+  () => appState.bpm,
+  (newBpm) => {
+    debouncedBpmUpdate(newBpm)
+  }
+)
 
 </script>
 
 <template>
   <div class="break-row"></div>
-  
+
+  <!-- BPM Control -->
+  <div class="bpm-control-section">
+    <h4>BPM Control</h4>
+    <div class="bpm-slider-container">
+      <label>BPM: {{ appState.bpm }}</label>
+      <input
+        type="range"
+        v-model.number="appState.bpm"
+        min="40"
+        max="240"
+        step="1"
+        class="bpm-slider"
+      />
+      <input
+        type="number"
+        v-model.number="appState.bpm"
+        min="40"
+        max="240"
+        step="1"
+        class="bpm-number-input"
+      />
+    </div>
+  </div>
+
   <!-- Top Level Slider & Toggle Banks -->
   <div class="slider-banks-section">
     <h4>Top Level Banks (Click: Load, Shift+Click: Save) - Saves/Loads Both Sliders & Toggles</h4>
     <div class="top-level-bank-buttons">
-      <button 
-        v-for="bankIdx in 8" 
+      <button
+        v-for="bankIdx in 8"
         :key="bankIdx"
         :class="{ 'active': appState.currentTopLevelBank === bankIdx - 1 }"
         @click="handleTopLevelBankClick(bankIdx - 1, $event)"
@@ -1747,6 +1784,59 @@ details summary {
   border-radius: 4px;
   border: 1px solid #e2e8f0;
   overflow: hidden;
+}
+
+/* BPM Control Section */
+.bpm-control-section {
+  margin: 0.5rem 0;
+  padding: 0.5rem;
+  background: #1a1a1a;
+  border-radius: 4px;
+  border: 1px solid #444;
+}
+
+.bpm-control-section h4 {
+  margin: 0 0 0.5rem 0;
+  color: #f0f0f0;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.bpm-slider-container {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.bpm-slider-container label {
+  font-size: 0.9rem;
+  color: #d0d0d0;
+  min-width: 80px;
+  font-weight: 600;
+}
+
+.bpm-slider {
+  flex: 1;
+  writing-mode: horizontal-tb !important;
+  direction: ltr !important;
+  height: 6px !important;
+  max-width: 400px;
+}
+
+.bpm-number-input {
+  width: 70px;
+  padding: 0.3rem;
+  background: #2a2a2a;
+  border: 1px solid #555;
+  color: #e0e0e0;
+  border-radius: 2px;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.bpm-number-input:focus {
+  outline: none;
+  border-color: #6a9bd1;
 }
 
 /* Slider Banks Sections */

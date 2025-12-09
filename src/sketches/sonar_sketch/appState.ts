@@ -59,6 +59,7 @@ export type SonarAppState = {
   toggleBanks: ToggleBanks
   oneShotBanks: OneShotBanks
   currentTopLevelBank: number
+  bpm: number
   snapshots: Array<{
     sliders: number[]
     toggles: boolean[]
@@ -114,6 +115,7 @@ export const appState: SonarAppState = {
     topLevel: Array.from({ length: 8 }, () => Array.from({ length: 8 }, () => false)),
   },
   currentTopLevelBank: 0,
+  bpm: 120,
   snapshots: [],
 } 
 
