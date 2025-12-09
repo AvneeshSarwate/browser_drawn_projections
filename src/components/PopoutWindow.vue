@@ -1,3 +1,24 @@
+<!--
+PopoutWindow - Component for moving content to a separate browser window
+
+USAGE PATTERN FOR PROPER FULLSCREEN HANDLING:
+1. Track popup state with v-model="popped"
+2. Apply conditional sizing to slotted content using the popped state:
+   - When popped=false: Use fixed pixel dimensions (e.g., '1280px')
+   - When popped=true: Use percentage dimensions ('100%')
+3. The popup window's fullscreen button will automatically stretch content to fill the screen
+
+Example pattern:
+  - In parent component: const popped = ref(false)
+  - Wrap content: PopoutWindow with v-model="popped" :width="1280" :height="720"
+  - Content sizing: :style="{ width: popped ? '100%' : '1280px', height: popped ? '100%' : '720px' }"
+
+Technical details:
+- When fill=true (default), the popup window root is set to 100vw/100vh
+- Children must use 100% sizing when popped out to stretch properly
+- When fullscreened, vw/vh units automatically reference the fullscreen viewport
+- No additional handling needed in the PopoutWindow component itself
+-->
 <script setup lang="ts">
 import { ref, watch, onMounted, onBeforeUnmount, nextTick, computed } from 'vue'
 

@@ -11,6 +11,7 @@ import Timeline from './Timeline.vue';
 import HierarchicalMetadataEditor from './HierarchicalMetadataEditor.vue';
 import VisualizationToggles from './VisualizationToggles.vue';
 import SnapshotsPanel from './SnapshotsPanel.vue';
+import PopoutWindow from '@/components/PopoutWindow.vue';
 import { clearFreehandSelection as clearFreehandSelectionImpl, createStrokeShape as createStrokeShapeImpl, deserializeFreehandState, getStrokePath, serializeFreehandState, updateBakedFreehandData, updateFreehandDraggableStates as updateFreehandDraggableStatesImpl, updateTimelineState as updateTimelineStateImpl, type FreehandStroke, handleTimeUpdate as handleTimeUpdateImpl, maxInterStrokeDelay, initFreehandLayers } from './freehandTool';
 import { freehandStrokes } from './canvasState';
 import { getPointsBounds } from './canvasUtils';
@@ -86,6 +87,7 @@ const metadataEditorVisible = canvasState.metadata.showEditor
 const snapshotsPanelVisible = canvasState.snapshots.showPanel
 const snapshotItems = canvasState.snapshots.items
 const snapshotSelectedId = canvasState.snapshots.selectedId
+const popped = ref(false)
 
 //vue specific - comma needed in <T,> to disambigate generics from html parsing
 const cloneValue = <T,>(value: T): T => {
@@ -571,6 +573,26 @@ onMounted(async () => {
     canvasState.stage = stageInstance
     canvasState.konvaContainer = konvaContainer.value
 
+    // Override getPointerPosition to handle CSS scaling
+    // When canvas is CSS-stretched (popup/fullscreen), transform visual coords to logical coords
+    const originalGetPointerPosition = stageInstance.getPointerPosition.bind(stageInstance)
+    stageInstance.getPointerPosition = function() {
+      const pos = originalGetPointerPosition()
+      if (!pos) return null
+
+      const container = this.container()
+      const visualWidth = container.clientWidth
+      const visualHeight = container.clientHeight
+      const logicalWidth = this.width()
+      const logicalHeight = this.height()
+
+      // Transform from CSS visual space to canvas logical space
+      return {
+        x: pos.x * (logicalWidth / visualWidth),
+        y: pos.y * (logicalHeight / visualHeight)
+      }
+    }
+
     // Prevent context menu on ctrl-click (for polygon point deletion)
     konvaContainer.value.addEventListener('contextmenu', (e) => {
       if (e.ctrlKey || e.metaKey) {
@@ -844,8 +866,11 @@ onMounted(async () => {
     // Set up polygon mode watcher
     setupPolygonModeWatcher()
 
-    // Escape key handling for polygon tool
-    disposeEscapeListener = singleKeydownEvent(canvasState, 'Escape', (ev) => {
+    // Auto-focus the container so keyboard events work immediately
+    konvaContainer.value?.focus()
+
+    // 'C' key handling for polygon tool (close/finish polygon)
+    disposeEscapeListener = singleKeydownEvent(canvasState, 'c', () => {
       if (activeTool.value === 'polygon' && canvasState.polygon.isDrawing.value) {
         // Auto-close the current polygon if it has at least 3 points
         if (canvasState.polygon.currentPoints.value.length >= 6) {
@@ -855,7 +880,7 @@ onMounted(async () => {
           clearCurrentPolygon()
         }
       }
-    })
+    }, konvaContainer.value!)
 
   } catch (e) {
     console.warn(e)
@@ -983,7 +1008,7 @@ onUnmounted(() => {
         <span class="separator">|</span>
         <div class="button-group vertical">
           <button @click="finishPolygon" :disabled="!canvasState.polygon.isDrawing.value || canvasState.freehand.isAnimating.value">
-            ✅ End Shape (esc)
+            ✅ End Shape (c)
           </button>
           <button @click="clearCurrentPolygon" :disabled="!canvasState.polygon.isDrawing.value || canvasState.freehand.isAnimating.value">
             🗑️ Cancel Shape
@@ -1001,10 +1026,12 @@ onUnmounted(() => {
       <span class="info">{{ selectionStore.count(canvasState) }} selected</span>
     </div>
     <div class="canvas-wrapper">
-      <div ref="konvaContainer" class="konva-container" :style="{
-        width: resolution.width + 'px',
-        height: resolution.height + 'px',
-      }"></div>
+      <PopoutWindow v-model="popped" title="Canvas" :width="resolution.width" :height="resolution.height">
+        <div ref="konvaContainer" class="konva-container" tabindex="0" :style="{
+          width: popped ? '100%' : resolution.width + 'px',
+          height: popped ? '100%' : resolution.height + 'px',
+        }"></div>
+      </PopoutWindow>
 
       <!-- Panels Container -->
       <div class="panels-container" v-if="metadataEditorVisible || snapshotsPanelVisible">
@@ -1284,6 +1311,14 @@ onUnmounted(() => {
 .konva-container {
   background-color: white;
   border: 1px solid black;
+}
+
+/* When container is stretched (popup/fullscreen), scale Konva's canvas visually
+   without changing logical dimensions - clicks still register at original coordinates */
+.konva-container :deep(.konvajs-content),
+.konva-container :deep(canvas) {
+  width: 100% !important;
+  height: 100% !important;
 }
 
 
