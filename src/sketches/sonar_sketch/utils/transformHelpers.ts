@@ -8,7 +8,8 @@ import {
   findLineCallMatches as findLineCallMatchesAST,
   transformToRuntime as transformToRuntimeAST,
 } from './acornHelpers'
-import type { TimeContext } from '@/channels/base_time_context'
+// import type { TimeContext } from '@/channels/base_time_context'
+import type { TimeContext } from '@/channels/offline_time_context'
 
 /** Split a full transform chain line into the source clip name and an array of command strings */
 export const splitTransformChainToCommandStrings = (line: string) => {

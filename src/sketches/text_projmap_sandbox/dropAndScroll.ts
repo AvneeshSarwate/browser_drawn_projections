@@ -1,6 +1,6 @@
 import type p5 from 'p5'
 import type { PolygonRenderData } from '@/canvas/canvasState'
-import { launch, type CancelablePromisePoxy, type TimeContext } from '@/channels/channels'
+import { launchBrowser, type CancelablePromiseProxy, type TimeContext } from '@/channels/offline_time_context'
 import {
   type Point,
   type RenderState,
@@ -21,7 +21,7 @@ const LOG_ENABLED = false
 
 export class DropAndScrollManager {
   private renderStates = new Map<string, RenderState>()
-  private loops = new Map<string, CancelablePromisePoxy<void>>()
+  private loops = new Map<string, CancelablePromiseProxy<void>>()
   private signatures = new Map<string, string>()
   private getP5: () => p5 | undefined
   private noPrepLogged = new Set<string>()
@@ -110,7 +110,7 @@ export class DropAndScrollManager {
         minCharsDrop
       })
 
-    const loop = launch(async (ctx) => {
+    const loop = launchBrowser(async (ctx) => {
       while (!ctx.isCanceled) {
         const p = this.getP5()
         if (!p) {

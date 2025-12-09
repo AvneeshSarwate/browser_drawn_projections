@@ -1,12 +1,12 @@
 <!-- eslint-disable no-debugger -->
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
-import { type SonarAppState, appStateName, type VoiceState, globalStore, type SaveableProperties, oneshotCall, startBarrier, resolveBarrier, awaitBarrier } from './appState';
+import { type SonarAppState, appStateName, type VoiceState, globalStore, type SaveableProperties, oneshotCall } from './appState';
 import { inject, onMounted, onUnmounted, reactive, ref, computed, watch, nextTick } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
-import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
+import { launch, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
 import { AbletonClip, clipMap, INITIALIZE_ABLETON_CLIPS, type AbletonNote, quickNote } from '@/io/abletonClips';
 import { MIDI_READY, midiInputs, midiOutputs } from '@/io/midi';
 import { getPiano, getPianoChain, TONE_AUDIO_START, getSynthChain, getDriftChain } from '@/music/synths';
@@ -21,6 +21,7 @@ import { buildClipFromLine, splitTextToGroups, generateUUID, findLineCallMatches
 import { monacoEditors, codeMirrorEditors, setCodeMirrorContent, highlightCurrentLine, highlightScheduledLines, initializeMonacoEditorComplete, initializeCodeMirrorEditorComplete, highlightCurrentLineByUUID, applyScheduledHighlightByUUID, handleDslLineClick, setPianoRollFromDslLine, clickedDslRanges, highlightClickedDsl, updateDslOutlines, clearPianoRoll, clickedDslOriginalText, clearAllDslHighlights, extractDslFromLine, clickedDslSegmentCounts, codeMirrorEditorsByName } from './utils/editorManager'
 import { saveSnapshot as saveSnapshotSM, loadSnapshotStateOnly as loadSnapshotStateOnlySM, downloadSnapshotsFile, loadSnapshotsFromFile as loadSnapshotsFromFileSM, saveToLocalStorage as saveToLocalStorageSM, loadFromLocalStorage as loadFromLocalStorageSM, saveBank, loadBank, makeBankClickHandler, saveTopLevelSliderBank as saveTopLevelSliderBankSM, loadTopLevelSliderBank as loadTopLevelSliderBankSM, saveFxSliderBank as saveFxSliderBankSM, loadFxSliderBank as loadFxSliderBankSM, saveTopLevelToggleBank as saveTopLevelToggleBankSM, loadTopLevelToggleBank as loadTopLevelToggleBankSM, saveTopLevelOneShotBank as saveTopLevelOneShotBankSM, loadTopLevelOneShotBank as loadTopLevelOneShotBankSM, saveJsCodeBank as saveJsCodeBankSM, loadJsCodeBank as loadJsCodeBankSM } from './utils/snapshotManager'
 import type { LoopHandle } from '@/channels/base_time_context';
+import { launchBrowser, CancelablePromiseProxy, TimeContext, startBarrier, resolveBarrier, awaitBarrier } from '@/channels/offline_time_context';
 
 // Monaco environment setup
 self.MonacoEnvironment = {
@@ -34,13 +35,19 @@ self.MonacoEnvironment = {
 
 const appState = inject<SonarAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
-let timeLoops: CancelablePromisePoxy<any>[] = []
+let timeLoops: CancelablePromiseProxy<any>[] = []
 
 const showInputEditor = ref([true, true, true, true]) // Per-voice input editor visibility
 
 
-const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromisePoxy<any> => {
-  const loop = launch(block)
+// const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromisePoxy<any> => {
+//   const loop = launch(block)
+//   timeLoops.push(loop)
+//   return loop
+// }
+
+const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromiseProxy<any> => {
+  const loop = launchBrowser(block)
   timeLoops.push(loop)
   return loop
 }
@@ -841,7 +848,7 @@ onMounted(async() => {
 
     launchLoop(async (ctx) => {
       rootTimeContext = ctx
-      ctx.bpm = 120
+      ctx.setBpm(120)
       console.log('launch loop')
       baseTimeContextHandle = ctx
 
@@ -850,11 +857,12 @@ onMounted(async() => {
         launchQueue.forEach(cb => cb(ctx))
         launchQueue.length = 0
         await ctx.wait(1)
+        console.log("queue step", Math.floor(Date.now() / 100))
       }
     })
 
     launchLoop(async (ctx) => {
-      ctx.bpm = 120
+      ctx.setBpm(120)
       // eslint-disable-next-line no-constant-condition
       while (true) {
         immediateLaunchQueue.forEach(cb => cb(ctx))

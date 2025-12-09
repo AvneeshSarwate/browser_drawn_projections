@@ -515,22 +515,22 @@ export class TempoClockTimeContext extends TimeContext {
   //  resolA - t-1
   //  awaitB - t-1
   //  startA - t-1
-  //  - awaitB immediately releases becaues no active key and never waits on barrier 
+  //  - awaitB immediately releases becaues no active key and never waits on barrier
  
   //  resolA - t-1
   //  startA - t-1
   //  awaitB - t-1
-  //  - awaitB immediately releases because startTime == waitTime and never waits on barrier 
+  //  - awaitB immediately releases because startTime == waitTime and never waits on barrier
  
   //  startA - t-1
   //  resolA - t-1
   //  awaitB - t-1
-  //  - awaitB immediately releases becaues no active key and never waits on barrier 
+  //  - awaitB immediately releases becaues no active key and never waits on barrier
  
   //  startA - t-1
   //  awaitB - t-1
   //  resolA - t-1
-  //  - awaitB immediately releases because startTime == waitTime and never waits on barrier 
+  //  - awaitB immediately releases because startTime == waitTime and never waits on barrier
  
   //  awaitB - t-1
   //  startA - t-1
@@ -542,3 +542,34 @@ export class TempoClockTimeContext extends TimeContext {
   //  resolA - t-1
   //  startA - t-1
   //  - awaitB releases because it's barrier is resolved
+
+  
+
+  // export const testCancel = async () => {
+  
+  //   launch(async (ctx) => {
+  //     const stepVal = 0.2
+  
+  //     const start = ctx.time
+  //     const start2 = performance.now()  //+ (USE_TONE ? Tone.context.lookAhead * 1000 : 0)
+  //     let drift, lastDrift = 0
+  //     const res0 = ctx.branch(async (ctx) => {
+  //       for (let i = 0; i < 100; i++) {
+  //         const [logicalTime, wallTime] = [ctx.time - start, (performance.now() - start2) / 1000] //todo bug - is this correct?
+  //         drift = wallTime - logicalTime 
+  //         const driftDelta = drift - lastDrift
+  //         console.log('step', i, "logicalTime", logicalTime.toFixed(3), "wallTime", wallTime.toFixed(3), "drift", drift.toFixed(3), "driftDelta", driftDelta.toFixed(3))
+  //         lastDrift = drift
+  //         await ctx.waitSec(stepVal)
+  //       }
+  //     })
+  
+  //     await ctx.branchWait(async (ctx) => {
+  //       await ctx.waitSec(stepVal * 10)
+  //       console.log('res0 cancel', performance.now() - start2)
+  //       res0.cancel()
+  //     })
+  
+  //     console.log("parent context time elapsed", ctx.progTime.toFixed(3))
+  //   })
+  // }

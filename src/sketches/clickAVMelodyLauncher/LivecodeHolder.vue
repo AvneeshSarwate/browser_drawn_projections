@@ -5,18 +5,24 @@ import { inject, onMounted, onUnmounted } from 'vue';
 import { CanvasPaint, FeedbackNode, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords, targetNormalizedCoords } from '@/io/keyboardAndMouse';
 import p5 from 'p5';
-import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri, EventChop, cos, sin } from '@/channels/channels';
+import { launch, type TimeContext, xyZip, cosN, sinN, Ramp, tri, EventChop, cos, sin } from '@/channels/channels';
 import { listToClip, clipToDeltas, note } from '@/music/clipPlayback';
 import { Scale } from '@/music/scale';
 import { sampler } from '@/music/synths';
 import { HorizontalBlur, LayerBlend, VerticalBlur, Transform } from '@/rendering/customFX';
-
+import { launchBrowser, CancelablePromiseProxy, BrowserTimeContext } from '@/channels/offline_time_context';
 const appState = inject<ClickAVAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
-let timeLoops: CancelablePromisePoxy<any>[] = []
+let timeLoops: CancelablePromiseProxy<any>[] = []
 
-const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromisePoxy<any> => {
-  const loop = launch(block)
+// const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromisePoxy<any> => {
+//   const loop = launch(block)
+//   timeLoops.push(loop)
+//   return loop
+// }
+
+const launchLoop = (block: (ctx: BrowserTimeContext) => Promise<any>): CancelablePromiseProxy<any> => {
+  const loop = launchBrowser(block)
   timeLoops.push(loop)
   return loop
 }
@@ -63,7 +69,7 @@ onMounted(() => {
       //   p.pop()
       // })
 
-      const loopMap = new Map<string, CancelablePromisePoxy<any>>()
+      const loopMap = new Map<string, CancelablePromiseProxy<any>>()
       const loopIdStack = [] as string[]
 
       mousedownEvent(ev => {
