@@ -158,7 +158,7 @@ const launchParamRamp = (paramName: string, startVal: number, endVal: number, du
       if (!paramFunc) return
       voice.saveable.fxParams[paramName] = val
       paramFunc(val)
-      await ctx.wait(0.016)
+      await ctx.waitSec(0.016)
     }
   })
   return ramp

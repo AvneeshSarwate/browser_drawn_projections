@@ -1,6 +1,8 @@
 // deno-lint-ignore-file no-explicit-any no-unused-vars no-this-alias require-await
 
 /**
+ * https://chatgpt.com/c/69343bfc-5394-832f-a246-c0be525623fd
+ * 
  * Timing engine v2:
  * - Single scheduler per root context (min-heap) to prevent drift + preserve logical ordering.
  * - waitSec() schedules absolute logical deadlines (seconds).

@@ -113,8 +113,8 @@ export const appState: TemplateAppState = {
 export const appStateName = 'text_projmap_sandbox'
 
 export const resolution = {
-  width: 1000,
-  height: 500
+  width: 1280,
+  height: 720
 }
 
 export const globalStore = defineStore(appStateName, () => {

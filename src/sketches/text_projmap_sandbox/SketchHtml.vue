@@ -12,9 +12,18 @@ const popped = ref(false)
 <template>
   <div class="canvas-page">
     <PopoutWindow v-model="popped" title="Canvas" :width="resRef.width" :height="resRef.height">
-      <div id="canvasContainer" :style="{width: resRef.width + 'px', height: resRef.height + 'px'}">
-        <canvas id="p5Canvas" :width="resRef.width * dpr" :height="resRef.height * dpr" :style="{width: resRef.width + 'px', height: resRef.height + 'px'}" abitrary-prop="somethi"></canvas>
-        <canvas id="threeCanvas" :width="resRef.width * dpr" :height="resRef.height * dpr" :style="{width: resRef.width + 'px', height: resRef.height + 'px'}" abitrary-prop="somethi"></canvas>
+      <div id="canvasContainer" :style="{
+        width: popped ? '100%' : resRef.width + 'px',
+        height: popped ? '100%' : resRef.height + 'px'
+      }">
+        <canvas id="p5Canvas" :width="resRef.width * dpr" :height="resRef.height * dpr" :style="{
+          width: popped ? '100%' : resRef.width + 'px',
+          height: popped ? '100%' : resRef.height + 'px'
+        }" abitrary-prop="somethi"></canvas>
+        <canvas id="threeCanvas" :width="resRef.width * dpr" :height="resRef.height * dpr" :style="{
+          width: popped ? '100%' : resRef.width + 'px',
+          height: popped ? '100%' : resRef.height + 'px'
+        }" abitrary-prop="somethi"></canvas>
       </div>
     </PopoutWindow>
     <div id="description">
