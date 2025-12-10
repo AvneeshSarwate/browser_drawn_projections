@@ -13,7 +13,110 @@
  *
  * NOTE: You said you already have PriorityQueue; import it here.
  */
-// TODO: change this import to wherever your PriorityQueue lives.
+
+
+/**
+ * Timing Engine Architecture (v2)
+ * ===============================
+ *
+ * Goals
+ * -----
+ * - Drift-free waits: `await ctx.waitSec(x)` and `await ctx.wait(beats)` should schedule against a
+ *   logical timeline (not accumulate setTimeout jitter).
+ * - Structured concurrency: spawn tasks (branches), cancel whole subtrees, and optionally join
+ *   branches while preserving logical time ordering.
+ * - Musical time: `wait(beats)` must remain correct under interactive tempo changes (slider/MIDI/LFO),
+ *   without rescheduling every pending waiter.
+ * - Offline rendering: deterministic, faster-than-realtime simulation with an ergonomic “step frames”
+ *   API (e.g. 60Hz) and correct ordering semantics.
+ *
+ * Core Concepts
+ * -------------
+ * - Logical time (seconds): every TimeContext has `ctx.time` representing the logical timeline.
+ * - Root context: the root of a context tree stores the scheduler and shared state used to keep
+ *   concurrency “consistent”.
+ * - mostRecentDescendentTime: the root tracks the maximum logical time reached by any descendant.
+ *   Wait scheduling uses this to prevent drift and keep branches aligned.
+ *
+ * Wait Semantics (Seconds)
+ * ------------------------
+ * - `waitSec(sec)` schedules a logical deadline, not "sleep for sec".
+ *   Base time = max(root.mostRecentDescendentTime, ctx.time)
+ *   Target time = base time + sec
+ * - When the wait resolves, ctx.time is set to the target time (exactly), regardless of how late
+ *   the underlying timer fired. The “lateness” only affects wall-clock, not logical time.
+ * - This is the mechanism that prevents drift: if the wall clock runs late, the next wait’s wall delay
+ *   shrinks because targetTime - scheduler.now() is smaller.
+ *
+ * Scheduler
+ * ---------
+ * - One scheduler per root context.
+ * - Uses a min-heap (priority queue) of absolute deadlines.
+ * - Realtime mode: at most one setTimeout is armed for the earliest deadline. When it fires (or when
+ *   deadlines are already due), the scheduler processes exactly one logical timeslice at the earliest
+ *   deadline, resolves all waiters at that time, then yields to microtasks before advancing further.
+ * - Offline mode: no setTimeout. The test/renderer advances `scheduler.now()` explicitly; the scheduler
+ *   repeatedly processes due timeslices up to the requested time, yielding to microtasks between slices.
+ *
+ * IMPORTANT INVARIANT:
+ * - After resolving any batch at time T, the scheduler MUST yield (microtask) before processing a later
+ *   time. This allows coroutines resumed at T to enqueue new waits at intermediate times (T < t < next).
+ *   Without this, offline simulation can “skip” events until the next advance call.
+ *
+ * Beat / Tempo Semantics
+ * ----------------------
+ * - `wait(beats)` does NOT convert beats->seconds once at call time.
+ * - Instead, each context has a TempoMap. `wait(beats)` schedules on an absolute target beat:
+ *     baseTime = max(root.mostRecentDescendentTime, ctx.time)
+ *     baseBeats = tempo.beatsAtTime(baseTime)
+ *     targetBeat = baseBeats + beats
+ * - The scheduler converts the head beat waiter to a time via tempo.timeAtBeats(targetBeat).
+ * - Tempo changes (interactive slider/MIDI/LFO) can retime pending beat waits automatically.
+ *
+ * PERFORMANCE DESIGN DECISION:
+ * - Beat waiters are grouped by TempoMap. When a TempoMap changes, only that TempoMap’s “head” beat waiter
+ *   needs its time recomputed (the earliest targetBeat for that map). This avoids rescheduling all waiters
+ *   when doing frequent tempo automation.
+ *
+ * Tempo API Safety
+ * ---------------
+ * - `ctx.bpm` is read-only; tempo changes go through `ctx.setBpm(...)`.
+ * - Tempo writes are stamped at “now” from the root scheduler (never in the past, never in the future).
+ *   This avoids retroactive tempo edits which can invalidate already-scheduled waits.
+ *
+ * Structured Concurrency
+ * ----------------------
+ * - `ctx.branch(...)`: fire-and-forget child context. Does NOT update parent ctx.time on completion.
+ * - `ctx.branchWait(...)`: spawn and return a promise-like handle, and on completion updates parent ctx.time
+ *   to max(parent.time, child.time). (Joining is typically done via awaiting the handle or Promise.all.)
+ * - Cancellation:
+ *   - Each context owns an AbortController; `ctx.cancel()` aborts the context and recursively cancels all
+ *     children in its subtree.
+ *   - Wait primitives attach abort listeners and remove them on resolve/cancel to avoid leaks.
+ *
+ * Barriers (Cross-Task Sync)
+ * --------------------------
+ * - Barriers allow coroutines to wait for “a moment” in another coroutine (e.g. melody A waits for melody B’s loop end).
+ * - Barrier waits must adopt the barrier’s resolve logical time, and update root.mostRecentDescendentTime.
+ * - Barriers are only valid within a single root context tree (cross-root use is undefined; warn/error).
+ * - Barrier implementation must avoid the “resolve + immediate restart” race by tracking lastResolvedTime.
+ *
+ * Frame Waiting
+ * -------------
+ * - DateTimeContext: works everywhere (setTimeout only), no waitFrame().
+ * - BrowserTimeContext: extends DateTimeContext with waitFrame(), implemented as a scheduler-managed RAF barrier
+ *   (all frame waiters resolve once per RAF tick).
+ * - Offline: waitFrame is simulated at a fixed fps (default 60Hz) by the OfflineRunner.
+ *
+ * User Guidance / Footguns
+ * ------------------------
+ * - Only await engine-controlled waits/barriers for timing. Awaiting arbitrary promises (fetch/IO/etc) can
+ *   resume “out of logical time”.
+ * - wait(0) / waitSec(0) is allowed as a sync/yield point, but it is user error to call it in a tight loop.
+ * - Don’t attempt interactive input in offline mode (unless you provide an input-event injection mechanism).
+ */
+
+
 import { PriorityQueue } from "@/stores/priorityQueue";
 
 /* ---------------------------------------------------------------------------------------------- */
