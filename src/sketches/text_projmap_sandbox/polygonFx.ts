@@ -22,9 +22,11 @@ export type PolygonFxSyncOptions = {
 
 type ChainBundle = {
   end: ShaderEffect
+  wobble: WobbleEffect
+  hBlur: HorizontalBlurEffect
+  vBlur: VerticalBlurEffect
   width: number
   height: number
-  bboxKey: string
   fxKey: string
   owned: ShaderEffect[]
   graphics: p5.Graphics
@@ -64,7 +66,7 @@ const ensureOverlayScene = (engine: BABYLON.WebGPUEngine) => {
 }
 
 const makeKeys = (bbox: { minX: number; minY: number; w: number; h: number }, fx: FxChainMeta) => ({
-  bboxKey: `${bbox.minX.toFixed(1)},${bbox.minY.toFixed(1)}_${bbox.w.toFixed(1)}x${bbox.h.toFixed(1)}`,
+  sizeKey: `${bbox.w.toFixed(1)}x${bbox.h.toFixed(1)}`,
   fxKey: JSON.stringify({ ...fx }),
 })
 
@@ -97,8 +99,21 @@ const createChain = (
   vBlur.setUniforms({ pixels: fx.blurY, resolution: h })
   alphaThresh.setUniforms({ threshold: 0 })
 
-  const { bboxKey, fxKey } = makeKeys({ minX: bboxPx.minX, minY: bboxPx.minY, w, h }, fx)
-  return { end: alphaThresh, width: w, height: h, bboxKey, fxKey, owned: [alphaThresh, vBlur, hBlur, wobble, srcPass], graphics, bboxPx, bboxLogical, poly }
+  const { fxKey } = makeKeys({ minX: bboxPx.minX, minY: bboxPx.minY, w, h }, fx)
+  return {
+    end: alphaThresh,
+    wobble,
+    hBlur,
+    vBlur,
+    width: w,
+    height: h,
+    fxKey,
+    owned: [alphaThresh, vBlur, hBlur, wobble, srcPass],
+    graphics,
+    bboxPx,
+    bboxLogical,
+    poly,
+  }
 }
 
 const createOrUpdateMesh = (
@@ -236,7 +251,7 @@ export const syncChainsAndMeshes = (
     }
   })
 
-  const processPoly = (poly: PolygonRenderData[number], forceRecreate: boolean) => {
+  const processPoly = (poly: PolygonRenderData[number]) => {
     const fx = getFxMeta(poly.metadata)
     if (!fx.enabled) {
       disposeEntry(poly.id)
@@ -272,10 +287,11 @@ export const syncChainsAndMeshes = (
     }
     const canvasLogical = { width: p5Canvas.width / dpr, height: p5Canvas.height / dpr }
 
-    const keys = makeKeys({ minX: bboxPx.minX, minY: bboxPx.minY, w: bboxPx.w, h: bboxPx.h }, fx)
+    const { fxKey } = makeKeys({ minX: bboxPx.minX, minY: bboxPx.minY, w: bboxPx.w, h: bboxPx.h }, fx)
     const prev = chains.get(poly.id)
-    const needsRecreate =
-      forceRecreate || !prev || prev.bboxKey !== keys.bboxKey || prev.fxKey !== keys.fxKey
+    const targetWidth = Math.max(1, Math.round(bboxPx.w))
+    const targetHeight = Math.max(1, Math.round(bboxPx.h))
+    const needsRecreate = !prev || prev.width !== targetWidth || prev.height !== targetHeight
 
     if (needsRecreate) {
       disposeEntry(poly.id)
@@ -291,20 +307,35 @@ export const syncChainsAndMeshes = (
       chain.bboxLogical = bboxLogical
       chain.bboxPx = bboxPx
       chain.poly = poly
+      chain.fxKey = fxKey
       chains.set(poly.id, chain)
       createOrUpdateMesh(poly.id, engine, chain, bboxLogical, canvasLogical)
     } else if (prev) {
-      // Update stored polygon data; redrawGraphics happens per-frame in renderPolygonFx
+      // Reuse existing chain when only position/metadata changed
+      const fxChanged = prev.fxKey !== fxKey
+      if (fxChanged) {
+        prev.wobble.setUniforms({
+          xStrength: fx.wobbleX,
+          yStrength: fx.wobbleY,
+          time: () => performance.now() / 1000,
+        })
+        prev.hBlur.setUniforms({ pixels: fx.blurX, resolution: prev.width })
+        prev.vBlur.setUniforms({ pixels: fx.blurY, resolution: prev.height })
+        prev.fxKey = fxKey
+      }
+
       prev.bboxLogical = bboxLogical
       prev.bboxPx = bboxPx
       prev.poly = poly
+      const rs = renderStates.get(poly.id)
+      redrawGraphics(prev.graphics, poly, bboxLogical, rs)
       createOrUpdateMesh(poly.id, engine, prev, bboxLogical, canvasLogical)
     }
   }
 
-  ;(payload.added ?? []).forEach((poly) => processPoly(poly, true))
-  ;(payload.changed ?? []).forEach((poly) => processPoly(poly, true))
-  payload.current.forEach((poly) => processPoly(poly, false))
+  ;(payload.added ?? []).forEach((poly) => processPoly(poly))
+  ;(payload.changed ?? []).forEach((poly) => processPoly(poly))
+  payload.current.forEach((poly) => processPoly(poly))
 }
 
 export const renderPolygonFx = (engine: BABYLON.Engine, renderStates: Map<string, RenderState>, frameId?: string) => {
