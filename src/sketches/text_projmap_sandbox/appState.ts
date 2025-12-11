@@ -62,7 +62,7 @@ export const fxChainSchema = z.object({
   pad: z.coerce.number().default(2),
   // letterParticles-specific params
   alphaThreshold: z.coerce.number().min(0).max(1).default(0.01),
-  circleRadius: z.coerce.number().positive().default(0.01),
+  circleRadius: z.coerce.number().positive().default(0.05), // 5% of NDC space
   lerpT: z.coerce.number().min(0).max(1).default(0),
   targetLayout: z.enum(['ring', 'spiral', 'noise', 'grid']).default('ring'),
   targetRadius: z.coerce.number().positive().default(0.3),

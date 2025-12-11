@@ -57,8 +57,11 @@ export class LetterParticlesRenderer {
   private compactionShaderState!: compactionShader.ShaderState
   private placementShaderState!: placementShader.ShaderState
 
-  // Input texture (from p5.Graphics)
-  private inputTexture!: BABYLON.DynamicTexture
+  // Input texture (from p5.Graphics) - using RawTexture for compute shader compatibility
+  private inputTexture!: BABYLON.RawTexture
+  private textureData!: Uint8Array
+  private tempCanvas!: HTMLCanvasElement
+  private tempCtx!: CanvasRenderingContext2D
 
   // Instanced mesh
   private mesh!: BABYLON.Mesh
@@ -70,7 +73,7 @@ export class LetterParticlesRenderer {
 
   // Initialization state
   private _initialized: boolean = false
-  private _pendingTextureDispose: BABYLON.DynamicTexture | null = null
+  private _pendingTextureDispose: BABYLON.RawTexture | null = null
 
   constructor(config: LetterParticlesConfig) {
     this.engine = config.engine
@@ -165,10 +168,11 @@ export class LetterParticlesRenderer {
       this.scene
     )
 
-    // Create material
+    // Create material - vertex colors are automatically used when present
     this.material = new BABYLON.StandardMaterial('letterParticleMat', this.scene)
     this.material.disableLighting = true
     this.material.backFaceCulling = false
+    this.material.diffuseColor = new BABYLON.Color3(1, 1, 1)
     this.material.emissiveColor = new BABYLON.Color3(1, 1, 1)
     this.material.alphaMode = BABYLON.Engine.ALPHA_COMBINE
     this.material.disableDepthWrite = true
@@ -183,12 +187,23 @@ export class LetterParticlesRenderer {
   }
 
   private async createComputeShaders(): Promise<void> {
+    // Create temp canvas for reading pixel data
+    this.tempCanvas = document.createElement('canvas')
+    this.tempCanvas.width = 1
+    this.tempCanvas.height = 1
+    this.tempCtx = this.tempCanvas.getContext('2d', { willReadFrequently: true })!
+
     // Create a placeholder texture (will be replaced when updateTexture is called)
-    this.inputTexture = new BABYLON.DynamicTexture(
-      'letterParticlesInput',
-      { width: 1, height: 1 },
+    this.textureData = new Uint8Array(4) // 1x1 RGBA
+    this.inputTexture = new BABYLON.RawTexture(
+      this.textureData,
+      1, // width
+      1, // height
+      BABYLON.Constants.TEXTUREFORMAT_RGBA,
       this.scene,
-      false
+      false, // no mipmaps
+      false, // not invertY
+      BABYLON.Texture.NEAREST_NEAREST // nearest sampling for exact texel reads
     )
 
     // Create compaction shader
@@ -295,15 +310,24 @@ export class LetterParticlesRenderer {
     // Recreate texture if dimensions changed
     if (width !== this.texWidth || height !== this.texHeight) {
       // Defer disposal of old texture to avoid "destroyed texture" errors
-      // The old texture may still be referenced by pending GPU commands
       if (this.inputTexture) {
         this._pendingTextureDispose = this.inputTexture
       }
-      this.inputTexture = new BABYLON.DynamicTexture(
-        'letterParticlesInput',
-        { width, height },
+
+      // Resize temp canvas and allocate new texture data
+      this.tempCanvas.width = width
+      this.tempCanvas.height = height
+      this.textureData = new Uint8Array(width * height * 4)
+
+      this.inputTexture = new BABYLON.RawTexture(
+        this.textureData,
+        width,
+        height,
+        BABYLON.Constants.TEXTUREFORMAT_RGBA,
         this.scene,
-        false
+        false, // no mipmaps
+        false, // not invertY
+        BABYLON.Texture.NEAREST_NEAREST
       )
       this.texWidth = width
       this.texHeight = height
@@ -314,10 +338,23 @@ export class LetterParticlesRenderer {
       })
     }
 
-    // Copy canvas content to texture
-    const ctx = this.inputTexture.getContext()
-    ctx.drawImage(canvas, 0, 0)
-    this.inputTexture.update(false)
+    // Copy canvas content to temp canvas, then read pixel data
+    this.tempCtx.clearRect(0, 0, width, height)
+    this.tempCtx.drawImage(canvas, 0, 0)
+    const imageData = this.tempCtx.getImageData(0, 0, width, height)
+    this.textureData.set(imageData.data)
+
+    // Debug: count non-transparent pixels (log occasionally)
+    if (Math.random() < 0.01) {
+      let nonTransparent = 0
+      for (let i = 3; i < this.textureData.length; i += 4) {
+        if (this.textureData[i] > 0) nonTransparent++
+      }
+      console.log(`[letterParticles] texture ${width}x${height}, non-transparent pixels: ${nonTransparent}`)
+    }
+
+    // Upload to GPU
+    this.inputTexture.update(this.textureData)
   }
 
   /**
@@ -330,8 +367,25 @@ export class LetterParticlesRenderer {
     bbox: LetterParticlesBbox,
     fx: FxChainMeta
   ): void {
-    if (!this._initialized) return
-    if (this.texWidth === 0 || this.texHeight === 0) return
+    if (!this._initialized) {
+      console.log('[letterParticles] dispatch skipped: not initialized')
+      return
+    }
+    if (this.texWidth === 0 || this.texHeight === 0) {
+      console.log('[letterParticles] dispatch skipped: texWidth/Height is 0')
+      return
+    }
+
+    // Debug logging (remove after debugging)
+    if (Math.random() < 0.01) { // Log ~1% of frames
+      console.log('[letterParticles] dispatch:', {
+        texSize: `${this.texWidth}x${this.texHeight}`,
+        maxParticles: this.maxParticles,
+        bbox,
+        circleRadius: fx.circleRadius,
+        lerpT: fx.lerpT,
+      })
+    }
 
     // Dispose any pending texture from previous frame (safe now that GPU has processed it)
     if (this._pendingTextureDispose) {
@@ -339,7 +393,7 @@ export class LetterParticlesRenderer {
       this._pendingTextureDispose = null
     }
 
-    // Reset counter (manual reset as per plan TODO)
+    // Reset counter (manual reset as per plan TODO - move atomics stuff to generateShaderTypes.ts)
     this.counterBuffer.update(new Uint32Array([0]))
 
     // Update compaction settings
