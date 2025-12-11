@@ -213,7 +213,7 @@ export class LetterParticlesRenderer {
     this.engine.updateDynamicTexture(
       this.internalTexture,
       initCanvas,
-      false, // invertY
+      false, // invertY - match original RawTexture behavior
       false, // premultiply alpha
       BABYLON.Texture.NEAREST_SAMPLINGMODE
     )
@@ -361,7 +361,7 @@ export class LetterParticlesRenderer {
     this.engine.updateDynamicTexture(
       this.internalTexture,
       canvas,
-      true,  // invertY - canvas Y is flipped relative to texture coords
+      false, // invertY - match original RawTexture behavior
       false, // premultiply alpha
       BABYLON.Texture.NEAREST_SAMPLINGMODE
     )
