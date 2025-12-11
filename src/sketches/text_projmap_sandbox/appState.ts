@@ -53,7 +53,7 @@ export const textStyleMetadataSchema = {
 
 // Simple per-polygon FX parameters
 export const fxChainSchema = z.object({
-  chain: z.enum(['basicBlur', 'letterParticles']).default('basicBlur'),
+  chain: z.enum(['basicBlur', 'letterParticles']).default('letterParticles'),
   enabled: z.boolean().default(true),
   wobbleX: z.coerce.number().default(0.003),
   wobbleY: z.coerce.number().default(0.003),
@@ -62,7 +62,7 @@ export const fxChainSchema = z.object({
   pad: z.coerce.number().default(2),
   // letterParticles-specific params
   alphaThreshold: z.coerce.number().min(0).max(1).default(0.01),
-  circleRadius: z.coerce.number().positive().default(0.05), // 5% of NDC space
+  circleRadius: z.coerce.number().positive().default(0.001), // .1% of NDC space
   lerpT: z.coerce.number().min(0).max(1).default(0),
   targetLayout: z.enum(['ring', 'spiral', 'noise', 'grid']).default('ring'),
   targetRadius: z.coerce.number().positive().default(0.3),
@@ -121,8 +121,8 @@ export const appState: TemplateAppState = {
 export const appStateName = 'text_projmap_sandbox'
 
 export const resolution = {
-  width: 1280,
-  height: 720
+  width: 1000,
+  height: 500
 }
 
 export const globalStore = defineStore(appStateName, () => {
