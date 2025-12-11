@@ -57,11 +57,9 @@ export class LetterParticlesRenderer {
   private compactionShaderState!: compactionShader.ShaderState
   private placementShaderState!: placementShader.ShaderState
 
-  // Input texture (from p5.Graphics) - using RawTexture for compute shader compatibility
-  private inputTexture!: BABYLON.RawTexture
-  private textureData!: Uint8Array
-  private tempCanvas!: HTMLCanvasElement
-  private tempCtx!: CanvasRenderingContext2D
+  // Input texture (from p5.Graphics) - using DynamicTexture for efficient GPU-to-GPU updates
+  private inputTexture!: BABYLON.BaseTexture
+  private internalTexture!: BABYLON.InternalTexture
 
   // Instanced mesh
   private mesh!: BABYLON.Mesh
@@ -73,7 +71,7 @@ export class LetterParticlesRenderer {
 
   // Initialization state
   private _initialized: boolean = false
-  private _pendingTextureDispose: BABYLON.RawTexture | null = null
+  private _pendingTextureDispose: BABYLON.InternalTexture | null = null
 
   constructor(config: LetterParticlesConfig) {
     this.engine = config.engine
@@ -192,24 +190,38 @@ export class LetterParticlesRenderer {
   }
 
   private async createComputeShaders(): Promise<void> {
-    // Create temp canvas for reading pixel data
-    this.tempCanvas = document.createElement('canvas')
-    this.tempCanvas.width = 1
-    this.tempCanvas.height = 1
-    this.tempCtx = this.tempCanvas.getContext('2d', { willReadFrequently: true })!
-
-    // Create a placeholder texture (will be replaced when updateTexture is called)
-    this.textureData = new Uint8Array(4) // 1x1 RGBA
-    this.inputTexture = new BABYLON.RawTexture(
-      this.textureData,
+    // Create a placeholder dynamic texture (will be resized when updateTexture is called)
+    // Using DynamicTexture allows efficient GPU-to-GPU copy via copyExternalImageToTexture
+    this.internalTexture = this.engine.createDynamicTexture(
       1, // width
       1, // height
-      BABYLON.Constants.TEXTUREFORMAT_RGBA,
-      this.scene,
       false, // no mipmaps
-      false, // not invertY
-      BABYLON.Texture.NEAREST_NEAREST // nearest sampling for exact texel reads
+      BABYLON.Texture.NEAREST_SAMPLINGMODE // nearest sampling for exact texel reads
     )
+    this.internalTexture.wrapU = BABYLON.Texture.CLAMP_ADDRESSMODE
+    this.internalTexture.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE
+
+    // IMPORTANT: Must upload initial data to make texture "ready" before binding to compute shader
+    // See: https://forum.babylonjs.com/t/webgpu-and-dynamic-texture/42065
+    // Canvas must have a rendering context for copyExternalImageToTexture to work
+    const initCanvas = document.createElement('canvas')
+    initCanvas.width = 1
+    initCanvas.height = 1
+    const ctx = initCanvas.getContext('2d')!
+    ctx.fillStyle = 'rgba(0,0,0,0)'
+    ctx.fillRect(0, 0, 1, 1)
+    this.engine.updateDynamicTexture(
+      this.internalTexture,
+      initCanvas,
+      false, // invertY
+      false, // premultiply alpha
+      BABYLON.Texture.NEAREST_SAMPLINGMODE
+    )
+
+    // Wrap in BaseTexture for compute shader binding
+    this.inputTexture = new BABYLON.BaseTexture(this.scene, this.internalTexture)
+    this.inputTexture.wrapU = BABYLON.Texture.CLAMP_ADDRESSMODE
+    this.inputTexture.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE
 
     // Create compaction shader
     this.compactionShaderState = compactionShader.createShader(this.engine, {
@@ -231,6 +243,7 @@ export class LetterParticlesRenderer {
     // Wait for shaders to be ready
     while (!this.compactionShaderState.shader.isReady() || !this.placementShaderState.shader.isReady()) {
       await new Promise((resolve) => setTimeout(resolve, 10))
+      console.log('waiting for shaders to be ready', this.internalTexture.isReady, this.compactionShaderState.shader.isReady(), this.placementShaderState.shader.isReady())
     }
   }
 
@@ -306,6 +319,7 @@ export class LetterParticlesRenderer {
 
   /**
    * Update the input texture from a canvas element (p5.Graphics.elt)
+   * Uses efficient GPU-to-GPU copy via updateDynamicTexture (copyExternalImageToTexture internally)
    */
   updateTexture(canvas: HTMLCanvasElement): void {
     if (!this._initialized) return
@@ -315,52 +329,42 @@ export class LetterParticlesRenderer {
 
     // Recreate texture if dimensions changed
     if (width !== this.texWidth || height !== this.texHeight) {
-      // Defer disposal of old texture to avoid "destroyed texture" errors
-      if (this.inputTexture) {
-        this._pendingTextureDispose = this.inputTexture
+      // Defer disposal of old internal texture to avoid "destroyed texture" errors
+      if (this.internalTexture) {
+        this._pendingTextureDispose = this.internalTexture
       }
 
-      // Resize temp canvas and allocate new texture data
-      this.tempCanvas.width = width
-      this.tempCanvas.height = height
-      this.textureData = new Uint8Array(width * height * 4)
-
-      this.inputTexture = new BABYLON.RawTexture(
-        this.textureData,
+      // Create new dynamic texture with correct dimensions
+      this.internalTexture = this.engine.createDynamicTexture(
         width,
         height,
-        BABYLON.Constants.TEXTUREFORMAT_RGBA,
-        this.scene,
         false, // no mipmaps
-        false, // not invertY
-        BABYLON.Texture.NEAREST_NEAREST
+        BABYLON.Texture.NEAREST_SAMPLINGMODE
       )
+      this.internalTexture.wrapU = BABYLON.Texture.CLAMP_ADDRESSMODE
+      this.internalTexture.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE
+
+      // Update the BaseTexture wrapper to point to new internal texture
+      this.inputTexture._texture = this.internalTexture
+
       this.texWidth = width
       this.texHeight = height
 
-      // Update compaction shader binding
+      // Update compaction shader binding (texture object changed)
       compactionShader.updateBindings(this.compactionShaderState, {
         inputTex: this.inputTexture,
       })
     }
 
-    // Copy canvas content to temp canvas, then read pixel data
-    this.tempCtx.clearRect(0, 0, width, height)
-    this.tempCtx.drawImage(canvas, 0, 0)
-    const imageData = this.tempCtx.getImageData(0, 0, width, height)
-    this.textureData.set(imageData.data)
-
-    // Debug: count non-transparent pixels (log occasionally)
-    if (Math.random() < 0.01) {
-      let nonTransparent = 0
-      for (let i = 3; i < this.textureData.length; i += 4) {
-        if (this.textureData[i] > 0) nonTransparent++
-      }
-      console.log(`[letterParticles] texture ${width}x${height}, non-transparent pixels: ${nonTransparent}`)
-    }
-
-    // Upload to GPU
-    this.inputTexture.update(this.textureData)
+    // Direct GPU upload from canvas - no getImageData CPU readback needed!
+    // This uses copyExternalImageToTexture internally for efficient transfer
+    this.engine.updateDynamicTexture(
+      this.internalTexture,
+      canvas,
+      true,  // invertY - canvas Y is flipped relative to texture coords
+      false, // premultiply alpha
+      BABYLON.Texture.NEAREST_SAMPLINGMODE
+    )
   }
 
   /**
@@ -469,7 +473,9 @@ export class LetterParticlesRenderer {
     this._initialized = false
     this.mesh?.dispose(false, true)
     this.material?.dispose(false, true)
+    // Dispose textures - internal texture must be disposed explicitly
     this.inputTexture?.dispose()
+    this.internalTexture?.dispose()
     this._pendingTextureDispose?.dispose()
     this._pendingTextureDispose = null
     this.particlesBuffer?.dispose()
