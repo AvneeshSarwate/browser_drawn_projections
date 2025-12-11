@@ -102,7 +102,9 @@ export class LetterParticlesRenderer {
     this.particlesBuffer = new BABYLON.StorageBuffer(
       this.engine,
       PARTICLE_SIZE * this.maxParticles,
-      BABYLON.Constants.BUFFER_CREATIONFLAG_STORAGE | BABYLON.Constants.BUFFER_CREATIONFLAG_WRITE
+      BABYLON.Constants.BUFFER_CREATIONFLAG_STORAGE |
+        BABYLON.Constants.BUFFER_CREATIONFLAG_READ |
+        BABYLON.Constants.BUFFER_CREATIONFLAG_WRITE
     )
 
     // Counter buffer (atomic u32)
@@ -120,6 +122,7 @@ export class LetterParticlesRenderer {
       64 * this.maxParticles,
       BABYLON.Constants.BUFFER_CREATIONFLAG_VERTEX |
         BABYLON.Constants.BUFFER_CREATIONFLAG_STORAGE |
+        BABYLON.Constants.BUFFER_CREATIONFLAG_READ |
         BABYLON.Constants.BUFFER_CREATIONFLAG_WRITE
     )
 
@@ -129,6 +132,7 @@ export class LetterParticlesRenderer {
       16 * this.maxParticles,
       BABYLON.Constants.BUFFER_CREATIONFLAG_VERTEX |
         BABYLON.Constants.BUFFER_CREATIONFLAG_STORAGE |
+        BABYLON.Constants.BUFFER_CREATIONFLAG_READ |
         BABYLON.Constants.BUFFER_CREATIONFLAG_WRITE
     )
 
@@ -161,10 +165,10 @@ export class LetterParticlesRenderer {
   }
 
   private createMesh(): void {
-    // Create a simple disc mesh for particle rendering
-    this.mesh = BABYLON.MeshBuilder.CreateDisc(
-      'letterParticleDisc',
-      { radius: 1, tessellation: 12 },
+    // Use a tiny screen‑aligned quad per instance (avoids subpixel disc tesselation artifacts)
+    this.mesh = BABYLON.MeshBuilder.CreatePlane(
+      'letterParticleQuad',
+      { size: 2, sideOrientation: BABYLON.Mesh.DOUBLESIDE },
       this.scene
     )
 
@@ -176,6 +180,7 @@ export class LetterParticlesRenderer {
     this.material.emissiveColor = new BABYLON.Color3(1, 1, 1)
     this.material.alphaMode = BABYLON.Engine.ALPHA_COMBINE
     this.material.disableDepthWrite = true
+    this.material.depthFunction = BABYLON.Constants.ALWAYS // ensure overlay ignores existing depth
     this.mesh.material = this.material
 
     // Set up thin instancing

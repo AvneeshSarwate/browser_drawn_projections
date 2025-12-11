@@ -62,7 +62,8 @@ const ensureOverlayScene = (engine: BABYLON.WebGPUEngine) => {
   overlayScene = new BABYLON.Scene(engine)
   overlayScene.autoClear = false
   overlayScene.clearColor = new BABYLON.Color4(0, 0, 0, 0)
-  overlayScene.autoClearDepthAndStencil = false
+  // Keep color buffer intact (autoClear=false) but reset depth/stencil each frame to avoid stale masking
+  overlayScene.autoClearDepthAndStencil = true
   overlayScene.skipFrustumClipping = true
 
   const cam = new BABYLON.FreeCamera('polyFxCam', new BABYLON.Vector3(0, 0, -1), overlayScene)
