@@ -220,6 +220,7 @@ export class LetterParticlesRenderer {
       settings: this.placementSettingsState,
       instanceMatrices: this.instanceMatricesBuffer,
       instanceColors: this.instanceColorsBuffer,
+      counter: this.counterBuffer,
     })
 
     // Wait for shaders to be ready

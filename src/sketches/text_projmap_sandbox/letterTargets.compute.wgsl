@@ -7,6 +7,10 @@ struct Particle {
     color: vec4<f32>,
 };
 
+struct Counter {
+    value: atomic<u32>,
+};
+
 struct PlacementSettings {
     lerpT: f32,
     bboxOriginX: f32,
@@ -30,6 +34,7 @@ struct PlacementSettings {
 @group(0) @binding(1) var<uniform> settings: PlacementSettings;
 @group(0) @binding(2) var<storage, read_write> instanceMatrices: array<vec4<f32>>;
 @group(0) @binding(3) var<storage, read_write> instanceColors: array<vec4<f32>>;
+@group(0) @binding(4) var<storage, read_write> counter: Counter;
 
 @compute @workgroup_size(64, 1, 1)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
@@ -42,8 +47,12 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
     let base = idx * 4u;
 
+    // Load live particle count from compaction pass and clamp to buffer capacity
+    let liveCountRaw = atomicLoad(&counter.value);
+    let liveCount = min(liveCountRaw, settings.maxParticles);
+
     // Handle inactive instances (beyond liveCount)
-    if (idx >= settings.liveCount) {
+    if (idx >= liveCount) {
         // Move offscreen and zero out
         instanceMatrices[base + 0u] = vec4<f32>(0.0, 0.0, 0.0, 0.0);
         instanceMatrices[base + 1u] = vec4<f32>(0.0, 0.0, 0.0, 0.0);
@@ -64,7 +73,10 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
     // Target position based on layout, centered at bbox center in NDC
     var dstPos: vec2<f32>;
-    let normalizedIdx = f32(idx) / max(1.0, f32(settings.liveCount - 1u));
+    var normalizedIdx: f32 = 0.0;
+    if (liveCount > 1u) {
+        normalizedIdx = f32(idx) / f32(liveCount - 1u);
+    }
     let bboxCenter = vec2<f32>(settings.bboxCenterNdcX, settings.bboxCenterNdcY);
 
     if (settings.targetLayout == 0u) {
@@ -83,7 +95,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         dstPos = bboxCenter + (vec2<f32>(h1, h2) * 2.0 - 1.0) * settings.targetRadius;
     } else {
         // Grid layout
-        let gridSize = u32(ceil(sqrt(f32(settings.liveCount))));
+        let gridSize = max(1u, u32(ceil(sqrt(f32(liveCount)))));
         let row = idx / gridSize;
         let col = idx % gridSize;
         let cellSize = settings.targetRadius * 2.0 / f32(gridSize);

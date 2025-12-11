@@ -47,6 +47,27 @@ export function packLetterTargetsParticle(target: Float32Array, floatOffset: num
   }
 }
 
+export interface LetterTargetsCounter {
+  value: number;
+}
+
+export const LetterTargetsCounterLayout = {
+  size: 4,
+  align: 4,
+  members: [
+  { name: 'value', offset: 0, size: 4, slot: 1 }
+  ] as const,
+} as const;
+
+export function packLetterTargetsCounter(target: Float32Array, floatOffset: number, value: LetterTargetsCounter): void {
+  const uintView = new Uint32Array(target.buffer);
+  {
+    const base = floatOffset + 0;
+    const raw = value.value;
+    uintView[base] = raw !== undefined ? Math.trunc(raw as number) >>> 0 : 0;
+  }
+}
+
 export interface LetterTargetsPlacementSettings {
   lerpT: number;
   bboxOriginX: number;
@@ -494,11 +515,44 @@ export function updateStorageBuffer_instanceColors(state: InstanceColorsStorageS
   state.buffer.update(state.data);
 }
 
+export interface CounterStorageState {
+  buffer: BABYLON.StorageBuffer;
+  data: Float32Array;
+  capacity: number;
+  floatsPerElement: number;
+}
+
+export function createStorageBuffer_counter(engine: BABYLON.WebGPUEngine, capacity: number, options?: { initial?: number[][]; usage?: number; }): CounterStorageState {
+  const byteStride = 4;
+  const floatsPerElement = byteStride / Float32Array.BYTES_PER_ELEMENT;
+  const totalFloats = floatsPerElement * capacity;
+  const data = new Float32Array(totalFloats);
+  const usage = options?.usage ?? (BABYLON.Constants.BUFFER_CREATIONFLAG_STORAGE | BABYLON.Constants.BUFFER_CREATIONFLAG_WRITE);
+  const buffer = new BABYLON.StorageBuffer(engine, byteStride * capacity, usage);
+  if (options?.initial) {
+    data.set(options.initial.flat().slice(0, totalFloats));
+    buffer.update(data);
+  }
+  return { buffer, data, capacity, floatsPerElement };
+}
+
+export function writeStorageValue_counter(state: CounterStorageState, index: number, value: number[]): void {
+  const offset = index * state.floatsPerElement;
+  for (let i = 0; i < state.floatsPerElement; i++) {
+    state.data[offset + i] = value[i] ?? 0;
+  }
+}
+
+export function updateStorageBuffer_counter(state: CounterStorageState): void {
+  state.buffer.update(state.data);
+}
+
 const bindingLayout = {
     settings: { group: 0, binding: 1 },
     particles: { group: 0, binding: 0 },
     instanceMatrices: { group: 0, binding: 2 },
-    instanceColors: { group: 0, binding: 3 }
+    instanceColors: { group: 0, binding: 3 },
+    counter: { group: 0, binding: 4 }
 };
 
 export interface ShaderBindings {
@@ -506,6 +560,7 @@ export interface ShaderBindings {
     particles: BABYLON.StorageBuffer;
     instanceMatrices: BABYLON.StorageBuffer;
     instanceColors: BABYLON.StorageBuffer;
+    counter: BABYLON.StorageBuffer;
 }
 
 export interface ShaderState {
@@ -522,6 +577,7 @@ export function createShader(engine: BABYLON.WebGPUEngine, bindings: ShaderBindi
   shader.setStorageBuffer('particles', bindings.particles);
   shader.setStorageBuffer('instanceMatrices', bindings.instanceMatrices);
   shader.setStorageBuffer('instanceColors', bindings.instanceColors);
+  shader.setStorageBuffer('counter', bindings.counter);
   return { shader, bindings };
 }
 
@@ -541,6 +597,10 @@ export function updateBindings(state: ShaderState, updates: Partial<ShaderBindin
   if (updates.instanceColors !== undefined) {
     state.bindings.instanceColors = updates.instanceColors!;
     state.shader.setStorageBuffer('instanceColors', updates.instanceColors!);
+  }
+  if (updates.counter !== undefined) {
+    state.bindings.counter = updates.counter!;
+    state.shader.setStorageBuffer('counter', updates.counter!);
   }
 }
 
