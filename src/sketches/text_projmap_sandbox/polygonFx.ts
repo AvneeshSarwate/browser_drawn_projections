@@ -11,6 +11,7 @@ import type { ShaderEffect } from '@/rendering/shaderFXBabylon'
 import type { RenderState } from './textRegionUtils'
 import { getTextStyle, getTextAnim } from './textRegionUtils'
 import type p5 from 'p5'
+import { LetterParticlesRenderer } from './letterParticles'
 
 export type PolygonFxSyncOptions = {
   engine: BABYLON.WebGPUEngine
@@ -40,8 +41,20 @@ type MeshBundle = {
   material: BABYLON.StandardMaterial
 }
 
+type LetterParticlesBundle = {
+  renderer: LetterParticlesRenderer
+  width: number
+  height: number
+  graphics: p5.Graphics
+  bboxPx: { minX: number; minY: number; w: number; h: number }
+  bboxLogical: { minX: number; minY: number; w: number; h: number }
+  poly: PolygonRenderData[number]
+  fx: FxChainMeta
+}
+
 const chains = new Map<string, ChainBundle>()
 const meshes = new Map<string, MeshBundle>()
+const letterParticlesRenderers = new Map<string, LetterParticlesBundle>()
 let overlayScene: BABYLON.Scene | undefined
 
 const ensureOverlayScene = (engine: BABYLON.WebGPUEngine) => {
@@ -169,6 +182,12 @@ const disposeEntry = (id: string) => {
     mesh.material.dispose(false, true)
     meshes.delete(id)
   }
+  const lpBundle = letterParticlesRenderers.get(id)
+  if (lpBundle) {
+    lpBundle.renderer.dispose()
+    lpBundle.graphics.remove()
+    letterParticlesRenderers.delete(id)
+  }
 }
 
 const redrawGraphics = (g: p5.Graphics, poly: PolygonRenderData[number], bboxLogical: { minX: number; minY: number }, renderState?: RenderState) => {
@@ -244,8 +263,13 @@ export const syncChainsAndMeshes = (
   const currentIds = new Set(payload.current.map((p) => p.id))
   const deletedIds = new Set(payload.deleted?.map((p) => p.id) ?? [])
 
-  // Remove deleted or missing
+  // Remove deleted or missing from both chains and letterParticles
   Array.from(chains.keys()).forEach((id) => {
+    if (!currentIds.has(id) || deletedIds.has(id)) {
+      disposeEntry(id)
+    }
+  })
+  Array.from(letterParticlesRenderers.keys()).forEach((id) => {
     if (!currentIds.has(id) || deletedIds.has(id)) {
       disposeEntry(id)
     }
@@ -286,50 +310,112 @@ export const syncChainsAndMeshes = (
       h: maxY - minY,
     }
     const canvasLogical = { width: p5Canvas.width / dpr, height: p5Canvas.height / dpr }
-
-    const { fxKey } = makeKeys({ minX: bboxPx.minX, minY: bboxPx.minY, w: bboxPx.w, h: bboxPx.h }, fx)
-    const prev = chains.get(poly.id)
     const targetWidth = Math.max(1, Math.round(bboxPx.w))
     const targetHeight = Math.max(1, Math.round(bboxPx.h))
-    const needsRecreate = !prev || prev.width !== targetWidth || prev.height !== targetHeight
 
-    if (needsRecreate) {
-      disposeEntry(poly.id)
-      const graphics = opts.mainP5.createGraphics(Math.max(1, Math.round(bboxLogical.w)), Math.max(1, Math.round(bboxLogical.h))) as p5.Graphics
-      graphics.pixelDensity(dpr)
-      const chain = createChain(engine, p5Canvas, graphics, bboxPx, bboxLogical, poly, fx)
-      if (!chain) {
-        graphics.remove()
-        return
-      }
-      const rs = renderStates.get(poly.id)
-      redrawGraphics(graphics, poly, bboxLogical, rs)
-      chain.bboxLogical = bboxLogical
-      chain.bboxPx = bboxPx
-      chain.poly = poly
-      chain.fxKey = fxKey
-      chains.set(poly.id, chain)
-      createOrUpdateMesh(poly.id, engine, chain, bboxLogical, canvasLogical)
-    } else if (prev) {
-      // Reuse existing chain when only position/metadata changed
-      const fxChanged = prev.fxKey !== fxKey
-      if (fxChanged) {
-        prev.wobble.setUniforms({
-          xStrength: fx.wobbleX,
-          yStrength: fx.wobbleY,
-          time: () => performance.now() / 1000,
+    // Branch based on chain type
+    if (fx.chain === 'letterParticles') {
+      // Handle letterParticles mode
+      const prevLP = letterParticlesRenderers.get(poly.id)
+      const needsRecreate = !prevLP || prevLP.width !== targetWidth || prevLP.height !== targetHeight
+
+      if (needsRecreate) {
+        disposeEntry(poly.id)
+        const scene = ensureOverlayScene(engine)
+        const graphics = opts.mainP5.createGraphics(Math.max(1, Math.round(bboxLogical.w)), Math.max(1, Math.round(bboxLogical.h))) as p5.Graphics
+        graphics.pixelDensity(dpr)
+
+        // Calculate maxParticles based on bbox size and scale
+        const maxParticles = Math.min(
+          Math.round(targetWidth * targetHeight * fx.maxParticlesScale),
+          100000 // Hard cap to prevent memory issues
+        )
+
+        const renderer = new LetterParticlesRenderer({
+          engine,
+          scene,
+          maxParticles,
+          canvasWidth: canvasW,
+          canvasHeight: canvasH,
         })
-        prev.hBlur.setUniforms({ pixels: fx.blurX, resolution: prev.width })
-        prev.vBlur.setUniforms({ pixels: fx.blurY, resolution: prev.height })
-        prev.fxKey = fxKey
-      }
 
-      prev.bboxLogical = bboxLogical
-      prev.bboxPx = bboxPx
-      prev.poly = poly
-      const rs = renderStates.get(poly.id)
-      redrawGraphics(prev.graphics, poly, bboxLogical, rs)
-      createOrUpdateMesh(poly.id, engine, prev, bboxLogical, canvasLogical)
+        // Initialize asynchronously - store pending initialization
+        renderer.initialize().then(() => {
+          const bundle = letterParticlesRenderers.get(poly.id)
+          if (bundle) {
+            // Initial draw and texture update
+            const rs = renderStates.get(poly.id)
+            redrawGraphics(bundle.graphics, bundle.poly, bundle.bboxLogical, rs)
+            bundle.renderer.updateTexture(bundle.graphics.elt as HTMLCanvasElement)
+          }
+        })
+
+        const rs = renderStates.get(poly.id)
+        redrawGraphics(graphics, poly, bboxLogical, rs)
+
+        letterParticlesRenderers.set(poly.id, {
+          renderer,
+          width: targetWidth,
+          height: targetHeight,
+          graphics,
+          bboxPx,
+          bboxLogical,
+          poly,
+          fx,
+        })
+      } else if (prevLP) {
+        // Update existing letterParticles renderer
+        prevLP.bboxLogical = bboxLogical
+        prevLP.bboxPx = bboxPx
+        prevLP.poly = poly
+        prevLP.fx = fx
+        const rs = renderStates.get(poly.id)
+        redrawGraphics(prevLP.graphics, poly, bboxLogical, rs)
+      }
+    } else {
+      // Handle basicBlur mode (existing behavior)
+      const { fxKey } = makeKeys({ minX: bboxPx.minX, minY: bboxPx.minY, w: bboxPx.w, h: bboxPx.h }, fx)
+      const prev = chains.get(poly.id)
+      const needsRecreate = !prev || prev.width !== targetWidth || prev.height !== targetHeight
+
+      if (needsRecreate) {
+        disposeEntry(poly.id)
+        const graphics = opts.mainP5.createGraphics(Math.max(1, Math.round(bboxLogical.w)), Math.max(1, Math.round(bboxLogical.h))) as p5.Graphics
+        graphics.pixelDensity(dpr)
+        const chain = createChain(engine, p5Canvas, graphics, bboxPx, bboxLogical, poly, fx)
+        if (!chain) {
+          graphics.remove()
+          return
+        }
+        const rs = renderStates.get(poly.id)
+        redrawGraphics(graphics, poly, bboxLogical, rs)
+        chain.bboxLogical = bboxLogical
+        chain.bboxPx = bboxPx
+        chain.poly = poly
+        chain.fxKey = fxKey
+        chains.set(poly.id, chain)
+        createOrUpdateMesh(poly.id, engine, chain, bboxLogical, canvasLogical)
+      } else if (prev) {
+        // Reuse existing chain when only position/metadata changed
+        const fxChanged = prev.fxKey !== fxKey
+        if (fxChanged) {
+          prev.wobble.setUniforms({
+            xStrength: fx.wobbleX,
+            yStrength: fx.wobbleY,
+            time: () => performance.now() / 1000,
+          })
+          prev.hBlur.setUniforms({ pixels: fx.blurX, resolution: prev.width })
+          prev.vBlur.setUniforms({ pixels: fx.blurY, resolution: prev.height })
+          prev.fxKey = fxKey
+        }
+
+        prev.bboxLogical = bboxLogical
+        prev.bboxPx = bboxPx
+        prev.poly = poly
+        const rs = renderStates.get(poly.id)
+        redrawGraphics(prev.graphics, poly, bboxLogical, rs)
+        createOrUpdateMesh(poly.id, engine, prev, bboxLogical, canvasLogical)
+      }
     }
   }
 
@@ -349,6 +435,18 @@ export const renderPolygonFx = (engine: BABYLON.Engine, renderStates: Map<string
   chains.forEach((chain) => {
     chain.end.renderAll(engine, frameId)
   })
+
+  // Update and dispatch letterParticles renderers (synchronous - GPU commands are queued)
+  letterParticlesRenderers.forEach((bundle, id) => {
+    // Skip if renderer not yet initialized
+    if (!bundle.renderer.initialized) return
+
+    const rs = renderStates.get(id)
+    redrawGraphics(bundle.graphics, bundle.poly, bundle.bboxLogical, rs)
+    bundle.renderer.updateTexture(bundle.graphics.elt as HTMLCanvasElement)
+    bundle.renderer.dispatch(bundle.bboxPx, bundle.fx)
+  })
+
   if (overlayScene) {
     overlayScene.render()
   }
@@ -356,6 +454,7 @@ export const renderPolygonFx = (engine: BABYLON.Engine, renderStates: Map<string
 
 export const disposePolygonFx = () => {
   Array.from(chains.keys()).forEach((id) => disposeEntry(id))
+  Array.from(letterParticlesRenderers.keys()).forEach((id) => disposeEntry(id))
   overlayScene?.dispose()
   overlayScene = undefined
   meshes.clear()

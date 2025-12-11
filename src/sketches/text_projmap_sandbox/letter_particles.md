@@ -15,7 +15,7 @@ Goal: add a polygon FX that renders an instanced particle cloud (one circle per 
    - Inputs: texture_2d<f32> (p5 canvas), StorageBuffer `particles`, StorageBuffer `counter`, UniformBuffer `settings`.
    - For pixels with `alpha > alphaThreshold`: atomicAdd counter, write `{uv, color}` to compacted array.
    - Outputs: compacted `particles` buffer + `liveCount` in counter.
-4. Compute pass B (**targets**): generate procedural layout positions if not done in vertex shader; writes `targetPositions` buffer of same length.
+4. Compute pass B (**targets**): generate procedural layout positions; writes `targetPositions` buffer of same length.
 5. Render pass: zero-copy thin instancing with built-in material (no custom ShaderMaterial). A compute pass writes world matrices (4×vec4 per instance) into a `StorageBuffer` flagged VERTEX|STORAGE; the mesh binds that buffer as `world0..world3` instanced attributes (see `babylon_instance_scene_example.ts`). A second storage buffer (VERTEX|STORAGE) carries per-instance `colorActive` (rgba + active flag); bound as an instanced vertex attribute so each instance matches its source pixel color. CPU never reads `liveCount`; we always draw `forcedInstanceCount = maxParticles` and cull inactive instances via matrices (offscreen translate or zero scale).
 
 ## Concrete steps
@@ -24,11 +24,10 @@ Goal: add a polygon FX that renders an instanced particle cloud (one circle per 
 - Update defaults/presets + UI schema in `appState.ts` and any Livecode controls to expose lerpT/target layout. Ensure `getFxMeta` parses new fields.
 
 ### 2) File layout
-- Create `src/rendering/postFX/letterParticles/` with:
-  - `letterParticles.compute.wgsl` (compaction)
-  - `letterTargets.compute.wgsl` (placement/lerp compute — mandatory)
-  - Generated outputs: `.generated.ts` alongside each WGSL (via existing Vite WGSL plugin).
-  - A TS module `letterParticles.ts` that wires compute + instancing buffers (no custom material).
+- `letterParticles.compute.wgsl` (compaction)
+- `letterTargets.compute.wgsl` (placement/lerp compute — mandatory)
+- Generated outputs: `.generated.ts` alongside each WGSL (automatically done via existing Vite WGSL plugin).
+- A TS module `letterParticles.ts` that wires compute + instancing buffers (no custom material).
 
 ### 3) WGSL details
 - Compaction shader (group 0):
@@ -43,7 +42,7 @@ Goal: add a polygon FX that renders an instanced particle cloud (one circle per 
   - For each index `< maxParticles`: if `idx >= liveCount`, write translate offscreen (or scale 0) and set active=0/alpha=0; else compute src position from uv → bbox → NDC, compute target layout (ring), `pos = mix(src, dst, lerpT)` (mandatory lerp stage), write world0-3 rows and copy color from `particles` into `instanceColorActive` (alpha preserved, active=1).
 
 ### 4) Type generation & glue
-- Keep WGSL under `src/` for Vite plugin; use generated helpers (`createShader`, `createStorageBuffer_*`, `createUniformBuffer_*`) instead of manual bindings.
+- Keep WGSL in `src/sketches/text_projmap_sandbox` for Vite plugin; use generated helpers (`createShader`, `createStorageBuffer_*`, `createUniformBuffer_*`) instead of manual bindings.
 - Mark `instanceMatrices` buffer with `BUFFER_CREATIONFLAG_STORAGE | BUFFER_CREATIONFLAG_VERTEX` so it can be both compute output and vertex input (zero copy), mirroring `babylon_instance_scene_example.ts`.
 - `instanceColorActive` buffer also flagged VERTEX|STORAGE; always produced by compute so colors match source pixels.
 - Counter buffer: 4-byte storage; reset via generated helper; no CPU reads.
@@ -71,9 +70,7 @@ Goal: add a polygon FX that renders an instanced particle cloud (one circle per 
 - WebGPU-only; no fallback required.
 
 ## Stretch items
-- GPU-driven indirect draw (when Babylon exposes it) to avoid drawing inactive instances at all.
 - Additional target layouts (grid/spiral/noise flow field) selectable via enum; could reuse placement compute to write alternative matrices.
-- If soft circles desired, swap mesh to a disc; still no custom material needed.
 
 ## Decision on liveCount usage (no CPU readback)
 - Keep `forcedInstanceCount = maxParticles`; store `liveCount` or an `active` flag per instance in the particle buffer.

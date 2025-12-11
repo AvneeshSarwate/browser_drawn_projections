@@ -53,13 +53,21 @@ export const textStyleMetadataSchema = {
 
 // Simple per-polygon FX parameters
 export const fxChainSchema = z.object({
-  chain: z.enum(['basicBlur']).default('basicBlur'),
+  chain: z.enum(['basicBlur', 'letterParticles']).default('basicBlur'),
   enabled: z.boolean().default(true),
   wobbleX: z.coerce.number().default(0.003),
   wobbleY: z.coerce.number().default(0.003),
   blurX: z.coerce.number().default(2),
   blurY: z.coerce.number().default(2),
   pad: z.coerce.number().default(2),
+  // letterParticles-specific params
+  alphaThreshold: z.coerce.number().min(0).max(1).default(0.01),
+  circleRadius: z.coerce.number().positive().default(0.01),
+  lerpT: z.coerce.number().min(0).max(1).default(0),
+  targetLayout: z.enum(['ring', 'spiral', 'noise', 'grid']).default('ring'),
+  targetRadius: z.coerce.number().positive().default(0.3),
+  seed: z.coerce.number().default(0),
+  maxParticlesScale: z.coerce.number().positive().default(1),
 })
 
 export type FxChainMeta = z.infer<typeof fxChainSchema>
