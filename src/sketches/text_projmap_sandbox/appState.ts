@@ -63,7 +63,8 @@ export const fxChainSchema = z.object({
   // letterParticles-specific params
   alphaThreshold: z.coerce.number().min(0).max(1).default(0.01),
   circleRadius: z.coerce.number().positive().default(0.001), // .1% of NDC space
-  lerpT: z.coerce.number().min(0).max(1).default(0),
+  lerpOscSpeed: z.coerce.number().default(1), // oscillation speed multiplier
+  oscSharp: z.coerce.number().min(0).max(1).default(0.5), // logistic sigmoid sharpness
   targetLayout: z.enum(['ring', 'spiral', 'noise', 'grid']).default('ring'),
   targetRadius: z.coerce.number().positive().default(0.3),
   seed: z.coerce.number().default(0),

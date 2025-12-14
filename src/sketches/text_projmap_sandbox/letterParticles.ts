@@ -143,7 +143,9 @@ export class LetterParticlesRenderer {
     })
 
     this.placementSettingsState = placementShader.createUniformBuffer_settings(this.engine, {
-      lerpT: 0,
+      lerpOscSpeed: 1,
+      time: 0,
+      oscSharp: 0.5,
       bboxOriginX: 0,
       bboxOriginY: 0,
       bboxWidth: 1,
@@ -393,7 +395,8 @@ export class LetterParticlesRenderer {
         maxParticles: this.maxParticles,
         bbox,
         circleRadius: fx.circleRadius,
-        lerpT: fx.lerpT,
+        lerpOscSpeed: fx.lerpOscSpeed,
+        oscSharp: fx.oscSharp,
       })
     }
 
@@ -429,7 +432,9 @@ export class LetterParticlesRenderer {
     // Note: We use maxParticles for liveCount since we can't synchronously read the counter.
     // The placement shader will handle inactive particles by moving them offscreen.
     placementShader.updateUniformBuffer_settings(this.placementSettingsState, {
-      lerpT: fx.lerpT,
+      lerpOscSpeed: fx.lerpOscSpeed,
+      time: performance.now() / 1000,
+      oscSharp: fx.oscSharp,
       bboxOriginX: bbox.minX,
       bboxOriginY: bbox.minY,
       bboxWidth: bbox.w,

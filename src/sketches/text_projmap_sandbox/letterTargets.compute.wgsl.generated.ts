@@ -69,7 +69,9 @@ export function packLetterTargetsCounter(target: Float32Array, floatOffset: numb
 }
 
 export interface LetterTargetsPlacementSettings {
-  lerpT: number;
+  lerpOscSpeed: number;
+  time: number;
+  oscSharp: number;
   bboxOriginX: number;
   bboxOriginY: number;
   bboxWidth: number;
@@ -88,25 +90,27 @@ export interface LetterTargetsPlacementSettings {
 }
 
 export const LetterTargetsPlacementSettingsLayout = {
-  size: 64,
+  size: 72,
   align: 4,
   members: [
-  { name: 'lerpT', offset: 0, size: 4, slot: 1 },
-  { name: 'bboxOriginX', offset: 4, size: 4, slot: 1 },
-  { name: 'bboxOriginY', offset: 8, size: 4, slot: 1 },
-  { name: 'bboxWidth', offset: 12, size: 4, slot: 1 },
-  { name: 'bboxHeight', offset: 16, size: 4, slot: 1 },
-  { name: 'canvasWidth', offset: 20, size: 4, slot: 1 },
-  { name: 'canvasHeight', offset: 24, size: 4, slot: 1 },
-  { name: 'targetRadius', offset: 28, size: 4, slot: 1 },
-  { name: 'circleRadius', offset: 32, size: 4, slot: 1 },
-  { name: 'maxParticles', offset: 36, size: 4, slot: 1 },
-  { name: 'liveCount', offset: 40, size: 4, slot: 1 },
-  { name: 'targetLayout', offset: 44, size: 4, slot: 1 },
-  { name: 'seed', offset: 48, size: 4, slot: 1 },
-  { name: 'bboxCenterNdcX', offset: 52, size: 4, slot: 1 },
-  { name: 'bboxCenterNdcY', offset: 56, size: 4, slot: 1 },
-  { name: 'padding', offset: 60, size: 4, slot: 1 }
+  { name: 'lerpOscSpeed', offset: 0, size: 4, slot: 1 },
+  { name: 'time', offset: 4, size: 4, slot: 1 },
+  { name: 'oscSharp', offset: 8, size: 4, slot: 1 },
+  { name: 'bboxOriginX', offset: 12, size: 4, slot: 1 },
+  { name: 'bboxOriginY', offset: 16, size: 4, slot: 1 },
+  { name: 'bboxWidth', offset: 20, size: 4, slot: 1 },
+  { name: 'bboxHeight', offset: 24, size: 4, slot: 1 },
+  { name: 'canvasWidth', offset: 28, size: 4, slot: 1 },
+  { name: 'canvasHeight', offset: 32, size: 4, slot: 1 },
+  { name: 'targetRadius', offset: 36, size: 4, slot: 1 },
+  { name: 'circleRadius', offset: 40, size: 4, slot: 1 },
+  { name: 'maxParticles', offset: 44, size: 4, slot: 1 },
+  { name: 'liveCount', offset: 48, size: 4, slot: 1 },
+  { name: 'targetLayout', offset: 52, size: 4, slot: 1 },
+  { name: 'seed', offset: 56, size: 4, slot: 1 },
+  { name: 'bboxCenterNdcX', offset: 60, size: 4, slot: 1 },
+  { name: 'bboxCenterNdcY', offset: 64, size: 4, slot: 1 },
+  { name: 'padding', offset: 68, size: 4, slot: 1 }
   ] as const,
 } as const;
 
@@ -114,88 +118,100 @@ export function packLetterTargetsPlacementSettings(target: Float32Array, floatOf
   const uintView = new Uint32Array(target.buffer);
   {
     const base = floatOffset + 0;
-    const raw = value.lerpT;
+    const raw = value.lerpOscSpeed;
     target[base] = raw !== undefined ? Number(raw) : 0;
   }
   {
     const base = floatOffset + 1;
-    const raw = value.bboxOriginX;
+    const raw = value.time;
     target[base] = raw !== undefined ? Number(raw) : 0;
   }
   {
     const base = floatOffset + 2;
-    const raw = value.bboxOriginY;
+    const raw = value.oscSharp;
     target[base] = raw !== undefined ? Number(raw) : 0;
   }
   {
     const base = floatOffset + 3;
-    const raw = value.bboxWidth;
+    const raw = value.bboxOriginX;
     target[base] = raw !== undefined ? Number(raw) : 0;
   }
   {
     const base = floatOffset + 4;
-    const raw = value.bboxHeight;
+    const raw = value.bboxOriginY;
     target[base] = raw !== undefined ? Number(raw) : 0;
   }
   {
     const base = floatOffset + 5;
-    const raw = value.canvasWidth;
+    const raw = value.bboxWidth;
     target[base] = raw !== undefined ? Number(raw) : 0;
   }
   {
     const base = floatOffset + 6;
-    const raw = value.canvasHeight;
+    const raw = value.bboxHeight;
     target[base] = raw !== undefined ? Number(raw) : 0;
   }
   {
     const base = floatOffset + 7;
-    const raw = value.targetRadius;
+    const raw = value.canvasWidth;
     target[base] = raw !== undefined ? Number(raw) : 0;
   }
   {
     const base = floatOffset + 8;
-    const raw = value.circleRadius;
+    const raw = value.canvasHeight;
     target[base] = raw !== undefined ? Number(raw) : 0;
   }
   {
     const base = floatOffset + 9;
+    const raw = value.targetRadius;
+    target[base] = raw !== undefined ? Number(raw) : 0;
+  }
+  {
+    const base = floatOffset + 10;
+    const raw = value.circleRadius;
+    target[base] = raw !== undefined ? Number(raw) : 0;
+  }
+  {
+    const base = floatOffset + 11;
     const raw = value.maxParticles;
     uintView[base] = raw !== undefined ? Math.trunc(raw as number) >>> 0 : 0;
   }
   {
-    const base = floatOffset + 10;
+    const base = floatOffset + 12;
     const raw = value.liveCount;
     uintView[base] = raw !== undefined ? Math.trunc(raw as number) >>> 0 : 0;
   }
   {
-    const base = floatOffset + 11;
+    const base = floatOffset + 13;
     const raw = value.targetLayout;
     uintView[base] = raw !== undefined ? Math.trunc(raw as number) >>> 0 : 0;
   }
   {
-    const base = floatOffset + 12;
+    const base = floatOffset + 14;
     const raw = value.seed;
     target[base] = raw !== undefined ? Number(raw) : 0;
   }
   {
-    const base = floatOffset + 13;
+    const base = floatOffset + 15;
     const raw = value.bboxCenterNdcX;
     target[base] = raw !== undefined ? Number(raw) : 0;
   }
   {
-    const base = floatOffset + 14;
+    const base = floatOffset + 16;
     const raw = value.bboxCenterNdcY;
     target[base] = raw !== undefined ? Number(raw) : 0;
   }
   {
-    const base = floatOffset + 15;
+    const base = floatOffset + 17;
     const raw = value.padding;
     target[base] = raw !== undefined ? Number(raw) : 0;
   }
 }
 
 const uniformLayout_settings = [
-  { name: 'lerpT', slot: 1 },
+  { name: 'lerpOscSpeed', slot: 1 },
+  { name: 'time', slot: 1 },
+  { name: 'oscSharp', slot: 1 },
   { name: 'bboxOriginX', slot: 1 },
   { name: 'bboxOriginY', slot: 1 },
   { name: 'bboxWidth', slot: 1 },
@@ -214,7 +230,9 @@ const uniformLayout_settings = [
 ] as const;
 
 export interface SettingsUniforms {
-  lerpT: number;
+  lerpOscSpeed: number;
+  time: number;
+  oscSharp: number;
   bboxOriginX: number;
   bboxOriginY: number;
   bboxWidth: number;
@@ -240,7 +258,9 @@ export interface SettingsUniformState {
 export function createUniformBuffer_settings(engine: BABYLON.WebGPUEngine, initial?: Partial<SettingsUniforms>): SettingsUniformState {
   const buffer = new BABYLON.UniformBuffer(engine);
   const uniforms: SettingsUniforms = {
-    lerpT: 0,
+    lerpOscSpeed: 0,
+    time: 0,
+    oscSharp: 0,
     bboxOriginX: 0,
     bboxOriginY: 0,
     bboxWidth: 0,
@@ -270,14 +290,32 @@ export function createUniformBuffer_settings(engine: BABYLON.WebGPUEngine, initi
 
 export function updateUniformBuffer_settings(state: SettingsUniformState, updates: Partial<SettingsUniforms>): void {
   let dirty = false;
-  if (updates.lerpT !== undefined) {
+  if (updates.lerpOscSpeed !== undefined) {
     dirty = true;
-    const raw = updates.lerpT! as any;
+    const raw = updates.lerpOscSpeed! as any;
     const numeric = raw !== undefined ? Number(raw) : 0;
-    state.uniforms.lerpT = numeric;
+    state.uniforms.lerpOscSpeed = numeric;
     const bufferView = new Float32Array(1);
     bufferView[0] = numeric;
-    state.buffer.updateUniform('lerpT', bufferView, 1);
+    state.buffer.updateUniform('lerpOscSpeed', bufferView, 1);
+  }
+  if (updates.time !== undefined) {
+    dirty = true;
+    const raw = updates.time! as any;
+    const numeric = raw !== undefined ? Number(raw) : 0;
+    state.uniforms.time = numeric;
+    const bufferView = new Float32Array(1);
+    bufferView[0] = numeric;
+    state.buffer.updateUniform('time', bufferView, 1);
+  }
+  if (updates.oscSharp !== undefined) {
+    dirty = true;
+    const raw = updates.oscSharp! as any;
+    const numeric = raw !== undefined ? Number(raw) : 0;
+    state.uniforms.oscSharp = numeric;
+    const bufferView = new Float32Array(1);
+    bufferView[0] = numeric;
+    state.buffer.updateUniform('oscSharp', bufferView, 1);
   }
   if (updates.bboxOriginX !== undefined) {
     dirty = true;

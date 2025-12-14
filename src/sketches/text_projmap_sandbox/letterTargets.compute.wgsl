@@ -12,7 +12,9 @@ struct Counter {
 };
 
 struct PlacementSettings {
-    lerpT: f32,
+    lerpOscSpeed: f32,
+    time: f32,
+    oscSharp: f32,
     bboxOriginX: f32,
     bboxOriginY: f32,
     bboxWidth: f32,
@@ -29,6 +31,24 @@ struct PlacementSettings {
     bboxCenterNdcY: f32,
     padding: f32,
 };
+
+// Sine scaled to 0-1 range
+fn sinN(x: f32) -> f32 {
+    return (sin(x) + 1.0) * 0.5;
+}
+
+// Logistic sigmoid normalized (adapted from logisticSigmoid.ts)
+fn logisticSigmoid(x: f32, sharpness: f32) -> f32 {
+    let epsilon = 0.0001;
+    let minParamA = 0.0 + epsilon;
+    let maxParamA = 1.0 - epsilon;
+    let a_clamped = clamp(sharpness, minParamA, maxParamA);
+    let a = (1.0 / (1.0 - a_clamped) - 1.0);
+    let A = 1.0 / (1.0 + exp(0.0 - (x - 0.5) * a * 2.0));
+    let B = 1.0 / (1.0 + exp(a));
+    let C = 1.0 / (1.0 + exp(0.0 - a));
+    return (A - B) / (C - B);
+}
 
 @group(0) @binding(0) var<storage, read> particles: array<Particle>;
 @group(0) @binding(1) var<uniform> settings: PlacementSettings;
@@ -105,8 +125,13 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         );
     }
 
+    // Calculate oscillating lerp value: logisticSigmoid(sinN(time * lerpOscSpeed), oscSharp)
+    let oscPhase = settings.time * settings.lerpOscSpeed;
+    let sinVal = sinN(oscPhase);
+    let lerpT = logisticSigmoid(sinVal, settings.oscSharp);
+
     // Lerp between source and target positions
-    let pos = mix(srcPos, dstPos, settings.lerpT);
+    let pos = mix(srcPos, dstPos, lerpT);
 
     // Build 2D transformation matrix (scale + translate)
     let scale = settings.circleRadius;
