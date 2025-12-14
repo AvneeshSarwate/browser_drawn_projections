@@ -26,7 +26,7 @@ structured metadata editor plan
 
 {
   "fillAnim": "dropAndScroll",
-  "textInd": 0
+  "textInd": "…and when I came out there were National Guard’s people on the corners with guns.  I mean, it’s a frightening experience.  It’s like what I imagine being in a hostile territory must be like.  It had a strange effect on me in that I tried to go on about my business as usual, as though nothing were taking place.  Because even when I saw the guards people there, I still was not aware that someone had been killed the night before."
 }
 
 remove tool-specific selection functions in freehandTool.ts and polygonTool.ts

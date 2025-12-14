@@ -10,11 +10,14 @@ import Konva from 'konva'
 import type { FlattenedStroke, FlattenedStrokeGroup, FreehandRenderData, PolygonRenderData } from '@/canvas/canvasState'
 import { z } from 'zod'
 import { switchedSchema, type InferFlat } from '@/canvas/switchedSchema'
+import { quotes } from './quotes'
+
+export const defaultQuoteText = `Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.`
 
 export const textAnimSchema = switchedSchema(
   z.object({
     fillAnim: z.enum(['dropAndScroll', 'matterExplode']).default('dropAndScroll'),
-    textInd: z.number().default(0)
+    textInd: z.coerce.string().default(defaultQuoteText)
   }),
   'fillAnim',
   {
@@ -53,7 +56,7 @@ export const textStyleMetadataSchema = {
 
 // Simple per-polygon FX parameters
 export const fxChainSchema = z.object({
-  chain: z.enum(['basicBlur', 'letterParticles']).default('letterParticles'),
+  chain: z.enum(['basicBlur', 'letterParticles']).default('basicBlur'),
   enabled: z.boolean().default(true),
   wobbleX: z.coerce.number().default(0.003),
   wobbleY: z.coerce.number().default(0.003),
@@ -122,8 +125,8 @@ export const appState: TemplateAppState = {
 export const appStateName = 'text_projmap_sandbox'
 
 export const resolution = {
-  width: 1000,
-  height: 500
+  width: 1280,
+  height: 720
 }
 
 export const globalStore = defineStore(appStateName, () => {

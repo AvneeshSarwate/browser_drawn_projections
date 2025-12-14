@@ -189,9 +189,14 @@ export const makeSignature = (points: Point[], meta: unknown) => {
 }
 
 export const chooseText = (textInd: unknown) => {
-  const idx = Number.isFinite(Number(textInd))
-    ? clamp(Math.floor(Number(textInd)), 0, quotes.length - 1)
-    : 0
+  // Primary path: if a non-empty string is provided, use it directly (supports new schema)
+  if (typeof textInd === 'string' && textInd.trim().length > 0) {
+    return textInd
+  }
+
+  // Backward compatibility: accept numeric indices (including numeric strings)
+  const num = Number(textInd)
+  const idx = Number.isFinite(num) ? clamp(Math.floor(num), 0, quotes.length - 1) : 0
   return quotes[idx] ?? quotes[0] ?? ''
 }
 
