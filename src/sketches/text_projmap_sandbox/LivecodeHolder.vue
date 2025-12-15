@@ -11,6 +11,7 @@ import { DropAndScrollManager } from './dropAndScroll'
 import { MatterExplodeManager } from './matterExplode'
 import { syncChainsAndMeshes, renderPolygonFx, disposePolygonFx, type PolygonFxSyncOptions } from './polygonFx'
 import { getTextStyle, getTextAnim, type RenderState } from './textRegionUtils'
+import { runAllTimingTests } from '@/channels/timing_tests'
 
 const appState = inject<TemplateAppState>(appStateName)!!
 const canvasRootRef = ref<InstanceType<typeof CanvasRoot> | null>(null)
@@ -18,6 +19,18 @@ const dropAndScrollManager = new DropAndScrollManager(() => appState.p5Instance)
 const matterExplodeManager = new MatterExplodeManager(() => appState.p5Instance)
 let polygonFxOpts: PolygonFxSyncOptions | null = null
 let frameCounter = 0
+
+// async function runTimingTests() {
+//   console.log('Running timing tests...')
+//   try {
+//     await runAllTimingTests()
+//   } catch (err) {
+//     console.error(err)
+//   }
+//   console.log('Timing tests completed')
+// }
+// runTimingTests()
+
 
 const metadataSchemas = [textAnimMetadataSchema, textStyleMetadataSchema, fxChainMetadataSchema]
 

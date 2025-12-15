@@ -24,6 +24,7 @@ const LERP_SPEED = 0.15
 const WALL_THICKNESS = 4
 const LETTER_RADIUS = 3
 const LOG_ENABLED = false
+const ENGINE_TIME_STEP_MS = 16.666
 
 const WALL_CATEGORY = 0x0001
 const LETTER_CATEGORY = 0x0002
@@ -247,7 +248,7 @@ export class MatterExplodeManager {
 
     const physicsStartTime = ctx.time
     while (!ctx.isCanceled && ctx.time - physicsStartTime < PHYSICS_DURATION) {
-      Engine.update(engine, 16.666)
+      Engine.update(engine, ENGINE_TIME_STEP_MS)
       this.updateRenderState(id, letterBodies, prevTextOffset, text)
       await ctx.waitSec(FRAME_WAIT)
     }

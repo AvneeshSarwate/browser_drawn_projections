@@ -48,6 +48,7 @@ const props = withDefaults(defineProps<{
   showTimeline?: boolean
   showVisualizations?: boolean
   showSnapshots?: boolean
+  showRescale?: boolean
   metadataSchemas?: { name: string; schema: ZodTypeAny }[]
 }>(), {
   initialFreehandState: '',
@@ -57,6 +58,7 @@ const props = withDefaults(defineProps<{
   showTimeline: false,
   showVisualizations: false,
   showSnapshots: false,
+  showRescale: false,
   metadataSchemas: () => [],
 })
 
@@ -350,6 +352,35 @@ const redo = () => commandStack.redo()
 canvasState.command.executeCommand = executeCommand
 canvasState.command.pushCommand = (name: string, beforeState: string, afterState: string) => {
   commandStack.pushCommand(name, beforeState, afterState)
+}
+
+const rescaleCanvas720To1080 = () => {
+  const stage = canvasState.stage
+  if (!stage) return
+
+  // 1280x720 -> 1920x1080
+  const sx = 1920 / 1280
+  const sy = 1080 / 720
+
+  const applyScaleFromOrigin = (node?: Konva.Node) => {
+    if (!node) return
+    node.x(node.x() * sx)
+    node.y(node.y() * sy)
+    node.scaleX(node.scaleX() * sx)
+    node.scaleY(node.scaleY() * sy)
+  }
+
+  executeCommand('Rescale 720p → 1080p', () => {
+    applyScaleFromOrigin(canvasState.groups.freehandShape)
+    applyScaleFromOrigin(canvasState.groups.polygonShapes)
+    applyScaleFromOrigin(canvasState.groups.circleShapes)
+
+    // Keep transformer + highlight aligned with the (possibly) selected node(s)
+    canvasState.layers.transformer?.forceUpdate()
+    metadataToolkit.updateMetadataHighlight(selectionStore.getActiveSingleNode(canvasState) ?? undefined)
+
+    stage.batchDraw()
+  })
 }
 
 // Grouping logic moved to core/selectTool
@@ -974,6 +1005,9 @@ onUnmounted(() => {
         <button @click="metadataEditorVisible = !metadataEditorVisible" :class="{ active: metadataEditorVisible }"
           :disabled="canvasState.freehand.isAnimating.value">
           📝 Metadata
+        </button>
+        <button v-if="props.showRescale" @click="rescaleCanvas720To1080" :disabled="canvasState.freehand.isAnimating.value">
+          ⬆️ 720→1080
         </button>
         <button v-if="props.showSnapshots" @click="snapshotsPanelVisible = !snapshotsPanelVisible" :class="{ active: snapshotsPanelVisible }"
           :disabled="canvasState.freehand.isAnimating.value">

@@ -1,121 +1,300 @@
 /* eslint-disable no-constant-condition */
 // deno-lint-ignore-file no-explicit-any no-unused-vars no-this-alias require-await
 
+
+// chat for implementing/fixing offline mode - https://chatgpt.com/c/69343bfc-5394-832f-a246-c0be525623fd
+
 /**
- * https://chatgpt.com/c/69343bfc-5394-832f-a246-c0be525623fd
- * 
- * Timing engine v2:
- * - Single scheduler per root context (min-heap) to prevent drift + preserve logical ordering.
- * - waitSec() schedules absolute logical deadlines (seconds).
- * - wait(beats) schedules absolute beat deadlines using a TempoMap (supports interactive BPM changes).
- * - DateTimeContext: setTimeout-only (works everywhere), NO waitFrame().
- * - BrowserTimeContext: adds waitFrame() via a single internal RAF driver (browser only).
- * - OfflineTimeContext + OfflineRunner: ergonomic offline stepping + frame simulation at 60fps.
+ * Timing Engine v2 — Architecture, Semantics, and Invariants
+ * =========================================================
  *
- * NOTE: You said you already have PriorityQueue; import it here.
- */
-
-
-/**
- * Timing Engine Architecture (v2)
- * ===============================
+ * Overview
+ * --------
+ * This module implements a deterministic “logical-time” timing engine with:
+ * - drift-free waits (time & beats)
+ * - structured concurrency (branch / branchWait, cancellation cascades)
+ * - interactive tempo changes (wait(beats) retimes automatically)
+ * - dual execution modes:
+ *     (1) realtime: driven by wall clock using setTimeout / RAF
+ *     (2) offline: driven by an explicit stepping API (OfflineRunner), enabling faster-than-realtime rendering
+ *
+ * The key idea: user code never sleeps “for N ms”. Instead it sleeps until an *absolute logical deadline*.
+ * Logical time is advanced in discrete *timeslices* determined by the earliest pending deadline(s).
+ *
  *
  * Goals
  * -----
- * - Drift-free waits: `await ctx.waitSec(x)` and `await ctx.wait(beats)` should schedule against a
- *   logical timeline (not accumulate setTimeout jitter).
- * - Structured concurrency: spawn tasks (branches), cancel whole subtrees, and optionally join
- *   branches while preserving logical time ordering.
- * - Musical time: `wait(beats)` must remain correct under interactive tempo changes (slider/MIDI/LFO),
- *   without rescheduling every pending waiter.
- * - Offline rendering: deterministic, faster-than-realtime simulation with an ergonomic “step frames”
- *   API (e.g. 60Hz) and correct ordering semantics.
+ * 1) Drift-free timing:
+ *    - setTimeout jitter should not accumulate across repeated waits.
+ *    - Logical time should advance exactly to the intended target times.
  *
- * Core Concepts
+ * 2) Consistent concurrency:
+ *    - If two coroutines schedule waits at T=0.1 and T=0.2, the 0.1 wait must resolve first.
+ *    - Parallel branches can run independently without forcing parent context time forward unless joined.
+ *
+ * 3) Tempo-aware beat timing:
+ *    - wait(beats) should be stable under bpm changes.
+ *    - bpm changes should not require rescheduling every pending beat waiter (head-only retiming).
+ *
+ * 4) Unified scheduler across modes:
+ *    - The same scheduling algorithm resolves logical timeslices in both realtime and offline.
+ *    - The difference is only “how do we wake up to process the next due timeslice?”
+ *
+ * 5) Ergonomic offline rendering:
+ *    - OfflineRunner can step time or frames and run the same timed code without wall-clock delays.
+ *
+ *
+ * Capabilities / Public API Summary
+ * --------------------------------
+ * - launch(fn): create a root DateTimeContext in realtime (setTimeout-only, works everywhere).
+ * - launchBrowser(fn): create a root BrowserTimeContext in realtime with waitFrame() (browser only).
+ * - OfflineRunner(fn): create an OfflineTimeContext plus stepping methods:
+ *     - stepSec(dt): advance offline logical time by dt seconds (processes all due waits)
+ *     - stepFrame(): advance by 1/fps and resolve waitFrame() waiters
+ *
+ * Context API:
+ * - ctx.waitSec(seconds): drift-free wait in seconds
+ * - ctx.wait(beats): wait in beats under a variable TempoMap (retimes under bpm changes)
+ * - ctx.branch(fn): spawn a child task that does NOT advance parent ctx.time on completion
+ * - ctx.branchWait(fn): spawn a child task that DOES update parent ctx.time on completion
+ * - ctx.cancel(): cancel this context and its entire subtree
+ * - ctx.setBpm(bpm): interactive tempo change (stamped at “root current time”)
+ * - ctx.rampBpmTo(bpm, durSec): optional tempo ramp helper
+ *
+ *
+ * Key Concepts
+ * ------------
+ * Logical time:
+ * - Each TimeContext has `ctx.time` (logical seconds).
+ * - Logical time progresses only when waits resolve; it is NOT wallNow().
+ *
+ * Root context:
+ * - Each context tree has one root context.
+ * - The root stores global scheduling state needed to keep parallel coroutines consistent.
+ *
+ * root.mostRecentDescendentTime:
+ * - The root tracks the maximum logical time reached by any descendant.
+ * - This enforces the “no drift / constant alignment” property:
+ *     BaseTime = max(root.mostRecentDescendentTime, ctx.time)
+ *     TargetTime = BaseTime + delta
+ *   so if wall-clock is late, subsequent waits get shorter wall delays.
+ *
+ * Scheduler:
+ * - One TimeScheduler per root context.
+ * - It owns:
+ *   - timePQ: min-heap for time-based waits by absolute targetTime
+ *   - beatPQs: map tempoId -> min-heap for beat waits by absolute targetBeat
+ *   - tempoHeadPQ: min-heap of “head waiter due-time per tempo” (derived from beatPQs)
+ *   - frameWaiters: set of waitFrame waiters (resolved at RAF ticks or offline frame ticks)
+ *
+ *
+ * Wait Semantics
  * -------------
- * - Logical time (seconds): every TimeContext has `ctx.time` representing the logical timeline.
- * - Root context: the root of a context tree stores the scheduler and shared state used to keep
- *   concurrency “consistent”.
- * - mostRecentDescendentTime: the root tracks the maximum logical time reached by any descendant.
- *   Wait scheduling uses this to prevent drift and keep branches aligned.
- *
- * Wait Semantics (Seconds)
- * ------------------------
- * - `waitSec(sec)` schedules a logical deadline, not "sleep for sec".
- *   Base time = max(root.mostRecentDescendentTime, ctx.time)
- *   Target time = base time + sec
- * - When the wait resolves, ctx.time is set to the target time (exactly), regardless of how late
- *   the underlying timer fired. The “lateness” only affects wall-clock, not logical time.
- * - This is the mechanism that prevents drift: if the wall clock runs late, the next wait’s wall delay
- *   shrinks because targetTime - scheduler.now() is smaller.
- *
- * Scheduler
- * ---------
- * - One scheduler per root context.
- * - Uses a min-heap (priority queue) of absolute deadlines.
- * - Realtime mode: at most one setTimeout is armed for the earliest deadline. When it fires (or when
- *   deadlines are already due), the scheduler processes exactly one logical timeslice at the earliest
- *   deadline, resolves all waiters at that time, then yields to microtasks before advancing further.
- * - Offline mode: no setTimeout. The test/renderer advances `scheduler.now()` explicitly; the scheduler
- *   repeatedly processes due timeslices up to the requested time, yielding to microtasks between slices.
- *
- * IMPORTANT INVARIANT:
- * - After resolving any batch at time T, the scheduler MUST yield (microtask) before processing a later
- *   time. This allows coroutines resumed at T to enqueue new waits at intermediate times (T < t < next).
- *   Without this, offline simulation can “skip” events until the next advance call.
- *
- * Beat / Tempo Semantics
- * ----------------------
- * - `wait(beats)` does NOT convert beats->seconds once at call time.
- * - Instead, each context has a TempoMap. `wait(beats)` schedules on an absolute target beat:
+ * waitSec(sec):
+ * - Computes absolute logical deadline:
  *     baseTime = max(root.mostRecentDescendentTime, ctx.time)
+ *     targetTime = baseTime + clamp(sec, >= 0)
+ * - Schedules a waiter in timePQ at deadline = targetTime.
+ * - When the scheduler processes that deadline, it sets:
+ *     ctx.time = max(ctx.time, targetTime)
+ *     root.mostRecentDescendentTime = max(root.mostRecentDescendentTime, ctx.time)
+ *
+ * wait(beats):
+ * - Schedules in beat-space, not “beats converted to seconds once”.
+ * - Computes:
+ *     baseTime  = max(root.mostRecentDescendentTime, ctx.time)
  *     baseBeats = tempo.beatsAtTime(baseTime)
  *     targetBeat = baseBeats + beats
- * - The scheduler converts the head beat waiter to a time via tempo.timeAtBeats(targetBeat).
- * - Tempo changes (interactive slider/MIDI/LFO) can retime pending beat waits automatically.
+ * - Inserts into beatPQs[tempoId] by targetBeat.
+ * - The scheduler keeps exactly one entry per tempo in tempoHeadPQ:
+ *     dueTime = tempo.timeAtBeats(beatPQs[tempoId].peek().targetBeat)
+ *     tempoHeadPQ stores (tempoId, dueTime)
  *
- * PERFORMANCE DESIGN DECISION:
- * - Beat waiters are grouped by TempoMap. When a TempoMap changes, only that TempoMap’s “head” beat waiter
- *   needs its time recomputed (the earliest targetBeat for that map). This avoids rescheduling all waiters
- *   when doing frequent tempo automation.
+ * Tempo changes:
+ * - setBpm writes to the TempoMap at:
+ *     t = root.mostRecentDescendentTime
+ *   This “root current time” definition is critical:
+ *   - robust in offline mode even when offline stepping jumps forward
+ *   - insensitive to microtask ordering differences
+ * - After a tempo change, only that tempoId’s head dueTime is recomputed (refreshTempoHead()).
  *
- * Tempo API Safety
- * ---------------
- * - `ctx.bpm` is read-only; tempo changes go through `ctx.setBpm(...)`.
- * - Tempo writes are stamped at “now” from the root scheduler (never in the past, never in the future).
- *   This avoids retroactive tempo edits which can invalidate already-scheduled waits.
  *
- * Structured Concurrency
- * ----------------------
- * - `ctx.branch(...)`: fire-and-forget child context. Does NOT update parent ctx.time on completion.
- * - `ctx.branchWait(...)`: spawn and return a promise-like handle, and on completion updates parent ctx.time
- *   to max(parent.time, child.time). (Joining is typically done via awaiting the handle or Promise.all.)
+ * Structured Concurrency Semantics
+ * -------------------------------
+ * branch(fn):
+ * - Creates a new child context whose initial time is root.mostRecentDescendentTime (align to global).
+ * - Runs fn(childCtx) concurrently.
+ * - Does NOT update parentCtx.time when the branch finishes.
+ * - Returns a handle with cancel() and finally().
+ *
+ * branchWait(fn):
+ * - Creates a new child context whose initial time is parentCtx.time.
+ * - Runs fn(childCtx) concurrently.
+ * - On completion, parentCtx.time is updated to:
+ *     parentCtx.time = max(parentCtx.time, childCtx.time)
+ *   (this is applied in a finally, and is designed for structured “join” semantics).
+ *
+ * Cancellation:
+ * - Each context has an AbortController.
+ * - ctx.cancel() aborts itself and recursively cancels all child contexts.
+ * - wait primitives attach abort listeners and remove them on resolve/cancel.
+ *
+ *
+ * Offline vs Realtime — Why the Same Scheduler Works
+ * --------------------------------------------------
+ * The scheduler core is the same in both modes:
+ * - It repeatedly chooses the next logical deadline (min(timePQ.head, tempoHeadPQ.head)).
+ * - It processes *one logical timeslice at that deadline*:
+ *     - resolve all time waiters whose targetTime == deadline
+ *     - OR resolve all beat waiters at the earliest targetBeat for the earliest tempoHead
+ * - It updates ctx.time and root.mostRecentDescendentTime.
+ *
+ * The *only* difference between modes is “how do we wake up to process the next slice?”
+ *
+ * Realtime wakeup:
+ * - scheduleNext() arms one setTimeout to the earliest next logical due time.
+ * - When setTimeout fires, we process exactly one timeslice.
+ * - If more due timeslices exist immediately, we do NOT recurse via microtasks.
+ *   Instead we queue the next pump on a macrotask, ensuring promise continuations (microtasks)
+ *   complete before advancing logical time again.
+ *
+ * Offline wakeup:
+ * - advanceTo(targetTime) is called by OfflineRunner.
+ * - It processes all timeslices with deadlines <= targetTime.
+ * - Crucially, offline must emulate realtime event loop semantics:
+ *   after each timeslice, it yields to a macrotask so the runtime drains microtasks
+ *   (Promise continuations / .finally / Promise.all chains / barrier logic).
+ * - Without macrotask yields, offline can advance to later timeslices before user continuations
+ *   from earlier slices have scheduled their next waits, breaking semantics.
+ *
+ *
+ * Core Algorithm (Pseudo / Dataflow)
+ * ---------------------------------
+ *
+ * Data structures:
+ *   timePQ:        min-heap keyed by absolute targetTime (sec)
+ *   beatPQs:       map tempoId -> min-heap keyed by absolute targetBeat
+ *   tempoHeadPQ:   min-heap keyed by derived dueTime (sec), metadata {tempoId}
+ *   frameWaiters:  set of pending waitFrame waiters
+ *
+ * Common operation: schedule a wait
+ *
+ *   waitSec(ctx, sec):
+ *     base = max(root.mostRecentDescendentTime, ctx.time)
+ *     target = base + max(0, sec)
+ *     timePQ.add(waitId, deadline=target, meta={ctx, target, resolve, reject, abortListener})
+ *     requestPumpOrWake()
+ *
+ *   waitBeats(ctx, beats):
+ *     baseT = max(root.mostRecentDescendentTime, ctx.time)
+ *     baseB = tempo.beatsAtTime(baseT)
+ *     targetB = baseB + beats
+ *     beatPQs[tempoId].add(waitId, deadline=targetB, meta={ctx, tempo, targetB, ...})
+ *     refreshTempoHead(tempoId) // compute dueTime from head targetBeat
+ *     requestPumpOrWake()
+ *
+ * Common operation: processing one timeslice (the heart of the engine)
+ *
+ *   processOneTimeslice():
+ *     tTime = timePQ.peek()?.deadline ?? +Inf
+ *     tBeat = tempoHeadPQ.peek()?.deadline ?? +Inf
+ *     t = min(tTime, tBeat)
+ *
+ *     if t == tTime:
+ *        batch = pop all from timePQ with deadline == t
+ *        for each waiter:
+ *          if canceled -> reject
+ *          else:
+ *            waiter.ctx.time = max(waiter.ctx.time, waiter.targetTime)
+ *            root.mostRecentDescendentTime = max(root.mostRecentDescendentTime, waiter.ctx.time)
+ *            resolve waiter
+ *
+ *     else: // t == tBeat
+ *        tempoId = tempoHeadPQ.peek().tempoId
+ *        headBeatWait = beatPQs[tempoId].peek()
+ *        dueTime = headBeatWait.tempo.timeAtBeats(headBeatWait.targetBeat)
+ *        batch = pop all beat waiters with same targetBeat
+ *        pop tempoHeadPQ entry (will refresh)
+ *        for each waiter:
+ *          if canceled -> reject
+ *          else:
+ *            waiter.ctx.time = max(waiter.ctx.time, dueTime)
+ *            root.mostRecentDescendentTime = max(root.mostRecentDescendentTime, waiter.ctx.time)
+ *            resolve waiter
+ *        refreshTempoHead(tempoId)
+ *
+ * Realtime driver:
+ *   - after processOneTimeslice, if next slice is already due, schedule the next pump on a macrotask.
+ *   - otherwise arm setTimeout to next due time.
+ *
+ * Offline driver:
+ *   advanceTo(target):
+ *     while peekNextEventTime() <= target:
+ *       offlineNow = nextEventTime
+ *       processOneTimeslice()
+ *       await nextMacrotask() // emulate realtime microtask checkpoint boundary
+ *     offlineNow = target
+ *     await nextMacrotask() // flush any remaining .finally / Promise.all microtasks
+ *
+ *
+ * Invariants / Assumptions (Important)
+ * ------------------------------------
+ * 1) Timeslice ordering:
+ *    The scheduler must not process timeslice T2 > T1 until all promise continuations spawned
+ *    by resolving timeslice T1 have run and had the chance to schedule new waits <= T2.
+ *
+ *    Implementation requirement:
+ *    - Realtime: schedule subsequent pumps in a macrotask (not a microtask).
+ *    - Offline: yield to a macrotask between timeslices.
+ *
+ * 2) No drift:
+ *    - waitSec uses baseTime=max(root.mostRecentDescendentTime, ctx.time)
+ *    - ctx.time and root.mostRecentDescendentTime only ever move forward (monotonic)
+ *
+ * 3) Tempo edits are applied at “root current time”:
+ *    - setBpm stamps at root.mostRecentDescendentTime (not scheduler.now()).
+ *    - This avoids offline stamping at “advance target” and avoids realtime stamping at “wall jitter now”.
+ *
+ * 4) Equality handling:
+ *    - Waiters are batched by exact equality of deadlines (time) or targetBeat (beats).
+ *    - User code should avoid relying on deterministic ordering among events with the same deadline.
+ *      (You can add tie-breakers if you later want determinism.)
+ *
+ * 5) External awaits:
+ *    - Awaiting arbitrary promises (fetch, random timers, etc.) can resume a coroutine outside
+ *      the scheduler’s control and break logical-time semantics.
+ *    - Guideline: only await engine waits/barriers for logical scheduling.
+ *
+ *
+ * Gotchas / Practical Notes
+ * -------------------------
+ * - wait(0) / waitSec(0):
+ *   - Allowed as a sync/yield point, but should not be used in tight loops.
+ *   - In a timing engine, “yield points” that are invisible to the scheduler can cause offline stepping
+ *     to return early. If you want a reliable yield, prefer making it scheduler-visible.
+ *
+ * - OfflineRunner.stepSec(dt) vs stepFrame():
+ *   - stepSec() resolves time/beat waits only.
+ *   - waitFrame() is resolved only by stepFrame() (or resolveFrameTick()).
+ *
  * - Cancellation:
- *   - Each context owns an AbortController; `ctx.cancel()` aborts the context and recursively cancels all
- *     children in its subtree.
- *   - Wait primitives attach abort listeners and remove them on resolve/cancel to avoid leaks.
+ *   - Cancel cascades to children via ctx.cancel() recursion.
+ *   - Ensure abort listeners are removed on resolve/cancel to prevent leaks.
  *
- * Barriers (Cross-Task Sync)
- * --------------------------
- * - Barriers allow coroutines to wait for “a moment” in another coroutine (e.g. melody A waits for melody B’s loop end).
- * - Barrier waits must adopt the barrier’s resolve logical time, and update root.mostRecentDescendentTime.
- * - Barriers are only valid within a single root context tree (cross-root use is undefined; warn/error).
- * - Barrier implementation must avoid the “resolve + immediate restart” race by tracking lastResolvedTime.
+ * - Barriers:
+ *   - Barriers must be scoped per root context (keyed by rootId + user key) to avoid bleed
+ *     between multiple roots (e.g. offline + realtime test runs in one process).
  *
- * Frame Waiting
- * -------------
- * - DateTimeContext: works everywhere (setTimeout only), no waitFrame().
- * - BrowserTimeContext: extends DateTimeContext with waitFrame(), implemented as a scheduler-managed RAF barrier
- *   (all frame waiters resolve once per RAF tick).
- * - Offline: waitFrame is simulated at a fixed fps (default 60Hz) by the OfflineRunner.
+ * - Determinism:
+ *   - Offline mode can be deterministic given deterministic user code.
+ *   - Realtime mode is inherently nondeterministic at micro-resolution due to setTimeout jitter,
+ *     but logical times (ctx.time) remain exact.
  *
- * User Guidance / Footguns
- * ------------------------
- * - Only await engine-controlled waits/barriers for timing. Awaiting arbitrary promises (fetch/IO/etc) can
- *   resume “out of logical time”.
- * - wait(0) / waitSec(0) is allowed as a sync/yield point, but it is user error to call it in a tight loop.
- * - Don’t attempt interactive input in offline mode (unless you provide an input-event injection mechanism).
+ * - Performance:
+ *   - Beat waiters retime efficiently (head-only). Many tempo changes per second are possible,
+ *     but extremely high-rate tempo modulation may still be heavy; use user guidance or coarser updates.
  */
+
 
 
 import { PriorityQueue } from "@/stores/priorityQueue";
