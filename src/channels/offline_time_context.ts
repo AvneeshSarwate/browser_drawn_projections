@@ -1,3 +1,4 @@
+/* eslint-disable no-constant-condition */
 // deno-lint-ignore-file no-explicit-any no-unused-vars no-this-alias require-await
 
 /**
@@ -404,9 +405,14 @@ export class TimeScheduler {
   public readonly id = crypto.randomUUID();
   public readonly mode: SchedulerMode;
 
-  // While pumping a specific logical time-slice, this is set.
-  // Used for safe tempo writes from coroutines (so offline doesn't "write into the future").
-  public currentSliceTime: number | null = null;
+  // Most recent logical time-slice processed by the scheduler.
+  // Used to deterministically stamp tempo writes that occur as immediate continuations of waits.
+  private lastProcessedTime: number = 0;
+
+  // True during the microtask phase immediately after processing a slice.
+  // Cleared via queueMicrotask() after promise continuations for that slice run.
+  private inTimesliceMicrotaskPhase: boolean = false;
+
 
   private timePQ = new PriorityQueue<TimeWaitMeta>();
   private beatPQs = new Map<string, PriorityQueue<BeatWaitMeta>>();
@@ -459,10 +465,15 @@ export class TimeScheduler {
     this.scheduleNext();
   }
 
-  /** Safe stamping time for tempo edits: inside pump => slice time; otherwise => now(). */
   public tempoWriteTime(): number {
-    return this.currentSliceTime ?? this.now();
+    // If setBpm() is called by a coroutine continuation resumed at logical time T,
+    // stamp the tempo change at exactly T. This avoids:
+    // - realtime stamping slightly after T due to setTimeout jitter
+    // - offline stamping at the advanceTo() target time
+    if (this.inTimesliceMicrotaskPhase) return this.lastProcessedTime;
+    return this.now();
   }
+
 
   /* ------------------------------- wait primitives ------------------------------- */
 
@@ -582,19 +593,27 @@ export class TimeScheduler {
   /** Offline: advance "now" and process all due waits (time + beat). */
   public async advanceTo(t: number): Promise<void> {
     if (this.mode !== "offline") throw new Error("advanceTo() is offline-only");
-    this.offlineNow = Math.max(0, t);
 
-    // Process due events, yielding microtasks between time-slices.
+    const target = Math.max(0, t);
+
+    // Process due events up to target, yielding microtasks between slices.
     while (true) {
       const next = this.peekNextEventTime();
-      if (next == null || next > this.offlineNow) break;
+      if (next == null || next > target) break;
+
+      // Critical: while processing slices, now() should reflect the slice time (not the final target).
+      this.offlineNow = next;
 
       this.processOneTimeslice(next);
 
       // let resumed coroutines enqueue intermediate waits before we continue
       await Promise.resolve();
     }
+
+    // After processing, advance the clock to the requested target time.
+    this.offlineNow = target;
   }
+
 
   /** Offline: resolve all waitFrame() calls once per frame tick at the current offline time. */
   public async resolveFrameTick(): Promise<void> {
@@ -742,7 +761,10 @@ export class TimeScheduler {
 
   private processOneTimeslice(tSlice: number) {
     const sliceTime = tSlice;
-    this.currentSliceTime = sliceTime;
+    // Mark the current logical time slice as the authoritative "root current time"
+    // for immediate continuation work (microtasks) spawned by resolving waits at this slice.
+    this.lastProcessedTime = sliceTime;
+    this.inTimesliceMicrotaskPhase = true;
 
     // Decide whether the next slice is from timePQ or tempoHeadPQ (re-check peeks).
     const timeHead = this.timePQ.peek();
@@ -757,7 +779,14 @@ export class TimeScheduler {
       this.processBeatWaitersForTempoHead();
     }
 
-    this.currentSliceTime = null;
+    // IMPORTANT: do NOT clear immediately. Clear after the promise continuations
+    // for this slice have had a chance to run.
+    queueMicrotask(() => {
+      // Only clear if nothing advanced lastProcessedTime in the meantime.
+      if (this.lastProcessedTime === sliceTime) {
+        this.inTimesliceMicrotaskPhase = false;
+      }
+    });
   }
 
   private processTimeWaitersAt(t: number) {
@@ -1071,19 +1100,25 @@ export abstract class TimeContext {
     return this.tempo.bpmAtTime(this.time);
   }
 
-  /** Safe BPM write: stamped at scheduler "tempoWriteTime" (slice time if inside pump; otherwise now). */
+  /** Tempo write: always stamped at the latest processed logical time of this root tree. */
   public setBpm(bpm: number) {
-    const t = this.rootContext!.scheduler.tempoWriteTime();
+    // This is the engine’s “root current time” (processed logical time), stable across:
+    // - offline advanceTo(target) (where scheduler.now() may equal target)
+    // - microtask ordering differences (queueMicrotask vs Promise reactions)
+    const t = this.rootContext!.mostRecentDescendentTime;
+
     this.tempo._setBpmAtTime(bpm, t);
     this.rootContext!.scheduler.onTempoChanged(this.tempo);
   }
 
-  /** Optional: small ramp helper */
+  /** Optional: small ramp helper (also stamped at latest processed logical time). */
   public rampBpmTo(bpm: number, durSec: number) {
-    const t = this.rootContext!.scheduler.tempoWriteTime();
+    const t = this.rootContext!.mostRecentDescendentTime;
+
     this.tempo._rampToBpmAtTime(bpm, durSec, t);
     this.rootContext!.scheduler.onTempoChanged(this.tempo);
   }
+
 
   public connectChildContext(childContext: TimeContext, opts?: BranchOptions) {
     childContext.rootContext = this.rootContext;
@@ -1245,7 +1280,7 @@ export function launch<T>(
   const scheduler = new TimeScheduler("realtime", { rate: opts?.rate ?? 1 });
   const tempo = new TempoMap(opts?.bpm ?? 60);
 
-  const t0 = scheduler.now();
+  const t0 = 0;
   return createAndLaunchContext(block as any, t0, DateTimeContext as any, false, undefined, opts?.debugName ?? "", undefined, scheduler, tempo);
 }
 
@@ -1257,7 +1292,7 @@ export function launchBrowser<T>(
   const scheduler = new TimeScheduler("realtime", { rate: opts?.rate ?? 1 });
   const tempo = new TempoMap(opts?.bpm ?? 60);
 
-  const t0 = scheduler.now();
+  const t0 = 0;
   return createAndLaunchContext(block as any, t0, BrowserTimeContext as any, false, undefined, opts?.debugName ?? "", undefined, scheduler, tempo);
 }
 

@@ -226,10 +226,17 @@ async function runOffline(tc: TimingTestCase): Promise<LoggedEvent[]> {
     await tc.run(ctx, log);
   }, { bpm: tc.bpm ?? 60, fps: 60 });
 
-  // Advance beyond max logical time so everything resolves.
-  // Add a small margin in case a scenario logs slightly after its last wait.
-  await runner.stepSec(tc.logicalDurationSec + 0.2);
-  await runner.promise; // should settle now
+  // // Advance beyond max logical time so everything resolves.
+  // // Add a small margin in case a scenario logs slightly after its last wait.
+  // await runner.stepSec(tc.logicalDurationSec + 0.2);
+  // await runner.promise; // should settle now
+
+  const delta = 1 / 60
+  let runTime = 0
+  while (runTime < tc.logicalDurationSec) {
+    await runner.stepSec(delta);
+    runTime += delta;
+  }
 
   return events;
 }
@@ -572,8 +579,10 @@ export function makeTimingTestCases(): TimingTestCase[] {
  * ------------------------------------------------------------------------------------------------ */
 
 export async function runTimingTestCaseBothModes(tc: TimingTestCase): Promise<TestResult> {
-  const offlineEvents = await runOffline(tc);
   const realtimeEvents = await runRealtime(tc);
+  console.log(`[TimingTests] finish realtime ${tc.name}`);
+  const offlineEvents = await runOffline(tc);
+  console.log(`[TimingTests] finish offline ${tc.name}`);
 
   compareOfflineVsRealtime(tc.name, offlineEvents, realtimeEvents, tc.tolerances);
 
@@ -592,6 +601,7 @@ export async function runAllTimingTests(
 
   for (const tc of cases) {
     try {
+      console.log(`[TimingTests] Running test case: ${tc.name}`);
       results.push(await runTimingTestCaseBothModes(tc));
     } catch (err) {
       failures.push({ name: tc.name, err });
