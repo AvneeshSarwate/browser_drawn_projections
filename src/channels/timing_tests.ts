@@ -226,17 +226,17 @@ async function runOffline(tc: TimingTestCase): Promise<LoggedEvent[]> {
     await tc.run(ctx, log);
   }, { bpm: tc.bpm ?? 60, fps: 60 });
 
-  // // Advance beyond max logical time so everything resolves.
-  // // Add a small margin in case a scenario logs slightly after its last wait.
-  // await runner.stepSec(tc.logicalDurationSec + 0.2);
-  // await runner.promise; // should settle now
+  // Advance beyond max logical time so everything resolves.
+  // Add a small margin in case a scenario logs slightly after its last wait.
+  await runner.stepSec(tc.logicalDurationSec + 0.2);
+  await runner.promise; // should settle now
 
-  const delta = 1 / 60
-  let runTime = 0
-  while (runTime < tc.logicalDurationSec) {
-    await runner.stepSec(delta);
-    runTime += delta;
-  }
+  // const delta = 1 / 60
+  // let runTime = 0
+  // while (runTime < tc.logicalDurationSec) {
+  //   await runner.stepSec(delta);
+  //   runTime += delta;
+  // }
 
   return events;
 }

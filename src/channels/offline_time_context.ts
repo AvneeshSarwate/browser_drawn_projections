@@ -120,6 +120,68 @@
 
 import { PriorityQueue } from "@/stores/priorityQueue";
 
+// A "macrotask yield" primitive.
+// This is the rigorous way to ensure the JS runtime drains the microtask queue to empty,
+// matching realtime behavior (microtask checkpoint after each timer callback).
+const yieldToMacrotask: () => Promise<void> = (() => {
+  const g: any = globalThis as any;
+
+  if (typeof g.setImmediate === "function") {
+    return () => new Promise<void>((res) => g.setImmediate(res));
+  }
+
+  if (typeof MessageChannel !== "undefined") {
+    const mc = new MessageChannel();
+    const q: Array<() => void> = [];
+
+    mc.port1.onmessage = () => {
+      const fn = q.shift();
+      if (fn) fn();
+    };
+    // Some runtimes require explicit start() on MessagePort.
+    (mc.port1 as any).start?.();
+
+    return () =>
+      new Promise<void>((res) => {
+        q.push(res);
+        mc.port2.postMessage(0);
+      });
+  }
+
+  // Last resort. May be clamped (e.g. to 1ms) in some environments.
+  return () => new Promise<void>((res) => setTimeout(res, 0));
+})();
+
+// Schedule a callback in the next macrotask (no real-time delay intended).
+// This gives the runtime a microtask checkpoint boundary (drains Promise reactions),
+// which is essential for deterministic ordering between logical timeslices.
+const scheduleMacrotask: (cb: () => void) => void = (() => {
+  const g: any = globalThis as any;
+
+  // Node.js / some runtimes
+  if (typeof g.setImmediate === "function") {
+    return (cb) => g.setImmediate(cb);
+  }
+
+  // Browsers / modern runtimes (fast, not clamped like setTimeout(0) often is)
+  if (typeof MessageChannel !== "undefined") {
+    const mc = new MessageChannel();
+    const q: Array<() => void> = [];
+    mc.port1.onmessage = () => {
+      const fn = q.shift();
+      if (fn) fn();
+    };
+    (mc.port1 as any).start?.();
+    return (cb) => {
+      q.push(cb);
+      mc.port2.postMessage(0);
+    };
+  }
+
+  // Fallback
+  return (cb) => setTimeout(cb, 0);
+})();
+
 /* ---------------------------------------------------------------------------------------------- */
 /* Wall clock utility                                                                              */
 /* ---------------------------------------------------------------------------------------------- */
@@ -436,6 +498,9 @@ export class TimeScheduler {
   private rafRunning = false;
   private rafHandle: number | null = null;
 
+  private pumpMacroQueued = false;
+
+
   constructor(mode: SchedulerMode, opts?: { rate?: number }) {
     this.mode = mode;
     if (mode === "realtime") {
@@ -596,23 +661,40 @@ export class TimeScheduler {
 
     const target = Math.max(0, t);
 
-    // Process due events up to target, yielding microtasks between slices.
+    // Safety bound: offline simulation can run infinite programs.
+    const MAX_TIMESLICES = 200_000;
+    let processed = 0;
+
     while (true) {
       const next = this.peekNextEventTime();
       if (next == null || next > target) break;
 
-      // Critical: while processing slices, now() should reflect the slice time (not the final target).
+      // During processing, now() should reflect the slice time.
       this.offlineNow = next;
-
       this.processOneTimeslice(next);
 
-      // let resumed coroutines enqueue intermediate waits before we continue
-      await Promise.resolve();
+      processed++;
+      if (processed > MAX_TIMESLICES) {
+        throw new Error(
+          `advanceTo(${target}) exceeded MAX_TIMESLICES. Possible infinite scheduling at/before target.`,
+        );
+      }
+
+      // Rigorous part:
+      // Yield to a macrotask so the runtime drains microtasks to completion,
+      // matching realtime semantics (timer callback -> microtask checkpoint).
+      await yieldToMacrotask();
     }
 
-    // After processing, advance the clock to the requested target time.
+    // After all due slices are processed, move the clock to the requested target time.
     this.offlineNow = target;
+
+    // Optional but recommended: one final macrotask yield so any .finally / Promise.all
+    // triggered by the last processed slice definitely runs before advanceTo resolves.
+    await yieldToMacrotask();
   }
+
+
 
 
   /** Offline: resolve all waitFrame() calls once per frame tick at the current offline time. */
@@ -621,11 +703,13 @@ export class TimeScheduler {
     const t = this.offlineNow;
 
     this.resolveAllFrameWaitersAt(t);
-    await Promise.resolve();
 
-    // process anything those frame continuations scheduled at the same time
+    // Ensure microtasks from frame waiters run before we process any resulting waits.
+    await yieldToMacrotask();
+
     await this.advanceTo(this.offlineNow);
   }
+
 
   /* ------------------------------- internal scheduling ------------------------------- */
 
@@ -682,11 +766,29 @@ export class TimeScheduler {
     };
 
     if (stillDue()) {
-      queueMicrotask(() => this.pumpDue());
-    } else {
-      this.scheduleNext();
-    }
+    // CRITICAL: continue in a MACROTASK, not a microtask.
+    // This guarantees that all promise continuations spawned by resolving the
+    // current timeslice have run (microtask checkpoint) before we advance
+    // to the next logical timeslice.
+    this.queuePumpMacrotask();
+  } else {
+    this.scheduleNext();
   }
+
+  }
+
+  private queuePumpMacrotask() {
+    if (this.mode === "offline") return;
+
+    if (this.pumpMacroQueued) return;
+    this.pumpMacroQueued = true;
+
+    scheduleMacrotask(() => {
+      this.pumpMacroQueued = false;
+      this.pumpDue();
+    });
+  }
+
 
   private scheduleNext() {
     if (this.mode === "offline") return;
@@ -939,9 +1041,18 @@ type BarrierState = {
 
 const barrierMap = new Map<string, BarrierState>();
 
+// Root-scoped storage key to prevent bleed between independent root trees
+// (e.g. offline + realtime test runs that reuse the same barrier name).
+function barrierStoreKey(rootId: number, key: string): string {
+  // Use a delimiter that is extremely unlikely to appear in user keys.
+  return `${rootId}\u0000${key}`;
+}
+
 function getBarrier(key: string, rootId: number): BarrierState {
-  const existing = barrierMap.get(key);
+  const storeKey = barrierStoreKey(rootId, key);
+  const existing = barrierMap.get(storeKey);
   if (existing) return existing;
+
   const b: BarrierState = {
     key,
     rootId,
@@ -950,18 +1061,15 @@ function getBarrier(key: string, rootId: number): BarrierState {
     startTime: -Infinity,
     waiters: new Set(),
   };
-  barrierMap.set(key, b);
+
+  barrierMap.set(storeKey, b);
   return b;
 }
+
 
 export function startBarrier(key: string, ctx: TimeContext) {
   const rootId = ctx.rootContext!.id;
   const b = getBarrier(key, rootId);
-
-  if (b.rootId !== rootId) {
-    console.warn(`Barrier "${key}" used across roots (not supported).`);
-    return;
-  }
 
   // Resolve any stale in-progress cycle to avoid deadlocks.
   if (b.inProgress) {
@@ -972,15 +1080,14 @@ export function startBarrier(key: string, ctx: TimeContext) {
   b.startTime = ctx.time;
 }
 
+
 export function resolveBarrier(key: string, ctx: TimeContext) {
   const rootId = ctx.rootContext!.id;
-  const b = barrierMap.get(key);
+  const storeKey = barrierStoreKey(rootId, key);
+
+  const b = barrierMap.get(storeKey);
   if (!b) {
     console.warn(`No barrier found for key: ${key}`);
-    return;
-  }
-  if (b.rootId !== rootId) {
-    console.warn(`Barrier "${key}" used across roots (not supported).`);
     return;
   }
 
@@ -1003,15 +1110,14 @@ export function resolveBarrier(key: string, ctx: TimeContext) {
   b.waiters.clear();
 }
 
+
 export function awaitBarrier(key: string, ctx: TimeContext): Promise<void> {
   const rootId = ctx.rootContext!.id;
-  const b = barrierMap.get(key);
+  const storeKey = barrierStoreKey(rootId, key);
+
+  const b = barrierMap.get(storeKey);
   if (!b) {
     console.warn(`No barrier found for key: ${key}`);
-    return Promise.resolve();
-  }
-  if (b.rootId !== rootId) {
-    console.warn(`Barrier "${key}" used across roots (not supported).`);
     return Promise.resolve();
   }
 
@@ -1036,6 +1142,7 @@ export function awaitBarrier(key: string, ctx: TimeContext): Promise<void> {
     b.waiters.add(w);
   });
 }
+
 
 /* ---------------------------------------------------------------------------------------------- */
 /* Context tree + API                                                                              */
@@ -1171,12 +1278,16 @@ export abstract class TimeContext {
     // allow wait(0) as a yield/sync point
     const delta = Number.isFinite(beats) ? beats : 0;
     if (delta <= 0) {
-      // still do a safe "sync to root time" and yield a microtask
+      // Treat wait(0) as an engine-controlled yield/sync point.
+      // Important for offline: Promise.resolve() is invisible to the scheduler and can cause advanceTo()
+      // to return before follow-up waits are enqueued (requires multiple microtask hops).
       const baseTime = Math.max(this.rootContext!.mostRecentDescendentTime, this.time);
-      this.time = Math.max(this.time, baseTime);
-      this.rootContext!.mostRecentDescendentTime = Math.max(this.rootContext!.mostRecentDescendentTime, this.time);
-      return Promise.resolve();
+
+      // Schedule a time-wait at baseTime. This yields without advancing logical time
+      // (unless we were behind the root, in which case it syncs us forward).
+      return this.rootContext!.scheduler.sleepUntilTime(this, baseTime);
     }
+
 
     // Align to global time, then wait in beats.
     const baseTime = Math.max(this.rootContext!.mostRecentDescendentTime, this.time);
@@ -1189,7 +1300,7 @@ export abstract class TimeContext {
 
 /** Works everywhere: schedules via setTimeout through the scheduler. No waitFrame(). */
 export class DateTimeContext extends TimeContext {
-  public async waitSec(sec: number): Promise<void> {
+  public waitSec(sec: number): Promise<void> {
     if (this.isCanceled) return Promise.reject(new Error("context canceled"));
 
     let s = Number.isFinite(sec) ? sec : 0;
@@ -1204,14 +1315,14 @@ export class DateTimeContext extends TimeContext {
 
 /** Browser-only: adds waitFrame() using a single RAF-driven frame barrier. */
 export class BrowserTimeContext extends DateTimeContext {
-  public async waitFrame(): Promise<void> {
+  public waitFrame(): Promise<void> {
     return this.rootContext!.scheduler.awaitNextFrame(this);
   }
 }
 
 /** Offline context: same semantics as BrowserTimeContext, but driven by OfflineRunner (60fps frame ticks). */
 export class OfflineTimeContext extends DateTimeContext {
-  public async waitFrame(): Promise<void> {
+  public waitFrame(): Promise<void> {
     return this.rootContext!.scheduler.awaitNextFrame(this);
   }
 }
