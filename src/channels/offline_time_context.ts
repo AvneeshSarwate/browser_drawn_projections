@@ -257,8 +257,8 @@
  *
  * 4) Equality handling:
  *    - Waiters are batched by exact equality of deadlines (time) or targetBeat (beats).
- *    - User code should avoid relying on deterministic ordering among events with the same deadline.
- *      (You can add tie-breakers if you later want determinism.)
+ *    - Ordering among events with the same deadline is deterministic but arbitrary.
+ *      Avoid relying on any specific order beyond stability.
  *
  * 5) External awaits:
  *    - Awaiting arbitrary promises (fetch, random timers, etc.) can resume a coroutine outside
@@ -298,6 +298,19 @@
 
 
 import { PriorityQueue } from "@/stores/priorityQueue";
+import seedrandom from "seedrandom";
+
+export type RandomSeed = string | number;
+
+function normalizeSeed(seed?: RandomSeed): string {
+  if (seed === undefined || seed === null) return crypto.randomUUID();
+  return typeof seed === "string" ? seed : String(seed);
+}
+
+// Deterministic child seed derivation (no wall-clock or random UUIDs).
+function deriveSeed(parentSeed: string, forkIndex: number): string {
+  return `${parentSeed}::fork:${forkIndex}`;
+}
 
 // A "macrotask yield" primitive.
 // This is the rigorous way to ensure the JS runtime drains the microtask queue to empty,
@@ -615,6 +628,7 @@ export class TempoMap {
 
 type TimeWaitMeta = {
   kind: "time";
+  seq: number;
   ctx: TimeContext;
   targetTime: number;
   resolve: () => void;
@@ -624,6 +638,7 @@ type TimeWaitMeta = {
 
 type BeatWaitMeta = {
   kind: "beat";
+  seq: number;
   ctx: TimeContext;
   tempo: TempoMap;
   targetBeat: number;
@@ -634,6 +649,7 @@ type BeatWaitMeta = {
 
 type TempoHeadMeta = { tempoId: string };
 type FrameWaitMeta = {
+  seq: number;
   ctx: TimeContext;
   resolve: () => void;
   reject: (e?: any) => void;
@@ -653,6 +669,9 @@ export class TimeScheduler {
   // True during the microtask phase immediately after processing a slice.
   // Cleared via queueMicrotask() after promise continuations for that slice run.
   private inTimesliceMicrotaskPhase: boolean = false;
+
+  // Deterministic tie-break sequence for events scheduled in this root.
+  private seqCounter = 0;
 
 
   private timePQ = new PriorityQueue<TimeWaitMeta>();
@@ -693,6 +712,11 @@ export class TimeScheduler {
     }
   }
 
+  /** Allocates a deterministic increasing sequence number. */
+  public allocSeq(): number {
+    return this.seqCounter++;
+  }
+
   public now(): number {
     if (this.mode === "offline") return this.offlineNow;
     return this.logicalAnchor + (wallNow() - this.wallAnchor) * this.rate;
@@ -728,7 +752,8 @@ export class TimeScheduler {
     if (ctx.isCanceled) return Promise.reject(new Error("context canceled"));
 
     return new Promise<void>((resolve, reject) => {
-      const id = crypto.randomUUID();
+      const seq = this.allocSeq();
+      const id = `time:${seq}`;
 
       const abortListener = () => {
         this.timePQ.remove(id);
@@ -741,6 +766,7 @@ export class TimeScheduler {
 
       this.timePQ.add(id, t, {
         kind: "time",
+        seq,
         ctx,
         targetTime: t,
         resolve,
@@ -758,8 +784,9 @@ export class TimeScheduler {
     if (ctx.isCanceled) return Promise.reject(new Error("context canceled"));
 
     return new Promise<void>((resolve, reject) => {
-      const id = crypto.randomUUID();
       const tempoId = tempo.id;
+      const seq = this.allocSeq();
+      const id = `beat:${tempoId}:${seq}`;
 
       const abortListener = () => {
         const pq = this.beatPQs.get(tempoId);
@@ -780,6 +807,7 @@ export class TimeScheduler {
 
       pq.add(id, b, {
         kind: "beat",
+        seq,
         ctx,
         tempo,
         targetBeat: b,
@@ -798,7 +826,8 @@ export class TimeScheduler {
     if (this.mode === "offline") {
       // offline will be driven by OfflineRunner.stepFrame()
       return new Promise<void>((resolve, reject) => {
-        const id = crypto.randomUUID();
+        const seq = this.allocSeq();
+        const id = `frame:${seq}`;
 
         const abortListener = () => {
           this.frameWaiters.delete(id);
@@ -807,7 +836,7 @@ export class TimeScheduler {
         };
 
         ctx.abortController.signal.addEventListener("abort", abortListener);
-        this.frameWaiters.set(id, { ctx, resolve, reject, abortListener });
+        this.frameWaiters.set(id, { seq, ctx, resolve, reject, abortListener });
       });
     }
 
@@ -819,7 +848,8 @@ export class TimeScheduler {
     this.ensureRafLoop();
 
     return new Promise<void>((resolve, reject) => {
-      const id = crypto.randomUUID();
+      const seq = this.allocSeq();
+      const id = `frame:${seq}`;
 
       const abortListener = () => {
         this.frameWaiters.delete(id);
@@ -828,7 +858,7 @@ export class TimeScheduler {
       };
 
       ctx.abortController.signal.addEventListener("abort", abortListener);
-      this.frameWaiters.set(id, { ctx, resolve, reject, abortListener });
+      this.frameWaiters.set(id, { seq, ctx, resolve, reject, abortListener });
     });
   }
 
@@ -1080,6 +1110,8 @@ export class TimeScheduler {
       batch.push(item.metadata);
     }
 
+    batch.sort((a, b) => a.seq - b.seq);
+
     for (const w of batch) {
       const ctx = w.ctx;
       ctx.abortController.signal.removeEventListener("abort", w.abortListener);
@@ -1128,6 +1160,8 @@ export class TimeScheduler {
       if (!h || h.deadline !== targetBeat) break;
       batch.push(beatPQ!.pop()!.metadata);
     }
+
+    batch.sort((a, b) => a.seq - b.seq);
 
     // If this tempo head was the earliest, remove it now; we'll refresh after processing.
     this.tempoHeadPQ.pop();
@@ -1179,6 +1213,8 @@ export class TimeScheduler {
 
     const entries = Array.from(this.frameWaiters.entries());
     this.frameWaiters.clear();
+
+    entries.sort((a, b) => a[1].seq - b[1].seq);
 
     for (const [id, w] of entries) {
       const ctx = w.ctx;
@@ -1331,6 +1367,7 @@ let contextId = 0;
 
 export type BranchOptions = {
   tempo?: "shared" | "cloned"; // default shared
+  rng?: "forked" | "shared"; // default forked
 };
 
 type Constructor<T> = new (time: number, ab: AbortController, id: number, cancelPromise: CancelablePromiseProxy<any>) => T;
@@ -1354,6 +1391,9 @@ export abstract class TimeContext {
   // Scheduler + tempo are wired during launch/branch creation
   public scheduler!: TimeScheduler;
   public tempo!: TempoMap;
+  public rng!: seedrandom.PRNG;
+  public rngSeed!: string;
+  private rngForkCounter = 0;
 
   constructor(time: number, ab: AbortController, id: number, cancelPromise: CancelablePromiseProxy<any>) {
     this.time = time;
@@ -1379,6 +1419,11 @@ export abstract class TimeContext {
 
   public get progBeats(): number {
     return this.tempo.beatsAtTime(this.time) - this.tempo.beatsAtTime(this.startTime);
+  }
+
+  /** Deterministic random in [0,1). Use this instead of Math.random(). */
+  public random(): number {
+    return this.rng();
   }
 
   /** Read-only BPM at the context's current logical time. */
@@ -1410,8 +1455,19 @@ export abstract class TimeContext {
     childContext.rootContext = this.rootContext;
     childContext.scheduler = this.rootContext!.scheduler;
 
-    const mode = opts?.tempo ?? "shared";
-    childContext.tempo = mode === "shared" ? this.tempo : this.tempo.clone();
+    const tempoMode = opts?.tempo ?? "shared";
+    childContext.tempo = tempoMode === "shared" ? this.tempo : this.tempo.clone();
+
+    const rngMode = opts?.rng ?? "forked";
+    if (rngMode === "shared") {
+      childContext.rngSeed = this.rngSeed;
+      childContext.rng = this.rng;
+    } else {
+      const childSeed = deriveSeed(this.rngSeed, this.rngForkCounter++);
+      childContext.rngSeed = childSeed;
+      childContext.rng = seedrandom(childSeed);
+      childContext.rngForkCounter = 0;
+    }
 
     this.childContexts.add(childContext);
   }
@@ -1517,6 +1573,7 @@ export function createAndLaunchContext<T, C extends TimeContext>(
   // only for root creation:
   rootScheduler?: TimeScheduler,
   rootTempo?: TempoMap,
+  rootSeed?: RandomSeed,
 ): CancelablePromiseProxy<T> {
   const abortController = new AbortController();
   const promiseProxy = new CancelablePromiseProxy<T>(abortController);
@@ -1537,6 +1594,9 @@ export function createAndLaunchContext<T, C extends TimeContext>(
 
     newContext.scheduler = rootScheduler;
     newContext.tempo = rootTempo;
+    const seedStr = normalizeSeed(rootSeed);
+    newContext.rngSeed = seedStr;
+    newContext.rng = seedrandom(seedStr);
   }
 
   const blockPromise = block(newContext);
@@ -1565,25 +1625,47 @@ export function createAndLaunchContext<T, C extends TimeContext>(
 /** Default launch: setTimeout-only DateTimeContext (works everywhere). */
 export function launch<T>(
   block: (ctx: DateTimeContext) => Promise<T>,
-  opts?: { bpm?: number; rate?: number; debugName?: string },
+  opts?: { bpm?: number; rate?: number; debugName?: string; seed?: RandomSeed },
 ): CancelablePromiseProxy<T> {
   const scheduler = new TimeScheduler("realtime", { rate: opts?.rate ?? 1 });
   const tempo = new TempoMap(opts?.bpm ?? 60);
 
   const t0 = 0;
-  return createAndLaunchContext(block as any, t0, DateTimeContext as any, false, undefined, opts?.debugName ?? "", undefined, scheduler, tempo);
+  return createAndLaunchContext(
+    block as any,
+    t0,
+    DateTimeContext as any,
+    false,
+    undefined,
+    opts?.debugName ?? "",
+    undefined,
+    scheduler,
+    tempo,
+    opts?.seed,
+  );
 }
 
 /** Browser launch: BrowserTimeContext with waitFrame(). */
 export function launchBrowser<T>(
   block: (ctx: BrowserTimeContext) => Promise<T>,
-  opts?: { bpm?: number; rate?: number; debugName?: string },
+  opts?: { bpm?: number; rate?: number; debugName?: string; seed?: RandomSeed },
 ): CancelablePromiseProxy<T> {
   const scheduler = new TimeScheduler("realtime", { rate: opts?.rate ?? 1 });
   const tempo = new TempoMap(opts?.bpm ?? 60);
 
   const t0 = 0;
-  return createAndLaunchContext(block as any, t0, BrowserTimeContext as any, false, undefined, opts?.debugName ?? "", undefined, scheduler, tempo);
+  return createAndLaunchContext(
+    block as any,
+    t0,
+    BrowserTimeContext as any,
+    false,
+    undefined,
+    opts?.debugName ?? "",
+    undefined,
+    scheduler,
+    tempo,
+    opts?.seed,
+  );
 }
 
 /* ---------------------------------------------------------------------------------------------- */
@@ -1597,7 +1679,7 @@ export class OfflineRunner<T> {
 
   private fps: number;
 
-  constructor(block: (ctx: OfflineTimeContext) => Promise<T>, opts?: { bpm?: number; fps?: number; debugName?: string }) {
+  constructor(block: (ctx: OfflineTimeContext) => Promise<T>, opts?: { bpm?: number; fps?: number; debugName?: string; seed?: RandomSeed }) {
     this.scheduler = new TimeScheduler("offline");
     const tempo = new TempoMap(opts?.bpm ?? 60);
     this.fps = opts?.fps ?? 60;
@@ -1613,6 +1695,7 @@ export class OfflineRunner<T> {
       undefined,
       this.scheduler,
       tempo,
+      opts?.seed,
     );
 
     this.ctx = this.promise.timeContext as OfflineTimeContext;
