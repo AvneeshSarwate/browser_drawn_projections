@@ -10,5 +10,4 @@ if (!customElements.get(tagName)) {
 }
 
 export { PianoRollElement }
-export default PianoRollElement
 export type { NoteData } from './pianoRollState'

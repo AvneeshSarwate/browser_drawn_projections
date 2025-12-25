@@ -19,8 +19,6 @@
  * ```
  */
 
-import { z } from 'zod'
-
 // ============================================================================
 // Type Definitions (readonly versions for server-side state)
 // ============================================================================
@@ -69,65 +67,36 @@ export interface PianoRollConfig {
 }
 
 // ============================================================================
-// Message Schemas (from server's perspective)
+// Internal Message Types
 // ============================================================================
 
-const MetadataSchema = z.record(z.string(), z.unknown()).optional()
+interface NotesUpdateMessage {
+  type: 'notesUpdate'
+  notes: Array<[string, NoteData]>
+}
 
-const NoteDataSchema = z.object({
-  id: z.string(),
-  pitch: z.number().int().min(0).max(127),
-  position: z.number(),
-  duration: z.number().positive(),
-  velocity: z.number().int().min(0).max(127),
-  metadata: MetadataSchema
-})
+interface StateUpdateMessage {
+  type: 'stateUpdate'
+  viewport: Viewport
+  grid: GridSettings
+}
 
-const ViewportSchema = z.object({
-  scrollX: z.number(),
-  scrollY: z.number(),
-  zoomX: z.number(),
-  zoomY: z.number()
-})
+interface PlayStartPositionResponseMessage {
+  type: 'playStartPositionResponse'
+  position: number
+  requestId?: string
+}
 
-const GridSchema = z.object({
-  quarterNoteWidth: z.number(),
-  noteHeight: z.number(),
-  subdivision: z.number()
-})
+interface ConnectionReadyMessage {
+  type: 'connectionReady'
+}
 
-// Messages server receives FROM component
-const NotesUpdateMessageSchema = z.object({
-  type: z.literal('notesUpdate'),
-  notes: z.array(z.tuple([z.string(), NoteDataSchema]))
-})
+type IncomingMessage =
+  | NotesUpdateMessage
+  | StateUpdateMessage
+  | PlayStartPositionResponseMessage
+  | ConnectionReadyMessage
 
-const StateUpdateMessageSchema = z.object({
-  type: z.literal('stateUpdate'),
-  viewport: ViewportSchema,
-  grid: GridSchema
-})
-
-const PlayStartPositionResponseSchema = z.object({
-  type: z.literal('playStartPositionResponse'),
-  position: z.number(),
-  requestId: z.string().optional()
-})
-
-const ConnectionReadyMessageSchema = z.object({
-  type: z.literal('connectionReady')
-})
-
-const IncomingMessageSchema = z.discriminatedUnion('type', [
-  NotesUpdateMessageSchema,
-  StateUpdateMessageSchema,
-  PlayStartPositionResponseSchema,
-  ConnectionReadyMessageSchema
-])
-
-type IncomingMessage = z.infer<typeof IncomingMessageSchema>
-
-// Messages server sends TO component
 interface SetNotesMessage {
   type: 'setNotes'
   notes: NoteDataInput[]
@@ -302,57 +271,47 @@ export class PianoRollWebSocketClient {
   }
 
   private handleMessage(data: string): void {
-    let parsed: unknown
     try {
-      parsed = JSON.parse(data)
-    } catch {
-      console.warn('[PianoRollClient] Invalid JSON received:', data)
-      return
-    }
+      const message = JSON.parse(data) as IncomingMessage
 
-    const result = IncomingMessageSchema.safeParse(parsed)
-    if (!result.success) {
-      console.warn('[PianoRollClient] Invalid message format:', result.error.format())
-      return
-    }
-
-    const message: IncomingMessage = result.data
-
-    switch (message.type) {
-      case 'notesUpdate': {
-        const newNotes = new Map<string, NoteData>()
-        for (const [id, note] of message.notes) {
-          newNotes.set(id, note as NoteData)
+      switch (message.type) {
+        case 'notesUpdate': {
+          const newNotes = new Map<string, NoteData>()
+          for (const [id, note] of message.notes) {
+            newNotes.set(id, note)
+          }
+          this._notes = newNotes
+          this.onNotesUpdate?.(this._notes)
+          break
         }
-        this._notes = newNotes
-        this.onNotesUpdate?.(this._notes)
-        break
-      }
 
-      case 'stateUpdate':
-        this._viewport = message.viewport
-        this._grid = message.grid
-        this.onStateUpdate?.({
-          viewport: this._viewport,
-          grid: this._grid
-        })
-        break
+        case 'stateUpdate':
+          this._viewport = message.viewport
+          this._grid = message.grid
+          this.onStateUpdate?.({
+            viewport: this._viewport,
+            grid: this._grid
+          })
+          break
 
-      case 'playStartPositionResponse': {
-        const requestId = message.requestId
-        if (requestId && this.pendingRequests.has(requestId)) {
-          const { resolve, timeout } = this.pendingRequests.get(requestId)!
-          clearTimeout(timeout)
-          this.pendingRequests.delete(requestId)
-          resolve(message.position)
+        case 'playStartPositionResponse': {
+          const requestId = message.requestId
+          if (requestId && this.pendingRequests.has(requestId)) {
+            const { resolve, timeout } = this.pendingRequests.get(requestId)!
+            clearTimeout(timeout)
+            this.pendingRequests.delete(requestId)
+            resolve(message.position)
+          }
+          break
         }
-        break
-      }
 
-      case 'connectionReady':
-        this._connected = true
-        this.onConnectionReady?.()
-        break
+        case 'connectionReady':
+          this._connected = true
+          this.onConnectionReady?.()
+          break
+      }
+    } catch (error) {
+      console.warn('[PianoRollClient] Error handling message:', error)
     }
   }
 
@@ -365,7 +324,7 @@ export class PianoRollWebSocketClient {
   }
 
   private generateRequestId(): string {
-    return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`
   }
 
   // ============================================================================
@@ -387,10 +346,6 @@ export class PianoRollWebSocketClient {
    * @param position - The playhead position in beats
    */
   setLivePlayhead(position: number): void {
-    if (position < 0) {
-      console.warn('[PianoRollClient] Playhead position must be non-negative')
-      return
-    }
     this._livePlayhead = position
     this.send({ type: 'setLivePlayhead', position })
   }

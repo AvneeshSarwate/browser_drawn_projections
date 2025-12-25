@@ -4,6 +4,15 @@ if (!ToneGlobal) {
   console.error('Tone.js failed to load. Ensure the CDN script is available.');
 }
 
+// defensive code - not strictly needed for this set up
+// const pianoRollModule = window.PianoRollComponent;
+// const PianoRollElementCtor =
+//   pianoRollModule?.PianoRollElement ?? pianoRollModule?.default ?? pianoRollModule;
+
+// if (PianoRollElementCtor && !customElements.get('piano-roll-component')) {
+//   customElements.define('piano-roll-component', PianoRollElementCtor);
+// }
+
 const START_DELAY = 0.05; // seconds before starting the transport
 
 const defaultNotes = [

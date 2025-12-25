@@ -19,8 +19,6 @@
  * ```
  */
 
-import { z } from 'zod'
-
 // ============================================================================
 // Type Definitions (readonly versions for server-side state)
 // ============================================================================
@@ -101,93 +99,29 @@ export interface CanvasConfig {
 }
 
 // ============================================================================
-// Message Schemas (from server's perspective)
+// Internal Message Types
 // ============================================================================
 
-const MetadataSchema = z.record(z.string(), z.unknown()).optional()
-const PointSchema = z.object({ x: z.number(), y: z.number() })
-const TimedPointSchema = z.object({ x: z.number(), y: z.number(), ts: z.number() })
+interface StateUpdateMessage {
+  type: 'stateUpdate'
+  snapshot: CanvasStateSnapshot
+}
 
-const FlattenedStrokeSchema = z.object({
-  type: z.literal('stroke'),
-  id: z.string(),
-  points: z.array(TimedPointSchema),
-  metadata: MetadataSchema
-})
+interface CanvasStateResponseMessage {
+  type: 'canvasStateResponse'
+  state: string
+  requestId?: string
+}
 
-const FlattenedStrokeGroupSchema: z.ZodType<FlattenedStrokeGroup> = z.object({
-  type: z.literal('strokeGroup'),
-  id: z.string(),
-  children: z.lazy(() => z.array(z.union([FlattenedStrokeSchema, FlattenedStrokeGroupSchema]))),
-  metadata: MetadataSchema
-}) as z.ZodType<FlattenedStrokeGroup>
+interface ConnectionReadyMessage {
+  type: 'connectionReady'
+}
 
-const FlattenedPolygonSchema = z.object({
-  type: z.literal('polygon'),
-  id: z.string(),
-  points: z.array(PointSchema),
-  metadata: MetadataSchema
-})
+type IncomingMessage =
+  | StateUpdateMessage
+  | CanvasStateResponseMessage
+  | ConnectionReadyMessage
 
-const FlattenedCircleSchema = z.object({
-  type: z.literal('circle'),
-  id: z.string(),
-  center: PointSchema,
-  r: z.number().optional(),
-  rx: z.number(),
-  ry: z.number(),
-  rotation: z.number(),
-  metadata: MetadataSchema
-})
-
-const CanvasStateSnapshotBaseSchema = z.object({
-  freehand: z.object({
-    serializedState: z.string(),
-    bakedRenderData: z.array(FlattenedStrokeGroupSchema),
-    bakedGroupMap: z.record(z.string(), z.array(z.number()))
-  }),
-  polygon: z.object({
-    serializedState: z.string(),
-    bakedRenderData: z.array(FlattenedPolygonSchema)
-  }),
-  circle: z.object({
-    serializedState: z.string(),
-    bakedRenderData: z.array(FlattenedCircleSchema),
-    bakedGroupMap: z.record(z.string(), z.array(z.number()))
-  })
-})
-
-const CanvasStateSnapshotSchema = CanvasStateSnapshotBaseSchema.extend({
-  added: CanvasStateSnapshotBaseSchema,
-  deleted: CanvasStateSnapshotBaseSchema,
-  changed: CanvasStateSnapshotBaseSchema
-})
-
-// Messages server receives FROM component
-const StateUpdateMessageSchema = z.object({
-  type: z.literal('stateUpdate'),
-  snapshot: CanvasStateSnapshotSchema
-})
-
-const CanvasStateResponseSchema = z.object({
-  type: z.literal('canvasStateResponse'),
-  state: z.string(),
-  requestId: z.string().optional()
-})
-
-const ConnectionReadyMessageSchema = z.object({
-  type: z.literal('connectionReady')
-})
-
-const IncomingMessageSchema = z.discriminatedUnion('type', [
-  StateUpdateMessageSchema,
-  CanvasStateResponseSchema,
-  ConnectionReadyMessageSchema
-])
-
-type IncomingMessage = z.infer<typeof IncomingMessageSchema>
-
-// Messages server sends TO component
 interface SetCanvasStateMessage {
   type: 'setCanvasState'
   state: string
@@ -352,43 +286,33 @@ export class CanvasWebSocketClient {
   }
 
   private handleMessage(data: string): void {
-    let parsed: unknown
     try {
-      parsed = JSON.parse(data)
-    } catch {
-      console.warn('[CanvasClient] Invalid JSON received:', data)
-      return
-    }
+      const message = JSON.parse(data) as IncomingMessage
 
-    const result = IncomingMessageSchema.safeParse(parsed)
-    if (!result.success) {
-      console.warn('[CanvasClient] Invalid message format:', result.error.format())
-      return
-    }
+      switch (message.type) {
+        case 'stateUpdate':
+          this._lastSnapshot = message.snapshot
+          this.onStateUpdate?.(this._lastSnapshot)
+          break
 
-    const message: IncomingMessage = result.data
-
-    switch (message.type) {
-      case 'stateUpdate':
-        this._lastSnapshot = message.snapshot as CanvasStateSnapshot
-        this.onStateUpdate?.(this._lastSnapshot)
-        break
-
-      case 'canvasStateResponse': {
-        const requestId = message.requestId
-        if (requestId && this.pendingRequests.has(requestId)) {
-          const { resolve, timeout } = this.pendingRequests.get(requestId)!
-          clearTimeout(timeout)
-          this.pendingRequests.delete(requestId)
-          resolve(message.state)
+        case 'canvasStateResponse': {
+          const requestId = message.requestId
+          if (requestId && this.pendingRequests.has(requestId)) {
+            const { resolve, timeout } = this.pendingRequests.get(requestId)!
+            clearTimeout(timeout)
+            this.pendingRequests.delete(requestId)
+            resolve(message.state)
+          }
+          break
         }
-        break
-      }
 
-      case 'connectionReady':
-        this._connected = true
-        this.onConnectionReady?.()
-        break
+        case 'connectionReady':
+          this._connected = true
+          this.onConnectionReady?.()
+          break
+      }
+    } catch (error) {
+      console.warn('[CanvasClient] Error handling message:', error)
     }
   }
 
@@ -401,7 +325,7 @@ export class CanvasWebSocketClient {
   }
 
   private generateRequestId(): string {
-    return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`
   }
 
   // ============================================================================

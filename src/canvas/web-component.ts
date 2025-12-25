@@ -10,5 +10,4 @@ if (!customElements.get(tagName)) {
 }
 
 export { CanvasElement }
-export default CanvasElement
 export type { CanvasStateSnapshot, CanvasStateSnapshotBase } from './canvasState'
