@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, shallowRef, watch } from 'vue'
 import { createPianoRollState, type PianoRollState, type NoteData, type NoteDataInput } from './pianoRollState'
+import { PianoRollWebSocketController } from './pianoRollWebSocket'
 import {
   initializeLayers,
   setupEventHandlers,
@@ -39,6 +40,7 @@ const props = withDefaults(defineProps<{
   syncState?: (state: PianoRollState) => void
   showControlPanel?: boolean
   interactive?: boolean
+  wsAddress?: string
 }>(), {
   width: 640,
   height: 360,
@@ -46,6 +48,23 @@ const props = withDefaults(defineProps<{
   showControlPanel: true,
   interactive: true
 })
+
+// WebSocket-overridable config
+const wsConfig = reactive({
+  width: undefined as number | undefined,
+  height: undefined as number | undefined,
+  interactive: undefined as boolean | undefined,
+  showControlPanel: undefined as boolean | undefined
+})
+
+// Effective values (WebSocket overrides props)
+const effectiveWidth = computed(() => wsConfig.width ?? props.width)
+const effectiveHeight = computed(() => wsConfig.height ?? props.height)
+const effectiveInteractive = computed(() => wsConfig.interactive ?? props.interactive)
+const effectiveShowControlPanel = computed(() => wsConfig.showControlPanel ?? props.showControlPanel)
+
+// WebSocket controller - use shallowRef to avoid Vue proxying the WebSocket internals
+const wsController = shallowRef<PianoRollWebSocketController | null>(null)
 
 const emit = defineEmits<{
   (event: 'notes-update', notes: Array<[string, NoteData]>): void
@@ -70,10 +89,10 @@ const selectedNoteMetadata = ref<Record<string, any> | null>(null)
 // Computed properties
 const noteCount = ref(state.notes.size)
 const selectionCount = ref(state.selection.selectedIds.size)
-const isInteractive = computed(() => props.interactive)
-const showControlPanel = computed(() => props.showControlPanel)
+const isInteractive = computed(() => effectiveInteractive.value)
+const isControlPanelVisible = computed(() => effectiveShowControlPanel.value)
 const canEditMetadata = computed(() => selectedNoteId.value !== null && isInteractive.value)
-const metadataEditorVisible = computed(() => showControlPanel.value && showMetadataEditor.value)
+const metadataEditorVisible = computed(() => isControlPanelVisible.value && showMetadataEditor.value)
 
 const normalizeMetadata = (metadata: any) => {
   if (metadata === null || metadata === undefined) {
@@ -105,44 +124,44 @@ const notifyViewportChange = () => {
 }
 
 const fitZoomToNotes = () => {
-  fitZoomToNotesHelper(state, props.width, props.height, notifyViewportChange)
+  fitZoomToNotesHelper(state, effectiveWidth.value, effectiveHeight.value, notifyViewportChange)
 }
 
 const enforceScrollBounds = () => {
-  updateScrollBounds(state, props.width, props.height, notifyViewportChange)
+  updateScrollBounds(state, effectiveWidth.value, effectiveHeight.value, notifyViewportChange)
 }
 
 const applyHorizontalZoomWithState = (newQuarterNoteWidth: number, newStartQuarter: number) => {
-  applyHorizontalZoom(state, newQuarterNoteWidth, newStartQuarter, props.width, props.height, notifyViewportChange)
+  applyHorizontalZoom(state, newQuarterNoteWidth, newStartQuarter, effectiveWidth.value, effectiveHeight.value, notifyViewportChange)
 }
 
 const applyVerticalZoomWithState = (newNoteHeight: number, newTopIndex: number) => {
-  applyVerticalZoom(state, newNoteHeight, newTopIndex, props.width, props.height, notifyViewportChange)
+  applyVerticalZoom(state, newNoteHeight, newTopIndex, effectiveWidth.value, effectiveHeight.value, notifyViewportChange)
 }
 
-const getHorizontalViewportRangeWithState = () => getHorizontalViewportRange(state, props.width)
-const getVerticalViewportRangeWithState = () => getVerticalViewportRange(state, props.height)
+const getHorizontalViewportRangeWithState = () => getHorizontalViewportRange(state, effectiveWidth.value)
+const getVerticalViewportRangeWithState = () => getVerticalViewportRange(state, effectiveHeight.value)
 
 const horizontalScrollbar = new HorizontalScrollbarController({
   state,
   horizontalTrack,
-  isInteractive: () => props.interactive,
+  isInteractive: () => effectiveInteractive.value,
   getViewportRange: getHorizontalViewportRangeWithState,
   applyHorizontalZoom: applyHorizontalZoomWithState,
   enforceScrollBounds,
   notifyViewportChange,
-  getFallbackWidth: () => props.width
+  getFallbackWidth: () => effectiveWidth.value
 })
 
 const verticalScrollbar = new VerticalScrollbarController({
   state,
   verticalTrack,
-  isInteractive: () => props.interactive,
+  isInteractive: () => effectiveInteractive.value,
   getViewportRange: getVerticalViewportRangeWithState,
   applyVerticalZoom: applyVerticalZoomWithState,
   enforceScrollBounds,
   notifyViewportChange,
-  getFallbackHeight: () => props.height
+  getFallbackHeight: () => effectiveHeight.value
 })
 
 const horizontalThumbStyle = computed(() => horizontalScrollbar.getThumbStyle())
@@ -181,11 +200,18 @@ watch(gridSubdivision, (newValue) => {
 
 const emitStateUpdate = () => {
   syncUiCounters()
-  emit('notes-update', Array.from(state.notes.entries()))
+  const notesArray = Array.from(state.notes.entries())
+  emit('notes-update', notesArray)
   props.syncState?.(state)
+
+  // Send via WebSocket if connected
+  if (wsController.value?.isConnected) {
+    wsController.value.sendNotesUpdate(notesArray)
+    wsController.value.sendStateUpdate(state)
+  }
 }
 
-watch(showControlPanel, (visible) => {
+watch(isControlPanelVisible, (visible) => {
   if (!visible) {
     showMetadataEditor.value = false
   }
@@ -248,7 +274,7 @@ const {
 
 const keyboardController = createKeyboardController({
   state,
-  isInteractive: () => props.interactive,
+  isInteractive: () => effectiveInteractive.value,
   undo,
   redo,
   deleteSelected,
@@ -275,20 +301,42 @@ const stageManager = new StageManager({
 
 onMounted(() => {
   stageManager.mount({
-    width: props.width,
-    height: props.height,
-    interactive: props.interactive,
+    width: effectiveWidth.value,
+    height: effectiveHeight.value,
+    interactive: effectiveInteractive.value,
     initialNotes: props.initialNotes ?? []
   })
+
+  // Initialize WebSocket if address provided
+  if (props.wsAddress) {
+    wsController.value = new PianoRollWebSocketController(props.wsAddress)
+    wsController.value.setHandlers({
+      onSetNotes: (notes) => setNotes(notes),
+      onSetLivePlayhead: (position) => setLivePlayheadPosition(position),
+      onFitZoomToNotes: () => fitZoomToNotes(),
+      onGetPlayStartPosition: (requestId) => {
+        const position = getPlayStartPosition()
+        wsController.value?.sendPlayStartPositionResponse(position, requestId)
+      },
+      onSetConfig: (config) => {
+        if (config.width !== undefined) wsConfig.width = config.width
+        if (config.height !== undefined) wsConfig.height = config.height
+        if (config.interactive !== undefined) wsConfig.interactive = config.interactive
+        if (config.showControlPanel !== undefined) wsConfig.showControlPanel = config.showControlPanel
+      }
+    })
+    wsController.value.connect()
+  }
 })
 
 onUnmounted(() => {
   stopHorizontalDrag()
   stopVerticalDrag()
   stageManager.unmount()
+  wsController.value?.disconnect()
 })
 
-watch(() => props.interactive, (interactive) => {
+watch(effectiveInteractive, (interactive) => {
   stageManager.setInteractive(interactive)
   if (!interactive) {
     stopHorizontalDrag()
@@ -296,12 +344,12 @@ watch(() => props.interactive, (interactive) => {
   }
 })
 
-watch(() => props.width, (newWidth) => {
-  stageManager.resize(newWidth, props.height)
+watch(effectiveWidth, (newWidth) => {
+  stageManager.resize(newWidth, effectiveHeight.value)
 })
 
-watch(() => props.height, (newHeight) => {
-  stageManager.resize(props.width, newHeight)
+watch(effectiveHeight, (newHeight) => {
+  stageManager.resize(effectiveWidth.value, newHeight)
 })
 
 // Expose methods for web component API
@@ -352,7 +400,7 @@ defineExpose({
 
 <template>
   <div class="piano-roll-root">
-    <div v-if="showControlPanel" class="control-panel">
+    <div v-if="isControlPanelVisible" class="control-panel">
       <button @click="undo" :disabled="!isInteractive || !canUndo">↶ Undo</button>
       <button @click="redo" :disabled="!isInteractive || !canRedo">↷ Redo</button>
       <span class="separator">|</span>
@@ -385,13 +433,13 @@ defineExpose({
         <div
           ref="konvaContainer"
           :class="['piano-roll-container', { 'is-disabled': !isInteractive }]"
-          :style="{ width: props.width + 'px', height: props.height + 'px' }"
+          :style="{ width: effectiveWidth + 'px', height: effectiveHeight + 'px' }"
         ></div>
         <div
           ref="horizontalTrack"
           class="scrollbar horizontal"
           :class="{ 'is-disabled': !isInteractive }"
-          :style="{ width: props.width + 'px' }"
+          :style="{ width: effectiveWidth + 'px' }"
           @pointerdown.self="onHorizontalTrackPointerDown"
         >
           <div class="scrollbar-thumb horizontal-thumb" :style="horizontalThumbStyle">
@@ -411,7 +459,7 @@ defineExpose({
         ref="verticalTrack"
         class="scrollbar vertical"
         :class="{ 'is-disabled': !isInteractive }"
-        :style="{ height: props.height + 'px' }"
+        :style="{ height: effectiveHeight + 'px' }"
         @pointerdown.self="onVerticalTrackPointerDown"
       >
         <div class="scrollbar-thumb vertical-thumb" :style="verticalThumbStyle">
@@ -430,7 +478,7 @@ defineExpose({
         </div>
       </div>
     </div>
-    <div v-if="showControlPanel" class="metadata-editor-wrapper">
+    <div v-if="isControlPanelVisible" class="metadata-editor-wrapper">
       <NoteMetadataEditor
         :visible="metadataEditorVisible"
         :metadata="selectedNoteMetadata ?? undefined"
