@@ -4,7 +4,8 @@ import { createCanvasRuntimeState, type CanvasRuntimeState, type CanvasStateSnap
 import { diff, type IChange } from 'json-diff-ts';
 import * as selectionStore from './selectionStore';
 import { getCanvasItem } from './CanvasItem';
-import { computed, onMounted, onUnmounted, ref, toRaw, watch } from 'vue';
+import { computed, onMounted, onUnmounted, reactive, ref, shallowRef, toRaw, watch } from 'vue';
+import { CanvasWebSocketController } from './canvasWebSocket';
 import { singleKeydownEvent } from './keyboard';
 import Konva from 'konva';
 import Timeline from './Timeline.vue';
@@ -50,6 +51,7 @@ const props = withDefaults(defineProps<{
   showSnapshots?: boolean
   showRescale?: boolean
   metadataSchemas?: { name: string; schema: ZodTypeAny }[]
+  wsAddress?: string
 }>(), {
   initialFreehandState: '',
   initialPolygonState: '',
@@ -62,13 +64,34 @@ const props = withDefaults(defineProps<{
   metadataSchemas: () => [],
 })
 
+// WebSocket-overridable config
+const wsConfig = reactive({
+  width: undefined as number | string | undefined,
+  height: undefined as number | string | undefined,
+  showTimeline: undefined as boolean | undefined,
+  showVisualizations: undefined as boolean | undefined,
+  showSnapshots: undefined as boolean | undefined,
+  showRescale: undefined as boolean | undefined
+})
+
+// Effective values (WebSocket overrides props)
+const effectiveWidth = computed(() => wsConfig.width ?? props.width)
+const effectiveHeight = computed(() => wsConfig.height ?? props.height)
+const effectiveShowTimeline = computed(() => wsConfig.showTimeline ?? props.showTimeline)
+const effectiveShowVisualizations = computed(() => wsConfig.showVisualizations ?? props.showVisualizations)
+const effectiveShowSnapshots = computed(() => wsConfig.showSnapshots ?? props.showSnapshots)
+const effectiveShowRescale = computed(() => wsConfig.showRescale ?? props.showRescale)
+
+// WebSocket controller - use shallowRef to avoid Vue proxying the WebSocket internals
+const wsController = shallowRef<CanvasWebSocketController | null>(null)
+
 const emit = defineEmits<{
   (event: 'state-update', state: CanvasStateSnapshot): void
 }>()
 
 const resolution = computed(() => {
-  const width = Number(props.width)
-  const height = Number(props.height)
+  const width = Number(effectiveWidth.value)
+  const height = Number(effectiveHeight.value)
 
   return {
     width: Number.isFinite(width) ? width : 1000,
@@ -247,6 +270,11 @@ const emitStateUpdate = (state: CanvasRuntimeState) => {
   const snapshot = createSnapshot(state)
   props.syncState?.(snapshot)
   emit('state-update', snapshot)
+
+  // Send via WebSocket if connected
+  if (wsController.value?.isConnected) {
+    wsController.value.sendStateUpdate(snapshot)
+  }
 }
 
 canvasState.callbacks.syncAppState = emitStateUpdate
@@ -736,7 +764,7 @@ onMounted(async () => {
     )
 
     watch(
-      () => [props.width, props.height] as const,
+      () => [effectiveWidth.value, effectiveHeight.value] as const,
       ([width, height]) => {
         const numericWidth = Number(width)
         const numericHeight = Number(height)
@@ -913,6 +941,44 @@ onMounted(async () => {
       }
     }, konvaContainer.value!)
 
+    // Initialize WebSocket if address provided
+    if (props.wsAddress) {
+      wsController.value = new CanvasWebSocketController(props.wsAddress)
+      wsController.value.setHandlers({
+        onSetCanvasState: (stateString) => {
+          restoreCanvasState(stateString)
+        },
+        onSetFreehandState: (stateString) => {
+          if (stateString && stateString !== canvasState.freehand.serializedState) {
+            deserializeFreehandState(canvasState, stateString)
+          }
+        },
+        onSetPolygonState: (stateString) => {
+          if (stateString && stateString !== canvasState.polygon.serializedState) {
+            deserializePolygonState(canvasState, stateString)
+          }
+        },
+        onUndo: () => undo(),
+        onRedo: () => redo(),
+        onGetCanvasState: (requestId) => {
+          const state = captureCanvasState()
+          wsController.value?.sendCanvasStateResponse(state, requestId)
+        },
+        onSetConfig: (config) => {
+          if (config.width !== undefined) wsConfig.width = config.width
+          if (config.height !== undefined) wsConfig.height = config.height
+          if (config.showTimeline !== undefined) wsConfig.showTimeline = config.showTimeline
+          if (config.showVisualizations !== undefined) wsConfig.showVisualizations = config.showVisualizations
+          if (config.showSnapshots !== undefined) wsConfig.showSnapshots = config.showSnapshots
+          if (config.showRescale !== undefined) wsConfig.showRescale = config.showRescale
+        },
+        onSetTool: (tool) => {
+          activeTool.value = tool
+        }
+      })
+      wsController.value.connect()
+    }
+
   } catch (e) {
     console.warn(e)
   }
@@ -932,6 +998,9 @@ onUnmounted(() => {
   disposeEscapeListener?.()
   disposeEscapeListener = undefined
   canvasState.keyboardDisposables.splice(0).forEach((dispose) => dispose())
+
+  // Clean up WebSocket
+  wsController.value?.disconnect()
 
   // Clean up Konva
   canvasState.stage?.destroy()
@@ -1006,10 +1075,10 @@ onUnmounted(() => {
           :disabled="canvasState.freehand.isAnimating.value">
           📝 Metadata
         </button>
-        <button v-if="props.showRescale" @click="rescaleCanvas720To1080" :disabled="canvasState.freehand.isAnimating.value">
+        <button v-if="effectiveShowRescale" @click="rescaleCanvas720To1080" :disabled="canvasState.freehand.isAnimating.value">
           ⬆️ 720→1080
         </button>
-        <button v-if="props.showSnapshots" @click="snapshotsPanelVisible = !snapshotsPanelVisible" :class="{ active: snapshotsPanelVisible }"
+        <button v-if="effectiveShowSnapshots" @click="snapshotsPanelVisible = !snapshotsPanelVisible" :class="{ active: snapshotsPanelVisible }"
           :disabled="canvasState.freehand.isAnimating.value">
           📷 Snapshots
         </button>
@@ -1018,7 +1087,7 @@ onUnmounted(() => {
 
       <!-- Freehand Tool Toolbar -->
       <template v-if="activeTool === 'freehand'">
-        <button v-if="props.showTimeline"
+        <button v-if="effectiveShowTimeline"
           @click="canvasState.freehand.useRealTiming.value = !canvasState.freehand.useRealTiming.value"
           :class="{ active: canvasState.freehand.useRealTiming.value }">
           {{ canvasState.freehand.useRealTiming.value ? '⏱️ Real Time' : '⏱️ Max 0.3s' }}
@@ -1083,7 +1152,7 @@ onUnmounted(() => {
 
         <!-- Smart Metadata Editor -->
         <div class="metadata-suite" v-if="metadataEditorVisible">
-          <VisualizationToggles v-if="props.showVisualizations" :canvas-state="canvasState" />
+          <VisualizationToggles v-if="effectiveShowVisualizations" :canvas-state="canvasState" />
           <HierarchicalMetadataEditor
             :selected-nodes="selectedKonvaNodes"
             :single-node="singleSelectedNode"
@@ -1098,7 +1167,7 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <template v-if="props.showTimeline">
+      <template v-if="effectiveShowTimeline">
         <Timeline :strokes="freehandStrokes(canvasState)" :selectedStrokes="canvasState.freehand.selectedStrokesForTimeline.value"
           :useRealTiming="canvasState.freehand.useRealTiming.value" :maxInterStrokeDelay="maxInterStrokeDelay"
           :overrideDuration="canvasState.freehand.timelineDuration.value > 0 ? canvasState.freehand.timelineDuration.value : undefined"

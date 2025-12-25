@@ -1,6 +1,9 @@
 import { z } from 'zod'
 import type { NoteData, NoteDataInput, PianoRollState } from './pianoRollState'
 
+// Schema for arbitrary metadata objects
+const MetadataSchema = z.record(z.string(), z.unknown()).optional()
+
 // Base note schema matching NoteDataInput (incoming notes may lack id/velocity)
 const NoteDataInputSchema = z.object({
   id: z.string().optional(),
@@ -8,7 +11,7 @@ const NoteDataInputSchema = z.object({
   position: z.number(),
   duration: z.number().positive(),
   velocity: z.number().int().min(0).max(127).optional(),
-  metadata: z.any().optional()
+  metadata: MetadataSchema
 })
 
 // Full note schema matching NoteData
@@ -18,7 +21,7 @@ const NoteDataSchema = z.object({
   position: z.number(),
   duration: z.number().positive(),
   velocity: z.number().int().min(0).max(127),
-  metadata: z.any().optional()
+  metadata: MetadataSchema
 })
 
 // Incoming message schemas (commands from server to component)
