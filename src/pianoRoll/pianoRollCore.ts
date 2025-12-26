@@ -455,7 +455,7 @@ export function setupEventHandlers(state: PianoRollState, stage: Konva.Stage) {
           }
         } else {
           // Replace selection unless single note already selected
-          if (!isSelected || state.selection.selectedIds.size > 1) {
+          if (!isSelected) {
             state.selection.selectedIds.clear()
             state.selection.selectedIds.add(noteId)
           }
