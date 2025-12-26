@@ -62,6 +62,36 @@ const effectiveWidth = computed(() => wsConfig.width ?? props.width)
 const effectiveHeight = computed(() => wsConfig.height ?? props.height)
 const effectiveInteractive = computed(() => wsConfig.interactive ?? props.interactive)
 const effectiveShowControlPanel = computed(() => wsConfig.showControlPanel ?? props.showControlPanel)
+const maxWidth = computed(() => effectiveWidth.value)
+const maxHeight = computed(() => effectiveHeight.value)
+
+const MIN_SCALE = 1 / 3
+const layoutGap = 1
+const scrollbarThickness = 12
+const sizeObserver = ref<HTMLDivElement>()
+const availableWidth = ref<number | null>(null)
+let resizeObserver: ResizeObserver | null = null
+const stageInset = computed(() => scrollbarThickness + layoutGap)
+
+const availableStageWidth = computed(() => {
+  if (!Number.isFinite(availableWidth.value ?? NaN)) return null
+  return Math.max(0, (availableWidth.value as number) - stageInset.value)
+})
+
+const scale = computed(() => {
+  const baseWidth = maxWidth.value
+  if (!Number.isFinite(baseWidth) || baseWidth <= 0) return 1
+  const measuredWidth = availableStageWidth.value ?? baseWidth
+  const rawScale = measuredWidth / baseWidth
+  if (!Number.isFinite(rawScale)) return 1
+  return Math.min(1, Math.max(MIN_SCALE, rawScale))
+})
+
+const scaledWidth = computed(() => Math.round(maxWidth.value * scale.value))
+const scaledHeight = computed(() => Math.round(maxHeight.value * scale.value))
+const minWidth = computed(() => Math.round(maxWidth.value * MIN_SCALE))
+const shellMaxWidth = computed(() => Math.round(maxWidth.value + stageInset.value))
+const shellMinWidth = computed(() => Math.round(minWidth.value + stageInset.value))
 
 // WebSocket controller - use shallowRef to avoid Vue proxying the WebSocket internals
 const wsController = shallowRef<PianoRollWebSocketController | null>(null)
@@ -124,23 +154,23 @@ const notifyViewportChange = () => {
 }
 
 const fitZoomToNotes = () => {
-  fitZoomToNotesHelper(state, effectiveWidth.value, effectiveHeight.value, notifyViewportChange)
+  fitZoomToNotesHelper(state, scaledWidth.value, scaledHeight.value, notifyViewportChange)
 }
 
 const enforceScrollBounds = () => {
-  updateScrollBounds(state, effectiveWidth.value, effectiveHeight.value, notifyViewportChange)
+  updateScrollBounds(state, scaledWidth.value, scaledHeight.value, notifyViewportChange)
 }
 
 const applyHorizontalZoomWithState = (newQuarterNoteWidth: number, newStartQuarter: number) => {
-  applyHorizontalZoom(state, newQuarterNoteWidth, newStartQuarter, effectiveWidth.value, effectiveHeight.value, notifyViewportChange)
+  applyHorizontalZoom(state, newQuarterNoteWidth, newStartQuarter, scaledWidth.value, scaledHeight.value, notifyViewportChange)
 }
 
 const applyVerticalZoomWithState = (newNoteHeight: number, newTopIndex: number) => {
-  applyVerticalZoom(state, newNoteHeight, newTopIndex, effectiveWidth.value, effectiveHeight.value, notifyViewportChange)
+  applyVerticalZoom(state, newNoteHeight, newTopIndex, scaledWidth.value, scaledHeight.value, notifyViewportChange)
 }
 
-const getHorizontalViewportRangeWithState = () => getHorizontalViewportRange(state, effectiveWidth.value)
-const getVerticalViewportRangeWithState = () => getVerticalViewportRange(state, effectiveHeight.value)
+const getHorizontalViewportRangeWithState = () => getHorizontalViewportRange(state, scaledWidth.value)
+const getVerticalViewportRangeWithState = () => getVerticalViewportRange(state, scaledHeight.value)
 
 const horizontalScrollbar = new HorizontalScrollbarController({
   state,
@@ -150,7 +180,7 @@ const horizontalScrollbar = new HorizontalScrollbarController({
   applyHorizontalZoom: applyHorizontalZoomWithState,
   enforceScrollBounds,
   notifyViewportChange,
-  getFallbackWidth: () => effectiveWidth.value
+  getFallbackWidth: () => scaledWidth.value
 })
 
 const verticalScrollbar = new VerticalScrollbarController({
@@ -161,7 +191,7 @@ const verticalScrollbar = new VerticalScrollbarController({
   applyVerticalZoom: applyVerticalZoomWithState,
   enforceScrollBounds,
   notifyViewportChange,
-  getFallbackHeight: () => effectiveHeight.value
+  getFallbackHeight: () => scaledHeight.value
 })
 
 const horizontalThumbStyle = computed(() => horizontalScrollbar.getThumbStyle())
@@ -308,9 +338,22 @@ const stageManager = new StageManager({
 })
 
 onMounted(() => {
+  if (sizeObserver.value) {
+    resizeObserver = new ResizeObserver((entries) => {
+      const entry = entries[0]
+      if (!entry) return
+      const boxSize = Array.isArray(entry.contentBoxSize) ? entry.contentBoxSize[0] : entry.contentBoxSize
+      const width = boxSize?.inlineSize ?? entry.contentRect.width
+      if (Number.isFinite(width)) {
+        availableWidth.value = width
+      }
+    })
+    resizeObserver.observe(sizeObserver.value)
+  }
+
   stageManager.mount({
-    width: effectiveWidth.value,
-    height: effectiveHeight.value,
+    width: scaledWidth.value,
+    height: scaledHeight.value,
     interactive: effectiveInteractive.value,
     initialNotes: props.initialNotes ?? []
   })
@@ -342,6 +385,8 @@ onUnmounted(() => {
   stopVerticalDrag()
   stageManager.unmount()
   wsController.value?.disconnect()
+  resizeObserver?.disconnect()
+  resizeObserver = null
 })
 
 watch(effectiveInteractive, (interactive) => {
@@ -352,12 +397,8 @@ watch(effectiveInteractive, (interactive) => {
   }
 })
 
-watch(effectiveWidth, (newWidth) => {
-  stageManager.resize(newWidth, effectiveHeight.value)
-})
-
-watch(effectiveHeight, (newHeight) => {
-  stageManager.resize(effectiveWidth.value, newHeight)
+watch([scaledWidth, scaledHeight], ([newWidth, newHeight]) => {
+  stageManager.resize(newWidth, newHeight)
 })
 
 // Expose methods for web component API
@@ -408,91 +449,102 @@ defineExpose({
 
 <template>
   <div class="piano-roll-root">
-    <div v-if="isControlPanelVisible" class="control-panel">
-      <button @click="undo" :disabled="!isInteractive || !canUndo">↶ Undo</button>
-      <button @click="redo" :disabled="!isInteractive || !canRedo">↷ Redo</button>
-      <span class="separator">|</span>
-      <label>
-        Grid:
-        <select v-model.number="gridSubdivision" :disabled="!isInteractive">
-          <option :value="4">Quarter</option>
-          <option :value="8">Eighth</option>
-          <option :value="16">16th</option>
-          <option :value="32">32nd</option>
-        </select>
-      </label>
-      <span class="separator">|</span>
-      <button @click="deleteSelected" :disabled="!isInteractive || selectionCount === 0">
-        🗑️ Delete
-      </button>
-      <span class="separator">|</span>
-      <button
-        class="metadata-toggle"
-        :class="{ active: showMetadataEditor }"
-        @click="showMetadataEditor = !showMetadataEditor"
-      >
-        📝 Metadata
-      </button>
-      <span class="separator">|</span>
-      <span class="info">{{ noteCount }} notes, {{ selectionCount }} selected</span>
-    </div>
-    <div class="piano-roll-layout">
-      <div class="stage-wrapper">
-        <div
-          ref="konvaContainer"
-          :class="['piano-roll-container', { 'is-disabled': !isInteractive }]"
-          :style="{ width: effectiveWidth + 'px', height: effectiveHeight + 'px' }"
-        ></div>
-        <div
-          ref="horizontalTrack"
-          class="scrollbar horizontal"
-          :class="{ 'is-disabled': !isInteractive }"
-          :style="{ width: effectiveWidth + 'px' }"
-          @pointerdown.self="onHorizontalTrackPointerDown"
+    <div
+      ref="sizeObserver"
+      class="piano-roll-shell"
+      :style="{
+        maxWidth: shellMaxWidth + 'px',
+        minWidth: shellMinWidth + 'px',
+        '--scrollbar-thickness': scrollbarThickness + 'px',
+        '--scrollbar-gap': layoutGap + 'px'
+      }"
+    >
+      <div v-if="isControlPanelVisible" class="control-panel">
+        <button @click="undo" :disabled="!isInteractive || !canUndo">↶ Undo</button>
+        <button @click="redo" :disabled="!isInteractive || !canRedo">↷ Redo</button>
+        <span class="separator">|</span>
+        <label>
+          Grid:
+          <select v-model.number="gridSubdivision" :disabled="!isInteractive">
+            <option :value="4">Quarter</option>
+            <option :value="8">Eighth</option>
+            <option :value="16">16th</option>
+            <option :value="32">32nd</option>
+          </select>
+        </label>
+        <span class="separator">|</span>
+        <button @click="deleteSelected" :disabled="!isInteractive || selectionCount === 0">
+          🗑️ Delete
+        </button>
+        <span class="separator">|</span>
+        <button
+          class="metadata-toggle"
+          :class="{ active: showMetadataEditor }"
+          @click="showMetadataEditor = !showMetadataEditor"
         >
-          <div class="scrollbar-thumb horizontal-thumb" :style="horizontalThumbStyle">
+          📝 Metadata
+        </button>
+        <span class="separator">|</span>
+        <span class="info">{{ noteCount }} notes, {{ selectionCount }} selected</span>
+      </div>
+      <div class="piano-roll-layout">
+        <div class="stage-wrapper">
+          <div
+            ref="konvaContainer"
+            :class="['piano-roll-container', { 'is-disabled': !isInteractive }]"
+            :style="{ width: scaledWidth + 'px', height: scaledHeight + 'px' }"
+          ></div>
+          <div
+            ref="horizontalTrack"
+            class="scrollbar horizontal"
+            :class="{ 'is-disabled': !isInteractive }"
+            :style="{ width: scaledWidth + 'px' }"
+            @pointerdown.self="onHorizontalTrackPointerDown"
+          >
+            <div class="scrollbar-thumb horizontal-thumb" :style="horizontalThumbStyle">
+              <div
+                class="scrollbar-handle handle-left"
+                @pointerdown.stop.prevent="startHorizontalDrag('resize-start', $event)"
+              ></div>
+              <div class="scrollbar-body" @pointerdown.stop.prevent="startHorizontalDrag('move', $event)"></div>
+              <div
+                class="scrollbar-handle handle-right"
+                @pointerdown.stop.prevent="startHorizontalDrag('resize-end', $event)"
+              ></div>
+            </div>
+          </div>
+        </div>
+        <div
+          ref="verticalTrack"
+          class="scrollbar vertical"
+          :class="{ 'is-disabled': !isInteractive }"
+          :style="{ height: scaledHeight + 'px' }"
+          @pointerdown.self="onVerticalTrackPointerDown"
+        >
+          <div class="scrollbar-thumb vertical-thumb" :style="verticalThumbStyle">
             <div
-              class="scrollbar-handle handle-left"
-              @pointerdown.stop.prevent="startHorizontalDrag('resize-start', $event)"
+              class="scrollbar-handle handle-top"
+              @pointerdown.stop.prevent="startVerticalDrag('resize-start', $event)"
             ></div>
-            <div class="scrollbar-body" @pointerdown.stop.prevent="startHorizontalDrag('move', $event)"></div>
             <div
-              class="scrollbar-handle handle-right"
-              @pointerdown.stop.prevent="startHorizontalDrag('resize-end', $event)"
+              class="scrollbar-body vertical-body"
+              @pointerdown.stop.prevent="startVerticalDrag('move', $event)"
+            ></div>
+            <div
+              class="scrollbar-handle handle-bottom"
+              @pointerdown.stop.prevent="startVerticalDrag('resize-end', $event)"
             ></div>
           </div>
         </div>
       </div>
-      <div
-        ref="verticalTrack"
-        class="scrollbar vertical"
-        :class="{ 'is-disabled': !isInteractive }"
-        :style="{ height: effectiveHeight + 'px' }"
-        @pointerdown.self="onVerticalTrackPointerDown"
-      >
-        <div class="scrollbar-thumb vertical-thumb" :style="verticalThumbStyle">
-          <div
-            class="scrollbar-handle handle-top"
-            @pointerdown.stop.prevent="startVerticalDrag('resize-start', $event)"
-          ></div>
-          <div
-            class="scrollbar-body vertical-body"
-            @pointerdown.stop.prevent="startVerticalDrag('move', $event)"
-          ></div>
-          <div
-            class="scrollbar-handle handle-bottom"
-            @pointerdown.stop.prevent="startVerticalDrag('resize-end', $event)"
-          ></div>
-        </div>
+      <div v-if="isControlPanelVisible" class="metadata-editor-wrapper">
+        <NoteMetadataEditor
+          :visible="metadataEditorVisible"
+          :metadata="selectedNoteMetadata ?? undefined"
+          :can-edit="canEditMetadata"
+          @apply="handleApplyNoteMetadata"
+        />
       </div>
-    </div>
-    <div v-if="isControlPanelVisible" class="metadata-editor-wrapper">
-      <NoteMetadataEditor
-        :visible="metadataEditorVisible"
-        :metadata="selectedNoteMetadata ?? undefined"
-        :can-edit="canEditMetadata"
-        @apply="handleApplyNoteMetadata"
-      />
     </div>
   </div>
 </template>
@@ -502,18 +554,31 @@ defineExpose({
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 20px;
-  padding: 20px;
+  padding: 8px 10px;
+}
+
+.piano-roll-shell {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin: 0 auto;
 }
 
 .control-panel {
   background: white;
   border: 1px solid #ccc;
   border-radius: 8px;
-  padding: 10px 15px;
+  padding: 6px 8px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  flex-wrap: wrap;
+  column-gap: 6px;
+  row-gap: 6px;
+  align-self: stretch;
+  box-sizing: border-box;
+  justify-content: center;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
 }
 
@@ -521,7 +586,7 @@ defineExpose({
   background: #f0f0f0;
   border: 1px solid #ccc;
   border-radius: 4px;
-  padding: 5px 15px;
+  padding: 4px 10px;
   cursor: pointer;
   font-size: 14px;
   transition: all 0.2s;
@@ -573,13 +638,13 @@ defineExpose({
 .piano-roll-layout {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: var(--scrollbar-gap);
 }
 
 .stage-wrapper {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--scrollbar-gap);
   align-items: stretch;
 }
 
@@ -594,11 +659,11 @@ defineExpose({
 }
 
 .scrollbar.horizontal {
-  height: 24px;
+  height: var(--scrollbar-thickness);
 }
 
 .scrollbar.vertical {
-  width: 24px;
+  width: var(--scrollbar-thickness);
 }
 
 .scrollbar.is-disabled {
@@ -613,8 +678,8 @@ defineExpose({
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-width: 16px;
-  min-height: 16px;
+  min-width: calc(var(--scrollbar-thickness) * 0.66);
+  min-height: calc(var(--scrollbar-thickness) * 0.66);
   cursor: grab;
   transition: background 0.15s ease;
   box-sizing: border-box;
@@ -656,7 +721,7 @@ defineExpose({
 
 .handle-left,
 .handle-right {
-  width: 8px;
+  width: calc(var(--scrollbar-thickness) / 3);
   height: 100%;
   cursor: ew-resize;
 }
@@ -664,7 +729,7 @@ defineExpose({
 .handle-top,
 .handle-bottom {
   width: 100%;
-  height: 8px;
+  height: calc(var(--scrollbar-thickness) / 3);
   cursor: ns-resize;
 }
 
