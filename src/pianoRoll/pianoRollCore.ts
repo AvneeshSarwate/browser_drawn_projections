@@ -128,12 +128,18 @@ export function renderGrid(state: PianoRollState) {
 
   const gridCache = state.renderCache.grid
 
+  const stage = state.stage
+  const viewportWidth = stage.width()
+  const viewportHeight = stage.height()
+
   // Only redraw if viewport or subdivision changed
   if (gridCache.lastScrollX === state.viewport.scrollX &&
       gridCache.lastScrollY === state.viewport.scrollY &&
       gridCache.lastSubdivision === state.grid.subdivision &&
       gridCache.lastQuarterNoteWidth === state.grid.quarterNoteWidth &&
-      gridCache.lastNoteHeight === state.grid.noteHeight) {
+      gridCache.lastNoteHeight === state.grid.noteHeight &&
+      gridCache.lastStageWidth === viewportWidth &&
+      gridCache.lastStageHeight === viewportHeight) {
     return
   }
 
@@ -142,15 +148,13 @@ export function renderGrid(state: PianoRollState) {
   gridCache.lastSubdivision = state.grid.subdivision
   gridCache.lastQuarterNoteWidth = state.grid.quarterNoteWidth
   gridCache.lastNoteHeight = state.grid.noteHeight
+  gridCache.lastStageWidth = viewportWidth
+  gridCache.lastStageHeight = viewportHeight
 
   gridLayer.destroyChildren()
 
   const { scrollX, scrollY } = state.viewport
   const { quarterNoteWidth, noteHeight, numMeasures, timeSignature } = state.grid
-  const stage = state.stage
-
-  const viewportWidth = stage.width()
-  const viewportHeight = stage.height()
 
   const pianoRollHeight = 128 * noteHeight
   const pulsesPerMeasure = timeSignature * 4

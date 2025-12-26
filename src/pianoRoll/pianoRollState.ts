@@ -107,6 +107,8 @@ export interface PianoRollState {
       lastSubdivision: number
       lastQuarterNoteWidth: number
       lastNoteHeight: number
+      lastStageWidth: number
+      lastStageHeight: number
     }
   }
 
@@ -218,7 +220,9 @@ export const createPianoRollState = (): PianoRollState => {
         lastScrollY: -1,
         lastSubdivision: -1,
         lastQuarterNoteWidth: -1,
-        lastNoteHeight: -1
+        lastNoteHeight: -1,
+        lastStageWidth: -1,
+        lastStageHeight: -1
       }
     },
 
