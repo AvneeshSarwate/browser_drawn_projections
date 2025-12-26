@@ -49,7 +49,7 @@ function mutateSelection(state: PianoRollState, mutate: () => void): boolean {
   mutate()
   const changed = selectionSetsDiffer(before, state.selection.selectedIds)
   if (changed) {
-    state.notifyExternalChange?.()
+    state.notifyExternalChange?.('selection')
   }
   return changed
 }
@@ -571,7 +571,7 @@ export function setupEventHandlers(state: PianoRollState, stage: Konva.Stage) {
           const quantizedPos = quantizeToGrid(position, state.grid.subdivision)
           state.queuePlayhead.position = Math.max(0, Math.min(quantizedPos, state.grid.maxLength))
           state.needsRedraw = true
-          state.notifyExternalChange?.() //for queue playhead update
+          state.notifyExternalChange?.('playhead') // for queue playhead update
         }
       }
     }

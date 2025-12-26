@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref, shallowRef, watch } from 'vue'
 import { createPianoRollState, type PianoRollState, type NoteData, type NoteDataInput } from './pianoRollState'
-import { PianoRollWebSocketController } from './pianoRollWebSocket'
+import { PianoRollWebSocketController, type UpdateSource } from './pianoRollWebSocket'
 import {
   initializeLayers,
   setupEventHandlers,
@@ -198,7 +198,13 @@ watch(gridSubdivision, (newValue) => {
   props.syncState?.(state)
 })
 
-const emitStateUpdate = () => {
+type EmitStateOptions = {
+  source?: UpdateSource
+  suppressWsNotes?: boolean
+}
+
+const emitStateUpdate = (options: EmitStateOptions = {}) => {
+  const source = options.source ?? 'notes'
   syncUiCounters()
   const notesArray = Array.from(state.notes.entries())
   emit('notes-update', notesArray)
@@ -206,8 +212,10 @@ const emitStateUpdate = () => {
 
   // Send via WebSocket if connected
   if (wsController.value?.isConnected) {
-    wsController.value.sendNotesUpdate(notesArray)
-    wsController.value.sendStateUpdate(state)
+    if (!options.suppressWsNotes && source === 'notes') {
+      wsController.value.sendNotesUpdate(notesArray, source)
+    }
+    wsController.value.sendStateUpdate(state, source)
   }
 }
 
@@ -255,8 +263,8 @@ const handleApplyNoteMetadata = (metadata: any) => {
   })
 }
 
-state.notifyExternalChange = () => {
-  emitStateUpdate()
+state.notifyExternalChange = (source) => {
+  emitStateUpdate({ source: source ?? 'other' })
 }
 
 const {
@@ -311,7 +319,7 @@ onMounted(() => {
   if (props.wsAddress) {
     wsController.value = new PianoRollWebSocketController(props.wsAddress)
     wsController.value.setHandlers({
-      onSetNotes: (notes) => setNotes(notes),
+      onSetNotes: (notes) => setNotes(notes, { suppressWsNotes: true }),
       onSetLivePlayhead: (position) => setLivePlayheadPosition(position),
       onFitZoomToNotes: () => fitZoomToNotes(),
       onGetPlayStartPosition: (requestId) => {
@@ -353,7 +361,7 @@ watch(effectiveHeight, (newHeight) => {
 })
 
 // Expose methods for web component API
-const setNotes = (notes: NoteDataInput[]) => {
+const setNotes = (notes: NoteDataInput[], options: EmitStateOptions = {}) => {
   const usedIds = new Set<string>()
 
   state.notes.clear()
@@ -377,7 +385,7 @@ const setNotes = (notes: NoteDataInput[]) => {
   })
 
   state.needsRedraw = true
-  emitStateUpdate()
+  emitStateUpdate({ ...options, source: 'notes' })
 }
 
 const setLivePlayheadPosition = (position: number) => {

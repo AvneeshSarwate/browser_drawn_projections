@@ -66,6 +66,14 @@ export interface PianoRollConfig {
   readonly showControlPanel?: boolean
 }
 
+export type UpdateSource =
+  | 'notes'
+  | 'selection'
+  | 'playhead'
+  | 'viewport'
+  | 'grid'
+  | 'other'
+
 // ============================================================================
 // Internal Message Types
 // ============================================================================
@@ -73,12 +81,14 @@ export interface PianoRollConfig {
 interface NotesUpdateMessage {
   type: 'notesUpdate'
   notes: Array<[string, NoteData]>
+  source?: UpdateSource
 }
 
 interface StateUpdateMessage {
   type: 'stateUpdate'
   viewport: Viewport
   grid: GridSettings
+  source?: UpdateSource
 }
 
 interface PlayStartPositionResponseMessage {
@@ -166,10 +176,10 @@ export class PianoRollWebSocketClient {
   // ============================================================================
 
   /** Called when the component sends a notes update */
-  onNotesUpdate?: (notes: ReadonlyMap<string, Readonly<NoteData>>) => void
+  onNotesUpdate?: (notes: ReadonlyMap<string, Readonly<NoteData>>, source?: UpdateSource) => void
 
   /** Called when the component sends a state update (viewport/grid) */
-  onStateUpdate?: (state: Readonly<PianoRollStateSnapshot>) => void
+  onStateUpdate?: (state: Readonly<PianoRollStateSnapshot>, source?: UpdateSource) => void
 
   /** Called when the component signals it's ready */
   onConnectionReady?: () => void
@@ -281,7 +291,7 @@ export class PianoRollWebSocketClient {
             newNotes.set(id, note)
           }
           this._notes = newNotes
-          this.onNotesUpdate?.(this._notes)
+          this.onNotesUpdate?.(this._notes, message.source)
           break
         }
 
@@ -291,7 +301,7 @@ export class PianoRollWebSocketClient {
           this.onStateUpdate?.({
             viewport: this._viewport,
             grid: this._grid
-          })
+          }, message.source)
           break
 
         case 'playStartPositionResponse': {

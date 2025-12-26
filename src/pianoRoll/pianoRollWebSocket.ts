@@ -1,5 +1,15 @@
 import { z } from 'zod'
-import type { NoteData, NoteDataInput, PianoRollState } from './pianoRollState'
+import type { NoteData, NoteDataInput, PianoRollState, ExternalChangeSource } from './pianoRollState'
+
+const UpdateSourceSchema = z.enum([
+  'notes',
+  'selection',
+  'playhead',
+  'viewport',
+  'grid',
+  'other'
+])
+export type UpdateSource = ExternalChangeSource
 
 // Schema for arbitrary metadata objects
 const MetadataSchema = z.record(z.string(), z.unknown()).optional()
@@ -66,7 +76,8 @@ export type IncomingMessage = z.infer<typeof IncomingMessageSchema>
 // Outgoing message schemas (events from component to server)
 const NotesUpdateMessageSchema = z.object({
   type: z.literal('notesUpdate'),
-  notes: z.array(z.tuple([z.string(), NoteDataSchema]))
+  notes: z.array(z.tuple([z.string(), NoteDataSchema])),
+  source: UpdateSourceSchema.optional()
 })
 
 const StateUpdateMessageSchema = z.object({
@@ -81,7 +92,8 @@ const StateUpdateMessageSchema = z.object({
     quarterNoteWidth: z.number(),
     noteHeight: z.number(),
     subdivision: z.number()
-  })
+  }),
+  source: UpdateSourceSchema.optional()
 })
 
 const PlayStartPositionResponseSchema = z.object({
@@ -228,14 +240,15 @@ export class PianoRollWebSocketController {
     this.ws.send(JSON.stringify(message))
   }
 
-  sendNotesUpdate(notes: Array<[string, NoteData]>) {
+  sendNotesUpdate(notes: Array<[string, NoteData]>, source?: UpdateSource) {
     this.send({
       type: 'notesUpdate',
-      notes
+      notes,
+      source
     })
   }
 
-  sendStateUpdate(state: PianoRollState) {
+  sendStateUpdate(state: PianoRollState, source?: UpdateSource) {
     this.send({
       type: 'stateUpdate',
       viewport: {
@@ -248,7 +261,8 @@ export class PianoRollWebSocketController {
         quarterNoteWidth: state.grid.quarterNoteWidth,
         noteHeight: state.grid.noteHeight,
         subdivision: state.grid.subdivision
-      }
+      },
+      source
     })
   }
 

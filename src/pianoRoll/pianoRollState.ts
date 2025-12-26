@@ -127,8 +127,16 @@ export interface PianoRollState {
   }
 
   // Optional callback to notify external listeners when state changes outside command stack
-  notifyExternalChange?: () => void
+  notifyExternalChange?: (source?: ExternalChangeSource) => void
 }
+
+export type ExternalChangeSource =
+  | 'notes'
+  | 'selection'
+  | 'playhead'
+  | 'viewport'
+  | 'grid'
+  | 'other'
 
 export const createPianoRollState = (): PianoRollState => {
   const baseQuarterNoteWidth = 120
