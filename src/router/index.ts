@@ -50,7 +50,8 @@ export const sketchNames = [
   'pianoRollChatbot',
   'haikuToFluidSong',
   'gestaltTest1',
-  'text_projmap_sandbox'
+  'text_projmap_sandbox',
+  'mpe_projmap'
 ]
 
 const sketchRoutes = sketchNames.map(name => {
