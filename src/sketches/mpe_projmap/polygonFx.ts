@@ -420,8 +420,10 @@ export const syncChainsAndMeshes = (
     }
   }
 
-  ;(payload.added ?? []).forEach((poly) => processPoly(poly))
-  ;(payload.changed ?? []).forEach((poly) => processPoly(poly))
+  (payload.added ?? []).forEach((poly) => processPoly(poly));
+    
+  (payload.changed ?? []).forEach((poly) => processPoly(poly));
+  
   payload.current.forEach((poly) => processPoly(poly))
 }
 

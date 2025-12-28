@@ -20,3 +20,74 @@ concrete animation idea
   - for some given grid step, element rooted on every 2nd column, and skip every 2nd row 
 - pressure - warp arrangement - add a rolling simplex noise displacment to each shape 
 - timbre - pixelate shader
+
+
+need a better unified API for "render bundles" (p5.Graphics, FlattenedPolygon (and metadata), post-processing nodes)
+- bundles need to be publically accessible so they can be controlled with realtimes messages
+- specifically, need to be able to set metadata. 
+  - send "path keyed messages" {"obj1.obj2.finalProp": 5}
+  - for now, just overwrite the metadata of the actual polygon with the message
+
+```typescript
+/**
+ * Applies dot-delimited paths to a target object, creating intermediate objects as needed.
+ * - Does not handle arrays (by request).
+ * - Mutates and returns `target`.
+ */
+export function applyPathMap(
+  target: any,
+  message: Record<string, unknown>,
+  opts?: { separator?: string; overwriteNonObject?: boolean }
+): any {
+  const separator = opts?.separator ?? ".";
+  const overwriteNonObject = opts?.overwriteNonObject ?? true;
+
+  for (const [path, value] of Object.entries(message)) {
+    if (!path) continue;
+
+    const parts = path.split(separator).filter(Boolean);
+    if (parts.length === 0) continue;
+
+    let cur: any = target;
+
+    for (let i = 0; i < parts.length; i++) {
+      const key = parts[i]!;
+      const isLast = i === parts.length - 1;
+
+      if (isLast) {
+        cur[key] = value;
+        continue;
+      }
+
+      const next = cur[key];
+
+      // If missing, create an object
+      if (next == null) {
+        cur[key] = {};
+        cur = cur[key];
+        continue;
+      }
+
+      // If present but not an object, decide what to do
+      const isObjectLike = typeof next === "object" && !Array.isArray(next);
+      if (!isObjectLike) {
+        if (!overwriteNonObject) {
+          // Skip applying this path rather than clobbering a non-object
+          cur = next; // won't really work for further traversal, but we just skip safely
+          break;
+        }
+        cur[key] = {};
+      }
+
+      cur = cur[key];
+    }
+  }
+
+  return target;
+}
+```
+
+
+
+
+need more generic node OSC listener - just bounces {addres, args} to browser via websocket
