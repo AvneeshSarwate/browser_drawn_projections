@@ -2,19 +2,14 @@ import * as BABYLON from 'babylonjs';
 
 export type Point2D = readonly [number, number];
 
+/**
+ * Accepted texture sources for StyledShape/BatchedStyledShape.
+ * For canvas sources, use CanvasTexture helper from sceneHelpers.ts.
+ */
 export type TextureSource =
   | BABYLON.BaseTexture
   | BABYLON.RenderTargetTexture
-  | HTMLCanvasElement
-  | OffscreenCanvas
   | { output: BABYLON.RenderTargetTexture };
-
-export interface CanvasTextureEntry {
-  texture: BABYLON.BaseTexture;
-  internal: BABYLON.InternalTexture;
-  width: number;
-  height: number;
-}
 
 export interface MaterialInstance<U, T extends string> {
   material: BABYLON.ShaderMaterial;

@@ -35,7 +35,7 @@ interface UniformTypeMetadata {
 
 interface TextureParam {
   textureName: string;
-  samplerName?: string;
+  samplerName: string;
 }
 
 interface InstanceField {
@@ -102,7 +102,7 @@ const UNIFORM_TYPE_MAP: Record<string, UniformTypeMetadata> = {
     setter: 'setMatrix',
     expression: (valueRef) => `ensureMatrix(${valueRef})`,
     helper: 'ensureMatrix',
-    defaultValue: 'new Float32Array(16)',
+    defaultValue: 'new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1])',
   },
 };
 
@@ -201,34 +201,39 @@ function collectInstanceLayout(struct: StructInfo): InstanceLayout {
   return { fields, totalFloats: offset };
 }
 
-function parseTextureParams(args: ArgumentInfo[], startIndex: number): TextureParam[] {
+function parseTextureParams(args: ArgumentInfo[], startIndex: number, functionName: string): TextureParam[] {
   const params: TextureParam[] = [];
-  let index = startIndex;
   const seenTextures = new Set<string>();
-  while (index < args.length) {
+
+  for (let index = startIndex; index < args.length; index += 2) {
     const textureArg = args[index];
+    const samplerArg = args[index + 1];
+
+    if (!textureArg || !samplerArg) {
+      throw new Error(`Texture parameters in ${functionName} must be provided in texture/sampler pairs.`);
+    }
+
     const textureType = textureArg.type.getTypeName();
     if (textureType !== 'texture_2d<f32>') {
       throw new Error(`Texture argument must be texture_2d<f32>. Received ${textureArg.name}: ${textureType}`);
     }
+
+    const samplerType = samplerArg.type.getTypeName();
+    if (samplerType !== 'sampler') {
+      throw new Error(`Expected sampler after texture ${textureArg.name}, but got ${samplerArg.name}: ${samplerType}. Texture parameters must be provided in texture/sampler pairs.`);
+    }
+
     if (seenTextures.has(textureArg.name)) {
       throw new Error(`Duplicate texture parameter ${textureArg.name} detected.`);
     }
     seenTextures.add(textureArg.name);
-    const next = args[index + 1];
-    if (next && next.type.getTypeName() === 'sampler') {
-      params.push({
-        textureName: textureArg.name,
-        samplerName: next.name,
-      });
-      index += 2;
-    } else {
-      params.push({
-        textureName: textureArg.name,
-      });
-      index += 1;
-    }
+
+    params.push({
+      textureName: textureArg.name,
+      samplerName: samplerArg.name,
+    });
   }
+
   return params;
 }
 
@@ -236,7 +241,7 @@ function generateUniformStructConstruction(struct: StructInfo, fields: UniformFi
   if (fields.length === 0) {
     return `fn load_${struct.name}() -> ${struct.name} {\n  return ${struct.name}();\n}`;
   }
-  const ctorArguments = fields.map((field) => `  ${field.bindingName}`).join(',\n');
+  const ctorArguments = fields.map((field) => `  uniforms.${field.bindingName}`).join(',\n');
   return `fn load_${struct.name}() -> ${struct.name} {\n  return ${struct.name}(\n${ctorArguments}\n  );\n}`;
 }
 
@@ -352,9 +357,7 @@ function buildFragmentSource(options: {
   lines.push('uniform power2d_canvasHeight: f32;');
   textureParams.forEach((param) => {
     lines.push(`var ${param.textureName}: texture_2d<f32>;`);
-    if (param.samplerName) {
-      lines.push(`var ${param.samplerName}: sampler;`);
-    }
+    lines.push(`var ${param.samplerName}: sampler;`);
   });
   lines.push('');
   lines.push(shaderCode.trimEnd());
@@ -378,9 +381,7 @@ function buildFragmentSource(options: {
   }
   textureParams.forEach((param) => {
     args.push(param.textureName);
-    if (param.samplerName) {
-      args.push(param.samplerName);
-    }
+    args.push(param.samplerName);
   });
   lines.push(`  let color = fragShader(${args.join(', ')});`);
   lines.push('  fragmentOutputs.color = color;');
@@ -467,7 +468,7 @@ export async function generateMaterialTypes(
     instanceLayout = collectInstanceLayout(instanceStruct);
   }
 
-  const textureParams = parseTextureParams(fragFn.arguments, resourceStartIndex);
+  const textureParams = parseTextureParams(fragFn.arguments, resourceStartIndex, 'fragShader');
 
   const vertexSource = buildVertexSource({
     shaderCode,
@@ -545,9 +546,8 @@ export async function generateMaterialTypes(
   const textureNameUnion = textureNames.length ? textureNames.map((name) => `'${name}'`).join(' | ') : 'never';
   const textureNamesLiteral = textureNames.length ? `[${textureNames.map((name) => `'${name}'`).join(', ')}] as const` : '[] as const';
 
-  const samplerNames = textureParams.filter((param) => param.samplerName).map((param) => param.samplerName as string);
+  const samplerNames = textureParams.map((param) => param.samplerName);
   const samplerLookupEntries = textureParams
-    .filter((param) => param.samplerName)
     .map((param) => `'${param.textureName}': '${param.samplerName}'`)
     .join(', ');
 
@@ -574,7 +574,7 @@ export async function generateMaterialTypes(
   materialInstanceLines.push('  material: BABYLON.ShaderMaterial;');
   materialInstanceLines.push(`  setUniforms(uniforms: Partial<${uniformInterfaceName}>): void;`);
   materialInstanceLines.push(`  setTexture(name: ${shaderPrefix}TextureName, texture: BABYLON.BaseTexture): void;`);
-  if (samplerNames.length > 0) {
+  if (textureParams.length > 0) {
     materialInstanceLines.push(`  setTextureSampler(name: ${shaderPrefix}TextureName, sampler: BABYLON.TextureSampler): void;`);
   }
   materialInstanceLines.push('  setCanvasSize(width: number, height: number): void;');
@@ -621,7 +621,7 @@ export async function generateMaterialTypes(
   uniformsList.push("'power2d_canvasWidth'", "'power2d_canvasHeight'");
 
   const defaultSamplerLines: string[] = [];
-  if (samplerNames.length > 0) {
+  if (textureParams.length > 0) {
     defaultSamplerLines.push('  const defaultSampler = new BABYLON.TextureSampler();');
     defaultSamplerLines.push('  defaultSampler.setParameters(');
     defaultSamplerLines.push('    BABYLON.Texture.CLAMP_ADDRESSMODE,');
@@ -666,7 +666,7 @@ export async function generateMaterialTypes(
   createMaterialLines.push('  material.backFaceCulling = false;');
   createMaterialLines.push('  material.alphaMode = BABYLON.Engine.ALPHA_COMBINE;');
   createMaterialLines.push('');
-  if (samplerNames.length > 0) {
+  if (textureParams.length > 0) {
     createMaterialLines.push(`  const samplerLookup = { ${samplerLookupEntries} } as const;`);
     createMaterialLines.push('');
   }
@@ -674,7 +674,7 @@ export async function generateMaterialTypes(
   createMaterialLines.push('    material,');
   createMaterialLines.push(`    setUniforms: (uniforms) => set${uniformInterfaceName}(material, uniforms),`);
   createMaterialLines.push('    setTexture: (name, texture) => material.setTexture(name, texture),');
-  if (samplerNames.length > 0) {
+  if (textureParams.length > 0) {
     createMaterialLines.push('    setTextureSampler: (name, sampler) => {');
     createMaterialLines.push('      const samplerName = (samplerLookup as Record<string, string | undefined>)[name];');
     createMaterialLines.push('      if (samplerName) {');

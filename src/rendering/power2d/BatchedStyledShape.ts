@@ -1,6 +1,6 @@
 import * as BABYLON from 'babylonjs';
 import earcut from 'earcut';
-import type { BatchMaterialDef, CanvasTextureEntry, InstanceAttrLayout, Point2D, TextureSource } from './types';
+import type { BatchMaterialDef, InstanceAttrLayout, Point2D, TextureSource } from './types';
 
 interface BatchedStyledShapeOptions<U extends object, T extends string, I extends object> {
   scene: BABYLON.Scene;
@@ -25,8 +25,6 @@ export class BatchedStyledShape<U extends object, T extends string, I extends ob
 
   private canvasWidth: number;
   private canvasHeight: number;
-
-  private readonly textureCache: Map<string, CanvasTextureEntry> = new Map();
 
   constructor(options: BatchedStyledShapeOptions<U, T, I>) {
     this.scene = options.scene;
@@ -55,6 +53,9 @@ export class BatchedStyledShape<U extends object, T extends string, I extends ob
         BABYLON.Constants.BUFFER_CREATIONFLAG_WRITE,
     );
 
+    // Set up thin instancing - must call thinInstanceSetBuffer first to initialize
+    // (matches pattern from letterParticles.ts)
+    this.mesh.thinInstanceSetBuffer('matrix', null, 16);
     this.mesh.thinInstanceCount = this.instanceCount;
     this.mesh.forcedInstanceCount = this.instanceCount;
     this.mesh.manualUpdateOfWorldMatrixInstancedBuffer = true;
@@ -67,7 +68,7 @@ export class BatchedStyledShape<U extends object, T extends string, I extends ob
   }
 
   setTexture(name: T, source: TextureSource): void {
-    const texture = this.resolveTexture(source, String(name));
+    const texture = this.resolveTexture(source);
     this.materialInstance.setTexture(name, texture);
   }
 
@@ -127,10 +128,6 @@ export class BatchedStyledShape<U extends object, T extends string, I extends ob
     this.mesh.dispose(false, false);
     this.materialInstance.dispose();
     this.instanceBuffer.dispose();
-    for (const entry of this.textureCache.values()) {
-      entry.internal.dispose();
-      entry.texture.dispose();
-    }
   }
 
   private createMesh(points: readonly Point2D[], closed: boolean): BABYLON.Mesh {
@@ -192,44 +189,13 @@ export class BatchedStyledShape<U extends object, T extends string, I extends ob
     }
   }
 
-  private resolveTexture(source: TextureSource, key: string): BABYLON.BaseTexture {
-    if ('output' in (source as { output?: BABYLON.RenderTargetTexture }) && (source as { output?: BABYLON.RenderTargetTexture }).output instanceof BABYLON.RenderTargetTexture) {
-      return (source as { output: BABYLON.RenderTargetTexture }).output;
+  private resolveTexture(source: TextureSource): BABYLON.BaseTexture {
+    // Handle ShaderEffect-like objects with output property
+    if ('output' in source && source.output instanceof BABYLON.RenderTargetTexture) {
+      return source.output;
     }
 
-    if (source instanceof BABYLON.RenderTargetTexture) {
-      return source;
-    }
-
-    if (source instanceof BABYLON.BaseTexture) {
-      return source;
-    }
-
-    const canvas = source as HTMLCanvasElement | OffscreenCanvas;
-    const width = canvas.width;
-    const height = canvas.height;
-    const engine = this.scene.getEngine() as BABYLON.WebGPUEngine;
-
-    let entry = this.textureCache.get(key);
-    if (!entry || entry.width !== width || entry.height !== height) {
-      if (entry) {
-        entry.internal.dispose();
-      }
-      const internal = engine.createDynamicTexture(width, height, false, BABYLON.Texture.BILINEAR_SAMPLINGMODE);
-      internal.wrapU = BABYLON.Texture.CLAMP_ADDRESSMODE;
-      internal.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
-
-      const wrapper = new BABYLON.BaseTexture(this.scene, internal);
-      wrapper.wrapU = BABYLON.Texture.CLAMP_ADDRESSMODE;
-      wrapper.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
-      wrapper.updateSamplingMode(BABYLON.Texture.BILINEAR_SAMPLINGMODE);
-
-      entry = { texture: wrapper, internal, width, height };
-      this.textureCache.set(key, entry);
-    }
-
-    engine.updateDynamicTexture(entry.internal, canvas as HTMLCanvasElement, false, false, BABYLON.Texture.BILINEAR_SAMPLINGMODE);
-
-    return entry.texture;
+    // Handle BaseTexture (including RenderTargetTexture and CanvasTexture.texture)
+    return source as BABYLON.BaseTexture;
   }
 }

@@ -323,6 +323,7 @@ function parseDefaultExpression(comment: string): string | null {
       candidate = match[0];
     }
   } else {
+    // eslint-disable-next-line no-useless-escape
     const quotedMatch = trimmed.match(/^(\"[^\"]*\"|\'[^\']*\')/);
     if (quotedMatch) {
       candidate = quotedMatch[0];

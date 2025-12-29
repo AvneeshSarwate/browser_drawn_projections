@@ -1,6 +1,6 @@
 import * as BABYLON from 'babylonjs';
 import earcut from 'earcut';
-import type { CanvasTextureEntry, MaterialDef, MaterialInstance, Point2D, TextureSource } from './types';
+import type { MaterialDef, MaterialInstance, Point2D, TextureSource } from './types';
 import { generateStrokeMesh } from './strokeMeshGenerator';
 
 interface StrokeAPI<U, T extends string> {
@@ -36,9 +36,6 @@ export class StyledShape<BodyU extends object, BodyT extends string, StrokeU ext
   private canvasHeight: number;
   private _strokeThickness: number;
   private _alphaIndex = 0;
-
-  private readonly bodyCanvasTextures: Map<string, CanvasTextureEntry> = new Map();
-  private readonly strokeCanvasTextures: Map<string, CanvasTextureEntry> = new Map();
 
   constructor(options: StyledShapeOptions<BodyU, BodyT, StrokeU, StrokeT>) {
     this.scene = options.scene;
@@ -79,7 +76,7 @@ export class StyledShape<BodyU extends object, BodyT extends string, StrokeU ext
         self.bodyMaterialInstance.setUniforms(uniforms);
       },
       setTexture(name: BodyT, source: TextureSource): void {
-        const texture = self.resolveTexture(source, String(name), self.bodyCanvasTextures);
+        const texture = self.resolveTexture(source);
         self.bodyMaterialInstance.setTexture(name, texture);
       },
       setTextureSampler(name: BodyT, sampler: BABYLON.TextureSampler): void {
@@ -106,7 +103,7 @@ export class StyledShape<BodyU extends object, BodyT extends string, StrokeU ext
         self.strokeMaterialInstance!.setUniforms(uniforms);
       },
       setTexture(name: StrokeT, source: TextureSource): void {
-        const texture = self.resolveTexture(source, String(name), self.strokeCanvasTextures);
+        const texture = self.resolveTexture(source);
         self.strokeMaterialInstance!.setTexture(name, texture);
       },
       setTextureSampler(name: StrokeT, sampler: BABYLON.TextureSampler): void {
@@ -276,45 +273,14 @@ export class StyledShape<BodyU extends object, BodyT extends string, StrokeU ext
   // Texture Resolution
   //===========================================================================
 
-  private resolveTexture(source: TextureSource, key: string, cache: Map<string, CanvasTextureEntry>): BABYLON.BaseTexture {
-    if ('output' in (source as { output?: BABYLON.RenderTargetTexture }) && (source as { output?: BABYLON.RenderTargetTexture }).output instanceof BABYLON.RenderTargetTexture) {
-      return (source as { output: BABYLON.RenderTargetTexture }).output;
+  private resolveTexture(source: TextureSource): BABYLON.BaseTexture {
+    // Handle ShaderEffect-like objects with output property
+    if ('output' in source && source.output instanceof BABYLON.RenderTargetTexture) {
+      return source.output;
     }
 
-    if (source instanceof BABYLON.RenderTargetTexture) {
-      return source;
-    }
-
-    if (source instanceof BABYLON.BaseTexture) {
-      return source;
-    }
-
-    const canvas = source as HTMLCanvasElement | OffscreenCanvas;
-    const width = canvas.width;
-    const height = canvas.height;
-    const engine = this.scene.getEngine() as BABYLON.WebGPUEngine;
-
-    let entry = cache.get(key);
-    if (!entry || entry.width !== width || entry.height !== height) {
-      if (entry) {
-        entry.internal.dispose();
-      }
-      const internal = engine.createDynamicTexture(width, height, false, BABYLON.Texture.BILINEAR_SAMPLINGMODE);
-      internal.wrapU = BABYLON.Texture.CLAMP_ADDRESSMODE;
-      internal.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
-
-      const wrapper = new BABYLON.BaseTexture(this.scene, internal);
-      wrapper.wrapU = BABYLON.Texture.CLAMP_ADDRESSMODE;
-      wrapper.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
-      wrapper.updateSamplingMode(BABYLON.Texture.BILINEAR_SAMPLINGMODE);
-
-      entry = { texture: wrapper, internal, width, height };
-      cache.set(key, entry);
-    }
-
-    engine.updateDynamicTexture(entry.internal, canvas as HTMLCanvasElement, false, false, BABYLON.Texture.BILINEAR_SAMPLINGMODE);
-
-    return entry.texture;
+    // Handle BaseTexture (including RenderTargetTexture and CanvasTexture.texture)
+    return source as BABYLON.BaseTexture;
   }
 
   //===========================================================================
@@ -333,14 +299,5 @@ export class StyledShape<BodyU extends object, BodyT extends string, StrokeU ext
     }
 
     this.parentNode.dispose();
-
-    for (const entry of this.bodyCanvasTextures.values()) {
-      entry.internal.dispose();
-      entry.texture.dispose();
-    }
-    for (const entry of this.strokeCanvasTextures.values()) {
-      entry.internal.dispose();
-      entry.texture.dispose();
-    }
   }
 }

@@ -1,0 +1,1757 @@
+
+╭─── Claude Code v2.0.76 ──────────────────────────────────────────────────────╮
+│                                                    │ Tips for getting        │
+│                   Welcome back a!                  │ started                 │
+│                                                    │ Run /init to create a … │
+│                     * ▐▛███▜▌ *                    │ ─────────────────────── │
+│                    * ▝▜█████▛▘ *                   │ Recent activity         │
+│                     *  ▘▘ ▝▝  *                    │ 2m ago  <ide_opened_fi… │
+│                                                    │ 4h ago  <ide_opened_fi… │
+│      Sonnet 4.5 · Claude Pro ·                     │ 5h ago  <ide_opened_fi… │
+│      avneeshsarwate@gmail.com's Organization       │ /resume for more        │
+│      ~/agentCombine/browser_drawn_projections      │                         │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+  A gift for you
+  Your rate limits are 2x higher through 12/31. Enjoy the extra room to think!
+
+> <ide_opened_file>The user opened the file 
+/Users/avneeshsarwate/agentCombine/browser_drawn_projections/src/rendering/p
+ower2d/generateStrokeMaterialTypes.ts in the IDE. This may or may not be 
+related to the current task.</ide_opened_file> 
+
+> read @src/rendering/power2d/power2DBabylon.md - this is the implementation
+ plan of a feature. then use git to see what files were modified/created in 
+the last commit, and read all of them - that is the implementation - give me
+ a review of the implementation - would anything be broken? i don't 
+particularly care about code organization or such right now - i know there 
+are a couple of duplicated files and such - i just want to know if there is 
+anything that actually won't work - ultrathink 
+
+⏺ Bash(git show --name-status HEAD)
+  ⎿  commit 8f6dc813fb1f413d48eb241d19e095960b81b264   
+     Author: Avneesh Sarwate <avneeshsarwate@gmail.com>
+     Date:   Sun Dec 28 22:14:44 2025 -0500
+     … +18 lines (ctrl+o to expand)
+
+⏺ Let me read all the implementation files.
+
+⏺ Read(node_src/wgsl/generateMaterialTypes.ts)
+  ⎿  Read 766 lines
+
+⏺ Read(node_src/wgsl/generateStrokeMaterialTypes.ts)
+  ⎿  Read 625 lines
+
+⏺ Read(node_src/wgsl/viteMaterialPlugin.ts)
+  ⎿  Read 133 lines
+
+⏺ Read(src/rendering/power2d/BatchedStyledShape.ts)
+  ⎿  Read 236 lines
+
+⏺ Read(src/rendering/power2d/StyledShape.ts)
+  ⎿  Read 347 lines
+
+⏺ Read(src/rendering/power2d/generateMaterialTypes.ts)
+  ⎿  Read 766 lines
+
+⏺ Read(src/rendering/power2d/generateStrokeMaterialTypes.ts)
+  ⎿  Read 625 lines
+
+⏺ Read(src/rendering/power2d/index.ts)
+  ⎿  Read 7 lines
+
+⏺ Read(src/rendering/power2d/pointGenerators.ts)
+  ⎿  Read 76 lines
+
+⏺ Read(src/rendering/power2d/sceneHelpers.ts)
+  ⎿  Read 51 lines
+
+⏺ Read(src/rendering/power2d/strokeMeshGenerator.ts)
+  ⎿  Read 172 lines
+
+⏺ Read(src/rendering/power2d/types.ts)
+  ⎿  Read 58 lines
+
+⏺ Read(vite.config.ts)
+  ⎿  Read 62 lines
+
+⏺ Let me check if the required dependencies are already installed.
+
+⏺ Read(package.json)
+  ⎿  Read 115 lines
+
+⏺ Good, dependencies are present. Let me also check one of the reference generated files to understand the existing pattern better.
+
+⏺ Read(src/postFX/wobble.frag.generated.ts)
+  ⎿  Error reading file
+
+⏺ Search(pattern: "**/*.generated.ts")
+  ⎿  Found 51 files (ctrl+o to expand)
+
+⏺ Read(src/rendering/postFX/wobble.frag.generated.ts)
+  ⎿  Read 100 lines
+
+⏺ Now I have a clear picture. Here's my comprehensive review:
+
+  ---
+  Power2D Implementation Review
+
+  CRITICAL BUGS (Will Break)
+
+  1. Missing uniforms. prefix in uniform loader function
+
+  Location: node_src/wgsl/generateMaterialTypes.ts#L239 and node_src/wgsl/generateStrokeMaterialTypes.ts#L195
+
+  The generated WGSL uniform loader uses bare variable names like uniforms_time but Babylon.js WGSL requires the uniforms. prefix to access individual uniforms.
+
+  Generated (broken):
+  fn load_GradientUniforms() -> GradientUniforms {
+    return GradientUniforms(
+      uniforms_time,           // ERROR: undefined variable
+      uniforms_colorA,
+    );
+  }
+
+  Should be:
+  fn load_GradientUniforms() -> GradientUniforms {
+    return GradientUniforms(
+      uniforms.uniforms_time,   // Correct
+      uniforms.uniforms_colorA,
+    );
+  }
+
+  The existing src/rendering/postFX/wobble.frag.generated.ts#L44-L50 shows the correct pattern with the uniforms. prefix.
+
+  Fix: Change the generateUniformStructConstruction function from:
+  const ctorArguments = fields.map((field) => `  ${field.bindingName}`).join(',\n');
+  to:
+  const ctorArguments = fields.map((field) => `  uniforms.${field.bindingName}`).join(',\n');
+
+  This bug exists in both generateMaterialTypes.ts and generateStrokeMaterialTypes.ts.
+
+  ---
+  POTENTIAL ISSUES (May Cause Problems)
+
+  2. Instancing pattern may have issues with Babylon.js thin instances
+
+  Location: src/rendering/power2d/BatchedStyledShape.ts#L58-L62
+
+  The code sets up thin instances with custom vertex buffers:
+  this.mesh.thinInstanceCount = this.instanceCount;
+  this.mesh.forcedInstanceCount = this.instanceCount;
+  this.mesh.manualUpdateOfWorldMatrixInstancedBuffer = true;
+
+  While forcedInstanceCount should work, thin instances normally expect a world matrix buffer. Using custom instanced vertex attributes instead is unconventional. The reference pattern from src/sketches/text_projmap_sandbox/letterParticles.ts should be verified to confirm this works correctly with Babylon 8.x.
+
+  3. Matrix uniform default is zeros, not identity
+
+  Location: node_src/wgsl/generateMaterialTypes.ts#L105
+
+  mat4x4f: {
+    defaultValue: 'new Float32Array(16)',  // All zeros
+  }
+
+  If a user expects matrix uniforms to default to identity, they'll get zeros instead, which would collapse geometry to a point if used as a transform.
+
+  4. Textures without explicit samplers
+
+  The addendum specified "if omitted, use a default sampler (linear + clamp-to-edge)" but the generator only creates default samplers for explicitly declared samplers. If a user declares just texture_2d<f32> without a following sampler, no sampler is generated or set. Users must explicitly declare samplers in their WGSL.
+
+  ---
+  THINGS THAT LOOK CORRECT
+
+  1. Dependencies present - Both earcut and wgsl_reflect are in package.json
+  2. Stroke mesh generation - The thickness is correctly passed to the shader rather than baked into vertex positions. The void thickness; on line 158 of strokeMeshGenerator.ts is intentional.
+  3. Vite plugin integration - The plugins are correctly imported and registered in vite.config.ts
+  4. Type generation - The TypeScript interfaces, uniform setters, and helper functions (ensureVector2, etc.) are correctly structured
+  5. Pixel-to-NDC conversion - The coordinate transform in the generated vertex shader correctly maps pixel coordinates (origin top-left, Y-down) to NDC
+  6. earcut triangulation - Works fine for simple polygons (the plan mentioned tess2 but earcut is a valid choice)
+  7. Miter limit clamping - The [-4, 4] clamp in strokeMeshGenerator.ts prevents extreme miter spikes
+
+  ---
+  MINOR NOTES (Not Breaking)
+
+  1. Duplicate files - There are identical generator files in both node_src/wgsl/ and src/rendering/power2d/. The Vite config imports from node_src/wgsl/, so the copies in src/rendering/power2d/ are unused. Not a bug, just cleanup needed later.
+  2. Scene resize function is no-op - In src/rendering/power2d/sceneHelpers.ts#L37-L41, the resize function does nothing since the shader handles pixel-to-NDC. This is correct but the function could be removed.
+
+  ---
+  SUMMARY
+
+  One critical fix needed: Add uniforms. prefix to uniform access in both material type generators. Without this fix, all generated shaders will fail to compile.
+
+> <ide_opened_file>The user opened the file /Users/avneeshsarwate/agentCombi
+ne/browser_drawn_projections/src/rendering/power2d/power2DBabylon.md in the 
+IDE. This may or may not be related to the current task.</ide_opened_file> 
+
+> these three should be fixed
+1. Missing uniforms. prefix in uniform loader function - good catch, fix 
+this
+2. Instancing pattern may have issues with Babylon.js thin instances - there
+ are subtle differences between thinInstances and normal instancedMesh in 
+babylon.js. the pattern in letterParticles definitely works, but it might 
+not be standard. this code was AI generated, so double check that the code 
+strictly follows the pattern in letterParticles.ts and is not improperly 
+mixing up the "proper" way to do things - i will go back and standardize it 
+later. for now match what works
+3. Matrix uniform default is zeros, not identity - make default identity
+
+
+this one requires more investigation
+4. Textures without explicit samplers - this whole part may actually be mis 
+specified - in the currnnt implementation, does the StyledShape own the 
+texture when it's passed in a source? eg, if i had 1 canvas 2d instance that
+ i was using to texture 10 shapes, would there be 10 different texture 
+instances on the gpu? 
+
+⏺ Let me start by reading the letterParticles.ts file to understand the correct instancing pattern, then I'll address all the issues.
+
+⏺ Read(src/sketches/text_projmap_sandbox/letterParticles.ts)
+  ⎿  Read 494 lines
+
+⏺ Let me also check the drawingScene.ts reference to understand the pattern better.
+
+⏺ Read(src/rendering/gpuStrokes/drawingScene.ts)
+  ⎿  Read 80 lines
+
+⏺ Read(src/rendering/gpuStrokes/drawingScene.ts)
+  ⎿  Read 45 lines
+
+⏺ Update(node_src/wgsl/generateMaterialTypes.ts)
+  ⎿  Added 1 line, removed 1 line                                        
+      236    if (fields.length === 0) {                                  
+      237      return `fn load_${struct.name}() -> ${struct.name} {\n    
+           return ${struct.name}();\n}`;                                 
+      238    }                                                           
+      239 -  const ctorArguments = fields.map((field) => `               
+          -${field.bindingName}`).join(',\n');                           
+      239 +  const ctorArguments = fields.map((field) => `  uniforms.    
+          +${field.bindingName}`).join(',\n');                           
+      240    return `fn load_${struct.name}() -> ${struct.name} {\n      
+           return ${struct.name}(\n${ctorArguments}\n  );\n}`;           
+      241  }                                                             
+      242                                                                
+
+⏺ Update(src/rendering/power2d/generateMaterialTypes.ts)
+  ⎿  Added 1 line, removed 1 line                                        
+      236    if (fields.length === 0) {                                  
+      237      return `fn load_${struct.name}() -> ${struct.name} {\n    
+           return ${struct.name}();\n}`;                                 
+      238    }                                                           
+      239 -  const ctorArguments = fields.map((field) => `               
+          -${field.bindingName}`).join(',\n');                           
+      239 +  const ctorArguments = fields.map((field) => `  uniforms.    
+          +${field.bindingName}`).join(',\n');                           
+      240    return `fn load_${struct.name}() -> ${struct.name} {\n      
+           return ${struct.name}(\n${ctorArguments}\n  );\n}`;           
+      241  }                                                             
+      242                                                                
+
+⏺ Update(node_src/wgsl/generateStrokeMaterialTypes.ts)
+  ⎿  Added 1 line, removed 1 line                                        
+      192    if (fields.length === 0) {                                  
+      193      return `fn load_${struct.name}() -> ${struct.name} {\n    
+           return ${struct.name}();\n}`;                                 
+      194    }                                                           
+      195 -  const ctorArguments = fields.map((field) => `               
+          -${field.bindingName}`).join(',\n');                           
+      195 +  const ctorArguments = fields.map((field) => `  uniforms.    
+          +${field.bindingName}`).join(',\n');                           
+      196    return `fn load_${struct.name}() -> ${struct.name} {\n      
+           return ${struct.name}(\n${ctorArguments}\n  );\n}`;           
+      197  }                                                             
+      198                                                                
+
+⏺ Update(src/rendering/power2d/generateStrokeMaterialTypes.ts)
+  ⎿  Added 1 line, removed 1 line                                        
+      192    if (fields.length === 0) {                                  
+      193      return `fn load_${struct.name}() -> ${struct.name} {\n    
+           return ${struct.name}();\n}`;                                 
+      194    }                                                           
+      195 -  const ctorArguments = fields.map((field) => `               
+          -${field.bindingName}`).join(',\n');                           
+      195 +  const ctorArguments = fields.map((field) => `  uniforms.    
+          +${field.bindingName}`).join(',\n');                           
+      196    return `fn load_${struct.name}() -> ${struct.name} {\n      
+           return ${struct.name}(\n${ctorArguments}\n  );\n}`;           
+      197  }                                                             
+      198                                                                
+
+⏺ Update(src/rendering/power2d/BatchedStyledShape.ts)
+  ⎿  File must be read first
+
+⏺ Read(src/rendering/power2d/BatchedStyledShape.ts)
+  ⎿  Read 236 lines
+
+⏺ Update(src/rendering/power2d/BatchedStyledShape.ts)
+  ⎿  Added 3 lines                                                       
+      55          BABYLON.Constants.BUFFER_CREATIONFLAG_WRITE,           
+      56      );                                                         
+      57                                                                 
+      58 +    // Set up thin instancing - must call                      
+         +thinInstanceSetBuffer first to initialize                      
+      59 +    // (matches pattern from letterParticles.ts)               
+      60 +    this.mesh.thinInstanceSetBuffer('matrix', null, 16);       
+      61      this.mesh.thinInstanceCount = this.instanceCount;          
+      62      this.mesh.forcedInstanceCount = this.instanceCount;        
+      63      this.mesh.manualUpdateOfWorldMatrixInstancedBuffer = true; 
+
+⏺ Update(node_src/wgsl/generateMaterialTypes.ts)
+  ⎿  Added 1 line, removed 1 line                                        
+      102      setter: 'setMatrix',                                      
+      103      expression: (valueRef) => `ensureMatrix(${valueRef})`,    
+      104      helper: 'ensureMatrix',                                   
+      105 -    defaultValue: 'new Float32Array(16)',                     
+      105 +    defaultValue: 'new Float32Array(                          
+          +[1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1])',           
+      106    },                                                          
+      107  };                                                            
+      108                                                                
+
+⏺ Update(src/rendering/power2d/generateMaterialTypes.ts)
+  ⎿  Added 1 line, removed 1 line                                        
+      102      setter: 'setMatrix',                                      
+      103      expression: (valueRef) => `ensureMatrix(${valueRef})`,    
+      104      helper: 'ensureMatrix',                                   
+      105 -    defaultValue: 'new Float32Array(16)',                     
+      105 +    defaultValue: 'new Float32Array(                          
+          +[1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1])',           
+      106    },                                                          
+      107  };                                                            
+      108                                                                
+
+⏺ Let me also check if the stroke material generators have the matrix default issue.
+
+⏺ Search(pattern: "mat4x4f", path:
+        "node_src/wgsl/generateStrokeMaterialTypes.ts", output_mode: "content")
+  ⎿  Found 1 line (ctrl+o to expand)
+
+⏺ Update(node_src/wgsl/generateStrokeMaterialTypes.ts)
+  ⎿  Added 1 line, removed 1 line                                        
+      89      setter: 'setMatrix',                                       
+      90      expression: (valueRef) => `ensureMatrix(${valueRef})`,     
+      91      helper: 'ensureMatrix',                                    
+      92 -    defaultValue: 'new Float32Array(16)',                      
+      92 +    defaultValue: 'new Float32Array(                           
+         +[1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1])',            
+      93    },                                                           
+      94  };                                                             
+      95                                                                 
+
+⏺ Update(src/rendering/power2d/generateStrokeMaterialTypes.ts)
+  ⎿  File must be read first
+
+⏺ Read(src/rendering/power2d/generateStrokeMaterialTypes.ts)
+  ⎿  Read 20 lines
+
+⏺ Update(src/rendering/power2d/generateStrokeMaterialTypes.ts)
+  ⎿  Added 1 line, removed 1 line                                        
+      89      setter: 'setMatrix',                                       
+      90      expression: (valueRef) => `ensureMatrix(${valueRef})`,     
+      91      helper: 'ensureMatrix',                                    
+      92 -    defaultValue: 'new Float32Array(16)',                      
+      92 +    defaultValue: 'new Float32Array(                           
+         +[1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1])',            
+      93    },                                                           
+      94  };                                                             
+      95                                                                 
+
+⏺ Now for the texture ownership question. Looking at the resolveTexture method in StyledShape:
+
+⏺ Read(src/rendering/power2d/StyledShape.ts)
+  ⎿  Read 50 lines
+
+⏺ Done with the fixes. Here's the summary:
+
+  Fixes Applied
+
+  1. uniforms. prefix - Fixed in all 4 generator files:
+    - node_src/wgsl/generateMaterialTypes.ts#L239
+    - node_src/wgsl/generateStrokeMaterialTypes.ts#L195
+    - src/rendering/power2d/generateMaterialTypes.ts#L239
+    - src/rendering/power2d/generateStrokeMaterialTypes.ts#L195
+  2. Thin instance initialization - Added thinInstanceSetBuffer('matrix', null, 16) to match letterParticles pattern in src/rendering/power2d/BatchedStyledShape.ts#L60
+  3. Matrix default to identity - Changed from new Float32Array(16) (zeros) to new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]) in all 4 generators
+
+  ---
+  Texture Ownership Investigation
+
+  Yes, if you have 1 canvas and 10 StyledShapes, you get 10 GPU textures.
+
+  Looking at src/rendering/power2d/StyledShape.ts#L279-L318:
+
+  - Each StyledShape has its own bodyCanvasTextures and strokeCanvasTextures cache Maps
+  - When you pass a Canvas, it calls engine.createDynamicTexture() and stores in the per-instance cache
+  - The cache is keyed by texture name (e.g., "noiseTex"), not by source canvas
+
+  However, if you pass a BABYLON.BaseTexture or RenderTargetTexture directly, it's returned as-is without duplication - lines 284-290 just return the source.
+
+  Options to share a canvas across shapes:
+  1. Create the texture once and pass the same BABYLON.BaseTexture to all shapes - they'll share it
+  2. Use RenderTargetTexture if you want GPU-driven updates
+  3. Refactor to use a global texture cache keyed by canvas instance (would require spec change)
+
+  The addendum noted: "Duplicate texture resolution logic locally for Power2D (no shared helper yet)" - so this per-instance behavior appears intentional for now.
+
+> <ide_opened_file>The user opened the file /Users/avneeshsarwate/agentCombi
+ne/browser_drawn_projections/src/rendering/power2d/sceneHelpers.ts in the 
+IDE. This may or may not be related to the current task.</ide_opened_file> 
+
+> what about narrowing the accepted texture uniform types to be only those 
+that do not cause duplicates (eg babylon texture types?). is creating a 
+texture from a canvas that needs to be updated every frame as simple as 
+calling engine.createDynamicTexture(canvas) or are there more steps 
+involved? if there are more steps then create a little helper function in 
+sceneHelpers.ts 
+
+⏺ Good question. Let me look at how letterParticles.ts handles dynamic canvas textures to understand the proper pattern.
+
+⏺ Read(src/sketches/text_projmap_sandbox/letterParticles.ts)
+  ⎿  Read 60 lines
+
+⏺ There are definitely more steps involved. Looking at letterParticles.ts, the pattern is:
+
+  1. Create InternalTexture with engine.createDynamicTexture()
+  2. Must upload initial data to make it "ready" (WebGPU quirk)
+  3. Wrap in BaseTexture for shader binding
+  4. Handle resize when dimensions change
+  5. Call engine.updateDynamicTexture() each frame
+
+  Let me create a helper class and narrow the texture types.
+
+⏺ Read(src/rendering/power2d/types.ts)
+  ⎿  Read 58 lines
+
+⏺ Read(src/rendering/power2d/sceneHelpers.ts)
+  ⎿  Read 51 lines
+
+⏺ Read(src/sketches/text_projmap_sandbox/letterParticles.ts)
+  ⎿  Read 55 lines
+
+⏺ Update(src/rendering/power2d/types.ts)
+  ⎿  File must be read first
+
+⏺ Read(src/rendering/power2d/types.ts)
+  ⎿  Read 58 lines
+
+⏺ Update(src/rendering/power2d/types.ts)
+  ⎿  Added 4 lines, removed 9 lines                                      
+       2                                                                 
+       3  export type Point2D = readonly [number, number];               
+       4                                                                 
+       5 +/**                                                            
+       6 + * Accepted texture sources for                                
+         +StyledShape/BatchedStyledShape.                                
+       7 + * For canvas sources, use CanvasTexture helper from           
+         +sceneHelpers.ts.                                               
+       8 + */                                                            
+       9  export type TextureSource =                                    
+      10    | BABYLON.BaseTexture                                        
+      11    | BABYLON.RenderTargetTexture                                
+      12 -  | HTMLCanvasElement                                          
+      13 -  | OffscreenCanvas                                            
+      12    | { output: BABYLON.RenderTargetTexture };                   
+      13                                                                 
+      14 -export interface CanvasTextureEntry {                          
+      15 -  texture: BABYLON.BaseTexture;                                
+      16 -  internal: BABYLON.InternalTexture;                           
+      17 -  width: number;                                               
+      18 -  height: number;                                              
+      19 -}                                                              
+      20 -                                                               
+      14  export interface MaterialInstance<U, T extends string> {       
+      15    material: BABYLON.ShaderMaterial;                            
+      16    setUniforms(uniforms: Partial<U>): void;                     
+
+⏺ Update(src/rendering/power2d/sceneHelpers.ts)
+  ⎿  Added 153 lines                                                     
+        1  import * as BABYLON from 'babylonjs';                         
+        2                                                                
+        3 +/**                                                           
+        4 + * Options for creating a CanvasTexture.                      
+        5 + */                                                           
+        6 +export interface CanvasTextureOptions {                       
+        7 +  engine: BABYLON.WebGPUEngine;                               
+        8 +  scene: BABYLON.Scene;                                       
+        9 +  /** Initial width (will auto-resize on update if canvas     
+          +size differs) */                                              
+       10 +  width?: number;                                             
+       11 +  /** Initial height (will auto-resize on update if canvas    
+          +size differs) */                                              
+       12 +  height?: number;                                            
+       13 +  /** Sampling mode (default: BILINEAR) */                    
+       14 +  samplingMode?: number;                                      
+       15 +}                                                             
+       16 +                                                              
+       17 +/**                                                           
+       18 + * Helper class for efficiently uploading canvas content to a 
+          + GPU texture.                                                 
+       19 + * Handles the WebGPU-specific initialization and resize      
+          +logic.                                                        
+       20 + *                                                            
+       21 + * Usage:                                                     
+       22 + * ```ts                                                      
+       23 + * const canvasTex = new CanvasTexture({ engine, scene });    
+       24 + * // In render loop:                                         
+       25 + * canvasTex.update(myCanvas);                                
+       26 + * shape.body.setTexture('myTex', canvasTex.texture);         
+       27 + * ```                                                        
+       28 + */                                                           
+       29 +export class CanvasTexture {                                  
+       30 +  private readonly engine: BABYLON.WebGPUEngine;              
+       31 +  private readonly scene: BABYLON.Scene;                      
+       32 +  private readonly samplingMode: number;                      
+       33 +                                                              
+       34 +  private internalTexture: BABYLON.InternalTexture;           
+       35 +  private readonly _texture: BABYLON.BaseTexture;             
+       36 +  private texWidth: number;                                   
+       37 +  private texHeight: number;                                  
+       38 +  private pendingDispose: BABYLON.InternalTexture | null =    
+          +null;                                                         
+       39 +                                                              
+       40 +  constructor(options: CanvasTextureOptions) {                
+       41 +    this.engine = options.engine;                             
+       42 +    this.scene = options.scene;                               
+       43 +    this.samplingMode = options.samplingMode ??               
+          +BABYLON.Texture.BILINEAR_SAMPLINGMODE;                        
+       44 +    this.texWidth = options.width ?? 1;                       
+       45 +    this.texHeight = options.height ?? 1;                     
+       46 +                                                              
+       47 +    // Create initial internal texture                        
+       48 +    this.internalTexture = this.engine.createDynamicTexture(  
+       49 +      this.texWidth,                                          
+       50 +      this.texHeight,                                         
+       51 +      false, // no mipmaps                                    
+       52 +      this.samplingMode,                                      
+       53 +    );                                                        
+       54 +    this.internalTexture.wrapU =                              
+          +BABYLON.Texture.CLAMP_ADDRESSMODE;                            
+       55 +    this.internalTexture.wrapV =                              
+          +BABYLON.Texture.CLAMP_ADDRESSMODE;                            
+       56 +                                                              
+       57 +    // IMPORTANT: Must upload initial data to make texture    
+          +"ready" for WebGPU                                            
+       58 +    // See: https://forum.babylonjs.com/t/webgpu-and-dynamic- 
+          +texture/42065                                                 
+       59 +    const initCanvas = document.createElement('canvas');      
+       60 +    initCanvas.width = this.texWidth;                         
+       61 +    initCanvas.height = this.texHeight;                       
+       62 +    const ctx = initCanvas.getContext('2d')!;                 
+       63 +    ctx.fillStyle = 'rgba(0,0,0,0)';                          
+       64 +    ctx.fillRect(0, 0, this.texWidth, this.texHeight);        
+       65 +    this.engine.updateDynamicTexture(                         
+       66 +      this.internalTexture,                                   
+       67 +      initCanvas,                                             
+       68 +      false,                                                  
+       69 +      false,                                                  
+       70 +      this.samplingMode,                                      
+       71 +    );                                                        
+       72 +                                                              
+       73 +    // Wrap in BaseTexture for shader binding                 
+       74 +    this._texture = new BABYLON.BaseTexture(this.scene,       
+          +this.internalTexture);                                        
+       75 +    this._texture.wrapU = BABYLON.Texture.CLAMP_ADDRESSMODE;  
+       76 +    this._texture.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;  
+       77 +  }                                                           
+       78 +                                                              
+       79 +  /**                                                         
+       80 +   * The texture to pass to setTexture().                     
+       81 +   */                                                         
+       82 +  get texture(): BABYLON.BaseTexture {                        
+       83 +    return this._texture;                                     
+       84 +  }                                                           
+       85 +                                                              
+       86 +  /**                                                         
+       87 +   * Current texture width.                                   
+       88 +   */                                                         
+       89 +  get width(): number {                                       
+       90 +    return this.texWidth;                                     
+       91 +  }                                                           
+       92 +                                                              
+       93 +  /**                                                         
+       94 +   * Current texture height.                                  
+       95 +   */                                                         
+       96 +  get height(): number {                                      
+       97 +    return this.texHeight;                                    
+       98 +  }                                                           
+       99 +                                                              
+      100 +  /**                                                         
+      101 +   * Update the texture from a canvas. Handles resize         
+          +automatically.                                                
+      102 +   * Call this once per frame before rendering.               
+      103 +   */                                                         
+      104 +  update(canvas: HTMLCanvasElement | OffscreenCanvas): void { 
+      105 +    // Dispose any pending texture from previous resize       
+      106 +    if (this.pendingDispose) {                                
+      107 +      this.pendingDispose.dispose();                          
+      108 +      this.pendingDispose = null;                             
+      109 +    }                                                         
+      110 +                                                              
+      111 +    const width = canvas.width;                               
+      112 +    const height = canvas.height;                             
+      113 +                                                              
+      114 +    // Recreate texture if dimensions changed                 
+      115 +    if (width !== this.texWidth || height !== this.texHeight) 
+          + {                                                            
+      116 +      // Defer disposal to avoid "destroyed texture" errors   
+      117 +      this.pendingDispose = this.internalTexture;             
+      118 +                                                              
+      119 +      // Create new internal texture                          
+      120 +      this.internalTexture =                                  
+          +this.engine.createDynamicTexture(                             
+      121 +        width,                                                
+      122 +        height,                                               
+      123 +        false,                                                
+      124 +        this.samplingMode,                                    
+      125 +      );                                                      
+      126 +      this.internalTexture.wrapU =                            
+          +BABYLON.Texture.CLAMP_ADDRESSMODE;                            
+      127 +      this.internalTexture.wrapV =                            
+          +BABYLON.Texture.CLAMP_ADDRESSMODE;                            
+      128 +                                                              
+      129 +      // Update the BaseTexture wrapper to point to new       
+          +internal texture                                              
+      130 +      this._texture._texture = this.internalTexture;          
+      131 +                                                              
+      132 +      this.texWidth = width;                                  
+      133 +      this.texHeight = height;                                
+      134 +    }                                                         
+      135 +                                                              
+      136 +    // Upload canvas content to GPU (uses                     
+          +copyExternalImageToTexture internally)                        
+      137 +    this.engine.updateDynamicTexture(                         
+      138 +      this.internalTexture,                                   
+      139 +      canvas as HTMLCanvasElement,                            
+      140 +      false,                                                  
+      141 +      false,                                                  
+      142 +      this.samplingMode,                                      
+      143 +    );                                                        
+      144 +  }                                                           
+      145 +                                                              
+      146 +  /**                                                         
+      147 +   * Dispose all resources.                                   
+      148 +   */                                                         
+      149 +  dispose(): void {                                           
+      150 +    this.pendingDispose?.dispose();                           
+      151 +    this.internalTexture.dispose();                           
+      152 +    this._texture.dispose();                                  
+      153 +  }                                                           
+      154 +}                                                             
+      155 +                                                              
+      156  export interface Power2DSceneOptions {                        
+      157    engine: BABYLON.WebGPUEngine;                               
+      158    canvasWidth: number;                                        
+
+⏺ Read(src/rendering/power2d/StyledShape.ts)
+  ⎿  Read 347 lines
+
+⏺ Update(src/rendering/power2d/StyledShape.ts)
+  ⎿  Added 1 line, removed 1 line                                        
+      1  import * as BABYLON from 'babylonjs';                           
+      2  import earcut from 'earcut';                                    
+      3 -import type { CanvasTextureEntry,                               
+        -MaterialDef, MaterialInstance, Point2D, TextureSource } from    
+        -'./types';                                                      
+      3 +import type {                                                   
+        +MaterialDef, MaterialInstance, Point2D, TextureSource } from    
+        +'./types';                                                      
+      4  import { generateStrokeMesh } from './strokeMeshGenerator';     
+      5                                                                  
+      6  interface StrokeAPI<U, T extends string> {                      
+
+⏺ Update(src/rendering/power2d/StyledShape.ts)
+  ⎿  Removed 3 lines                                                     
+      37    private _strokeThickness: number;                            
+      38    private _alphaIndex = 0;                                     
+      39                                                                 
+      40 -  private readonly bodyCanvasTextures: Map<string,             
+         -CanvasTextureEntry> = new Map();                               
+      41 -  private readonly strokeCanvasTextures: Map<string,           
+         -CanvasTextureEntry> = new Map();                               
+      42 -                                                               
+      40    constructor(options: StyledShapeOptions<BodyU, BodyT,        
+          StrokeU, StrokeT>) {                                           
+      41      this.scene = options.scene;                                
+      42      this.points = options.points;                              
+
+⏺ Update(src/rendering/power2d/StyledShape.ts)
+  ⎿  Added 1 line, removed 1 line                                        
+      76          self.bodyMaterialInstance.setUniforms(uniforms);       
+      77        },                                                       
+      78        setTexture(name: BodyT, source: TextureSource): void {   
+      79 -        const texture = self.resolveTexture(source, String(name
+         -), self.bodyCanvasTextures);                                   
+      79 +        const texture = self.resolveTexture(source);           
+      80          self.bodyMaterialInstance.setTexture(name, texture);   
+      81        },                                                       
+      82        setTextureSampler(name: BodyT, sampler:                  
+          BABYLON.TextureSampler): void {                                
+
+⏺ Update(src/rendering/power2d/StyledShape.ts)
+  ⎿  Added 1 line, removed 1 line                                        
+      103          self.strokeMaterialInstance!.setUniforms(uniforms);   
+      104        },                                                      
+      105        setTexture(name: StrokeT, source: TextureSource): void  
+           {                                                             
+      106 -        const texture = self.resolveTexture(source            
+          -, String(name), self.strokeCanvasTextures);                   
+      106 +        const texture = self.resolveTexture(source);          
+      107          self.strokeMaterialInstance!.setTexture(name,         
+           texture);                                                     
+      108        },                                                      
+      109        setTextureSampler(name: StrokeT, sampler:               
+           BABYLON.TextureSampler): void {                               
+
+⏺ Update(src/rendering/power2d/StyledShape.ts)
+  ⎿  Added 7 lines, removed 33 lines                                     
+      273    // Texture Resolution                                       
+      274    //========================================================= 
+           ==================                                            
+      275                                                                
+      276 -  private resolveTexture(source: TextureSource                
+          -, key: string, cache: Map<string, CanvasTextureEntry>         
+          -): BABYLON.BaseTexture {                                      
+      277 -    if ('output' in (source as { output?:                     
+          -BABYLON.RenderTargetTexture }) && (source as { output?:       
+          -BABYLON.RenderTargetTexture }).output instanceof              
+          -BABYLON.RenderTargetTexture) {                                
+      278 -      return (source as { output: BABYLON.RenderTargetTexture 
+          - }).output;                                                   
+      276 +  private resolveTexture(source: TextureSource                
+          +): BABYLON.BaseTexture {                                      
+      277 +    // Handle ShaderEffect-like objects with output property  
+      278 +    if ('output' in source && source.output instanceof        
+          +BABYLON.RenderTargetTexture) {                                
+      279 +      return source.output;                                   
+      280      }                                                         
+      281                                                                
+      282 +    // Handle RenderTargetTexture directly                    
+      283      if (source instanceof BABYLON.RenderTargetTexture) {      
+      284        return source;                                          
+      285      }                                                         
+      286                                                                
+      287 -    if (source instanceof BABYLON.BaseTexture) {              
+      288 -      return source;                                          
+      289 -    }                                                         
+      290 -                                                              
+      291 -    const canvas = source as HTMLCanvasElement |              
+          -OffscreenCanvas;                                              
+      292 -    const width = canvas.width;                               
+      293 -    const height = canvas.height;                             
+      294 -    const engine = this.scene.getEngine() as                  
+          -BABYLON.WebGPUEngine;                                         
+      295 -                                                              
+      296 -    let entry = cache.get(key);                               
+      297 -    if (!entry || entry.width !== width || entry.height !==   
+          -height) {                                                     
+      298 -      if (entry) {                                            
+      299 -        entry.internal.dispose();                             
+      300 -      }                                                       
+      301 -      const internal = engine.createDynamicTexture(width,     
+          -height, false, BABYLON.Texture.BILINEAR_SAMPLINGMODE);        
+      302 -      internal.wrapU = BABYLON.Texture.CLAMP_ADDRESSMODE;     
+      303 -      internal.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;     
+      304 -                                                              
+      305 -      const wrapper = new BABYLON.BaseTexture(this.scene,     
+          -internal);                                                    
+      306 -      wrapper.wrapU = BABYLON.Texture.CLAMP_ADDRESSMODE;      
+      307 -      wrapper.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;      
+      308 -      wrapper.updateSamplingMode(BABYLON.Texture.BILINEAR_SAM 
+          -PLINGMODE);                                                   
+      309 -                                                              
+      310 -      entry = { texture: wrapper, internal, width, height };  
+      311 -      cache.set(key, entry);                                  
+      312 -    }                                                         
+      313 -                                                              
+      314 -    engine.updateDynamicTexture(entry.internal, canvas as     
+          -HTMLCanvasElement, false, false,                              
+          -BABYLON.Texture.BILINEAR_SAMPLINGMODE);                       
+      315 -                                                              
+      316 -    return entry.texture;                                     
+      287 +    // Handle BaseTexture (including CanvasTexture.texture)   
+      288 +    return source;                                            
+      289    }                                                           
+      290                                                                
+      291    //========================================================= 
+           ==================                                            
+
+⏺ Update(src/rendering/power2d/StyledShape.ts)
+  ⎿  Added 2 lines, removed 7 lines                                      
+      279        return source.output;                                   
+      280      }                                                         
+      281                                                                
+      282 -    // Handle RenderTargetTexture directly                    
+      283 -    if (source instanceof BABYLON.RenderTargetTexture) {      
+      284 -      return source;                                          
+      285 -    }                                                         
+      286 -                                                              
+      287 -    // Handle BaseTexture (including CanvasTexture.texture)   
+      288 -    return source;                                            
+      282 +    // Handle BaseTexture (including RenderTargetTexture and  
+          +CanvasTexture.texture)                                        
+      283 +    return source as BABYLON.BaseTexture;                     
+      284    }                                                           
+      285                                                                
+      286    //========================================================= 
+           ==================                                            
+
+⏺ Update(src/rendering/power2d/StyledShape.ts)
+  ⎿  Removed 9 lines                                                     
+      299      }                                                         
+      300                                                                
+      301      this.parentNode.dispose();                                
+      302 -                                                              
+      303 -    for (const entry of this.bodyCanvasTextures.values()) {   
+      304 -      entry.internal.dispose();                               
+      305 -      entry.texture.dispose();                                
+      306 -    }                                                         
+      307 -    for (const entry of this.strokeCanvasTextures.values()) { 
+      308 -      entry.internal.dispose();                               
+      309 -      entry.texture.dispose();                                
+      310 -    }                                                         
+      302    }                                                           
+      303  }                                                             
+
+⏺ Read(src/rendering/power2d/BatchedStyledShape.ts)
+  ⎿  Read 239 lines
+
+⏺ Update(src/rendering/power2d/BatchedStyledShape.ts)
+  ⎿  Added 1 line, removed 1 line                                        
+      1  import * as BABYLON from 'babylonjs';                           
+      2  import earcut from 'earcut';                                    
+      3 -import type { BatchMaterialDef, CanvasTextureEntry,             
+        -InstanceAttrLayout, Point2D, TextureSource } from './types';    
+      3 +import type { BatchMaterialDef,                                 
+        +InstanceAttrLayout, Point2D, TextureSource } from './types';    
+      4                                                                  
+      5  interface BatchedStyledShapeOptions<U extends object, T extends 
+          string, I extends object> {                                    
+      6    scene: BABYLON.Scene;                                         
+
+⏺ Update(src/rendering/power2d/BatchedStyledShape.ts)
+  ⎿  Removed 2 lines                                                     
+      26    private canvasWidth: number;                                 
+      27    private canvasHeight: number;                                
+      28                                                                 
+      29 -  private readonly textureCache: Map<string,                   
+         -CanvasTextureEntry> = new Map();                               
+      30 -                                                               
+      29    constructor(options: BatchedStyledShapeOptions<U, T, I>) {   
+      30      this.scene = options.scene;                                
+      31      this.instanceCount = options.instanceCount;                
+
+⏺ Update(src/rendering/power2d/BatchedStyledShape.ts)
+  ⎿  Added 1 line, removed 1 line                                        
+      68    }                                                            
+      69                                                                 
+      70    setTexture(name: T, source: TextureSource): void {           
+      71 -    const texture = this.resolveTexture(source, String(name)); 
+      71 +    const texture = this.resolveTexture(source);               
+      72      this.materialInstance.setTexture(name, texture);           
+      73    }                                                            
+      74                                                                 
+
+⏺ Update(src/rendering/power2d/BatchedStyledShape.ts)
+  ⎿  Removed 4 lines                                                     
+      128      this.mesh.dispose(false, false);                          
+      129      this.materialInstance.dispose();                          
+      130      this.instanceBuffer.dispose();                            
+      131 -    for (const entry of this.textureCache.values()) {         
+      132 -      entry.internal.dispose();                               
+      133 -      entry.texture.dispose();                                
+      134 -    }                                                         
+      131    }                                                           
+      132                                                                
+      133    private createMesh(points: readonly Point2D[], closed:      
+           boolean): BABYLON.Mesh {                                      
+
+⏺ Update(src/rendering/power2d/BatchedStyledShape.ts)
+  ⎿  Added 6 lines, removed 37 lines                                     
+      189      }                                                         
+      190    }                                                           
+      191                                                                
+      192 -  private resolveTexture(source: TextureSource, key: string   
+          -): BABYLON.BaseTexture {                                      
+      193 -    if ('output' in (source as { output?:                     
+          -BABYLON.RenderTargetTexture }) && (source as { output?:       
+          -BABYLON.RenderTargetTexture }).output instanceof              
+          -BABYLON.RenderTargetTexture) {                                
+      194 -      return (source as { output: BABYLON.RenderTargetTexture 
+          - }).output;                                                   
+      192 +  private resolveTexture(source: TextureSource                
+          +): BABYLON.BaseTexture {                                      
+      193 +    // Handle ShaderEffect-like objects with output property  
+      194 +    if ('output' in source && source.output instanceof        
+          +BABYLON.RenderTargetTexture) {                                
+      195 +      return source.output;                                   
+      196      }                                                         
+      197                                                                
+      198 -    if (source instanceof BABYLON.RenderTargetTexture) {      
+      199 -      return source;                                          
+      200 -    }                                                         
+      201 -                                                              
+      202 -    if (source instanceof BABYLON.BaseTexture) {              
+      203 -      return source;                                          
+      204 -    }                                                         
+      205 -                                                              
+      206 -    const canvas = source as HTMLCanvasElement |              
+          -OffscreenCanvas;                                              
+      207 -    const width = canvas.width;                               
+      208 -    const height = canvas.height;                             
+      209 -    const engine = this.scene.getEngine() as                  
+          -BABYLON.WebGPUEngine;                                         
+      210 -                                                              
+      211 -    let entry = this.textureCache.get(key);                   
+      212 -    if (!entry || entry.width !== width || entry.height !==   
+          -height) {                                                     
+      213 -      if (entry) {                                            
+      214 -        entry.internal.dispose();                             
+      215 -      }                                                       
+      216 -      const internal = engine.createDynamicTexture(width,     
+          -height, false, BABYLON.Texture.BILINEAR_SAMPLINGMODE);        
+      217 -      internal.wrapU = BABYLON.Texture.CLAMP_ADDRESSMODE;     
+      218 -      internal.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;     
+      219 -                                                              
+      220 -      const wrapper = new BABYLON.BaseTexture(this.scene,     
+          -internal);                                                    
+      221 -      wrapper.wrapU = BABYLON.Texture.CLAMP_ADDRESSMODE;      
+      222 -      wrapper.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;      
+      223 -      wrapper.updateSamplingMode(BABYLON.Texture.BILINEAR_SAM 
+          -PLINGMODE);                                                   
+      224 -                                                              
+      225 -      entry = { texture: wrapper, internal, width, height };  
+      226 -      this.textureCache.set(key, entry);                      
+      227 -    }                                                         
+      228 -                                                              
+      229 -    engine.updateDynamicTexture(entry.internal, canvas as     
+          -HTMLCanvasElement, false, false,                              
+          -BABYLON.Texture.BILINEAR_SAMPLINGMODE);                       
+      230 -                                                              
+      231 -    return entry.texture;                                     
+      198 +    // Handle BaseTexture (including RenderTargetTexture and  
+          +CanvasTexture.texture)                                        
+      199 +    return source as BABYLON.BaseTexture;                     
+      200    }                                                           
+      201  }                                                             
+
+⏺ Let me also export the new CanvasTexture class from the index.
+
+⏺ Read(src/rendering/power2d/index.ts)
+  ⎿  Read 7 lines
+
+⏺ The index already exports everything from sceneHelpers, so CanvasTexture is automatically exported.
+
+  ---
+  Summary
+
+  Done! Here's what was changed:
+
+  1. Narrowed TextureSource type (src/rendering/power2d/types.ts)
+
+  Removed HTMLCanvasElement and OffscreenCanvas from accepted types:
+  export type TextureSource =
+    | BABYLON.BaseTexture
+    | BABYLON.RenderTargetTexture
+    | { output: BABYLON.RenderTargetTexture };
+
+  2. Created CanvasTexture helper (src/rendering/power2d/sceneHelpers.ts)
+
+  A class that handles all the WebGPU-specific setup:
+  - Initial texture creation with dummy data upload (required for WebGPU readiness)
+  - Automatic resize handling with deferred disposal
+  - Per-frame update() method
+
+  Usage:
+  import { CanvasTexture } from '@/rendering/power2d';
+
+  // Create once
+  const canvasTex = new CanvasTexture({ engine, scene });
+
+  // In render loop
+  canvasTex.update(myP5Canvas);  // handles resize automatically
+  shape.body.setTexture('myTex', canvasTex.texture);
+
+  // Cleanup
+  canvasTex.dispose();
+
+  3. Simplified StyledShape and BatchedStyledShape
+
+  - Removed internal canvas caches
+  - Simplified resolveTexture() to just unwrap the texture types
+  - Removed canvas disposal logic from dispose()
+
+  Now if you want to share 1 canvas across 10 shapes:
+  // Create ONE CanvasTexture
+  const sharedTex = new CanvasTexture({ engine, scene });
+
+  // Share it across all shapes
+  for (const shape of shapes) {
+    shape.body.setTexture('myTex', sharedTex.texture);
+  }
+
+  // Update once per frame
+  sharedTex.update(myCanvas);
+
+  This is more explicit and avoids the hidden duplication issue.
+
+> <ide_selection>The user selected the lines 142 to 142 from 
+/Users/avneeshsarwate/agentCombine/browser_drawn_projections/src/rendering/p
+ower2d/sceneHelpers.ts:
+samplingMode
+
+This may or may not be related to the current task.</ide_selection> 
+
+> does this resolve the shader generation issue of samplers not being 
+specified for textures? for this dynamic texture helper - the base texture 
+already has sampling settings right? can you just make those configurable on
+ the helper? and actually, it would be simpler to just disallow not having 
+matched textures/samplers in the shader functions - that's how the 
+fragFunc.wgsl generator works right? 
+
+⏺ Good questions. Let me check how the fragFunc generator handles texture/sampler pairs.
+
+⏺ Read(node_src/wgsl/generateFragmentShader.ts)
+  ⎿  Read 150 lines
+
+⏺ Search(pattern: "parseResourceParams|texture_2d", path:
+        "node_src/wgsl/generateFragmentShader.ts", output_mode: "content")
+  ⎿  Found 44 lines (ctrl+o to expand)
+
+⏺ Search(pattern: "function parse.*Texture|parseResource", path:
+        "node_src/wgsl/generateFragmentShader.ts", output_mode: "content")
+  ⎿  Found 0 lines 
+
+⏺ Search(pattern: "textureArg.*samplerArg|must have matching", path:
+        "node_src/wgsl/generateFragmentShader.ts", output_mode: "content")
+  ⎿  Found 33 lines (ctrl+o to expand)
+
+⏺ You're right! The fragFunc generator requires paired texture/sampler (lines 783-784 throw an error if not matched). Let me:
+
+  1. Update the material generators to require paired texture/sampler
+  2. Add sampling mode to the BaseTexture in CanvasTexture
+
+⏺ Read(node_src/wgsl/generateMaterialTypes.ts)
+  ⎿  Read 40 lines
+
+⏺ Search(pattern: "interface TextureParam", path:
+        "node_src/wgsl/generateMaterialTypes.ts", output_mode: "content")
+  ⎿  Found 6 lines (ctrl+o to expand)
+
+⏺ Update(node_src/wgsl/generateMaterialTypes.ts)
+  ⎿  Added 1 line, removed 1 line                                        
+      35                                                                 
+      36  interface TextureParam {                                       
+      37    textureName: string;                                         
+      38 -  samplerName?: string;                                        
+      38 +  samplerName: string;                                         
+      39  }                                                              
+      40                                                                 
+      41  interface InstanceField {                                      
+
+⏺ Update(node_src/wgsl/generateMaterialTypes.ts)
+  ⎿  Added 21 lines, removed 16 lines                                    
+      201    return { fields, totalFloats: offset };                     
+      202  }                                                             
+      203                                                                
+      204 -function parseTextureParams(args: ArgumentInfo[], startIndex: 
+          -number): TextureParam[] {                                     
+      204 +function parseTextureParams(args: ArgumentInfo[], startIndex: 
+          +number, functionName: string): TextureParam[] {               
+      205    const params: TextureParam[] = [];                          
+      206 -  let index = startIndex;                                     
+      206    const seenTextures = new Set<string>();                     
+      207 -  while (index < args.length) {                               
+      207 +                                                              
+      208 +  for (let index = startIndex; index < args.length; index +=  
+          +2) {                                                          
+      209      const textureArg = args[index];                           
+      210 +    const samplerArg = args[index + 1];                       
+      211 +                                                              
+      212 +    if (!textureArg || !samplerArg) {                         
+      213 +      throw new Error(`Texture parameters in ${functionName}  
+          +must be provided in texture/sampler pairs.`);                 
+      214 +    }                                                         
+      215 +                                                              
+      216      const textureType = textureArg.type.getTypeName();        
+      217      if (textureType !== 'texture_2d<f32>') {                  
+      218        throw new Error(`Texture argument must be               
+           texture_2d<f32>. Received ${textureArg.name}:                 
+           ${textureType}`);                                             
+      219      }                                                         
+      220 +                                                              
+      221 +    const samplerType = samplerArg.type.getTypeName();        
+      222 +    if (samplerType !== 'sampler') {                          
+      223 +      throw new Error(`Expected sampler after texture         
+          +${textureArg.name}, but got ${samplerArg.name}:               
+          +${samplerType}. Texture parameters must be provided in        
+          +texture/sampler pairs.`);                                     
+      224 +    }                                                         
+      225 +                                                              
+      226      if (seenTextures.has(textureArg.name)) {                  
+      227        throw new Error(`Duplicate texture parameter            
+           ${textureArg.name} detected.`);                               
+      228      }                                                         
+      229      seenTextures.add(textureArg.name);                        
+      230 -    const next = args[index + 1];                             
+      231 -    if (next && next.type.getTypeName() === 'sampler') {      
+      232 -      params.push({                                           
+      233 -        textureName: textureArg.name,                         
+      234 -        samplerName: next.name,                               
+      235 -      });                                                     
+      236 -      index += 2;                                             
+      237 -    } else {                                                  
+      238 -      params.push({                                           
+      239 -        textureName: textureArg.name,                         
+      240 -      });                                                     
+      241 -      index += 1;                                             
+      242 -    }                                                         
+      230 +                                                              
+      231 +    params.push({                                             
+      232 +      textureName: textureArg.name,                           
+      233 +      samplerName: samplerArg.name,                           
+      234 +    });                                                       
+      235    }                                                           
+      236 +                                                              
+      237    return params;                                              
+      238  }                                                             
+      239                                                                
+
+⏺ Search(pattern: "parseTextureParams\(", path:
+        "node_src/wgsl/generateMaterialTypes.ts", output_mode: "content")
+  ⎿  Found 2 lines (ctrl+o to expand)
+
+⏺ Read(node_src/wgsl/generateMaterialTypes.ts)
+  ⎿  Read 15 lines
+
+⏺ Update(node_src/wgsl/generateMaterialTypes.ts)
+  ⎿  Added 1 line, removed 1 line                                        
+      472      instanceLayout = collectInstanceLayout(instanceStruct);   
+      473    }                                                           
+      474                                                                
+      475 -  const textureParams = parseTextureParams(fragFn.arguments,  
+          -resourceStartIndex);                                          
+      475 +  const textureParams = parseTextureParams(fragFn.arguments,  
+          +resourceStartIndex, 'fragShader');                            
+      476                                                                
+      477    const vertexSource = buildVertexSource({                    
+      478      shaderCode,                                               
+
+⏺ Now I need to simplify the generated code since samplers are always present. Let me check if there's conditional sampler handling to remove.
+
+⏺ Search(pattern: "samplerNames\.length|param\.samplerName\)|defaultSampler",
+        path: "node_src/wgsl/generateMaterialTypes.ts", output_mode: "content")
+  ⎿  Found 21 lines (ctrl+o to expand)
+
+⏺ Let me simplify the code now that samplers are always required. I'll read the relevant sections and clean them up.
+
+⏺ Read(node_src/wgsl/generateMaterialTypes.ts)
+  ⎿  Read 40 lines
+
+⏺ Update(node_src/wgsl/generateMaterialTypes.ts)
+  ⎿  Added 1 line, removed 3 lines                                       
+      357    lines.push('uniform power2d_canvasHeight: f32;');           
+      358    textureParams.forEach((param) => {                          
+      359      lines.push(`var ${param.textureName}: texture_2d<f32>;`); 
+      360 -    if (param.samplerName) {                                  
+      361 -      lines.push(`var ${param.samplerName}: sampler;`);       
+      362 -    }                                                         
+      360 +    lines.push(`var ${param.samplerName}: sampler;`);         
+      361    });                                                         
+      362    lines.push('');                                             
+      363    lines.push(shaderCode.trimEnd());                           
+
+⏺ Update(node_src/wgsl/generateMaterialTypes.ts)
+  ⎿  Added 1 line, removed 3 lines                                       
+      381    }                                                           
+      382    textureParams.forEach((param) => {                          
+      383      args.push(param.textureName);                             
+      384 -    if (param.samplerName) {                                  
+      385 -      args.push(param.samplerName);                           
+      386 -    }                                                         
+      384 +    args.push(param.samplerName);                             
+      385    });                                                         
+      386    lines.push(`  let color = fragShader(${args.join(',         
+           ')});`);                                                      
+      387    lines.push('  fragmentOutputs.color = color;');             
+
+⏺ Read(node_src/wgsl/generateMaterialTypes.ts)
+  ⎿  Read 50 lines
+
+⏺ Update(node_src/wgsl/generateMaterialTypes.ts)
+  ⎿  Added 1 line, removed 2 lines                                       
+      546    const textureNameUnion = textureNames.length ?              
+           textureNames.map((name) => `'${name}'`).join(' | ') :         
+           'never';                                                      
+      547    const textureNamesLiteral = textureNames.length ?           
+           `[${textureNames.map((name) => `'${name}'`).join(', ')}] as   
+           const` : '[] as const';                                       
+      548                                                                
+      549 -  const samplerNames = textureParams.                         
+          -filter((param) => param.samplerName).                         
+          -map((param) => param.samplerName as string);                  
+      549 +  const samplerNames = textureParams.                         
+          +map((param) => param.samplerName);                            
+      550    const samplerLookupEntries = textureParams                  
+      551 -    .filter((param) => param.samplerName)                     
+      551      .map((param) => `'${param.textureName}':                  
+           '${param.samplerName}'`)                                      
+      552      .join(', ');                                              
+      553                                                                
+
+⏺ Update(node_src/wgsl/generateMaterialTypes.ts)
+  ⎿  Added 1 line, removed 1 line                                        
+      574    materialInstanceLines.push('  material:                     
+           BABYLON.ShaderMaterial;');                                    
+      575    materialInstanceLines.push(`  setUniforms(uniforms:         
+           Partial<${uniformInterfaceName}>): void;`);                   
+      576    materialInstanceLines.push(`  setTexture(name:              
+           ${shaderPrefix}TextureName, texture: BABYLON.BaseTexture):    
+           void;`);                                                      
+      577 -  if (samplerNames.length > 0) {                              
+      577 +  if (textureParams.length > 0) {                             
+      578      materialInstanceLines.push(`  setTextureSampler(name:     
+           ${shaderPrefix}TextureName, sampler: BABYLON.TextureSampler): 
+            void;`);                                                     
+      579    }                                                           
+      580    materialInstanceLines.push('  setCanvasSize(width: number,  
+           height: number): void;');                                     
+
+⏺ Read(node_src/wgsl/generateMaterialTypes.ts)
+  ⎿  Read 80 lines
+
+⏺ Update(node_src/wgsl/generateMaterialTypes.ts)
+  ⎿  Added 3 lines, removed 3 lines                                      
+      621    uniformsList.push("'power2d_canvasWidth'",                  
+           "'power2d_canvasHeight'");                                    
+      622                                                                
+      623    const defaultSamplerLines: string[] = [];                   
+      624 -  if (samplerNames.length > 0) {                              
+      624 +  if (textureParams.length > 0) {                             
+      625      defaultSamplerLines.push('  const defaultSampler = new    
+           BABYLON.TextureSampler();');                                  
+      626      defaultSamplerLines.push('                                
+           defaultSampler.setParameters(');                              
+      627      defaultSamplerLines.push('                                
+           BABYLON.Texture.CLAMP_ADDRESSMODE,');                         
+     ...
+      666    createMaterialLines.push('  material.backFaceCulling =      
+           false;');                                                     
+      667    createMaterialLines.push('  material.alphaMode =            
+           BABYLON.Engine.ALPHA_COMBINE;');                              
+      668    createMaterialLines.push('');                               
+      669 -  if (samplerNames.length > 0) {                              
+      669 +  if (textureParams.length > 0) {                             
+      670      createMaterialLines.push(`  const samplerLookup = {       
+           ${samplerLookupEntries} } as const;`);                        
+      671      createMaterialLines.push('');                             
+      672    }                                                           
+     ...
+      674    createMaterialLines.push('    material,');                  
+      675    createMaterialLines.push(`    setUniforms: (uniforms) =>    
+           set${uniformInterfaceName}(material, uniforms),`);            
+      676    createMaterialLines.push('    setTexture: (name, texture)   
+           => material.setTexture(name, texture),');                     
+      677 -  if (samplerNames.length > 0) {                              
+      677 +  if (textureParams.length > 0) {                             
+      678      createMaterialLines.push('    setTextureSampler: (name,   
+           sampler) => {');                                              
+      679      createMaterialLines.push('      const samplerName =       
+           (samplerLookup as Record<string, string |                     
+           undefined>)[name];');                                         
+      680      createMaterialLines.push('      if (samplerName) {');     
+
+⏺ Now let me apply the same changes to the copy in src/rendering/power2d/ and the stroke material generators.
+
+⏺ Read(src/rendering/power2d/generateMaterialTypes.ts)
+  ⎿  Read 10 lines
+
+⏺ Update(src/rendering/power2d/generateMaterialTypes.ts)
+  ⎿  Added 1 line, removed 1 line                                        
+      35                                                                 
+      36  interface TextureParam {                                       
+      37    textureName: string;                                         
+      38 -  samplerName?: string;                                        
+      38 +  samplerName: string;                                         
+      39  }                                                              
+      40                                                                 
+      41  interface InstanceField {                                      
+
+⏺ Read(src/rendering/power2d/generateMaterialTypes.ts)
+  ⎿  Read 35 lines
+
+⏺ Update(src/rendering/power2d/generateMaterialTypes.ts)
+  ⎿  Added 21 lines, removed 16 lines                                    
+      201    return { fields, totalFloats: offset };                     
+      202  }                                                             
+      203                                                                
+      204 -function parseTextureParams(args: ArgumentInfo[], startIndex: 
+          -number): TextureParam[] {                                     
+      204 +function parseTextureParams(args: ArgumentInfo[], startIndex: 
+          +number, functionName: string): TextureParam[] {               
+      205    const params: TextureParam[] = [];                          
+      206 -  let index = startIndex;                                     
+      206    const seenTextures = new Set<string>();                     
+      207 -  while (index < args.length) {                               
+      207 +                                                              
+      208 +  for (let index = startIndex; index < args.length; index +=  
+          +2) {                                                          
+      209      const textureArg = args[index];                           
+      210 +    const samplerArg = args[index + 1];                       
+      211 +                                                              
+      212 +    if (!textureArg || !samplerArg) {                         
+      213 +      throw new Error(`Texture parameters in ${functionName}  
+          +must be provided in texture/sampler pairs.`);                 
+      214 +    }                                                         
+      215 +                                                              
+      216      const textureType = textureArg.type.getTypeName();        
+      217      if (textureType !== 'texture_2d<f32>') {                  
+      218        throw new Error(`Texture argument must be               
+           texture_2d<f32>. Received ${textureArg.name}:                 
+           ${textureType}`);                                             
+      219      }                                                         
+      220 +                                                              
+      221 +    const samplerType = samplerArg.type.getTypeName();        
+      222 +    if (samplerType !== 'sampler') {                          
+      223 +      throw new Error(`Expected sampler after texture         
+          +${textureArg.name}, but got ${samplerArg.name}:               
+          +${samplerType}. Texture parameters must be provided in        
+          +texture/sampler pairs.`);                                     
+      224 +    }                                                         
+      225 +                                                              
+      226      if (seenTextures.has(textureArg.name)) {                  
+      227        throw new Error(`Duplicate texture parameter            
+           ${textureArg.name} detected.`);                               
+      228      }                                                         
+      229      seenTextures.add(textureArg.name);                        
+      230 -    const next = args[index + 1];                             
+      231 -    if (next && next.type.getTypeName() === 'sampler') {      
+      232 -      params.push({                                           
+      233 -        textureName: textureArg.name,                         
+      234 -        samplerName: next.name,                               
+      235 -      });                                                     
+      236 -      index += 2;                                             
+      237 -    } else {                                                  
+      238 -      params.push({                                           
+      239 -        textureName: textureArg.name,                         
+      240 -      });                                                     
+      241 -      index += 1;                                             
+      242 -    }                                                         
+      230 +                                                              
+      231 +    params.push({                                             
+      232 +      textureName: textureArg.name,                           
+      233 +      samplerName: samplerArg.name,                           
+      234 +    });                                                       
+      235    }                                                           
+      236 +                                                              
+      237    return params;                                              
+      238  }                                                             
+      239                                                                
+
+⏺ Search(pattern: "parseTextureParams\(fragFn", path:
+        "src/rendering/power2d/generateMaterialTypes.ts", output_mode:
+        "content")
+  ⎿  Found 1 line (ctrl+o to expand)
+
+⏺ Update(src/rendering/power2d/generateMaterialTypes.ts)
+  ⎿  Added 1 line, removed 1 line                                        
+      472      instanceLayout = collectInstanceLayout(instanceStruct);   
+      473    }                                                           
+      474                                                                
+      475 -  const textureParams = parseTextureParams(fragFn.arguments,  
+          -resourceStartIndex);                                          
+      475 +  const textureParams = parseTextureParams(fragFn.arguments,  
+          +resourceStartIndex, 'fragShader');                            
+      476                                                                
+      477    const vertexSource = buildVertexSource({                    
+      478      shaderCode,                                               
+
+⏺ Now let me apply the remaining simplifications to the src copy.
+
+⏺ Search(pattern: "if \(param\.samplerName\)", path:
+        "src/rendering/power2d/generateMaterialTypes.ts", output_mode:
+        "content")
+  ⎿  Found 9 lines (ctrl+o to expand)
+
+⏺ Read(src/rendering/power2d/generateMaterialTypes.ts)
+  ⎿  Read 40 lines
+
+⏺ Update(src/rendering/power2d/generateMaterialTypes.ts)
+  ⎿  Added 1 line, removed 3 lines                                       
+      357    lines.push('uniform power2d_canvasHeight: f32;');           
+      358    textureParams.forEach((param) => {                          
+      359      lines.push(`var ${param.textureName}: texture_2d<f32>;`); 
+      360 -    if (param.samplerName) {                                  
+      361 -      lines.push(`var ${param.samplerName}: sampler;`);       
+      362 -    }                                                         
+      360 +    lines.push(`var ${param.samplerName}: sampler;`);         
+      361    });                                                         
+      362    lines.push('');                                             
+      363    lines.push(shaderCode.trimEnd());                           
+
+⏺ Update(src/rendering/power2d/generateMaterialTypes.ts)
+  ⎿  Added 1 line, removed 3 lines                                       
+      381    }                                                           
+      382    textureParams.forEach((param) => {                          
+      383      args.push(param.textureName);                             
+      384 -    if (param.samplerName) {                                  
+      385 -      args.push(param.samplerName);                           
+      386 -    }                                                         
+      384 +    args.push(param.samplerName);                             
+      385    });                                                         
+      386    lines.push(`  let color = fragShader(${args.join(',         
+           ')});`);                                                      
+      387    lines.push('  fragmentOutputs.color = color;');             
+
+⏺ Read(src/rendering/power2d/generateMaterialTypes.ts)
+  ⎿  Read 15 lines
+
+⏺ Update(src/rendering/power2d/generateMaterialTypes.ts)
+  ⎿  Added 1 line, removed 2 lines                                       
+      546    const textureNameUnion = textureNames.length ?              
+           textureNames.map((name) => `'${name}'`).join(' | ') :         
+           'never';                                                      
+      547    const textureNamesLiteral = textureNames.length ?           
+           `[${textureNames.map((name) => `'${name}'`).join(', ')}] as   
+           const` : '[] as const';                                       
+      548                                                                
+      549 -  const samplerNames = textureParams.                         
+          -filter((param) => param.samplerName).                         
+          -map((param) => param.samplerName as string);                  
+      549 +  const samplerNames = textureParams.                         
+          +map((param) => param.samplerName);                            
+      550    const samplerLookupEntries = textureParams                  
+      551 -    .filter((param) => param.samplerName)                     
+      551      .map((param) => `'${param.textureName}':                  
+           '${param.samplerName}'`)                                      
+      552      .join(', ');                                              
+      553                                                                
+
+⏺ Update(src/rendering/power2d/generateMaterialTypes.ts)
+  ⎿  Added 4 lines, removed 4 lines                                      
+      574    materialInstanceLines.push('  material:                     
+           BABYLON.ShaderMaterial;');                                    
+      575    materialInstanceLines.push(`  setUniforms(uniforms:         
+           Partial<${uniformInterfaceName}>): void;`);                   
+      576    materialInstanceLines.push(`  setTexture(name:              
+           ${shaderPrefix}TextureName, texture: BABYLON.BaseTexture):    
+           void;`);                                                      
+      577 -  if (samplerNames.length > 0) {                              
+      577 +  if (textureParams.length > 0) {                             
+      578      materialInstanceLines.push(`  setTextureSampler(name:     
+           ${shaderPrefix}TextureName, sampler: BABYLON.TextureSampler): 
+            void;`);                                                     
+      579    }                                                           
+      580    materialInstanceLines.push('  setCanvasSize(width: number,  
+           height: number): void;');                                     
+     ...
+      621    uniformsList.push("'power2d_canvasWidth'",                  
+           "'power2d_canvasHeight'");                                    
+      622                                                                
+      623    const defaultSamplerLines: string[] = [];                   
+      624 -  if (samplerNames.length > 0) {                              
+      624 +  if (textureParams.length > 0) {                             
+      625      defaultSamplerLines.push('  const defaultSampler = new    
+           BABYLON.TextureSampler();');                                  
+      626      defaultSamplerLines.push('                                
+           defaultSampler.setParameters(');                              
+      627      defaultSamplerLines.push('                                
+           BABYLON.Texture.CLAMP_ADDRESSMODE,');                         
+     ...
+      666    createMaterialLines.push('  material.backFaceCulling =      
+           false;');                                                     
+      667    createMaterialLines.push('  material.alphaMode =            
+           BABYLON.Engine.ALPHA_COMBINE;');                              
+      668    createMaterialLines.push('');                               
+      669 -  if (samplerNames.length > 0) {                              
+      669 +  if (textureParams.length > 0) {                             
+      670      createMaterialLines.push(`  const samplerLookup = {       
+           ${samplerLookupEntries} } as const;`);                        
+      671      createMaterialLines.push('');                             
+      672    }                                                           
+     ...
+      674    createMaterialLines.push('    material,');                  
+      675    createMaterialLines.push(`    setUniforms: (uniforms) =>    
+           set${uniformInterfaceName}(material, uniforms),`);            
+      676    createMaterialLines.push('    setTexture: (name, texture)   
+           => material.setTexture(name, texture),');                     
+      677 -  if (samplerNames.length > 0) {                              
+      677 +  if (textureParams.length > 0) {                             
+      678      createMaterialLines.push('    setTextureSampler: (name,   
+           sampler) => {');                                              
+      679      createMaterialLines.push('      const samplerName =       
+           (samplerLookup as Record<string, string |                     
+           undefined>)[name];');                                         
+      680      createMaterialLines.push('      if (samplerName) {');     
+
+⏺ Search(pattern: "interface TextureParam|parseTextureParams|samplerName\?",
+        path: "node_src/wgsl/generateStrokeMaterialTypes.ts", output_mode:
+        "content")
+  ⎿  Found 4 lines (ctrl+o to expand)
+
+⏺ Read(node_src/wgsl/generateStrokeMaterialTypes.ts)
+  ⎿  Read 50 lines
+
+⏺ Update(node_src/wgsl/generateStrokeMaterialTypes.ts)
+  ⎿  Added 1 line, removed 1 line                                        
+      35                                                                 
+      36  interface TextureParam {                                       
+      37    textureName: string;                                         
+      38 -  samplerName?: string;                                        
+      38 +  samplerName: string;                                         
+      39  }                                                              
+      40                                                                 
+      41  const UNIFORM_TYPE_MAP: Record<string, UniformTypeMetadata> =  
+          {                                                              
+
+⏺ Read(node_src/wgsl/generateStrokeMaterialTypes.ts)
+  ⎿  Read 35 lines
+
+⏺ Update(node_src/wgsl/generateStrokeMaterialTypes.ts)
+  ⎿  Added 21 lines, removed 16 lines                                    
+      157    });                                                         
+      158  }                                                             
+      159                                                                
+      160 -function parseTextureParams(args: ArgumentInfo[], startIndex: 
+          -number): TextureParam[] {                                     
+      160 +function parseTextureParams(args: ArgumentInfo[], startIndex: 
+          +number, functionName: string): TextureParam[] {               
+      161    const params: TextureParam[] = [];                          
+      162 -  let index = startIndex;                                     
+      162    const seenTextures = new Set<string>();                     
+      163 -  while (index < args.length) {                               
+      163 +                                                              
+      164 +  for (let index = startIndex; index < args.length; index +=  
+          +2) {                                                          
+      165      const textureArg = args[index];                           
+      166 +    const samplerArg = args[index + 1];                       
+      167 +                                                              
+      168 +    if (!textureArg || !samplerArg) {                         
+      169 +      throw new Error(`Texture parameters in ${functionName}  
+          +must be provided in texture/sampler pairs.`);                 
+      170 +    }                                                         
+      171 +                                                              
+      172      const textureType = textureArg.type.getTypeName();        
+      173      if (textureType !== 'texture_2d<f32>') {                  
+      174        throw new Error(`Texture argument must be               
+           texture_2d<f32>. Received ${textureArg.name}:                 
+           ${textureType}`);                                             
+      175      }                                                         
+      176 +                                                              
+      177 +    const samplerType = samplerArg.type.getTypeName();        
+      178 +    if (samplerType !== 'sampler') {                          
+      179 +      throw new Error(`Expected sampler after texture         
+          +${textureArg.name}, but got ${samplerArg.name}:               
+          +${samplerType}. Texture parameters must be provided in        
+          +texture/sampler pairs.`);                                     
+      180 +    }                                                         
+      181 +                                                              
+      182      if (seenTextures.has(textureArg.name)) {                  
+      183        throw new Error(`Duplicate texture parameter            
+           ${textureArg.name} detected.`);                               
+      184      }                                                         
+      185      seenTextures.add(textureArg.name);                        
+      186 -    const next = args[index + 1];                             
+      187 -    if (next && next.type.getTypeName() === 'sampler') {      
+      188 -      params.push({                                           
+      189 -        textureName: textureArg.name,                         
+      190 -        samplerName: next.name,                               
+      191 -      });                                                     
+      192 -      index += 2;                                             
+      193 -    } else {                                                  
+      194 -      params.push({                                           
+      195 -        textureName: textureArg.name,                         
+      196 -      });                                                     
+      197 -      index += 1;                                             
+      198 -    }                                                         
+      186 +                                                              
+      187 +    params.push({                                             
+      188 +      textureName: textureArg.name,                           
+      189 +      samplerName: samplerArg.name,                           
+      190 +    });                                                       
+      191    }                                                           
+      192 +                                                              
+      193    return params;                                              
+      194  }                                                             
+      195                                                                
+
+⏺ Update(node_src/wgsl/generateStrokeMaterialTypes.ts)
+  ⎿  Added 1 line, removed 1 line                                        
+      372                                                                
+      373    const uniformFields = collectUniformFields(uniformStruct,   
+           uniformArg.name);                                             
+      374    const uniformLoaderFn =                                     
+           generateUniformStructConstruction(uniformStruct,              
+           uniformFields);                                               
+      375 -  const textureParams = parseTextureParams(fragFn.arguments, 4
+          -);                                                            
+      375 +  const textureParams = parseTextureParams(fragFn.arguments, 4
+          +, 'strokeFragShader');                                        
+      376                                                                
+      377    const vertexSource = buildStrokeVertexSource({              
+      378      shaderCode,                                               
+
+⏺ Search(pattern: "if \(param\.samplerName\)|\.filter\(\(param\) =>
+        param\.samplerName\)|samplerNames\.length > 0", path:
+        "node_src/wgsl/generateStrokeMaterialTypes.ts", output_mode: "content")
+  ⎿  Found 8 lines (ctrl+o to expand)
+
+⏺ Read(node_src/wgsl/generateStrokeMaterialTypes.ts)
+  ⎿  Read 35 lines
+
+⏺ Update(node_src/wgsl/generateStrokeMaterialTypes.ts)
+  ⎿  Added 2 lines, removed 6 lines                                      
+      282    lines.push('uniform power2d_strokeThickness: f32;');        
+      283    textureParams.forEach((param) => {                          
+      284      lines.push(`var ${param.textureName}: texture_2d<f32>;`); 
+      285 -    if (param.samplerName) {                                  
+      286 -      lines.push(`var ${param.samplerName}: sampler;`);       
+      287 -    }                                                         
+      285 +    lines.push(`var ${param.samplerName}: sampler;`);         
+      286    });                                                         
+      287    lines.push('');                                             
+      288    lines.push(shaderCode.trimEnd());                           
+     ...
+      302    const args: string[] = ['uv', 'arcLength', 'normalizedArc', 
+            'uniformsValue'];                                            
+      303    textureParams.forEach((param) => {                          
+      304      args.push(param.textureName);                             
+      305 -    if (param.samplerName) {                                  
+      306 -      args.push(param.samplerName);                           
+      307 -    }                                                         
+      305 +    args.push(param.samplerName);                             
+      306    });                                                         
+      307    lines.push(`  let color = strokeFragShader(${args.join(',   
+           ')});`);                                                      
+      308    lines.push('  fragmentOutputs.color = color;');             
+
+⏺ Read(node_src/wgsl/generateStrokeMaterialTypes.ts)
+  ⎿  Read 15 lines
+
+⏺ Update(node_src/wgsl/generateStrokeMaterialTypes.ts)
+  ⎿  Added 1 line, removed 2 lines                                       
+      440    const textureNameUnion = textureNames.length ?              
+           textureNames.map((name) => `'${name}'`).join(' | ') :         
+           'never';                                                      
+      441    const textureNamesLiteral = textureNames.length ?           
+           `[${textureNames.map((name) => `'${name}'`).join(', ')}] as   
+           const` : '[] as const';                                       
+      442                                                                
+      443 -  const samplerNames = textureParams.                         
+          -filter((param) => param.samplerName).                         
+          -map((param) => param.samplerName as string);                  
+      443 +  const samplerNames = textureParams.                         
+          +map((param) => param.samplerName);                            
+      444    const samplerLookupEntries = textureParams                  
+      445 -    .filter((param) => param.samplerName)                     
+      445      .map((param) => `'${param.textureName}':                  
+           '${param.samplerName}'`)                                      
+      446      .join(', ');                                              
+      447                                                                
+
+⏺ Update(node_src/wgsl/generateStrokeMaterialTypes.ts)
+  ⎿  Added 4 lines, removed 4 lines                                      
+      465    materialInstanceLines.push('  material:                     
+           BABYLON.ShaderMaterial;');                                    
+      466    materialInstanceLines.push(`  setUniforms(uniforms:         
+           Partial<${uniformInterfaceName}>): void;`);                   
+      467    materialInstanceLines.push(`  setTexture(name:              
+           ${shaderPrefix}TextureName, texture: BABYLON.BaseTexture):    
+           void;`);                                                      
+      468 -  if (samplerNames.length > 0) {                              
+      468 +  if (textureParams.length > 0) {                             
+      469      materialInstanceLines.push(`  setTextureSampler(name:     
+           ${shaderPrefix}TextureName, sampler: BABYLON.TextureSampler): 
+            void;`);                                                     
+      470    }                                                           
+      471    materialInstanceLines.push('  setCanvasSize(width: number,  
+           height: number): void;');                                     
+     ...
+      486    uniformsList.push("'power2d_canvasWidth'",                  
+           "'power2d_canvasHeight'", "'power2d_strokeThickness'");       
+      487                                                                
+      488    const defaultSamplerLines: string[] = [];                   
+      489 -  if (samplerNames.length > 0) {                              
+      489 +  if (textureParams.length > 0) {                             
+      490      defaultSamplerLines.push('  const defaultSampler = new    
+           BABYLON.TextureSampler();');                                  
+      491      defaultSamplerLines.push('                                
+           defaultSampler.setParameters(');                              
+      492      defaultSamplerLines.push('                                
+           BABYLON.Texture.CLAMP_ADDRESSMODE,');                         
+     ...
+      532    createMaterialLines.push('  material.backFaceCulling =      
+           false;');                                                     
+      533    createMaterialLines.push('  material.alphaMode =            
+           BABYLON.Engine.ALPHA_COMBINE;');                              
+      534    createMaterialLines.push('');                               
+      535 -  if (samplerNames.length > 0) {                              
+      535 +  if (textureParams.length > 0) {                             
+      536      createMaterialLines.push(`  const samplerLookup = {       
+           ${samplerLookupEntries} } as const;`);                        
+      537      createMaterialLines.push('');                             
+      538    }                                                           
+     ...
+      540    createMaterialLines.push('    material,');                  
+      541    createMaterialLines.push(`    setUniforms: (uniforms) =>    
+           set${uniformInterfaceName}(material, uniforms),`);            
+      542    createMaterialLines.push('    setTexture: (name, texture)   
+           => material.setTexture(name, texture),');                     
+      543 -  if (samplerNames.length > 0) {                              
+      543 +  if (textureParams.length > 0) {                             
+      544      createMaterialLines.push('    setTextureSampler: (name,   
+           sampler) => {');                                              
+      545      createMaterialLines.push('      const samplerName =       
+           (samplerLookup as Record<string, string |                     
+           undefined>)[name];');                                         
+      546      createMaterialLines.push('      if (samplerName) {');     
+
+⏺ Now let me apply the same changes to the src/rendering/power2d copy of the stroke material generator.
+
+⏺ Search(pattern: "samplerName\?", path:
+        "src/rendering/power2d/generateStrokeMaterialTypes.ts", output_mode:
+        "content")
+  ⎿  Found 0 lines 
+
+> <ide_opened_file>The user opened the file /Users/avneeshsarwate/agentCombi
+ne/browser_drawn_projections/node_src/wgsl/generateMaterialTypes.ts in the 
+IDE. This may or may not be related to the current task.</ide_opened_file> 
+
+> can you not just use the shell to copy the file instead of doing all these
+ little edits and wasting context and time 
+
+⏺ You're absolutely right. Let me just copy the files.
+
+⏺ Bash(cp /Users/avneeshsarwate/agentCombine/browser_drawn_projections/node_src/
+      wgsl/generateMaterialTypes.ts
+      /Users/avneeshsarwate/agentCombine/browser_drawn_projecti…)
+  ⎿  (No content)
+
+⏺ Now let me add updateSamplingMode to the BaseTexture in the CanvasTexture helper.
+
+⏺ Read(src/rendering/power2d/sceneHelpers.ts)
+  ⎿  Read 15 lines
+
+⏺ Update(src/rendering/power2d/sceneHelpers.ts)
+  ⎿  Added 1 line                                                        
+      74      this._texture = new BABYLON.BaseTexture(this.scene,        
+          this.internalTexture);                                         
+      75      this._texture.wrapU = BABYLON.Texture.CLAMP_ADDRESSMODE;   
+      76      this._texture.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;   
+      77 +    this._texture.updateSamplingMode(this.samplingMode);       
+      78    }                                                            
+      79                                                                 
+      80    /**                                                          
+
+⏺ Done. Summary of changes:
+
+  1. Material generators now require paired texture/sampler (like fragFunc generator)
+  - parseTextureParams now throws if textures aren't followed by samplers
+  - Error message: "Texture parameters in {fn} must be provided in texture/sampler pairs."
+
+  2. CanvasTexture now applies sampling mode to BaseTexture
+  - Added this._texture.updateSamplingMode(this.samplingMode)
+  - Users can pass samplingMode option (defaults to BILINEAR)
+
+  3. Both node_src and src/rendering/power2d copies are synced
+
+
+
