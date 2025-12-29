@@ -1739,3 +1739,44 @@ main();
 4. **Gradient strokes**: Support for stroke width variation along path
 5. **Texture atlasing**: Combine multiple material textures for batch rendering
 6. **Compute-driven instances**: Direct compute shader → instance buffer binding
+
+---
+
+## Addendum (Dec 29, 2025)
+
+Clarifications from implementation kickoff:
+
+### WGSL Format + Generator
+- Single-pass only (standard vertex + fragment for mesh materials).
+- Zero textures allowed; if no textures are declared, emit no samplers.
+- Uniform restrictions match `generateFragmentShader.ts` (no arrays, no nested structs).
+- Ignore uniform comment annotations (no default/min/max/step parsing).
+
+### Uniforms + Injection
+- Per-field uniforms (individual uniforms, not UBOs).
+- `power2d_canvasWidth` / `power2d_canvasHeight` are set every frame.
+- User is responsible for render target sizing/aspect; rendering should stretch to fill the target.
+
+### Textures
+- Any texture name allowed.
+- Samplers are optional per texture; if omitted, use a default sampler (linear + clamp-to-edge).
+- Restrict to `texture_2d<f32>` + `sampler` for now.
+
+### Coordinate System
+- Pixel space with origin at top-left (Y down), standard 2D screen coordinates.
+
+### Instancing / Buffers
+- Use thin instances with custom buffers.
+- Instance transform matrix layout matches existing patterns (world0..world3).
+
+### Stroke Materials
+- `.strokeMaterial.wgsl` mirrors `.material.wgsl` with stroke-specific inputs.
+- Centerline derived from main shape on CPU; expansion/triangulation happens later.
+
+### Texture Source Resolution
+- Duplicate texture resolution logic locally for Power2D (no shared helper yet).
+
+### Vite Plugins / Output
+- Plugins should mimic existing behavior (overwrite artifacts on change).
+- `StyledShape` / `BatchedStyledShape` are shared runtime classes.
+- Generated output is a MaterialBuilder module used by those classes.

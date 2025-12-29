@@ -9,6 +9,7 @@ import { vitePluginTypescriptTransform } from 'vite-plugin-typescript-transform'
 import vueDevTools from 'vite-plugin-vue-devtools'
 import { wgslTypesPlugin } from './node_src/wgsl/vitePlugin'
 import { wgslFragmentPlugin } from './node_src/wgsl/viteFragmentPlugin'
+import { wgslMaterialPlugin, wgslStrokeMaterialPlugin } from './node_src/wgsl/viteMaterialPlugin'
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -16,6 +17,8 @@ export default defineConfig({
   plugins: [
     wgslTypesPlugin(),
     wgslFragmentPlugin(),
+    wgslMaterialPlugin(),
+    wgslStrokeMaterialPlugin(),
     vue(), 
     // react(),
     // vueJsx()
