@@ -4,6 +4,34 @@ A Vite plugin system for creating custom-shaded 2D shapes in Babylon.js WebGPU w
 
 ---
 
+## Reference Files
+
+This system builds on patterns already established in the codebase. The following files serve as reference implementations:
+
+### Code Generators
+- [generateShaderTypes.ts](../../node_src/wgsl/generateShaderTypes.ts) - WGSL → TypeScript generator for `.compute.wgsl` files. Demonstrates struct parsing, uniform buffer generation, and storage buffer handling.
+- [generateFragmentShader.ts](../../node_src/wgsl/generateFragmentShader.ts) - Generator for `.fragFunc.wgsl` files. Shows the pattern of wrapping user functions in Babylon.js-compatible shaders.
+
+### Vite Plugins
+- [vitePlugin.ts](../../node_src/wgsl/vitePlugin.ts) - Vite plugin for `.compute.wgsl` files
+- [viteFragmentPlugin.ts](../../node_src/wgsl/viteFragmentPlugin.ts) - Vite plugin for `.fragFunc.wgsl` files
+
+### Runtime Patterns
+- [drawingScene.ts](../gpuStrokes/drawingScene.ts) - Demonstrates storage buffers as vertex buffers for instancing, orthographic camera setup, and zero-copy GPU buffer binding (lines 205-256)
+- [letterParticles.ts](../../sketches/text_projmap_sandbox/letterParticles.ts) - Shows instanced rendering with compute-driven instance attributes and the `setupVertexBuffer()` pattern (lines 252-320)
+- [shaderFXBabylon.ts](../shaderFXBabylon.ts) - `CustomShaderEffect` class demonstrates texture resolution from multiple source types (Canvas, RenderTargetTexture, ShaderEffect)
+
+### Example WGSL Files
+- [strokeAnimation.compute.wgsl](../gpuStrokes/strokeAnimation.compute.wgsl) - Example compute shader with struct definitions and bindings
+- [wobble.fragFunc.wgsl](../postFX/wobble.fragFunc.wgsl) - Example fragment function showing the "user writes function, generator wraps it" pattern
+- [edge.fragFunc.wgsl](../postFX/edge.fragFunc.wgsl) - Another fragment function example with texture sampling
+
+### Generated Output Examples
+- [strokeAnimation.compute.wgsl.generated.ts](../gpuStrokes/strokeAnimation.compute.wgsl.generated.ts) - Shows generated TypeScript interfaces, pack functions, buffer helpers, and shader bindings
+- [wobble.frag.generated.ts](../postFX/wobble.frag.generated.ts) - Shows generated material class with typed uniform setters
+
+---
+
 ## Table of Contents
 
 1. [Overview](#overview)
@@ -1502,6 +1530,197 @@ async function main() {
     if (rect.stroke) {
       rect.stroke.setUniforms({ time });
     }
+
+    scene.render();
+  });
+}
+
+main();
+```
+
+### BatchedStyledShape Usage (CPU-driven instance attributes)
+
+```typescript
+// particles.batchMaterial.wgsl
+struct ParticleUniforms {
+  time: f32,
+  globalColor: vec3f,
+};
+
+// Instance attributes - per-particle data
+struct ParticleInstanceAttrs {
+  position: vec2f,    // Particle position in pixels
+  scale: f32,         // Size multiplier
+  rotation: f32,      // Rotation in radians
+  color: vec4f,       // Per-particle color tint
+};
+
+fn vertShader(
+  localPos: vec2f,
+  uv: vec2f,
+  uniforms: ParticleUniforms,
+  inst: ParticleInstanceAttrs,
+) -> vec2f {
+  // Rotate local position
+  let c = cos(inst.rotation);
+  let s = sin(inst.rotation);
+  let rotated = vec2f(
+    localPos.x * c - localPos.y * s,
+    localPos.x * s + localPos.y * c
+  );
+  // Scale and translate
+  return inst.position + rotated * inst.scale;
+}
+
+fn fragShader(
+  uv: vec2f,
+  uniforms: ParticleUniforms,
+  inst: ParticleInstanceAttrs,
+) -> vec4f {
+  let tint = vec3f(uniforms.globalColor * inst.color.rgb);
+  return vec4f(tint, inst.color.a);
+}
+```
+
+```typescript
+// particleSystem.ts
+import { createPower2DScene, BatchedStyledShape, CirclePts } from '@/rendering/power2d';
+import { ParticleMaterial } from './particles.batchMaterial.wgsl.generated';
+
+async function main() {
+  const canvas = document.getElementById('renderCanvas') as HTMLCanvasElement;
+  const engine = new BABYLON.WebGPUEngine(canvas);
+  await engine.initAsync();
+
+  const { scene, canvasWidth, canvasHeight } = createPower2DScene({
+    engine,
+    canvasWidth: canvas.width,
+    canvasHeight: canvas.height,
+  });
+
+  const PARTICLE_COUNT = 1000;
+
+  // Create batched particle system using a small circle as base shape
+  const particles = new BatchedStyledShape({
+    scene,
+    points: CirclePts({ cx: 0, cy: 0, radius: 5, segments: 8 }),
+    material: ParticleMaterial,
+    instanceCount: PARTICLE_COUNT,
+    canvasWidth,
+    canvasHeight,
+  });
+
+  // Initialize particle positions randomly
+  for (let i = 0; i < PARTICLE_COUNT; i++) {
+    particles.writeInstanceAttr(i, {
+      position: [Math.random() * canvasWidth, Math.random() * canvasHeight],
+      scale: 0.5 + Math.random() * 1.5,
+      rotation: Math.random() * Math.PI * 2,
+      color: [Math.random(), Math.random(), Math.random(), 1.0],
+    });
+  }
+
+  // Animation loop
+  engine.runRenderLoop(() => {
+    const time = performance.now() / 1000;
+
+    // Update shared uniforms
+    particles.setUniforms({
+      time,
+      globalColor: [1, 1, 1],
+    });
+
+    // Update individual particle positions (CPU-driven)
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      const baseX = (i % 50) * 20 + 50;
+      const baseY = Math.floor(i / 50) * 20 + 50;
+      particles.writeInstanceAttr(i, {
+        position: [
+          baseX + Math.sin(time + i * 0.1) * 10,
+          baseY + Math.cos(time + i * 0.15) * 10,
+        ],
+        rotation: time + i * 0.01,
+      });
+    }
+
+    // Upload instance data to GPU (called automatically if using beforeRender)
+    particles.beforeRender();
+
+    scene.render();
+  });
+}
+
+main();
+```
+
+### BatchedStyledShape with Compute Shader (GPU-driven instance attributes)
+
+```typescript
+// When instance data is driven by a compute shader, use external buffer mode
+// This avoids the CPU→GPU upload each frame
+
+import { createPower2DScene, BatchedStyledShape, CirclePts } from '@/rendering/power2d';
+import { ParticleMaterial } from './particles.batchMaterial.wgsl.generated';
+import * as ParticleCompute from './particlePhysics.compute.wgsl.generated';
+
+async function main() {
+  const canvas = document.getElementById('renderCanvas') as HTMLCanvasElement;
+  const engine = new BABYLON.WebGPUEngine(canvas);
+  await engine.initAsync();
+
+  const { scene, canvasWidth, canvasHeight } = createPower2DScene({
+    engine,
+    canvasWidth: canvas.width,
+    canvasHeight: canvas.height,
+  });
+
+  const PARTICLE_COUNT = 10000;
+
+  // Create batched particle system
+  const particles = new BatchedStyledShape({
+    scene,
+    points: CirclePts({ cx: 0, cy: 0, radius: 3, segments: 6 }),
+    material: ParticleMaterial,
+    instanceCount: PARTICLE_COUNT,
+    canvasWidth,
+    canvasHeight,
+  });
+
+  // Switch to external buffer mode - CPU writes are ignored
+  particles.setExternalBufferMode(true);
+
+  // Get the instance buffer to bind to compute shader
+  const instanceBuffer = particles.getInstanceBuffer();
+
+  // Create compute shader for particle physics
+  const computeUniforms = ParticleCompute.createUniformBuffer(engine);
+  const computeShader = ParticleCompute.createShader(engine, {
+    uniforms: computeUniforms,
+    particles: instanceBuffer, // Bind the same buffer!
+  });
+
+  // Animation loop
+  engine.runRenderLoop(() => {
+    const time = performance.now() / 1000;
+
+    // Update compute shader uniforms
+    ParticleCompute.updateUniformBuffer(computeUniforms, {
+      time,
+      deltaTime: engine.getDeltaTime() / 1000,
+      canvasWidth,
+      canvasHeight,
+    });
+
+    // Dispatch compute shader - writes directly to instance buffer
+    computeShader.shader.dispatch(Math.ceil(PARTICLE_COUNT / 64), 1, 1);
+
+    // Update rendering uniforms
+    particles.setUniforms({
+      time,
+      globalColor: [1, 1, 1],
+    });
+
+    // No beforeRender() needed - buffer is already on GPU from compute shader
 
     scene.render();
   });
