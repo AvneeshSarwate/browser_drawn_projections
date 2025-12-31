@@ -54,7 +54,8 @@ fn strokeFragShader(
   let edge0 = max(seg - feather, 0.0);
   let falloff = smoothstep(edge0, seg, wrappedDist);
   let alpha = 1.0 - falloff;
-  return vec4f(1.0, 1.0, 1.0, alpha);
+  // Premultiplied alpha avoids MSAA fringe because RGB goes to 0 as coverage fades.
+  return vec4f(1.0, 1.0, 1.0, 1.0) * alpha;
 }
 
 fn load_RunnerStrokeUniforms() -> RunnerStrokeUniforms {
@@ -140,7 +141,8 @@ fn strokeFragShader(
   let edge0 = max(seg - feather, 0.0);
   let falloff = smoothstep(edge0, seg, wrappedDist);
   let alpha = 1.0 - falloff;
-  return vec4f(1.0, 1.0, 1.0, alpha);
+  // Premultiplied alpha avoids MSAA fringe because RGB goes to 0 as coverage fades.
+  return vec4f(1.0, 1.0, 1.0, 1.0) * alpha;
 }
 
 fn load_RunnerStrokeUniforms() -> RunnerStrokeUniforms {

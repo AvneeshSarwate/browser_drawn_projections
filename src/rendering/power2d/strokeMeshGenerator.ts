@@ -91,7 +91,10 @@ export function generateStrokeMesh(points: readonly Point2D[], thickness: number
     miterFactors[i] = miterLen;
   }
 
-  const vertexCount = count * 2;
+  // Closed strokes need a duplicated seam vertex (normalizedArc = 1.0) to avoid 0↔1 interpolation across a triangle.
+  const useSeamDuplicate = closed && count >= 2;
+  const extendedCount = useSeamDuplicate ? count + 1 : count;
+  const vertexCount = extendedCount * 2;
   const positions = new Float32Array(vertexCount * 3);
   const uvs = new Float32Array(vertexCount * 2);
   const normalData = new Float32Array(vertexCount * 2);
@@ -102,12 +105,13 @@ export function generateStrokeMesh(points: readonly Point2D[], thickness: number
 
   const totalArc = totalLength || 1;
 
-  for (let i = 0; i < count; i++) {
-    const [x, y] = points[i];
-    const normal = normals[i] ?? [0, 0];
-    const arc = arcLengths[i];
-    const normalized = arc / totalArc;
-    const miterFactor = miterFactors[i] ?? 1;
+  for (let i = 0; i < extendedCount; i++) {
+    const baseIndex = i < count ? i : 0;
+    const [x, y] = points[baseIndex];
+    const normal = normals[baseIndex] ?? [0, 0];
+    const arc = i < count ? arcLengths[baseIndex] : totalLength;
+    const normalized = i < count ? arc / totalArc : 1.0;
+    const miterFactor = miterFactors[baseIndex] ?? 1;
 
     const leftIndex = i * 2;
     const rightIndex = i * 2 + 1;
@@ -144,9 +148,9 @@ export function generateStrokeMesh(points: readonly Point2D[], thickness: number
   }
 
   const indices: number[] = [];
-  const segmentCount = closed ? count : count - 1;
+  const segmentCount = useSeamDuplicate ? extendedCount - 1 : closed ? count : count - 1;
   for (let i = 0; i < segmentCount; i++) {
-    const next = (i + 1) % count;
+    const next = useSeamDuplicate ? i + 1 : closed ? (i + 1) % count : i + 1;
     const v0 = i * 2;
     const v1 = i * 2 + 1;
     const v2 = next * 2;
