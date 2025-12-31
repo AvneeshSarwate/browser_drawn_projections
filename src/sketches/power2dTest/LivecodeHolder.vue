@@ -98,9 +98,12 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
   }
   batchedCircles.beforeRender()
 
+  const webcamAspect = TEST_CANVAS_SIZE.width / TEST_CANVAS_SIZE.height
+  const webcamHeight = 240
+  const webcamWidth = Math.round(webcamHeight * webcamAspect)
   webcamRect = new StyledShape({
     scene: powerScene,
-    points: RectPts({ x: 860, y: 80, width: 340, height: 240 }),
+    points: RectPts({ x: 860, y: 80, width: webcamWidth, height: webcamHeight }),
     bodyMaterial: WebcamPixelMaterial,
     canvasWidth: width,
     canvasHeight: height,
@@ -212,7 +215,7 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
     if (webcamRect) {
       webcamRect.setCanvasSize(width, height)
       webcamRect.body.setUniforms({
-        pixelSize: 64,
+        pixelSize: 8,
         tint: new BABYLON.Vector3(1.0, 1.0, 1.0),
         opacity: 1.0,
       })
