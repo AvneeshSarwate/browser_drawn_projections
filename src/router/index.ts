@@ -51,7 +51,8 @@ export const sketchNames = [
   'haikuToFluidSong',
   'gestaltTest1',
   'text_projmap_sandbox',
-  'mpe_projmap'
+  'mpe_projmap',
+  'power2dTest'
 ]
 
 const sketchRoutes = sketchNames.map(name => {

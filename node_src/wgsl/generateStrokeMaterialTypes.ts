@@ -232,8 +232,8 @@ function buildStrokeVertexSource(options: {
   lines.push(uniformLoaderFn);
   lines.push('');
   lines.push('fn power2d_pixelToNDC(pixel: vec2f) -> vec4f {');
-  lines.push('  let ndcX = (pixel.x / power2d_canvasWidth) * 2.0 - 1.0;');
-  lines.push('  let ndcY = -((pixel.y / power2d_canvasHeight) * 2.0 - 1.0);');
+  lines.push('  let ndcX = (pixel.x / uniforms.power2d_canvasWidth) * 2.0 - 1.0;');
+  lines.push('  let ndcY = -((pixel.y / uniforms.power2d_canvasHeight) * 2.0 - 1.0);');
   lines.push('  return vec4f(ndcX, ndcY, 0.0, 1.0);');
   lines.push('}');
   lines.push('');
@@ -248,7 +248,7 @@ function buildStrokeVertexSource(options: {
   lines.push('  let arcLength = vertexInputs.strokeArcLength;');
   lines.push('  let normalizedArc = vertexInputs.strokeNormalizedArc;');
   lines.push('  let miterFactor = vertexInputs.strokeMiterFactor;');
-  lines.push('  let thickness = power2d_strokeThickness;');
+  lines.push('  let thickness = uniforms.power2d_strokeThickness;');
   lines.push('  let uv = vertexInputs.uv;');
   lines.push('  let adjustedPixelPos = strokeVertShader(centerPos, normal, side, arcLength, normalizedArc, miterFactor, thickness, uniformsValue);');
   lines.push('  vertexOutputs.position = power2d_pixelToNDC(adjustedPixelPos);');

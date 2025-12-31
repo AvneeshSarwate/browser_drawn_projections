@@ -298,8 +298,8 @@ function buildVertexSource(options: {
     }
   }
   lines.push('fn power2d_pixelToNDC(pixel: vec2f) -> vec4f {');
-  lines.push('  let ndcX = (pixel.x / power2d_canvasWidth) * 2.0 - 1.0;');
-  lines.push('  let ndcY = -((pixel.y / power2d_canvasHeight) * 2.0 - 1.0);');
+  lines.push('  let ndcX = (pixel.x / uniforms.power2d_canvasWidth) * 2.0 - 1.0;');
+  lines.push('  let ndcY = -((pixel.y / uniforms.power2d_canvasHeight) * 2.0 - 1.0);');
   lines.push('  return vec4f(ndcX, ndcY, 0.0, 1.0);');
   lines.push('}');
   lines.push('');
