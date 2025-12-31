@@ -21,6 +21,6 @@ fn fragShader(
   let quantUV = (floor(uvClamped / step) + vec2f(0.5, 0.5)) * step;
   let pix = textureSample(webcamTex, webcamTexSampler, quantUV);
   let colorPassthru = textureSample(webcamTex, webcamTexSampler, uv);
-  let color = select(colorPassthru, pix, uv.x < 0.5);
+  let color = select(colorPassthru, pix, uv.x > 0.5);
   return vec4f(color.rgb * uniforms.tint, color.a * uniforms.opacity);
 }

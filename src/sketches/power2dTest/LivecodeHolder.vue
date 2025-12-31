@@ -13,6 +13,7 @@ import { BasicMaterial } from './basic.material.wgsl.generated';
 import { BasicStrokeMaterial } from './basic.strokeMaterial.wgsl.generated';
 import { InstancedBasicMaterial } from './instancedBasic.material.wgsl.generated';
 import { WebcamPixelMaterial } from './webcamPixel.material.wgsl.generated';
+import { RunnerStrokeMaterial } from './runner.strokeMaterial.wgsl.generated';
 
 const TEST_CANVAS_SIZE = { width: 320, height: 200 }
 
@@ -66,6 +67,8 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
     scene: powerScene,
     points: CirclePts({ cx: 700, cy: 380, radius: 120, segments: 48 }),
     bodyMaterial: BasicMaterial,
+    strokeMaterial: RunnerStrokeMaterial,
+    strokeThickness: 10,
     canvasWidth: width,
     canvasHeight: height,
   })
@@ -200,6 +203,12 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
     rect.body.setUniforms({ time, color: new BABYLON.Vector3(1, 0.4, 0.2) })
     rect.stroke?.setUniforms({ color: new BABYLON.Vector3(1.0, 0.9, 0.0) })
     circle.body.setUniforms({ time: time + 1.2, color: new BABYLON.Vector3(0.2, 0.6, 1.0) })
+    circle.stroke?.setUniforms({
+      time,
+      speed: 0.15,
+      segmentLength: 0.18,
+      feather: 0.06,
+    })
 
     if (batchedCircles) {
       batchedCircles.setCanvasSize(width, height)
