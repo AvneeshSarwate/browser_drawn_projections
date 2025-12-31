@@ -10,6 +10,7 @@ import { BloomEffect } from '@/rendering/postFX/bloom.frag.generated';
 import * as BABYLON from 'babylonjs';
 import { createPower2DScene, RectPts, CirclePts, StyledShape, BatchedStyledShape, CanvasTexture } from '@/rendering/power2d';
 import { BasicMaterial } from './basic.material.wgsl.generated';
+import { BasicStrokeMaterial } from './basic.strokeMaterial.wgsl.generated';
 import { InstancedBasicMaterial } from './instancedBasic.material.wgsl.generated';
 import { WebcamPixelMaterial } from './webcamPixel.material.wgsl.generated';
 
@@ -54,6 +55,8 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
     scene: powerScene,
     points: RectPts({ x: 150, y: 120, width: 300, height: 200 }),
     bodyMaterial: BasicMaterial,
+    strokeMaterial: BasicStrokeMaterial,
+    strokeThickness: 6,
     canvasWidth: width,
     canvasHeight: height,
   })
@@ -195,6 +198,7 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
     rect.setCanvasSize(width, height)
     circle.setCanvasSize(width, height)
     rect.body.setUniforms({ time, color: new BABYLON.Vector3(1, 0.4, 0.2) })
+    rect.stroke?.setUniforms({ color: new BABYLON.Vector3(1.0, 0.9, 0.0) })
     circle.body.setUniforms({ time: time + 1.2, color: new BABYLON.Vector3(0.2, 0.6, 1.0) })
 
     if (batchedCircles) {
