@@ -127,6 +127,7 @@ export type Power2DTestAppState = {
 // Separate reactive engine ref
 export const engineRef = shallowRef<BABYLON.WebGPUEngine | undefined>(undefined)
 export const shaderGraphEndNodeRef = shallowRef<ShaderEffect | undefined>(undefined)
+export const bypassPostRef = shallowRef(false)
 
 export const resolution = {
   width: 1280,

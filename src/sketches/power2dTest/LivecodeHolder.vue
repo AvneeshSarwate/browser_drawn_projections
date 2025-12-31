@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { appStateName, type Power2DTestAppState, engineRef, shaderGraphEndNodeRef, resolution } from './appState';
+import { appStateName, type Power2DTestAppState, bypassPostRef, engineRef, shaderGraphEndNodeRef, resolution } from './appState';
 import { inject, onMounted, onUnmounted, watch, type WatchStopHandle } from 'vue';
 import { CanvasPaint, FeedbackNode, PassthruEffect, type ShaderEffect } from '@/rendering/shaderFXBabylon';
 import { VerticalBlurEffect } from '@/rendering/postFX/verticalBlur.frag.generated';
@@ -19,6 +19,7 @@ let powerScene: BABYLON.Scene | undefined
 let powerCamera: BABYLON.FreeCamera | undefined
 let powerTarget: BABYLON.RenderTargetTexture | undefined
 let powerShapes: Array<StyledShape<any, any>> = []
+let bypassCanvasPaint: CanvasPaint | undefined
 
 const clearDrawFuncs = () => {
   appState.drawFunctions.length = 0
@@ -78,7 +79,12 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
   powerTarget.ignoreCameraViewport = true
   powerTarget.clearColor = new BABYLON.Color4(0, 0, 0, 0)
 
+  if (powerCamera) {
+    powerCamera.outputRenderTarget = null
+  }
+
   const passthru = new PassthruEffect(engine, { src: powerTarget }, width, height, 'nearest')
+  const bypassPassthru = new PassthruEffect(engine, { src: powerTarget }, width, height, 'nearest')
   const feedback = new FeedbackNode(engine, passthru, width, height, 'linear', 'half_float')
   const vertBlur = new VerticalBlurEffect(engine, { src: feedback }, width, height)
   const horBlur = new HorizontalBlurEffect(engine, { src: vertBlur }, width, height)
@@ -93,6 +99,7 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
   horBlur.setUniforms({ pixels: 2, resolution: width })
 
   const canvasPaint = new CanvasPaint(engine, { src: bloom }, width, height)
+  bypassCanvasPaint = new CanvasPaint(engine, { src: bypassPassthru }, width, height)
   shaderGraphEndNode = canvasPaint
   shaderGraphEndNodeRef.value = shaderGraphEndNode
 
@@ -107,6 +114,11 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
     engine.beginFrame()
     powerTarget?.render()
     engine.restoreDefaultFramebuffer()
+    if (bypassPostRef.value) {
+      bypassCanvasPaint?.renderAll(engine as any)
+      engine.endFrame()
+      return
+    }
     shaderGraphEndNode!.renderAll(engine as any)
     engine.endFrame()
   }
@@ -135,6 +147,8 @@ onUnmounted(() => {
   engineWatcher?.()
   engineWatcher = undefined
   clearDrawFuncs()
+  bypassCanvasPaint?.disposeAll()
+  bypassCanvasPaint = undefined
   shaderGraphEndNode?.disposeAll()
   shaderGraphEndNode = undefined
   shaderGraphEndNodeRef.value = undefined

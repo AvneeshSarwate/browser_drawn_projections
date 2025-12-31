@@ -2,9 +2,10 @@
 import { computed, ref } from 'vue'
 import ShaderGraphUI from '@/components/ShaderGraphUI/ShaderGraphUI.vue'
 import PopoutWindow from '@/components/PopoutWindow.vue'
-import { shaderGraphEndNodeRef, resolution } from './appState'
+import { bypassPostRef, shaderGraphEndNodeRef, resolution } from './appState'
 
 const shaderGraphEffect = computed(() => shaderGraphEndNodeRef.value ?? null)
+const bypassPost = bypassPostRef
 const canvasPopped = ref(false)
 const controlsPopped = ref(false)
 const dpr = window.devicePixelRatio || 1
@@ -35,7 +36,13 @@ const height = resolution.height
       :height="900"
       :fill="false"
     >
-      <ShaderGraphUI :final-effect="shaderGraphEffect" />
+      <div class="shader-controls">
+        <label class="toggle-row">
+          <input type="checkbox" v-model="bypassPost" />
+          Bypass post-processing (show Power2D scene directly)
+        </label>
+        <ShaderGraphUI :final-effect="shaderGraphEffect" />
+      </div>
     </PopoutWindow>
   </div>
   <div>
@@ -84,6 +91,19 @@ const height = resolution.height
   width: 100%;
   height: 10px;
   background-color: white;
+}
+
+.shader-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
 }
 
 </style>
