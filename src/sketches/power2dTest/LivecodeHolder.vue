@@ -8,8 +8,12 @@ import { LayerBlendEffect } from '@/rendering/postFX/layerBlend.frag.generated';
 import { TransformEffect } from '@/rendering/postFX/transform.frag.generated';
 import { BloomEffect } from '@/rendering/postFX/bloom.frag.generated';
 import * as BABYLON from 'babylonjs';
-import { createPower2DScene, RectPts, CirclePts, StyledShape } from '@/rendering/power2d';
+import { createPower2DScene, RectPts, CirclePts, StyledShape, BatchedStyledShape, CanvasTexture } from '@/rendering/power2d';
 import { BasicMaterial } from './basic.material.wgsl.generated';
+import { InstancedBasicMaterial } from './instancedBasic.material.wgsl.generated';
+import { WebcamPixelMaterial } from './webcamPixel.material.wgsl.generated';
+
+const TEST_CANVAS_SIZE = { width: 320, height: 200 }
 
 const appState = inject<Power2DTestAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
@@ -19,6 +23,9 @@ let powerScene: BABYLON.Scene | undefined
 let powerCamera: BABYLON.FreeCamera | undefined
 let powerTarget: BABYLON.RenderTargetTexture | undefined
 let powerShapes: Array<StyledShape<any, any>> = []
+let batchedCircles: BatchedStyledShape<any, any, any> | undefined
+let webcamRect: StyledShape<any, any> | undefined
+let testCanvasTexture: CanvasTexture | undefined
 let bypassCanvasPaint: CanvasPaint | undefined
 
 const clearDrawFuncs = () => {
@@ -61,7 +68,81 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
   })
   circle.alphaIndex = 2
 
+  const instancedCount = 6
+  const instancedBasePositions: Array<[number, number]> = [
+    [220, 520],
+    [320, 560],
+    [420, 520],
+    [520, 560],
+    [620, 520],
+    [720, 560],
+  ]
+
+  batchedCircles = new BatchedStyledShape({
+    scene: powerScene,
+    points: CirclePts({ cx: 0, cy: 0, radius: 26, segments: 20 }),
+    material: InstancedBasicMaterial,
+    instanceCount: instancedCount,
+    canvasWidth: width,
+    canvasHeight: height,
+  })
+
+  for (let i = 0; i < instancedCount; i++) {
+    const [x, y] = instancedBasePositions[i]
+    batchedCircles.writeInstanceAttr(i, {
+      offset: [x, y],
+      scale: 1.0,
+      rotation: i * 0.2,
+      tint: [0.8, 0.9, 1.0],
+    })
+  }
+  batchedCircles.beforeRender()
+
+  webcamRect = new StyledShape({
+    scene: powerScene,
+    points: RectPts({ x: 860, y: 80, width: 340, height: 240 }),
+    bodyMaterial: WebcamPixelMaterial,
+    canvasWidth: width,
+    canvasHeight: height,
+  })
+  webcamRect.alphaIndex = 0
+  if (webcamRect && powerScene) {
+    const canvas = document.createElement('canvas')
+    canvas.width = TEST_CANVAS_SIZE.width
+    canvas.height = TEST_CANVAS_SIZE.height
+    const ctx = canvas.getContext('2d')
+    if (ctx) {
+      const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height)
+      grad.addColorStop(0, '#ff6b6b')
+      grad.addColorStop(1, '#4d96ff')
+      ctx.fillStyle = grad
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      ctx.fillStyle = 'rgba(255,255,255,0.8)'
+      ctx.fillRect(20, 20, 120, 60)
+      ctx.fillStyle = '#111'
+      ctx.font = '20px sans-serif'
+      ctx.fillText('Power2D', 28, 58)
+      ctx.strokeStyle = '#111'
+      ctx.lineWidth = 4
+      ctx.beginPath()
+      ctx.arc(240, 120, 40, 0, Math.PI * 2)
+      ctx.stroke()
+    }
+    testCanvasTexture = new CanvasTexture({
+      engine,
+      scene: powerScene,
+      width: canvas.width,
+      height: canvas.height,
+      samplingMode: BABYLON.Texture.BILINEAR_SAMPLINGMODE,
+    })
+    testCanvasTexture.update(canvas)
+    webcamRect.body.setTexture('webcamTex', testCanvasTexture.texture)
+  }
+
   powerShapes = [rect, circle]
+  if (webcamRect) {
+    powerShapes.push(webcamRect)
+  }
 
   powerTarget = new BABYLON.RenderTargetTexture(
     'power2dRT',
@@ -74,7 +155,7 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
     BABYLON.Texture.BILINEAR_SAMPLINGMODE,
     false,
   )
-  powerTarget.renderList = [rect.body.mesh, circle.body.mesh]
+  powerTarget.renderList = powerScene.meshes
   powerTarget.activeCamera = powerCamera
   powerTarget.ignoreCameraViewport = true
   powerTarget.clearColor = new BABYLON.Color4(0, 0, 0, 0)
@@ -103,6 +184,8 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
   shaderGraphEndNode = canvasPaint
   shaderGraphEndNodeRef.value = shaderGraphEndNode
 
+  // Static canvas texture already bound above.
+
   appState.shaderDrawFunc = () => {
     const time = performance.now() * 0.001
 
@@ -110,6 +193,30 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
     circle.setCanvasSize(width, height)
     rect.body.setUniforms({ time, color: new BABYLON.Vector3(1, 0.4, 0.2) })
     circle.body.setUniforms({ time: time + 1.2, color: new BABYLON.Vector3(0.2, 0.6, 1.0) })
+
+    if (batchedCircles) {
+      batchedCircles.setCanvasSize(width, height)
+      batchedCircles.setUniforms({ time, color: new BABYLON.Vector3(0.6, 0.9, 0.7) })
+      for (let i = 0; i < instancedCount; i++) {
+        const [baseX, baseY] = instancedBasePositions[i]
+        const offsetX = Math.sin(time * 1.3 + i) * 12
+        const offsetY = Math.cos(time * 1.1 + i) * 10
+        batchedCircles.writeInstanceAttr(i, {
+          offset: [baseX + offsetX, baseY + offsetY],
+          rotation: time * 0.6 + i * 0.4,
+        })
+      }
+      batchedCircles.beforeRender()
+    }
+
+    if (webcamRect) {
+      webcamRect.setCanvasSize(width, height)
+      webcamRect.body.setUniforms({
+        pixelSize: 64,
+        tint: new BABYLON.Vector3(1.0, 1.0, 1.0),
+        opacity: 1.0,
+      })
+    }
 
     engine.beginFrame()
     powerTarget?.render()
@@ -156,6 +263,13 @@ onUnmounted(() => {
 
   powerShapes.forEach((shape) => shape.dispose())
   powerShapes = []
+  batchedCircles?.dispose()
+  batchedCircles = undefined
+  webcamRect = undefined
+  if (testCanvasTexture) {
+    testCanvasTexture.dispose()
+    testCanvasTexture = undefined
+  }
   powerTarget?.dispose()
   powerTarget = undefined
   powerScene?.dispose()

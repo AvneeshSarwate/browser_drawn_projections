@@ -2,6 +2,7 @@ import * as BABYLON from 'babylonjs';
 import earcut from 'earcut';
 import type { MaterialDef, MaterialInstance, Point2D, TextureSource } from './types';
 import { generateStrokeMesh } from './strokeMeshGenerator';
+import { createMaterialInstanceName } from './materialNames';
 
 interface StrokeAPI<U, T extends string> {
   setUniforms(uniforms: Partial<U>): void;
@@ -47,7 +48,8 @@ export class StyledShape<BodyU extends object, BodyT extends string, StrokeU ext
 
     this.parentNode = new BABYLON.TransformNode('styledShape', this.scene);
 
-    this.bodyMaterialInstance = options.bodyMaterial.createMaterial(this.scene, 'styledShapeBodyMaterial');
+    const bodyMaterialName = createMaterialInstanceName('power2dBodyMaterial');
+    this.bodyMaterialInstance = options.bodyMaterial.createMaterial(this.scene, bodyMaterialName);
     this.bodyMaterialInstance.setCanvasSize(this.canvasWidth, this.canvasHeight);
 
     this.bodyMesh = this.createBodyMesh();
@@ -55,7 +57,8 @@ export class StyledShape<BodyU extends object, BodyT extends string, StrokeU ext
     this.bodyMesh.material = this.bodyMaterialInstance.material;
 
     if (options.strokeMaterial) {
-      this.strokeMaterialInstance = options.strokeMaterial.createMaterial(this.scene, 'styledShapeStrokeMaterial') as MaterialInstance<StrokeU, StrokeT>;
+      const strokeMaterialName = createMaterialInstanceName('power2dStrokeMaterial');
+      this.strokeMaterialInstance = options.strokeMaterial.createMaterial(this.scene, strokeMaterialName) as MaterialInstance<StrokeU, StrokeT>;
       this.strokeMaterialInstance.setCanvasSize(this.canvasWidth, this.canvasHeight);
       this.strokeMaterialInstance.material.setFloat('power2d_strokeThickness', this._strokeThickness);
 

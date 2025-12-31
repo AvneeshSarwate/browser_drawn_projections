@@ -292,10 +292,6 @@ function buildVertexSource(options: {
   if (instanceStruct && instanceLayout) {
     lines.push(generateInstanceStructConstruction(instanceStruct, instanceLayout.fields, 'vertex'));
     lines.push('');
-    if (useInstanceInFragment) {
-      lines.push(generateInstanceStructConstruction(instanceStruct, instanceLayout.fields, 'fragment'));
-      lines.push('');
-    }
   }
   lines.push('fn power2d_pixelToNDC(pixel: vec2f) -> vec4f {');
   lines.push('  let ndcX = (pixel.x / uniforms.power2d_canvasWidth) * 2.0 - 1.0;');

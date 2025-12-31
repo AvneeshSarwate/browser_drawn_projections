@@ -1,6 +1,7 @@
 import * as BABYLON from 'babylonjs';
 import earcut from 'earcut';
 import type { BatchMaterialDef, InstanceAttrLayout, Point2D, TextureSource } from './types';
+import { createMaterialInstanceName } from './materialNames';
 
 interface BatchedStyledShapeOptions<U extends object, T extends string, I extends object> {
   scene: BABYLON.Scene;
@@ -35,7 +36,8 @@ export class BatchedStyledShape<U extends object, T extends string, I extends ob
 
     const engine = this.scene.getEngine() as BABYLON.WebGPUEngine;
 
-    this.materialInstance = options.material.createMaterial(this.scene, 'batchedMaterial');
+    const materialName = createMaterialInstanceName('power2dBatchMaterial');
+    this.materialInstance = options.material.createMaterial(this.scene, materialName);
     this.materialInstance.setCanvasSize(this.canvasWidth, this.canvasHeight);
 
     this.mesh = this.createMesh(options.points, options.closed ?? true);
