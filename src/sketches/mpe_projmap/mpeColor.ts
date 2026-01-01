@@ -1,14 +1,26 @@
 /**
- * Maps MIDI pitch to a color using a circular hue ramp.
- * Pitch classes (0-11) map to equally spaced hues around the color wheel.
- * Pitch bend shifts all colors along the hue circle.
+ * Maps MIDI pitch to color using an explicit 12-color palette.
+ * Pitch bend blends between adjacent pitch-class colors (circularly).
  */
 
-// Hue values for each pitch class (0-11) in degrees (0-360)
-// Starting from C = red (0), progressing through the spectrum
-const PITCH_CLASS_HUES = [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330]
-
 export type RGB = { r: number; g: number; b: number }
+
+// Hardcoded pitch-class colors (C..B). Edit these to taste.
+// Values are 0-1 RGB. The ramp and pitch-bend blending are derived from this list.
+const PITCH_CLASS_COLORS: RGB[] = [
+  { r: 0.91, g: 0.20, b: 0.20 }, // C
+  { r: 0.94, g: 0.43, b: 0.14 }, // C#
+  { r: 0.95, g: 0.64, b: 0.18 }, // D
+  { r: 0.80, g: 0.73, b: 0.20 }, // D#
+  { r: 0.46, g: 0.74, b: 0.28 }, // E
+  { r: 0.18, g: 0.70, b: 0.54 }, // F
+  { r: 0.18, g: 0.62, b: 0.82 }, // F#
+  { r: 0.20, g: 0.46, b: 0.86 }, // G
+  { r: 0.28, g: 0.32, b: 0.78 }, // G#
+  { r: 0.46, g: 0.26, b: 0.69 }, // A
+  { r: 0.70, g: 0.24, b: 0.62 }, // A#
+  { r: 0.85, g: 0.25, b: 0.45 }, // B
+]
 
 /**
  * Convert MIDI note number and pitch bend to an RGB color.
@@ -19,14 +31,18 @@ export type RGB = { r: number; g: number; b: number }
  * @returns RGB color with values 0-1
  */
 export function pitchToColor(noteNum: number, bend: number, bendRange = 48): RGB {
-  const pitchClass = noteNum % 12
-  // Convert bend to semitones offset
-  const bendSemitones = (bend / 8192) * bendRange
-  // 30 degrees per semitone (360 / 12)
-  const hueOffset = bendSemitones * (30 / 12)
-  const hue = ((PITCH_CLASS_HUES[pitchClass] ?? 0) + hueOffset + 360) % 360
+  const pitchClass = mod(noteNum, 12)
+  const bendNorm = normalizeBend(bend)
+  // Convert bend to semitone offset
+  const bendSemitones = bendNorm * bendRange
 
-  return hslToRgb(hue, 0.8, 0.6)
+  const pitchFloat = pitchClass + bendSemitones
+  const baseIndex = Math.floor(pitchFloat)
+  const t = pitchFloat - baseIndex
+  const colorA = PITCH_CLASS_COLORS[mod(baseIndex, 12)] ?? { r: 1, g: 1, b: 1 }
+  const colorB = PITCH_CLASS_COLORS[mod(baseIndex + 1, 12)] ?? { r: 1, g: 1, b: 1 }
+
+  return lerpRgb(colorA, colorB, t)
 }
 
 /**
@@ -37,38 +53,31 @@ export function releaseColor(): RGB {
   return { r: 1, g: 1, b: 1 }
 }
 
-/**
- * Convert HSL color to RGB.
- *
- * @param h - Hue in degrees (0-360)
- * @param s - Saturation (0-1)
- * @param l - Lightness (0-1)
- * @returns RGB color with values 0-1
- */
-function hslToRgb(h: number, s: number, l: number): RGB {
-  const c = (1 - Math.abs(2 * l - 1)) * s
-  const x = c * (1 - Math.abs((h / 60) % 2 - 1))
-  const m = l - c / 2
+function mod(value: number, n: number): number {
+  const m = value % n
+  return m < 0 ? m + n : m
+}
 
-  let r = 0, g = 0, b = 0
-
-  if (h < 60) {
-    r = c; g = x
-  } else if (h < 120) {
-    r = x; g = c
-  } else if (h < 180) {
-    g = c; b = x
-  } else if (h < 240) {
-    g = x; b = c
-  } else if (h < 300) {
-    r = x; b = c
-  } else {
-    r = c; b = x
+function normalizeBend(bend: number): number {
+  if (!Number.isFinite(bend)) return 0
+  // MIDIVal reports pitch bend as -1..1
+  if (Math.abs(bend) <= 1.2) return bend
+  // Common 14-bit MIDI range 0..16383
+  if (bend >= 0 && bend <= 16383) {
+    return (bend - 8192) / 8192
   }
+  // Signed 14-bit range -8192..8191
+  if (bend >= -8192 && bend <= 8191) {
+    return bend / 8192
+  }
+  return Math.max(-1, Math.min(1, bend))
+}
 
+function lerpRgb(a: RGB, b: RGB, t: number): RGB {
+  const tt = Math.max(0, Math.min(1, t))
   return {
-    r: r + m,
-    g: g + m,
-    b: b + m
+    r: a.r + (b.r - a.r) * tt,
+    g: a.g + (b.g - a.g) * tt,
+    b: a.b + (b.b - a.b) * tt,
   }
 }

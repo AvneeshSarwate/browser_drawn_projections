@@ -11,7 +11,7 @@ export type MPEVoiceState = {
   velocity: number
   pressure: number  // 0-127, updated live via channel aftertouch
   timbre: number    // 0-127, updated live via CC74
-  bend: number      // pitch bend value (-8192 to +8191, 0 = center)
+  bend: number      // pitch bend value (typically -1.0..1.0 from MIDIVal)
 }
 
 /**

@@ -16,7 +16,7 @@ import { runAllTimingTests } from '@/channels/timing_tests'
 import { MIDI_READY, getMPEInput, midiInputs, type MPENoteStart, type MPENoteUpdate, type MPENoteEnd } from '@/io/midi'
 import { MPEInput } from '@/io/mpe'
 import type { MPEAnimBundle } from './mpeState'
-import { allocateVoice, releaseVoice } from './mpeVoiceAlloc'
+import { allocateVoice, releaseVoice, type VoiceRotationState } from './mpeVoiceAlloc'
 import { generateSparseGrid } from './mpeFillSpots'
 import { startFillAnimation, startReleaseAnimation } from './mpeAnimLoop'
 
@@ -32,6 +32,7 @@ const mpeBundles = new Map<string, MPEAnimBundle>()
 const channelToPolygon = new Map<number, string>()
 const mpeRenderStates = new Map<string, RenderState>()
 let mpeInput: MPEInput | null = null
+const voiceRotation: VoiceRotationState = { nextIndex: 0 }
 
 // async function runTimingTests() {
 //   console.log('Running timing tests...')
@@ -161,7 +162,7 @@ function handleNoteStart(evt: MPENoteStart) {
   const polygonIds = Array.from(mpeBundles.keys())
   mpeLog(`  -> Available polygons: ${polygonIds.length} [${polygonIds.join(', ')}]`)
 
-  const polygonId = allocateVoice(evt.channel, polygonIds, channelToPolygon, mpeBundles, true)
+  const polygonId = allocateVoice(evt.channel, polygonIds, channelToPolygon, mpeBundles, true, voiceRotation)
   if (!polygonId) {
     mpeLog(`  -> NO POLYGON ALLOCATED (no MPE polygons available)`)
     return
@@ -247,6 +248,7 @@ function disposeMPE() {
   mpeBundles.clear()
   channelToPolygon.clear()
   mpeRenderStates.clear()
+  voiceRotation.nextIndex = 0
 
   // Close MPE input
   if (mpeInput) {

@@ -6,6 +6,7 @@ import { PassthruEffect } from '@/rendering/shaderFXBabylon'
 import { WobbleEffect } from '@/rendering/postFX/wobble.frag.generated'
 import { HorizontalBlurEffect } from '@/rendering/postFX/horizontalBlur.frag.generated'
 import { VerticalBlurEffect } from '@/rendering/postFX/verticalBlur.frag.generated'
+import { PixelateEffect } from '@/rendering/postFX/pixelate.frag.generated'
 import { AlphaThresholdEffect } from '@/rendering/postFX/alphaThreshold.frag.generated'
 import type { ShaderEffect } from '@/rendering/shaderFXBabylon'
 import type { RenderState } from './textRegionUtils'
@@ -27,6 +28,7 @@ type ChainBundle = {
   wobble: WobbleEffect
   hBlur: HorizontalBlurEffect
   vBlur: VerticalBlurEffect
+  pixelate: PixelateEffect
   width: number
   height: number
   fxKey: string
@@ -57,6 +59,16 @@ const chains = new Map<string, ChainBundle>()
 const meshes = new Map<string, MeshBundle>()
 const letterParticlesRenderers = new Map<string, LetterParticlesBundle>()
 let overlayScene: BABYLON.Scene | undefined
+
+const MPE_PIXELATE_MIN = 1
+const MPE_PIXELATE_MAX = 24
+
+const getMpePixelateSize = (renderState?: RenderState): number => {
+  const timbre = renderState?.mpeVoice?.timbre
+  if (timbre === undefined || timbre === null) return MPE_PIXELATE_MIN
+  const t = Math.min(1, Math.max(0, timbre / 127))
+  return MPE_PIXELATE_MIN + (MPE_PIXELATE_MAX - MPE_PIXELATE_MIN) * t
+}
 
 const ensureOverlayScene = (engine: BABYLON.WebGPUEngine) => {
   if (overlayScene) return overlayScene
@@ -102,7 +114,8 @@ const createChain = (
   const wobble = new WobbleEffect(engine, { src: srcPass }, w, h)
   const hBlur = new HorizontalBlurEffect(engine, { src: wobble }, w, h)
   const vBlur = new VerticalBlurEffect(engine, { src: hBlur }, w, h)
-  const alphaThresh = new AlphaThresholdEffect(engine, { src: vBlur }, w, h)
+  const pixelate = new PixelateEffect(engine, { src: vBlur }, w, h, 'nearest')
+  const alphaThresh = new AlphaThresholdEffect(engine, { src: pixelate }, w, h)
 
   wobble.setUniforms({
     xStrength: fx.wobbleX,
@@ -112,6 +125,7 @@ const createChain = (
 
   hBlur.setUniforms({ pixels: fx.blurX, resolution: w })
   vBlur.setUniforms({ pixels: fx.blurY, resolution: h })
+  pixelate.setUniforms({ pixelSize: 1 })
   alphaThresh.setUniforms({ threshold: 0 })
 
   const { fxKey } = makeKeys({ minX: bboxPx.minX, minY: bboxPx.minY, w, h }, fx)
@@ -120,10 +134,11 @@ const createChain = (
     wobble,
     hBlur,
     vBlur,
+    pixelate,
     width: w,
     height: h,
     fxKey,
-    owned: [alphaThresh, vBlur, hBlur, wobble, srcPass],
+    owned: [alphaThresh, pixelate, vBlur, hBlur, wobble, srcPass],
     graphics,
     bboxPx,
     bboxLogical,
@@ -471,6 +486,7 @@ export const renderPolygonFx = (engine: BABYLON.Engine, renderStates: Map<string
   chains.forEach((chain, id) => {
     const rs = renderStates.get(id)
     redrawGraphics(chain.graphics, chain.poly, chain.bboxLogical, rs)
+    chain.pixelate.setUniforms({ pixelSize: getMpePixelateSize(rs) })
   })
 
   // Render shader chains
