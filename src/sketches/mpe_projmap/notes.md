@@ -21,6 +21,8 @@ concrete animation idea
 - pressure - warp arrangement - add a rolling simplex noise displacment to each shape 
 - timbre - pixelate shader
 
+use MPE midi listener from midi helpers to map into this
+
 
 need a better unified API for "render bundles" (p5.Graphics, FlattenedPolygon (and metadata), post-processing nodes)
 - bundles need to be publically accessible so they can be controlled with realtimes messages
@@ -86,8 +88,3 @@ export function applyPathMap(
   return target;
 }
 ```
-
-
-
-
-need more generic node OSC listener - just bounces {addres, args} to browser via websocket

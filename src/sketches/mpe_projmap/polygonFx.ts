@@ -12,6 +12,7 @@ import type { RenderState } from './textRegionUtils'
 import { getTextStyle, getTextAnim } from './textRegionUtils'
 import type p5 from 'p5'
 import { LetterParticlesRenderer } from './letterParticles'
+import { pitchToColor, releaseColor } from './mpeColor'
 
 export type PolygonFxSyncOptions = {
   engine: BABYLON.WebGPUEngine
@@ -211,6 +212,7 @@ const redrawGraphics = (g: p5.Graphics, poly: PolygonRenderData[number], bboxLog
   const fillAnim = textAnim.fillAnim
   const isDropAndScroll = fillAnim === 'dropAndScroll'
   const isMatterExplode = fillAnim === 'matterExplode'
+  const isMPE = fillAnim === 'mpe'
 
   g.push()
   g.translate(-bboxLogical.minX, -bboxLogical.minY)
@@ -240,6 +242,43 @@ const redrawGraphics = (g: p5.Graphics, poly: PolygonRenderData[number], bboxLog
       })
       g.endShape(p.CLOSE)
       g.pop()
+    }
+  } else if (isMPE) {
+    // MPE mode: draw circles colored by pitch, sized by pressure
+    const baseSize = textAnim.circleSize ?? 8
+
+    if (renderState && renderState.letters.length > 0) {
+      g.noStroke()
+
+      if (renderState.mpeVoice) {
+        // Active note: use pitch-based color and pressure-based size
+        const rgb = pitchToColor(renderState.mpeVoice.noteNum, renderState.mpeVoice.bend)
+        const pressureScale = 0.5 + (renderState.mpeVoice.pressure / 127) * 0.5  // 0.5 to 1
+        g.fill(rgb.r * 255, rgb.g * 255, rgb.b * 255, 255)
+
+        renderState.letters.forEach(({ pos }) => {
+          const size = baseSize * pressureScale
+          g.circle(pos.x, pos.y, size)
+        })
+      } else {
+        // Released note: fade to white based on fillProgress
+        const rgb = releaseColor()
+        const alpha = renderState.mpeFillProgress !== undefined ? renderState.mpeFillProgress * 255 : 255
+        g.fill(rgb.r * 255, rgb.g * 255, rgb.b * 255, alpha)
+
+        renderState.letters.forEach(({ pos }) => {
+          g.circle(pos.x, pos.y, baseSize)
+        })
+      }
+    } else {
+      // No active animation, draw polygon outline
+      g.noFill()
+      g.stroke(color.r, color.g, color.b, color.a * 0.5)
+      g.beginShape()
+      poly.points.forEach((point) => {
+        g.vertex(point.x, point.y)
+      })
+      g.endShape(p.CLOSE)
     }
   } else {
     g.fill(color.r, color.g, color.b, color.a)

@@ -16,13 +16,19 @@ export const defaultQuoteText = `Lorem ipsum dolor sit amet, consectetur adipisc
 
 export const textAnimSchema = switchedSchema(
   z.object({
-    fillAnim: z.enum(['dropAndScroll', 'matterExplode']).default('dropAndScroll'),
+    fillAnim: z.enum(['dropAndScroll', 'matterExplode', 'mpe']).default('mpe'),
     textInd: z.coerce.string().default(defaultQuoteText)
   }),
   'fillAnim',
   {
     dropAndScroll: { minCharsDrop: z.number().optional() },
-    matterExplode: {}
+    matterExplode: {},
+    mpe: {
+      attackTime: z.number().positive().default(0.1),    // seconds
+      releaseTime: z.number().positive().default(0.3),   // seconds
+      gridStep: z.number().positive().default(20),       // pixels
+      circleSize: z.number().positive().default(8),      // base circle size in pixels
+    }
   }
 )
 

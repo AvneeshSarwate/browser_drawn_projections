@@ -4,10 +4,20 @@ import { textAnimSchema, textStyleSchema, fxChainSchema, type TextAnimFlat, type
 
 export type Point = { x: number; y: number }
 
+export type MPEVoiceRenderData = {
+  noteNum: number
+  pressure: number
+  timbre: number
+  bend: number
+} | null
+
 export type RenderState = {
   letters: { pos: Point; idx: number }[]
   textOffset: number
   text: string
+  // MPE-specific render data (optional)
+  mpeVoice?: MPEVoiceRenderData
+  mpeFillProgress?: number
 }
 
 export type PreparedPolygon = {

@@ -1,6 +1,11 @@
 import type { MPEPolySynth, MPEVoiceGraph } from "@/music/mpeSynth";
 import { MIDIVal, MIDIValInput, MIDIValOutput, type NoteMessage } from "@midival/core";
 
+// Re-export MPE module
+export { MPEInput, MPEDevice, MPENoteRef, asMPE } from "./mpe";
+export type { MPEConfig, MPEDeviceConfig, MPENoteStart, MPENoteUpdate, MPENoteEnd } from "./mpe";
+import { MPEInput, MPEDevice, type MPEConfig, type MPEDeviceConfig } from "./mpe";
+
 export const midiInputs: Map<string, MIDIValInput> = new Map();
 export const midiOutputs: Map<string, MIDIValOutput> = new Map()
 
@@ -96,6 +101,34 @@ export function mapMidiInputToMpeSynth<T extends MPEVoiceGraph>(input: MIDIValIn
 
 
 //todo hotreload - add an allNotesOff method for cleaning up midi
+
+// ============ MPE Helper Functions ============
+
+/**
+ * Create an MPEInput from a named MIDI input port.
+ * Must be called after MIDI_READY resolves.
+ */
+export function getMPEInput(inputName: string, config: MPEConfig): MPEInput | null {
+  const input = midiInputs.get(inputName);
+  if (!input) {
+    console.warn(`MIDI input "${inputName}" not found`);
+    return null;
+  }
+  return new MPEInput(input, config);
+}
+
+/**
+ * Create an MPEDevice from a named MIDI output port.
+ * Must be called after MIDI_READY resolves.
+ */
+export function getMPEDevice(outputName: string, config: MPEDeviceConfig): MPEDevice | null {
+  const output = midiOutputs.get(outputName);
+  if (!output) {
+    console.warn(`MIDI output "${outputName}" not found`);
+    return null;
+  }
+  return new MPEDevice(output, config);
+}
 
 
 
