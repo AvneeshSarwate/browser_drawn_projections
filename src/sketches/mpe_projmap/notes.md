@@ -1,4 +1,15 @@
 
+todo (on below plan)
+- color spectrum is just full rainbow - pick specifics
+- pitch bend doesn't map properly to change colors (math/coordinate-scaling issue?)
+- timbre not wired up and no post-processing stack 
+- need to rotate mpe voice idx even on single notes like some MPE controllers do (makes notes move around polygons even when melody is monophonic)
+
+
+
+
+
+
 
 projection mapping where MPE midi notes animated a region.
 

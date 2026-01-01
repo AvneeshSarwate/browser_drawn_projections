@@ -253,7 +253,7 @@ const redrawGraphics = (g: p5.Graphics, poly: PolygonRenderData[number], bboxLog
       if (renderState.mpeVoice) {
         // Active note: use pitch-based color and pressure-based size
         const rgb = pitchToColor(renderState.mpeVoice.noteNum, renderState.mpeVoice.bend)
-        const pressureScale = 0.5 + (renderState.mpeVoice.pressure / 127) * 0.5  // 0.5 to 1
+        const pressureScale = 0.5 + (renderState.mpeVoice.pressure / 127) * 5.5  // 0.5 to 1
         g.fill(rgb.r * 255, rgb.g * 255, rgb.b * 255, 255)
 
         renderState.letters.forEach(({ pos }) => {
