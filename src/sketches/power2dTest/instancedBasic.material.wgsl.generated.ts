@@ -249,7 +249,7 @@ export interface InstancedBasicMaterialDef {
   readonly fragmentSource: string;
   readonly uniformMeta: typeof InstancedBasicUniformMeta;
   readonly uniformDefaults: InstancedBasicUniforms;
-  readonly instanceAttrLayout: InstancedBasicInstanceAttrLayout;
+  readonly instanceAttrLayout: InstanceAttrLayout<InstancedBasicInstance>;
   readonly createMaterial: (scene: BABYLON.Scene, name?: string) => InstancedBasicMaterialInstance;
 }
 

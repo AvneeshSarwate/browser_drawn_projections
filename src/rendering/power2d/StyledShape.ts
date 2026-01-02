@@ -1,34 +1,45 @@
 import * as BABYLON from 'babylonjs';
 import earcut from 'earcut';
-import type { MaterialDef, MaterialInstance, Point2D, TextureSource } from './types';
+import type {
+  MaterialDef,
+  MaterialInstanceOf,
+  Point2D,
+  TextureSource,
+} from './types';
 import { generateStrokeMesh } from './strokeMeshGenerator';
 import { createMaterialInstanceName } from './materialNames';
 
-interface StrokeAPI<U, T extends string> {
-  setUniforms(uniforms: Partial<U>): void;
-  setTexture(name: T, source: TextureSource): void;
-  setTextureSampler?(name: T, sampler: BABYLON.TextureSampler): void;
+type MaybeMaterialDef = MaterialDef<object, string> | undefined;
+
+type UniformsOf<M> = M extends MaterialDef<infer U, infer _T> ? U : never;
+type TextureNamesOf<M> = M extends MaterialDef<unknown, infer T> ? T : never;
+type MaterialInstanceFor<M> = MaterialInstanceOf<M>;
+
+interface StrokeAPI<M extends MaterialDef<object, string>> {
+  setUniforms(uniforms: Partial<UniformsOf<M>>): void;
+  setTexture(name: TextureNamesOf<M>, source: TextureSource): void;
+  setTextureSampler(name: TextureNamesOf<M>, sampler: BABYLON.TextureSampler): void;
   thickness: number;
   mesh: BABYLON.Mesh;
 }
 
-interface StyledShapeOptions<BodyU, BodyT extends string, StrokeU = never, StrokeT extends string = never> {
+interface StyledShapeOptions<BodyMat extends MaterialDef<object, string>, StrokeMat extends MaybeMaterialDef = undefined> {
   scene: BABYLON.Scene;
   points: readonly Point2D[];
-  bodyMaterial: MaterialDef<BodyU, BodyT>;
-  strokeMaterial?: MaterialDef<StrokeU, StrokeT>;
+  bodyMaterial: BodyMat;
+  strokeMaterial?: StrokeMat;
   strokeThickness?: number;
   closed?: boolean;
   canvasWidth: number;
   canvasHeight: number;
 }
 
-export class StyledShape<BodyU extends object, BodyT extends string, StrokeU extends object = never, StrokeT extends string = never> {
+export class StyledShape<BodyMat extends MaterialDef<object, string>, StrokeMat extends MaybeMaterialDef = undefined> {
   private readonly scene: BABYLON.Scene;
   private bodyMesh: BABYLON.Mesh;
   private strokeMesh: BABYLON.Mesh | null = null;
-  private readonly bodyMaterialInstance: MaterialInstance<BodyU, BodyT>;
-  private strokeMaterialInstance: MaterialInstance<StrokeU, StrokeT> | null = null;
+  private readonly bodyMaterialInstance: MaterialInstanceFor<BodyMat>;
+  private strokeMaterialInstance: MaterialInstanceFor<Exclude<StrokeMat, undefined>> | null = null;
   private readonly parentNode: BABYLON.TransformNode;
 
   private points: readonly Point2D[];
@@ -38,7 +49,7 @@ export class StyledShape<BodyU extends object, BodyT extends string, StrokeU ext
   private _strokeThickness: number;
   private _alphaIndex = 0;
 
-  constructor(options: StyledShapeOptions<BodyU, BodyT, StrokeU, StrokeT>) {
+  constructor(options: StyledShapeOptions<BodyMat, StrokeMat>) {
     this.scene = options.scene;
     this.points = options.points;
     this.closed = options.closed ?? true;
@@ -49,7 +60,7 @@ export class StyledShape<BodyU extends object, BodyT extends string, StrokeU ext
     this.parentNode = new BABYLON.TransformNode('styledShape', this.scene);
 
     const bodyMaterialName = createMaterialInstanceName('power2dBodyMaterial');
-    this.bodyMaterialInstance = options.bodyMaterial.createMaterial(this.scene, bodyMaterialName);
+    this.bodyMaterialInstance = options.bodyMaterial.createMaterial(this.scene, bodyMaterialName) as MaterialInstanceFor<BodyMat>;
     this.bodyMaterialInstance.setCanvasSize(this.canvasWidth, this.canvasHeight);
 
     this.bodyMesh = this.createBodyMesh();
@@ -58,7 +69,7 @@ export class StyledShape<BodyU extends object, BodyT extends string, StrokeU ext
 
     if (options.strokeMaterial) {
       const strokeMaterialName = createMaterialInstanceName('power2dStrokeMaterial');
-      this.strokeMaterialInstance = options.strokeMaterial.createMaterial(this.scene, strokeMaterialName) as MaterialInstance<StrokeU, StrokeT>;
+      this.strokeMaterialInstance = options.strokeMaterial.createMaterial(this.scene, strokeMaterialName) as MaterialInstanceFor<Exclude<StrokeMat, undefined>>;
       this.strokeMaterialInstance.setCanvasSize(this.canvasWidth, this.canvasHeight);
       this.strokeMaterialInstance.material.setFloat('power2d_strokeThickness', this._strokeThickness);
 
@@ -75,14 +86,14 @@ export class StyledShape<BodyU extends object, BodyT extends string, StrokeU ext
   get body() {
     const self = this;
     return {
-      setUniforms(uniforms: Partial<BodyU>): void {
+      setUniforms(uniforms: Partial<UniformsOf<BodyMat>>): void {
         self.bodyMaterialInstance.setUniforms(uniforms);
       },
-      setTexture(name: BodyT, source: TextureSource): void {
+      setTexture(name: TextureNamesOf<BodyMat>, source: TextureSource): void {
         const texture = self.resolveTexture(source);
         self.bodyMaterialInstance.setTexture(name, texture);
       },
-      setTextureSampler(name: BodyT, sampler: BABYLON.TextureSampler): void {
+      setTextureSampler(name: TextureNamesOf<BodyMat>, sampler: BABYLON.TextureSampler): void {
         self.bodyMaterialInstance.setTextureSampler?.(name, sampler);
       },
       get mesh(): BABYLON.Mesh {
@@ -95,21 +106,21 @@ export class StyledShape<BodyU extends object, BodyT extends string, StrokeU ext
   // Stroke API
   //===========================================================================
 
-  get stroke(): StrokeAPI<StrokeU, StrokeT> | null {
+  get stroke(): StrokeMat extends MaterialDef<object, string> ? StrokeAPI<StrokeMat> : null {
     if (!this.strokeMaterialInstance || !this.strokeMesh) {
-      return null;
+      return null as StrokeMat extends MaterialDef<object, string> ? StrokeAPI<StrokeMat> : null;
     }
 
     const self = this;
     return {
-      setUniforms(uniforms: Partial<StrokeU>): void {
+      setUniforms(uniforms: Partial<UniformsOf<Exclude<StrokeMat, undefined>>>): void {
         self.strokeMaterialInstance!.setUniforms(uniforms);
       },
-      setTexture(name: StrokeT, source: TextureSource): void {
+      setTexture(name: TextureNamesOf<Exclude<StrokeMat, undefined>>, source: TextureSource): void {
         const texture = self.resolveTexture(source);
         self.strokeMaterialInstance!.setTexture(name, texture);
       },
-      setTextureSampler(name: StrokeT, sampler: BABYLON.TextureSampler): void {
+      setTextureSampler(name: TextureNamesOf<Exclude<StrokeMat, undefined>>, sampler: BABYLON.TextureSampler): void {
         self.strokeMaterialInstance!.setTextureSampler?.(name, sampler);
       },
       get thickness(): number {
@@ -127,7 +138,7 @@ export class StyledShape<BodyU extends object, BodyT extends string, StrokeU ext
       get mesh(): BABYLON.Mesh {
         return self.strokeMesh!;
       },
-    };
+    } as unknown as StrokeMat extends MaterialDef<object, string> ? StrokeAPI<StrokeMat> : null;
   }
 
   //===========================================================================

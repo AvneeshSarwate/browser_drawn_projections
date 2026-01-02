@@ -17,14 +17,18 @@ export interface MaterialInstance<U, T extends string> {
   setTexture(name: T, texture: BABYLON.BaseTexture): void;
   setCanvasSize(width: number, height: number): void;
   dispose(): void;
-  setTextureSampler?: (name: T, sampler: BABYLON.TextureSampler) => void;
+  setTextureSampler?(name: T, sampler: BABYLON.TextureSampler): void;
 }
 
 export interface MaterialDef<U, T extends string> {
-  createMaterial: (scene: BABYLON.Scene, name?: string) => MaterialInstance<U, T>;
-  uniformDefaults: U;
-  textureNames: readonly T[];
+  readonly createMaterial: (scene: BABYLON.Scene, name?: string) => MaterialInstance<U, T>;
+  readonly uniformDefaults: U;
+  readonly textureNames: readonly T[];
 }
+
+export type MaterialUniforms<M> = M extends MaterialDef<infer U, infer _T> ? U : never;
+export type MaterialTextureNames<M> = M extends MaterialDef<unknown, infer T> ? T : never;
+export type MaterialInstanceOf<M> = M extends MaterialDef<unknown, infer _T> ? ReturnType<M['createMaterial']> : never;
 
 export interface InstanceAttrLayout<I> {
   size: number;
@@ -36,8 +40,10 @@ export interface InstanceAttrLayout<I> {
 }
 
 export interface BatchMaterialDef<U, T extends string, I> extends MaterialDef<U, T> {
-  instanceAttrLayout: InstanceAttrLayout<I>;
+  readonly instanceAttrLayout: InstanceAttrLayout<I>;
 }
+
+export type BatchInstanceAttrs<M> = M extends { instanceAttrLayout: InstanceAttrLayout<infer I> } ? I : never;
 
 export interface StrokeMeshData {
   positions: Float32Array;

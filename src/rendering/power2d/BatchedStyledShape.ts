@@ -1,24 +1,33 @@
 import * as BABYLON from 'babylonjs';
 import earcut from 'earcut';
-import type { BatchMaterialDef, InstanceAttrLayout, Point2D, TextureSource } from './types';
+import type {
+  BatchInstanceAttrs,
+  BatchMaterialDef,
+  InstanceAttrLayout,
+  MaterialInstanceOf,
+  MaterialTextureNames,
+  MaterialUniforms,
+  Point2D,
+  TextureSource,
+} from './types';
 import { createMaterialInstanceName } from './materialNames';
 
-interface BatchedStyledShapeOptions<U extends object, T extends string, I extends object> {
+interface BatchedStyledShapeOptions<M extends BatchMaterialDef<object, string, Record<string, unknown>>> {
   scene: BABYLON.Scene;
   points: readonly Point2D[];
-  material: BatchMaterialDef<U, T, I>;
+  material: M;
   instanceCount: number;
   canvasWidth: number;
   canvasHeight: number;
   closed?: boolean;
 }
 
-export class BatchedStyledShape<U extends object, T extends string, I extends object> {
+export class BatchedStyledShape<M extends BatchMaterialDef<object, string, Record<string, unknown>>> {
   private readonly scene: BABYLON.Scene;
   private readonly mesh: BABYLON.Mesh;
-  private readonly materialInstance: ReturnType<BatchMaterialDef<U, T, I>['createMaterial']>;
+  private readonly materialInstance: MaterialInstanceOf<M>;
   private readonly instanceCount: number;
-  private readonly instanceLayout: InstanceAttrLayout<I>;
+  private readonly instanceLayout: InstanceAttrLayout<BatchInstanceAttrs<M>>;
 
   private readonly instanceData: Float32Array;
   private readonly instanceBuffer: BABYLON.StorageBuffer;
@@ -27,17 +36,17 @@ export class BatchedStyledShape<U extends object, T extends string, I extends ob
   private canvasWidth: number;
   private canvasHeight: number;
 
-  constructor(options: BatchedStyledShapeOptions<U, T, I>) {
+  constructor(options: BatchedStyledShapeOptions<M>) {
     this.scene = options.scene;
     this.instanceCount = options.instanceCount;
-    this.instanceLayout = options.material.instanceAttrLayout;
+    this.instanceLayout = options.material.instanceAttrLayout as InstanceAttrLayout<BatchInstanceAttrs<M>>;
     this.canvasWidth = options.canvasWidth;
     this.canvasHeight = options.canvasHeight;
 
     const engine = this.scene.getEngine() as BABYLON.WebGPUEngine;
 
     const materialName = createMaterialInstanceName('power2dBatchMaterial');
-    this.materialInstance = options.material.createMaterial(this.scene, materialName);
+    this.materialInstance = options.material.createMaterial(this.scene, materialName) as MaterialInstanceOf<M>;
     this.materialInstance.setCanvasSize(this.canvasWidth, this.canvasHeight);
 
     this.mesh = this.createMesh(options.points, options.closed ?? true);
@@ -65,20 +74,20 @@ export class BatchedStyledShape<U extends object, T extends string, I extends ob
     this.setupInstanceVertexBuffers();
   }
 
-  setUniforms(uniforms: Partial<U>): void {
+  setUniforms(uniforms: Partial<MaterialUniforms<M>>): void {
     this.materialInstance.setUniforms(uniforms);
   }
 
-  setTexture(name: T, source: TextureSource): void {
+  setTexture(name: MaterialTextureNames<M>, source: TextureSource): void {
     const texture = this.resolveTexture(source);
     this.materialInstance.setTexture(name, texture);
   }
 
-  setTextureSampler(name: T, sampler: BABYLON.TextureSampler): void {
+  setTextureSampler(name: MaterialTextureNames<M>, sampler: BABYLON.TextureSampler): void {
     this.materialInstance.setTextureSampler?.(name, sampler);
   }
 
-  writeInstanceAttr(index: number, values: Partial<I>): void {
+  writeInstanceAttr(index: number, values: Partial<BatchInstanceAttrs<M>>): void {
     if (this.useExternalBuffers) {
       console.warn('Cannot write instance attrs when using external buffers');
       return;

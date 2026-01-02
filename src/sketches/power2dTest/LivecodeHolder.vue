@@ -27,14 +27,19 @@ let engineWatcher: WatchStopHandle | undefined
 let powerScene: BABYLON.Scene | undefined
 let powerCamera: BABYLON.FreeCamera | undefined
 let powerTarget: BABYLON.RenderTargetTexture | undefined
-let powerShapes: Array<StyledShape<any, any>> = []
-let batchedCircles: BatchedStyledShape<any, any, any> | undefined
-let webcamRect: StyledShape<any, any> | undefined
+let powerShapes: Array<{ dispose: () => void }> = []
+let batchedCircles: BatchedStyledShape<typeof InstancedBasicMaterial> | undefined
+let webcamRect: StyledShape<typeof WebcamPixelMaterial> | undefined
 let testCanvasTexture: CanvasTexture | undefined
 let bypassCanvasPaint: CanvasPaint | undefined
-let computeQuads: BatchedStyledShape<any, any, any> | undefined
+let computeQuads: BatchedStyledShape<typeof InstancedBasicMaterial> | undefined
 let gridCircleSettingsState: gridCircleShader.SettingsUniformState | undefined
 let gridCircleShaderState: gridCircleShader.ShaderState | undefined
+
+const disposeComputeShader = (shader: BABYLON.ComputeShader | undefined) => {
+  if (!shader) return
+  (shader as unknown as { dispose?: () => void }).dispose?.()
+}
 
 const clearDrawFuncs = () => {
   appState.drawFunctions.length = 0
@@ -332,7 +337,7 @@ onUnmounted(() => {
     testCanvasTexture.dispose()
     testCanvasTexture = undefined
   }
-  gridCircleShaderState?.shader.dispose()
+  disposeComputeShader(gridCircleShaderState?.shader)
   gridCircleShaderState = undefined
   if (gridCircleSettingsState) {
     gridCircleSettingsState.buffer.dispose()

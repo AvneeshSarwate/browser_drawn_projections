@@ -560,7 +560,7 @@ export async function generateMaterialTypes(
   materialInterfaceLines.push(`  readonly uniformMeta: typeof ${shaderPrefix}UniformMeta;`);
   materialInterfaceLines.push(`  readonly uniformDefaults: ${uniformInterfaceName};`);
   if (instanceLayout && instanceStruct) {
-    materialInterfaceLines.push(`  readonly instanceAttrLayout: ${shaderPrefix}InstanceAttrLayout;`);
+    materialInterfaceLines.push(`  readonly instanceAttrLayout: InstanceAttrLayout<${instanceStruct.name}>;`);
   }
   materialInterfaceLines.push(`  readonly createMaterial: (scene: BABYLON.Scene, name?: string) => ${materialInstanceName};`);
   materialInterfaceLines.push('}');
