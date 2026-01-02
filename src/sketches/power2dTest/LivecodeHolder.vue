@@ -14,8 +14,11 @@ import { BasicStrokeMaterial } from './basic.strokeMaterial.wgsl.generated';
 import { InstancedBasicMaterial } from './instancedBasic.material.wgsl.generated';
 import { WebcamPixelMaterial } from './webcamPixel.material.wgsl.generated';
 import { RunnerStrokeMaterial } from './runner.strokeMaterial.wgsl.generated';
+import * as gridCircleShader from './gridCircleInstances.compute.wgsl.generated';
 
 const TEST_CANVAS_SIZE = { width: 320, height: 200 }
+const QUAD_GRID_SIZE = 100
+const QUAD_INSTANCE_COUNT = QUAD_GRID_SIZE * QUAD_GRID_SIZE
 
 const appState = inject<Power2DTestAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
@@ -29,6 +32,9 @@ let batchedCircles: BatchedStyledShape<any, any, any> | undefined
 let webcamRect: StyledShape<any, any> | undefined
 let testCanvasTexture: CanvasTexture | undefined
 let bypassCanvasPaint: CanvasPaint | undefined
+let computeQuads: BatchedStyledShape<any, any, any> | undefined
+let gridCircleSettingsState: gridCircleShader.SettingsUniformState | undefined
+let gridCircleShaderState: gridCircleShader.ShaderState | undefined
 
 const clearDrawFuncs = () => {
   appState.drawFunctions.length = 0
@@ -103,6 +109,38 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
     })
   }
   batchedCircles.beforeRender()
+
+  computeQuads = new BatchedStyledShape({
+    scene: powerScene,
+    points: RectPts({ x: -1, y: -1, width: 5, height: 5 }),
+    material: InstancedBasicMaterial,
+    instanceCount: QUAD_INSTANCE_COUNT,
+    canvasWidth: width,
+    canvasHeight: height,
+  })
+  computeQuads.setExternalBufferMode(true)
+
+  const quadCenterX = width * 0.6
+  const quadCenterY = height * 0.62
+  const quadExtent = Math.min(width, height) * 0.32
+  const quadRadius = quadExtent * 0.9
+
+  gridCircleSettingsState = gridCircleShader.createUniformBuffer_settings(engine, {
+    time: 0,
+    speed: 0.35,
+    centerX: quadCenterX,
+    centerY: quadCenterY,
+    gridExtent: quadExtent,
+    circleRadius: quadRadius,
+    quadScale: 1.0,
+    gridSize: QUAD_GRID_SIZE,
+    instanceCount: QUAD_INSTANCE_COUNT,
+  })
+
+  gridCircleShaderState = gridCircleShader.createShader(engine, {
+    settings: gridCircleSettingsState,
+    instanceData: computeQuads.getInstanceBuffer(),
+  })
 
   const webcamAspect = TEST_CANVAS_SIZE.width / TEST_CANVAS_SIZE.height
   const webcamHeight = 240
@@ -234,6 +272,14 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
       })
     }
 
+    if (computeQuads && gridCircleShaderState && gridCircleSettingsState) {
+      computeQuads.setCanvasSize(width, height)
+      computeQuads.setUniforms({ time, color: new BABYLON.Vector3(0.9, 0.95, 1.0) })
+      gridCircleShader.updateUniformBuffer_settings(gridCircleSettingsState, { time })
+      const quadGroups = Math.ceil(QUAD_INSTANCE_COUNT / 256)
+      gridCircleShaderState.shader.dispatchWhenReady(quadGroups, 1, 1)
+    }
+
     engine.beginFrame()
     powerTarget?.render()
     engine.restoreDefaultFramebuffer()
@@ -286,6 +332,14 @@ onUnmounted(() => {
     testCanvasTexture.dispose()
     testCanvasTexture = undefined
   }
+  gridCircleShaderState?.shader.dispose()
+  gridCircleShaderState = undefined
+  if (gridCircleSettingsState) {
+    gridCircleSettingsState.buffer.dispose()
+    gridCircleSettingsState = undefined
+  }
+  computeQuads?.dispose()
+  computeQuads = undefined
   powerTarget?.dispose()
   powerTarget = undefined
   powerScene?.dispose()
