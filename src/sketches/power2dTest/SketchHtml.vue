@@ -8,7 +8,6 @@ const shaderGraphEffect = computed(() => shaderGraphEndNodeRef.value ?? null)
 const bypassPost = bypassPostRef
 const canvasPopped = ref(false)
 const controlsPopped = ref(false)
-const dpr = window.devicePixelRatio || 1
 const width = resolution.width
 const height = resolution.height
 </script>
@@ -16,7 +15,7 @@ const height = resolution.height
 <template>
   <div class="sketch-layout">
     <div id="canvasContainer">
-      <canvas id="p5Canvas" :width="width * dpr" :height="height * dpr" :style="{ width: width + 'px', height: height + 'px' }" abitrary-prop="somethi"></canvas>
+      <canvas id="p5Canvas" :width="width" :height="height" :style="{ width: width + 'px', height: height + 'px' }" abitrary-prop="somethi"></canvas>
       <div id="divider"></div>
       <PopoutWindow 
         v-model="canvasPopped" 
@@ -25,7 +24,7 @@ const height = resolution.height
         :height="height"
         fullscreen-target="canvas"
       >
-        <canvas id="threeCanvas" :width="width * dpr" :height="height * dpr" :style="{ width: width + 'px', height: height + 'px' }" abitrary-prop="somethi"></canvas>
+        <canvas id="threeCanvas" :width="width" :height="height" :style="{ width: width + 'px', height: height + 'px' }" abitrary-prop="somethi"></canvas>
       </PopoutWindow>
     </div>
     

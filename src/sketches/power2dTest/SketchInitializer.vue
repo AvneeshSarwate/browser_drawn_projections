@@ -49,7 +49,8 @@ onMounted(async () => {
   const renderCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
   console.log('Creating Babylon engine...', { renderCanvas })
   const engine = new BABYLON.WebGPUEngine(renderCanvas, {
-    antialias: false,
+    antialias: true,
+    adaptToDeviceRatio: true,
     deviceDescriptor: {
       requiredFeatures: ['timestamp-query'],
     },

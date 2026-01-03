@@ -88,14 +88,15 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
   shaderGraphEndNodeRef.value = undefined
   clearDrawFuncs()
 
-  const dpr = window.devicePixelRatio || 1
-  const width = resolution.width * dpr
-  const height = resolution.height * dpr
+  const logicalWidth = resolution.width
+  const logicalHeight = resolution.height
+  const renderWidth = engine.getRenderWidth()
+  const renderHeight = engine.getRenderHeight()
 
   const power2d = createPower2DScene({
     engine,
-    canvasWidth: width,
-    canvasHeight: height,
+    canvasWidth: logicalWidth,
+    canvasHeight: logicalHeight,
     clearColor: new BABYLON.Color4(0, 0, 0, 0),
   })
   powerScene = power2d.scene
@@ -103,34 +104,40 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
 
   const rect = new StyledShape({
     scene: powerScene,
-    points: RectPts({ x: 150, y: 120, width: 300, height: 200 }),
+    points: RectPts({ x: 0, y: 0, width: 150, height: 100 }),
     bodyMaterial: BasicMaterial,
     strokeMaterial: BasicStrokeMaterial,
     strokeThickness: 6,
-    canvasWidth: width,
-    canvasHeight: height,
+    canvasWidth: logicalWidth,
+    canvasHeight: logicalHeight,
   })
+  rect.x = 300
+  rect.y = 100
   rect.alphaIndex = 1
 
   const circle = new StyledShape({
     scene: powerScene,
-    points: CirclePts({ cx: 700, cy: 380, radius: 120, segments: 48 }),
+    points: CirclePts({ cx: 0, cy: 0, radius: 60, segments: 48 }),
     bodyMaterial: BasicMaterial,
     strokeMaterial: RunnerStrokeMaterial,
     strokeThickness: 10,
-    canvasWidth: width,
-    canvasHeight: height,
+    canvasWidth: logicalWidth,
+    canvasHeight: logicalHeight,
   })
+  circle.x = 100
+  circle.y = 200
   circle.alphaIndex = 2
 
   const instancedCount = 6
   const instancedBasePositions: Array<[number, number]> = [
-    [220, 520],
-    [320, 560],
-    [420, 520],
-    [520, 560],
-    [620, 520],
-    [720, 560],
+    [20, -20],
+    [120, 20],
+    [220, -20],
+    [320, 20],
+    [420, -20],
+    [520, 20],
+    [620, -20],
+    [720, 20],
   ]
 
   batchedCircles = new BatchedStyledShape({
@@ -138,8 +145,8 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
     points: CirclePts({ cx: 0, cy: 0, radius: 26, segments: 20 }),
     material: InstancedBasicMaterial,
     instanceCount: instancedCount,
-    canvasWidth: width,
-    canvasHeight: height,
+    canvasWidth: logicalWidth,
+    canvasHeight: logicalHeight,
   })
 
   batchedCircles.y = 500
@@ -158,12 +165,14 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
 
   computeQuads = new BatchedStyledShape({
     scene: powerScene,
-    points: RectPts({ x: -1, y: -1, width: 5, height: 5 }),
+    points: RectPts({ x: -1, y: -1, width: 2, height: 2 }),
     material: InstancedBasicMaterial,
     instanceCount: QUAD_INSTANCE_COUNT,
-    canvasWidth: width,
-    canvasHeight: height,
+    canvasWidth: logicalWidth,
+    canvasHeight: logicalHeight,
   })
+  computeQuads.x = 1050
+  computeQuads.y = 500
   computeInstanceBufferState = gridCircleShader.createStorageBuffer_instanceData(engine, QUAD_INSTANCE_COUNT, {
     usage: BABYLON.Constants.BUFFER_CREATIONFLAG_VERTEX |
       BABYLON.Constants.BUFFER_CREATIONFLAG_STORAGE |
@@ -171,16 +180,14 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
   })
   computeQuads.setInstancingBuffer(computeInstanceBufferState.buffer)
 
-  const quadCenterX = width * 0.6
-  const quadCenterY = height * 0.62
-  const quadExtent = Math.min(width, height) * 0.32
+  const quadExtent = Math.min(logicalWidth, logicalHeight) * 0.22
   const quadRadius = quadExtent * 0.9
 
   gridCircleSettingsState = gridCircleShader.createUniformBuffer_settings(engine, {
     time: 0,
     speed: 0.35,
-    centerX: quadCenterX,
-    centerY: quadCenterY,
+    centerX: 0,
+    centerY: 0,
     gridExtent: quadExtent,
     circleRadius: quadRadius,
     quadScale: 1.0,
@@ -200,10 +207,10 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
     scene: powerScene,
     points: RectPts({ x: 0, y: 0, width: webcamWidth, height: webcamHeight }),
     bodyMaterial: WebcamPixelMaterial,
-    canvasWidth: width,
-    canvasHeight: height,
+    canvasWidth: logicalWidth,
+    canvasHeight: logicalHeight,
   })
-  webcamRect.x = 1280
+  webcamRect.x = 800
   webcamRect.y = 80
   webcamRect.alphaIndex = 0
   if (webcamRect && powerScene) {
@@ -230,7 +237,7 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
 
   powerTarget = new BABYLON.RenderTargetTexture(
     'power2dRT',
-    { width, height },
+    { width: renderWidth, height: renderHeight },
     powerScene,
     false,
     true,
@@ -248,23 +255,23 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
     powerCamera.outputRenderTarget = null
   }
 
-  const passthru = new PassthruEffect(engine, { src: powerTarget }, width, height, 'nearest')
-  const bypassPassthru = new PassthruEffect(engine, { src: powerTarget }, width, height, 'nearest')
-  const feedback = new FeedbackNode(engine, passthru, width, height, 'linear', 'half_float')
-  const vertBlur = new VerticalBlurEffect(engine, { src: feedback }, width, height)
-  const horBlur = new HorizontalBlurEffect(engine, { src: vertBlur }, width, height)
-  const transform = new TransformEffect(engine, { src: horBlur }, width, height)
-  const layerOverlay = new LayerBlendEffect(engine, { src1: passthru, src2: transform }, width, height)
+  const passthru = new PassthruEffect(engine, { src: powerTarget }, renderWidth, renderHeight, 'linear')
+  const bypassPassthru = new PassthruEffect(engine, { src: powerTarget }, renderWidth, renderHeight, 'linear')
+  const feedback = new FeedbackNode(engine, passthru, renderWidth, renderHeight, 'linear', 'half_float')
+  const vertBlur = new VerticalBlurEffect(engine, { src: feedback }, renderWidth, renderHeight)
+  const horBlur = new HorizontalBlurEffect(engine, { src: vertBlur }, renderWidth, renderHeight)
+  const transform = new TransformEffect(engine, { src: horBlur }, renderWidth, renderHeight)
+  const layerOverlay = new LayerBlendEffect(engine, { src1: passthru, src2: transform }, renderWidth, renderHeight)
   feedback.setFeedbackSrc(layerOverlay)
 
-  const bloom = new BloomEffect(engine, { src: layerOverlay }, width, height)
+  const bloom = new BloomEffect(engine, { src: layerOverlay }, renderWidth, renderHeight)
 
   transform.setUniforms({ rotate: 0, anchor: [0.5, 0.5], translate: [0, 0], scale: [0.995, 0.995] })
-  vertBlur.setUniforms({ pixels: 2, resolution: height })
-  horBlur.setUniforms({ pixels: 2, resolution: width })
+  vertBlur.setUniforms({ pixels: 2, resolution: renderHeight })
+  horBlur.setUniforms({ pixels: 2, resolution: renderWidth })
 
-  const canvasPaint = new CanvasPaint(engine, { src: bloom }, width, height)
-  bypassCanvasPaint = new CanvasPaint(engine, { src: bypassPassthru }, width, height)
+  const canvasPaint = new CanvasPaint(engine, { src: bloom }, renderWidth, renderHeight)
+  bypassCanvasPaint = new CanvasPaint(engine, { src: bypassPassthru }, renderWidth, renderHeight)
   shaderGraphEndNode = canvasPaint
   shaderGraphEndNodeRef.value = shaderGraphEndNode
 
@@ -275,8 +282,8 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
     statsRef?.begin()
     const time = performance.now() * 0.001
 
-    rect.setCanvasSize(width, height)
-    circle.setCanvasSize(width, height)
+    rect.setCanvasSize(logicalWidth, logicalHeight)
+    circle.setCanvasSize(logicalWidth, logicalHeight)
     rect.body.setUniforms({ time, color: new BABYLON.Vector3(1, 0.4, 0.2) })
     rect.stroke?.setUniforms({ color: new BABYLON.Vector3(1.0, 0.9, 0.0) })
     circle.body.setUniforms({ time: time + 1.2, color: new BABYLON.Vector3(0.2, 0.6, 1.0) })
@@ -288,7 +295,7 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
     })
 
     if (batchedCircles) {
-      batchedCircles.setCanvasSize(width, height)
+      batchedCircles.setCanvasSize(logicalWidth, logicalHeight)
       batchedCircles.setUniforms({ time, color: new BABYLON.Vector3(0.6, 0.9, 0.7) })
       for (let i = 0; i < instancedCount; i++) {
         const [baseX, baseY] = instancedBasePositions[i]
@@ -303,7 +310,7 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
     }
 
     if (webcamRect) {
-      webcamRect.setCanvasSize(width, height)
+      webcamRect.setCanvasSize(logicalWidth, logicalHeight)
       webcamRect.body.setUniforms({
         pixelSize: 8,
         tint: new BABYLON.Vector3(1.0, 1.0, 1.0),
@@ -316,7 +323,7 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
     }
 
     if (computeQuads && gridCircleShaderState && gridCircleSettingsState) {
-      computeQuads.setCanvasSize(width, height)
+      computeQuads.setCanvasSize(logicalWidth, logicalHeight)
       computeQuads.setUniforms({ time, color: new BABYLON.Vector3(0.9, 0.95, 1.0) })
       gridCircleShader.updateUniformBuffer_settings(gridCircleSettingsState, { time })
       const quadGroups = Math.ceil(QUAD_INSTANCE_COUNT / 256)
