@@ -65,6 +65,7 @@
     "signia": "^0.1.5",
     "simplex-noise": "^4.0.3",
     "spectral.js": "^2.0.2",
+    "stats-gl": "^3.8.0",
     "stats.js": "^0.17.0",
     "sucrase": "^3.35.0",
     "three": "^0.178.0",

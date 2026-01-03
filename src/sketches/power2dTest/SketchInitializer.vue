@@ -48,9 +48,15 @@ onMounted(async () => {
 
   const renderCanvas = document.getElementById('threeCanvas') as HTMLCanvasElement
   console.log('Creating Babylon engine...', { renderCanvas })
-  const engine = new BABYLON.WebGPUEngine(renderCanvas, { antialias: false })
+  const engine = new BABYLON.WebGPUEngine(renderCanvas, {
+    antialias: false,
+    deviceDescriptor: {
+      requiredFeatures: ['timestamp-query'],
+    },
+  })
   console.log('Engine created, initializing...')
   await engine.initAsync()
+  engine.enableGPUTimingMeasurements = true
   console.log('Engine initialized, resizing...')
   engine.resize()
   resizeListener = () => engine.resize()

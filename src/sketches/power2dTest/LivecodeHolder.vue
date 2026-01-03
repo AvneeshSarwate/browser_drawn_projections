@@ -8,6 +8,7 @@ import { LayerBlendEffect } from '@/rendering/postFX/layerBlend.frag.generated';
 import { TransformEffect } from '@/rendering/postFX/transform.frag.generated';
 import { BloomEffect } from '@/rendering/postFX/bloom.frag.generated';
 import * as BABYLON from 'babylonjs';
+import Stats from 'stats-gl';
 import { createPower2DScene, RectPts, CirclePts, StyledShape, BatchedStyledShape, CanvasTexture } from '@/rendering/power2d';
 import { BasicMaterial } from './basic.material.wgsl.generated';
 import { BasicStrokeMaterial } from './basic.strokeMaterial.wgsl.generated';
@@ -30,12 +31,48 @@ let powerTarget: BABYLON.RenderTargetTexture | undefined
 let powerShapes: Array<{ dispose: () => void }> = []
 let batchedCircles: BatchedStyledShape<typeof InstancedBasicMaterial> | undefined
 let webcamRect: StyledShape<typeof WebcamPixelMaterial> | undefined
+let testCanvasElement: HTMLCanvasElement | undefined
 let testCanvasTexture: CanvasTexture | undefined
 let bypassCanvasPaint: CanvasPaint | undefined
 let computeQuads: BatchedStyledShape<typeof InstancedBasicMaterial> | undefined
 let computeInstanceBufferState: gridCircleShader.InstanceDataStorageState | undefined
 let gridCircleSettingsState: gridCircleShader.SettingsUniformState | undefined
 let gridCircleShaderState: gridCircleShader.ShaderState | undefined
+let stats: Stats | undefined
+const gpuFrameSamples: number[] = []
+const GPU_AVG_WINDOW = 10
+const GPU_LOG_EVERY_N_FRAMES = 30
+let gpuLogFrameCounter = 0
+
+const drawToCanvas = (canvas: HTMLCanvasElement, time: number) => {
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+
+  const { width, height } = canvas
+  ctx.clearRect(0, 0, width, height)
+
+  const grad = ctx.createLinearGradient(0, 0, width, height)
+  grad.addColorStop(0, '#ff6b6b')
+  grad.addColorStop(1, '#4d96ff')
+  ctx.fillStyle = grad
+  ctx.fillRect(0, 0, width, height)
+
+  ctx.fillStyle = 'rgba(255,255,255,0.8)'
+  ctx.fillRect(5, 20, 155, 60)
+
+  ctx.fillStyle = '#111'
+  ctx.font = '20px sans-serif'
+  ctx.fillText('Canvas input tex', 9, 58)
+
+  const t = (Math.sin(time * 0.8) + 1) * 0.5
+  const circleX = width * 0.2 + t * width * 0.6
+  const circleY = height * 0.6
+  ctx.strokeStyle = '#111'
+  ctx.lineWidth = 4
+  ctx.beginPath()
+  ctx.arc(circleX, circleY, 40, 0, Math.PI * 2)
+  ctx.stroke()
+}
 
 const disposeComputeShader = (shader: BABYLON.ComputeShader | undefined) => {
   if (!shader) return
@@ -169,24 +206,8 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
     const canvas = document.createElement('canvas')
     canvas.width = TEST_CANVAS_SIZE.width
     canvas.height = TEST_CANVAS_SIZE.height
-    const ctx = canvas.getContext('2d')
-    if (ctx) {
-      const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height)
-      grad.addColorStop(0, '#ff6b6b')
-      grad.addColorStop(1, '#4d96ff')
-      ctx.fillStyle = grad
-      ctx.fillRect(0, 0, canvas.width, canvas.height)
-      ctx.fillStyle = 'rgba(255,255,255,0.8)'
-      ctx.fillRect(20, 20, 120, 60)
-      ctx.fillStyle = '#111'
-      ctx.font = '20px sans-serif'
-      ctx.fillText('Power2D', 28, 58)
-      ctx.strokeStyle = '#111'
-      ctx.lineWidth = 4
-      ctx.beginPath()
-      ctx.arc(240, 120, 40, 0, Math.PI * 2)
-      ctx.stroke()
-    }
+    drawToCanvas(canvas, 0)
+    testCanvasElement = canvas
     testCanvasTexture = new CanvasTexture({
       engine,
       scene: powerScene,
@@ -246,6 +267,8 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
   // Static canvas texture already bound above.
 
   appState.shaderDrawFunc = () => {
+    const statsRef = stats
+    statsRef?.begin()
     const time = performance.now() * 0.001
 
     rect.setCanvasSize(width, height)
@@ -283,6 +306,10 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
         opacity: 1.0,
       })
     }
+    if (testCanvasTexture && testCanvasElement) {
+      drawToCanvas(testCanvasElement, time)
+      testCanvasTexture.update(testCanvasElement)
+    }
 
     if (computeQuads && gridCircleShaderState && gridCircleSettingsState) {
       computeQuads.setCanvasSize(width, height)
@@ -298,14 +325,56 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
     if (bypassPostRef.value) {
       bypassCanvasPaint?.renderAll(engine as any)
       engine.endFrame()
+      statsRef?.end()
+      statsRef?.update()
+      logGpuTiming(engine)
       return
     }
     shaderGraphEndNode!.renderAll(engine as any)
     engine.endFrame()
+    statsRef?.end()
+    statsRef?.update()
+    logGpuTiming(engine)
+  }
+}
+
+const logGpuTiming = (engine: BABYLON.WebGPUEngine) => {
+  const counter = engine.gpuTimeInFrameForMainPass?.counter
+  if (!counter) return
+  const ns = counter.current
+  if (!Number.isFinite(ns) || ns <= 0) return
+  const ms = ns / 1_000_000
+  gpuFrameSamples.push(ms)
+  if (gpuFrameSamples.length > GPU_AVG_WINDOW) {
+    gpuFrameSamples.shift()
+  }
+  if (gpuFrameSamples.length === GPU_AVG_WINDOW) {
+    gpuLogFrameCounter += 1
+    if (gpuLogFrameCounter % GPU_LOG_EVERY_N_FRAMES !== 0) {
+      return
+    }
+    const sum = gpuFrameSamples.reduce((acc, value) => acc + value, 0)
+    const avg = sum / gpuFrameSamples.length
+    console.log(`[WebGPU] ${GPU_AVG_WINDOW}-frame GPU avg: ${avg.toFixed(2)} ms`)
   }
 }
 
 onMounted(() => {
+  stats = new Stats({
+    trackFPS: true,
+    trackGPU: true,
+    trackHz: true,
+    logsPerSecond: 4,
+    graphsPerSecond: 30,
+    samplesLog: 40,
+    samplesGraph: 10,
+    precision: 2,
+    horizontal: true,
+    minimal: false,
+    mode: 2,
+  })
+  document.body.appendChild(stats.dom)
+
   const engine = engineRef.value
   if (engine) {
     setupSketch(engine)
@@ -328,6 +397,10 @@ onUnmounted(() => {
   engineWatcher?.()
   engineWatcher = undefined
   clearDrawFuncs()
+  if (stats) {
+    stats.dom.remove()
+    stats = undefined
+  }
   bypassCanvasPaint?.disposeAll()
   bypassCanvasPaint = undefined
   shaderGraphEndNode?.disposeAll()
@@ -344,6 +417,7 @@ onUnmounted(() => {
     testCanvasTexture.dispose()
     testCanvasTexture = undefined
   }
+  testCanvasElement = undefined
   disposeComputeShader(gridCircleShaderState?.shader)
   gridCircleShaderState = undefined
   if (gridCircleSettingsState) {
