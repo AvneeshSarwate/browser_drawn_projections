@@ -31,6 +31,8 @@ export class BatchedStyledShape<M extends BatchMaterialDef<object, string, Recor
 
   private readonly instanceData: Float32Array;
   private readonly instanceBuffer: BABYLON.StorageBuffer;
+  private externalInstanceBuffer: BABYLON.StorageBuffer | null = null;
+  private instanceVertexBuffers: BABYLON.VertexBuffer[] = [];
   private useExternalBuffers = false;
 
   private canvasWidth: number;
@@ -71,7 +73,7 @@ export class BatchedStyledShape<M extends BatchMaterialDef<object, string, Recor
     this.mesh.forcedInstanceCount = this.instanceCount;
     this.mesh.manualUpdateOfWorldMatrixInstancedBuffer = true;
 
-    this.setupInstanceVertexBuffers();
+    this.rebuildInstanceVertexBuffers();
   }
 
   setUniforms(uniforms: Partial<MaterialUniforms<M>>): void {
@@ -117,8 +119,19 @@ export class BatchedStyledShape<M extends BatchMaterialDef<object, string, Recor
     }
   }
 
+  setInstancingBuffer(buffer: BABYLON.StorageBuffer | null): void {
+    this.externalInstanceBuffer = buffer;
+    this.useExternalBuffers = buffer !== null;
+    this.rebuildInstanceVertexBuffers();
+  }
+
   setExternalBufferMode(enabled: boolean): void {
+    if (enabled && !this.externalInstanceBuffer) {
+      console.warn('setExternalBufferMode(true) called without an external buffer. Use setInstancingBuffer first.');
+      return;
+    }
     this.useExternalBuffers = enabled;
+    this.rebuildInstanceVertexBuffers();
   }
 
   getInstanceBuffer(): BABYLON.StorageBuffer {
@@ -136,6 +149,10 @@ export class BatchedStyledShape<M extends BatchMaterialDef<object, string, Recor
   }
 
   dispose(): void {
+    for (const vb of this.instanceVertexBuffers) {
+      vb.dispose();
+    }
+    this.instanceVertexBuffers = [];
     this.mesh.dispose(false, false);
     this.materialInstance.dispose();
     this.instanceBuffer.dispose();
@@ -180,14 +197,23 @@ export class BatchedStyledShape<M extends BatchMaterialDef<object, string, Recor
     return mesh;
   }
 
-  private setupInstanceVertexBuffers(): void {
+  private rebuildInstanceVertexBuffers(): void {
     const engine = this.scene.getEngine() as BABYLON.WebGPUEngine;
     const floatsPerInstance = this.instanceLayout.size;
+    const sourceBuffer = (this.externalInstanceBuffer ?? this.instanceBuffer).getBuffer();
+    if (!sourceBuffer) {
+      return;
+    }
+
+    for (const vb of this.instanceVertexBuffers) {
+      vb.dispose();
+    }
+    this.instanceVertexBuffers = [];
 
     for (const member of this.instanceLayout.members) {
       const vb = new BABYLON.VertexBuffer(
         engine,
-        this.instanceBuffer.getBuffer(),
+        sourceBuffer,
         `inst_${String(member.name)}`,
         false,
         false,
@@ -197,6 +223,7 @@ export class BatchedStyledShape<M extends BatchMaterialDef<object, string, Recor
         member.floatCount,
       );
       this.mesh.setVerticesBuffer(vb);
+      this.instanceVertexBuffers.push(vb);
     }
   }
 

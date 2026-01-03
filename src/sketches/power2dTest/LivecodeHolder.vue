@@ -33,6 +33,7 @@ let webcamRect: StyledShape<typeof WebcamPixelMaterial> | undefined
 let testCanvasTexture: CanvasTexture | undefined
 let bypassCanvasPaint: CanvasPaint | undefined
 let computeQuads: BatchedStyledShape<typeof InstancedBasicMaterial> | undefined
+let computeInstanceBufferState: gridCircleShader.InstanceDataStorageState | undefined
 let gridCircleSettingsState: gridCircleShader.SettingsUniformState | undefined
 let gridCircleShaderState: gridCircleShader.ShaderState | undefined
 
@@ -124,7 +125,12 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
     canvasWidth: width,
     canvasHeight: height,
   })
-  computeQuads.setExternalBufferMode(true)
+  computeInstanceBufferState = gridCircleShader.createStorageBuffer_instanceData(engine, QUAD_INSTANCE_COUNT, {
+    usage: BABYLON.Constants.BUFFER_CREATIONFLAG_VERTEX |
+      BABYLON.Constants.BUFFER_CREATIONFLAG_STORAGE |
+      BABYLON.Constants.BUFFER_CREATIONFLAG_WRITE,
+  })
+  computeQuads.setInstancingBuffer(computeInstanceBufferState.buffer)
 
   const quadCenterX = width * 0.6
   const quadCenterY = height * 0.62
@@ -145,7 +151,7 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
 
   gridCircleShaderState = gridCircleShader.createShader(engine, {
     settings: gridCircleSettingsState,
-    instanceData: computeQuads.getInstanceBuffer(),
+    instanceData: computeInstanceBufferState.buffer,
   })
 
   const webcamAspect = TEST_CANVAS_SIZE.width / TEST_CANVAS_SIZE.height
@@ -343,6 +349,10 @@ onUnmounted(() => {
   if (gridCircleSettingsState) {
     gridCircleSettingsState.buffer.dispose()
     gridCircleSettingsState = undefined
+  }
+  if (computeInstanceBufferState) {
+    computeInstanceBufferState.buffer.dispose()
+    computeInstanceBufferState = undefined
   }
   computeQuads?.dispose()
   computeQuads = undefined

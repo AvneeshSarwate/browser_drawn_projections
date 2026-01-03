@@ -1106,8 +1106,10 @@ export class BatchedStyledShape<
   // External Buffer Control
   //===========================================================================
 
-  setExternalBufferMode(enabled: boolean): void {
-    this.useExternalBuffers = enabled;
+  setInstancingBuffer(buffer: BABYLON.StorageBuffer | null): void {
+    this.externalInstanceBuffer = buffer;
+    this.useExternalBuffers = buffer !== null;
+    this.rebuildInstanceVertexBuffers();
   }
 
   getInstanceBuffer(): BABYLON.StorageBuffer {
@@ -1686,17 +1688,21 @@ async function main() {
     canvasHeight,
   });
 
-  // Switch to external buffer mode - CPU writes are ignored
-  particles.setExternalBufferMode(true);
+  // Create the instance buffer for compute -> render sharing
+  const instanceBufferState = ParticleCompute.createStorageBuffer_particles(engine, PARTICLE_COUNT, {
+    usage: BABYLON.Constants.BUFFER_CREATIONFLAG_VERTEX |
+      BABYLON.Constants.BUFFER_CREATIONFLAG_STORAGE |
+      BABYLON.Constants.BUFFER_CREATIONFLAG_WRITE,
+  });
 
-  // Get the instance buffer to bind to compute shader
-  const instanceBuffer = particles.getInstanceBuffer();
+  // Bind the compute-owned buffer to the batched shape
+  particles.setInstancingBuffer(instanceBufferState.buffer);
 
   // Create compute shader for particle physics
   const computeUniforms = ParticleCompute.createUniformBuffer(engine);
   const computeShader = ParticleCompute.createShader(engine, {
     uniforms: computeUniforms,
-    particles: instanceBuffer, // Bind the same buffer!
+    particles: instanceBufferState.buffer, // Bind the same buffer!
   });
 
   // Animation loop
