@@ -10,8 +10,16 @@ struct GridCircleSettings {
   instanceCount: u32,
 };
 
+struct InstanceData {
+  offset: vec2f,
+  scale: f32,
+  rotation: f32,
+  tint: vec3f,
+  instanceIndex: f32,
+};
+
 @group(0) @binding(0) var<uniform> settings: GridCircleSettings;
-@group(0) @binding(1) var<storage, read_write> instanceData: array<f32>;
+@group(0) @binding(1) var<storage, read_write> instanceData: array<InstanceData>;
 
 @compute @workgroup_size(256, 1, 1)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
@@ -37,12 +45,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   let t = 0.5 + 0.5 * sin(settings.time * settings.speed);
   let pos = mix(gridPos, circlePos, t) + vec2f(settings.centerX, settings.centerY);
 
-  let base = idx * 7u;
-  instanceData[base + 0u] = pos.x;
-  instanceData[base + 1u] = pos.y;
-  instanceData[base + 2u] = settings.quadScale;
-  instanceData[base + 3u] = 0.0;
-  instanceData[base + 4u] = 1.0;
-  instanceData[base + 5u] = 1.0;
-  instanceData[base + 6u] = 1.0;
+  instanceData[idx].offset = pos;
+  instanceData[idx].scale = settings.quadScale;
+  instanceData[idx].rotation = 0.0;
+  instanceData[idx].tint = vec3f(1.0, 1.0, 1.0);
+  instanceData[idx].instanceIndex = f32(idx);
 }

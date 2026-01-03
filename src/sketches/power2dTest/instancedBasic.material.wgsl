@@ -8,6 +8,7 @@ struct InstancedBasicInstance {
   scale: f32,
   rotation: f32,
   tint: vec3f,
+  instanceIndex: f32,
 };
 
 fn vertShader(
@@ -30,7 +31,7 @@ fn fragShader(
   uniforms: InstancedBasicUniforms,
   inst: InstancedBasicInstance,
 ) -> vec4f {
-  let pulse = 0.5 + 0.5 * sin(uniforms.time * 2.0 + uv.x * 3.14159);
+  let pulse = 0.5 + 0.5 * sin(uniforms.time * 2.0 + uv.x * 3.14159 + inst.instanceIndex * 0.001);
   let color = uniforms.color * inst.tint * pulse;
   return vec4f(color, 1.0);
 }

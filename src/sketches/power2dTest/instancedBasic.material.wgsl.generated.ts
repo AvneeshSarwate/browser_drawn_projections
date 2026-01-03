@@ -8,11 +8,13 @@ attribute inst_offset: vec2<f32>;
 attribute inst_scale: f32;
 attribute inst_rotation: f32;
 attribute inst_tint: vec3<f32>;
+attribute inst_instanceIndex: f32;
 varying vUV: vec2<f32>;
 varying vInst_offset: vec2<f32>;
 varying vInst_scale: f32;
 varying vInst_rotation: f32;
 varying vInst_tint: vec3<f32>;
+varying vInst_instanceIndex: f32;
 uniform uniforms_time: f32;
 uniform uniforms_color: vec3f;
 uniform power2d_canvasWidth: f32;
@@ -28,6 +30,7 @@ struct InstancedBasicInstance {
   scale: f32,
   rotation: f32,
   tint: vec3f,
+  instanceIndex: f32,
 };
 
 fn vertShader(
@@ -50,7 +53,7 @@ fn fragShader(
   uniforms: InstancedBasicUniforms,
   inst: InstancedBasicInstance,
 ) -> vec4f {
-  let pulse = 0.5 + 0.5 * sin(uniforms.time * 2.0 + uv.x * 3.14159);
+  let pulse = 0.5 + 0.5 * sin(uniforms.time * 2.0 + uv.x * 3.14159 + inst.instanceIndex * 0.001);
   let color = uniforms.color * inst.tint * pulse;
   return vec4f(color, 1.0);
 }
@@ -67,7 +70,8 @@ fn load_InstancedBasicInstance_vertex() -> InstancedBasicInstance {
   vertexInputs.inst_offset,
   vertexInputs.inst_scale,
   vertexInputs.inst_rotation,
-  vertexInputs.inst_tint
+  vertexInputs.inst_tint,
+  vertexInputs.inst_instanceIndex
   );
 }
 
@@ -92,6 +96,7 @@ fn main(input : VertexInputs) -> FragmentInputs {
   vertexOutputs.vInst_scale = vertexInputs.inst_scale;
   vertexOutputs.vInst_rotation = vertexInputs.inst_rotation;
   vertexOutputs.vInst_tint = vertexInputs.inst_tint;
+  vertexOutputs.vInst_instanceIndex = vertexInputs.inst_instanceIndex;
 #define CUSTOM_VERTEX_MAIN_END
 }
 
@@ -102,6 +107,7 @@ varying vInst_offset: vec2<f32>;
 varying vInst_scale: f32;
 varying vInst_rotation: f32;
 varying vInst_tint: vec3<f32>;
+varying vInst_instanceIndex: f32;
 uniform uniforms_time: f32;
 uniform uniforms_color: vec3f;
 uniform power2d_canvasWidth: f32;
@@ -117,6 +123,7 @@ struct InstancedBasicInstance {
   scale: f32,
   rotation: f32,
   tint: vec3f,
+  instanceIndex: f32,
 };
 
 fn vertShader(
@@ -139,7 +146,7 @@ fn fragShader(
   uniforms: InstancedBasicUniforms,
   inst: InstancedBasicInstance,
 ) -> vec4f {
-  let pulse = 0.5 + 0.5 * sin(uniforms.time * 2.0 + uv.x * 3.14159);
+  let pulse = 0.5 + 0.5 * sin(uniforms.time * 2.0 + uv.x * 3.14159 + inst.instanceIndex * 0.001);
   let color = uniforms.color * inst.tint * pulse;
   return vec4f(color, 1.0);
 }
@@ -156,7 +163,8 @@ fn load_InstancedBasicInstance_fragment() -> InstancedBasicInstance {
   fragmentInputs.vInst_offset,
   fragmentInputs.vInst_scale,
   fragmentInputs.vInst_rotation,
-  fragmentInputs.vInst_tint
+  fragmentInputs.vInst_tint,
+  fragmentInputs.vInst_instanceIndex
   );
 }
 
@@ -221,6 +229,7 @@ export interface InstancedBasicInstance {
   scale: number;
   rotation: number;
   tint: readonly [number, number, number];
+  instanceIndex: number;
 }
 
 export interface InstanceAttrLayout<I> {
@@ -233,12 +242,13 @@ export interface InstanceAttrLayout<I> {
 }
 
 export const InstancedBasicInstanceAttrLayout: InstanceAttrLayout<InstancedBasicInstance> = {
-  size: 7,
+  size: 8,
   members: [
     { name: 'offset', offset: 0, floatCount: 2 },
     { name: 'scale', offset: 2, floatCount: 1 },
     { name: 'rotation', offset: 3, floatCount: 1 },
     { name: 'tint', offset: 4, floatCount: 3 },
+    { name: 'instanceIndex', offset: 7, floatCount: 1 },
   ],
 };
 
@@ -272,7 +282,7 @@ export function createInstancedBasicMaterial(scene: BABYLON.Scene, name: string 
     vertex: name,
     fragment: name,
   }, {
-    attributes: ['position', 'uv', 'inst_offset', 'inst_scale', 'inst_rotation', 'inst_tint'],
+    attributes: ['position', 'uv', 'inst_offset', 'inst_scale', 'inst_rotation', 'inst_tint', 'inst_instanceIndex'],
     uniforms: ['uniforms_time', 'uniforms_color', 'power2d_canvasWidth', 'power2d_canvasHeight'],
     samplers: [],
     samplerObjects: [],

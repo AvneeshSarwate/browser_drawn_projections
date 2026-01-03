@@ -81,6 +81,63 @@ export function packGridCircleInstancesGridCircleSettings(target: Float32Array, 
   }
 }
 
+export interface GridCircleInstancesInstanceData {
+  offset: Float32Array | readonly number[];
+  scale: number;
+  rotation: number;
+  tint: Float32Array | readonly number[];
+  instanceIndex: number;
+}
+
+export const GridCircleInstancesInstanceDataLayout = {
+  size: 32,
+  align: 16,
+  members: [
+  { name: 'offset', offset: 0, size: 8, slot: 2 },
+  { name: 'scale', offset: 8, size: 4, slot: 1 },
+  { name: 'rotation', offset: 12, size: 4, slot: 1 },
+  { name: 'tint', offset: 16, size: 12, slot: 4 },
+  { name: 'instanceIndex', offset: 28, size: 4, slot: 1 }
+  ] as const,
+} as const;
+
+export function packGridCircleInstancesInstanceData(target: Float32Array, floatOffset: number, value: GridCircleInstancesInstanceData): void {
+  {
+    const base = floatOffset + 0;
+    const offsetSource = value.offset as any;
+    for (let i = 0; i < 2; i++) {
+      const component = offsetSource?.[i];
+      target[base + i] = component !== undefined ? Number(component) : 0;
+    }
+  }
+  {
+    const base = floatOffset + 2;
+    const raw = value.scale;
+    target[base] = raw !== undefined ? Number(raw) : 0;
+  }
+  {
+    const base = floatOffset + 3;
+    const raw = value.rotation;
+    target[base] = raw !== undefined ? Number(raw) : 0;
+  }
+  {
+    const base = floatOffset + 4;
+    const tintSource = value.tint as any;
+    for (let i = 0; i < 3; i++) {
+      const component = tintSource?.[i];
+      target[base + i] = component !== undefined ? Number(component) : 0;
+    }
+    for (let i = 3; i < 4; i++) {
+      target[base + i] = 0;
+    }
+  }
+  {
+    const base = floatOffset + 7;
+    const raw = value.instanceIndex;
+    target[base] = raw !== undefined ? Number(raw) : 0;
+  }
+}
+
 const uniformLayout_settings = [
   { name: 'time', slot: 1 },
   { name: 'speed', slot: 1 },
@@ -229,25 +286,25 @@ export interface InstanceDataStorageState {
   floatsPerElement: number;
 }
 
-export function createStorageBuffer_instanceData(engine: BABYLON.WebGPUEngine, capacity: number, options?: { initial?: number[][]; usage?: number; }): InstanceDataStorageState {
-  const byteStride = 4;
+export function createStorageBuffer_instanceData(engine: BABYLON.WebGPUEngine, capacity: number, options?: { initial?: GridCircleInstancesInstanceData[]; usage?: number; }): InstanceDataStorageState {
+  const byteStride = 32;
   const floatsPerElement = byteStride / Float32Array.BYTES_PER_ELEMENT;
   const totalFloats = floatsPerElement * capacity;
   const data = new Float32Array(totalFloats);
   const usage = options?.usage ?? (BABYLON.Constants.BUFFER_CREATIONFLAG_STORAGE | BABYLON.Constants.BUFFER_CREATIONFLAG_WRITE);
   const buffer = new BABYLON.StorageBuffer(engine, byteStride * capacity, usage);
   if (options?.initial) {
-    data.set(options.initial.flat().slice(0, totalFloats));
+    options.initial.slice(0, capacity).forEach((value, index) => {
+      packGridCircleInstancesInstanceData(data, index * floatsPerElement, value);
+    });
     buffer.update(data);
   }
   return { buffer, data, capacity, floatsPerElement };
 }
 
-export function writeStorageValue_instanceData(state: InstanceDataStorageState, index: number, value: number[]): void {
+export function writeStorageValue_instanceData(state: InstanceDataStorageState, index: number, value: GridCircleInstancesInstanceData): void {
   const offset = index * state.floatsPerElement;
-  for (let i = 0; i < state.floatsPerElement; i++) {
-    state.data[offset + i] = value[i] ?? 0;
-  }
+  packGridCircleInstancesInstanceData(state.data, offset, value);
 }
 
 export function updateStorageBuffer_instanceData(state: InstanceDataStorageState): void {

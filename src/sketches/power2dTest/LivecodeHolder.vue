@@ -111,6 +111,7 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
       scale: 1.0,
       rotation: i * 0.2,
       tint: [0.8, 0.9, 1.0],
+      instanceIndex: i,
     })
   }
   batchedCircles.beforeRender()
