@@ -13,6 +13,9 @@ varying vUV: vec2<f32>;
 varying vArcLength: f32;
 varying vNormalizedArc: f32;
 uniform uniforms_color: vec3f;
+uniform power2d_shapeTranslate: vec2f;
+uniform power2d_shapeRotation: f32;
+uniform power2d_shapeScale: vec2f;
 uniform power2d_canvasWidth: f32;
 uniform power2d_canvasHeight: f32;
 uniform power2d_strokeThickness: f32;
@@ -49,6 +52,17 @@ fn load_BasicStrokeUniforms() -> BasicStrokeUniforms {
   );
 }
 
+fn power2d_applyShapeTransform(pixel: vec2f) -> vec2f {
+  let scaled = pixel * uniforms.power2d_shapeScale;
+  let s = sin(uniforms.power2d_shapeRotation);
+  let c = cos(uniforms.power2d_shapeRotation);
+  let rotated = vec2f(
+    scaled.x * c - scaled.y * s,
+    scaled.x * s + scaled.y * c,
+  );
+  return rotated + uniforms.power2d_shapeTranslate;
+}
+
 fn power2d_pixelToNDC(pixel: vec2f) -> vec4f {
   let ndcX = (pixel.x / uniforms.power2d_canvasWidth) * 2.0 - 1.0;
   let ndcY = -((pixel.y / uniforms.power2d_canvasHeight) * 2.0 - 1.0);
@@ -69,7 +83,8 @@ fn main(input : VertexInputs) -> FragmentInputs {
   let thickness = uniforms.power2d_strokeThickness;
   let uv = vertexInputs.uv;
   let adjustedPixelPos = strokeVertShader(centerPos, normal, side, arcLength, normalizedArc, miterFactor, thickness, uniformsValue);
-  vertexOutputs.position = power2d_pixelToNDC(adjustedPixelPos);
+  let transformedPixelPos = power2d_applyShapeTransform(adjustedPixelPos);
+  vertexOutputs.position = power2d_pixelToNDC(transformedPixelPos);
   vertexOutputs.vUV = uv;
   vertexOutputs.vArcLength = arcLength;
   vertexOutputs.vNormalizedArc = normalizedArc;
@@ -82,6 +97,9 @@ varying vUV: vec2<f32>;
 varying vArcLength: f32;
 varying vNormalizedArc: f32;
 uniform uniforms_color: vec3f;
+uniform power2d_shapeTranslate: vec2f;
+uniform power2d_shapeRotation: f32;
+uniform power2d_shapeScale: vec2f;
 uniform power2d_canvasWidth: f32;
 uniform power2d_canvasHeight: f32;
 uniform power2d_strokeThickness: f32;
@@ -195,13 +213,16 @@ export function createBasicStrokeMaterial(scene: BABYLON.Scene, name: string = '
     fragment: name,
   }, {
     attributes: ['position', 'uv', 'strokeNormal', 'strokeSide', 'strokeArcLength', 'strokeNormalizedArc', 'strokeMiterFactor'],
-    uniforms: ['uniforms_color', 'power2d_canvasWidth', 'power2d_canvasHeight', 'power2d_strokeThickness'],
+    uniforms: ['uniforms_color', 'power2d_shapeTranslate', 'power2d_shapeRotation', 'power2d_shapeScale', 'power2d_canvasWidth', 'power2d_canvasHeight', 'power2d_strokeThickness'],
     samplers: [],
     samplerObjects: [],
     shaderLanguage: BABYLON.ShaderLanguage.WGSL,
   });
 
   setBasicStrokeUniforms(material, BasicUniformDefaults);
+  material.setVector2('power2d_shapeTranslate', new BABYLON.Vector2(0, 0));
+  material.setFloat('power2d_shapeRotation', 0);
+  material.setVector2('power2d_shapeScale', new BABYLON.Vector2(1, 1));
   material.setFloat('power2d_strokeThickness', 1);
   material.disableDepthWrite = true;
   material.depthFunction = BABYLON.Constants.ALWAYS;

@@ -17,6 +17,9 @@ varying vInst_tint: vec3<f32>;
 varying vInst_instanceIndex: f32;
 uniform uniforms_time: f32;
 uniform uniforms_color: vec3f;
+uniform power2d_shapeTranslate: vec2f;
+uniform power2d_shapeRotation: f32;
+uniform power2d_shapeScale: vec2f;
 uniform power2d_canvasWidth: f32;
 uniform power2d_canvasHeight: f32;
 
@@ -75,6 +78,17 @@ fn load_InstancedBasicInstance_vertex() -> InstancedBasicInstance {
   );
 }
 
+fn power2d_applyShapeTransform(pixel: vec2f) -> vec2f {
+  let scaled = pixel * uniforms.power2d_shapeScale;
+  let s = sin(uniforms.power2d_shapeRotation);
+  let c = cos(uniforms.power2d_shapeRotation);
+  let rotated = vec2f(
+    scaled.x * c - scaled.y * s,
+    scaled.x * s + scaled.y * c,
+  );
+  return rotated + uniforms.power2d_shapeTranslate;
+}
+
 fn power2d_pixelToNDC(pixel: vec2f) -> vec4f {
   let ndcX = (pixel.x / uniforms.power2d_canvasWidth) * 2.0 - 1.0;
   let ndcY = -((pixel.y / uniforms.power2d_canvasHeight) * 2.0 - 1.0);
@@ -90,7 +104,8 @@ fn main(input : VertexInputs) -> FragmentInputs {
   let pixelPos = vec2f(vertexInputs.position.x, vertexInputs.position.y);
   let uv = vertexInputs.uv;
   let adjustedPixelPos = vertShader(pixelPos, uv, uniformsValue, instValue);
-  vertexOutputs.position = power2d_pixelToNDC(adjustedPixelPos);
+  let transformedPixelPos = power2d_applyShapeTransform(adjustedPixelPos);
+  vertexOutputs.position = power2d_pixelToNDC(transformedPixelPos);
   vertexOutputs.vUV = uv;
   vertexOutputs.vInst_offset = vertexInputs.inst_offset;
   vertexOutputs.vInst_scale = vertexInputs.inst_scale;
@@ -110,6 +125,9 @@ varying vInst_tint: vec3<f32>;
 varying vInst_instanceIndex: f32;
 uniform uniforms_time: f32;
 uniform uniforms_color: vec3f;
+uniform power2d_shapeTranslate: vec2f;
+uniform power2d_shapeRotation: f32;
+uniform power2d_shapeScale: vec2f;
 uniform power2d_canvasWidth: f32;
 uniform power2d_canvasHeight: f32;
 
@@ -283,13 +301,16 @@ export function createInstancedBasicMaterial(scene: BABYLON.Scene, name: string 
     fragment: name,
   }, {
     attributes: ['position', 'uv', 'inst_offset', 'inst_scale', 'inst_rotation', 'inst_tint', 'inst_instanceIndex'],
-    uniforms: ['uniforms_time', 'uniforms_color', 'power2d_canvasWidth', 'power2d_canvasHeight'],
+    uniforms: ['uniforms_time', 'uniforms_color', 'power2d_shapeTranslate', 'power2d_shapeRotation', 'power2d_shapeScale', 'power2d_canvasWidth', 'power2d_canvasHeight'],
     samplers: [],
     samplerObjects: [],
     shaderLanguage: BABYLON.ShaderLanguage.WGSL,
   });
 
   setInstancedBasicUniforms(material, InstancedBasicUniformDefaults);
+  material.setVector2('power2d_shapeTranslate', new BABYLON.Vector2(0, 0));
+  material.setFloat('power2d_shapeRotation', 0);
+  material.setVector2('power2d_shapeScale', new BABYLON.Vector2(1, 1));
   material.disableDepthWrite = true;
   material.depthFunction = BABYLON.Constants.ALWAYS;
   material.backFaceCulling = false;

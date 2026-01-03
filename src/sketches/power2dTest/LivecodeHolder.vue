@@ -142,6 +142,8 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
     canvasHeight: height,
   })
 
+  batchedCircles.y = 500
+
   for (let i = 0; i < instancedCount; i++) {
     const [x, y] = instancedBasePositions[i]
     batchedCircles.writeInstanceAttr(i, {
@@ -196,11 +198,13 @@ const setupSketch = (engine: BABYLON.WebGPUEngine) => {
   const webcamWidth = Math.round(webcamHeight * webcamAspect)
   webcamRect = new StyledShape({
     scene: powerScene,
-    points: RectPts({ x: 860, y: 80, width: webcamWidth, height: webcamHeight }),
+    points: RectPts({ x: 0, y: 0, width: webcamWidth, height: webcamHeight }),
     bodyMaterial: WebcamPixelMaterial,
     canvasWidth: width,
     canvasHeight: height,
   })
+  webcamRect.x = 1280
+  webcamRect.y = 80
   webcamRect.alphaIndex = 0
   if (webcamRect && powerScene) {
     const canvas = document.createElement('canvas')
