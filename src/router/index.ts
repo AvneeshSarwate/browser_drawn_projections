@@ -52,6 +52,7 @@ export const sketchNames = [
   'gestaltTest1',
   'text_projmap_sandbox',
   'mpe_projmap',
+  'mpe_projmapGL',
   'power2dTest',
   'power2dTestGL'
 ]
