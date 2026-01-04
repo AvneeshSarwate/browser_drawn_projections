@@ -234,12 +234,20 @@ export function createWebcamPixelMaterial(scene: BABYLON.Scene, name: string = '
     BABYLON.Texture.BILINEAR_SAMPLINGMODE,
   );
   const samplerState: Record<string, BABYLON.TextureSampler> = {};
+  const textureState: Partial<Record<WebcamPixelTextureName, BABYLON.BaseTexture | null>> = {};
   const applySamplerToTexture = (texture: BABYLON.BaseTexture | null, sampler: BABYLON.TextureSampler) => {
     if (!texture) return;
-    texture.wrapU = sampler.wrapU;
-    texture.wrapV = sampler.wrapV;
-    if ((sampler as any).wrapR !== undefined) {
-      texture.wrapR = (sampler as any).wrapR;
+    const wrapU = sampler.wrapU;
+    if (wrapU !== null && wrapU !== undefined) {
+      texture.wrapU = wrapU;
+    }
+    const wrapV = sampler.wrapV;
+    if (wrapV !== null && wrapV !== undefined) {
+      texture.wrapV = wrapV;
+    }
+    const wrapR = sampler.wrapR;
+    if (wrapR !== null && wrapR !== undefined) {
+      texture.wrapR = wrapR;
     }
     texture.updateSamplingMode(sampler.samplingMode);
   };
@@ -257,12 +265,13 @@ export function createWebcamPixelMaterial(scene: BABYLON.Scene, name: string = '
     setUniforms: (uniforms) => setWebcamPixelUniforms(material, uniforms),
     setTexture: (name, texture) => {
       material.setTexture(name, texture);
+      textureState[name] = texture;
       const sampler = samplerState[name] ?? defaultSampler;
       applySamplerToTexture(texture, sampler);
     },
     setTextureSampler: (name, sampler) => {
       samplerState[name] = sampler;
-      const texture = material.getTexture(name);
+      const texture = textureState[name] ?? null;
       applySamplerToTexture(texture, sampler);
     },
     setCanvasSize: (width, height) => {

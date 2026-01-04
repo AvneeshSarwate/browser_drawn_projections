@@ -23,7 +23,7 @@ export class CanvasTexture {
   private readonly samplingMode: number;
 
   private dynamicTexture: BABYLON.DynamicTexture;
-  private ctx: CanvasRenderingContext2D;
+  private ctx: BABYLON.ICanvasRenderingContext;
   private texWidth: number;
   private texHeight: number;
 
@@ -92,7 +92,7 @@ export class CanvasTexture {
     }
 
     this.ctx.clearRect(0, 0, width, height);
-    this.ctx.drawImage(canvas as any, 0, 0, width, height);
+    this.ctx.drawImage(canvas, 0, 0, width, height);
     this.dynamicTexture.update(false);
   }
 

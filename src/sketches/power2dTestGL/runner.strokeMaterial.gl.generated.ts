@@ -258,7 +258,7 @@ export interface RunnerStrokeMaterialInstance {
   dispose(): void;
 }
 
-export function createRunnerStrokeMaterial(scene: BABYLON.Scene, name: string = 'RunnerMaterial'): RunnerStrokeMaterialInstance {
+export function createRunnerStrokeMaterial(scene: BABYLON.Scene, name: string = 'RunnerStrokeMaterial'): RunnerStrokeMaterialInstance {
   const vertexShaderName = `${name}VertexShader`;
   const fragmentShaderName = `${name}FragmentShader`;
 
@@ -303,7 +303,7 @@ export function createRunnerStrokeMaterial(scene: BABYLON.Scene, name: string = 
   return handles;
 }
 
-export const RunnerMaterial: RunnerStrokeMaterialDef = {
+export const RunnerStrokeMaterial: RunnerStrokeMaterialDef = {
   uniformType: undefined as unknown as RunnerUniforms,
   textureNames: RunnerTextureNames,
   vertexSource: RunnerVertexSource,
@@ -313,4 +313,6 @@ export const RunnerMaterial: RunnerStrokeMaterialDef = {
   createMaterial: createRunnerStrokeMaterial,
 };
 
-export default RunnerMaterial;
+export const RunnerMaterial: RunnerStrokeMaterialDef = RunnerStrokeMaterial;
+
+export default RunnerStrokeMaterial;

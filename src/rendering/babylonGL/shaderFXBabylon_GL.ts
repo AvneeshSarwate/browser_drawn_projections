@@ -81,7 +81,7 @@ function resolveRenderTextureType(engine: BABYLON.Engine, precision: RenderPreci
 
 interface CanvasTextureEntry {
   texture: BABYLON.DynamicTexture
-  ctx: CanvasRenderingContext2D
+  ctx: BABYLON.ICanvasRenderingContext
   width: number
   height: number
 }
@@ -707,7 +707,7 @@ export class CustomShaderEffect<U extends object, I extends ShaderInputShape<I> 
 
     const ctx = entry.ctx
     ctx.clearRect(0, 0, width, height)
-    ctx.drawImage(imageSource as any, 0, 0, width, height)
+    ctx.drawImage(imageSource, 0, 0, width, height)
     entry.texture.update(false)
     entry.width = width
     entry.height = height
@@ -836,19 +836,29 @@ export class CanvasPaint extends CustomShaderEffect<Record<string, never>, Canva
     super(engine, inputs, {
       factory: (sceneRef, options) => {
         const material = createCanvasPaintMaterial(sceneRef, options?.name ?? 'CanvasPaintMaterial')
+        const textureState: Record<string, BABYLON.BaseTexture | null> = {}
         return {
           material,
-          setTexture: (name, texture) => material.setTexture(name, texture),
+          setTexture: (name, texture) => {
+            material.setTexture(name, texture)
+            textureState[name] = texture
+          },
           setTextureSampler: (name, sampler) => {
-            const texture = material.getTexture(name)
-            if (texture) {
-              texture.wrapU = sampler.wrapU
-              texture.wrapV = sampler.wrapV
-              if ((sampler as any).wrapR !== undefined) {
-                texture.wrapR = (sampler as any).wrapR
-              }
-              texture.updateSamplingMode(sampler.samplingMode)
+            const texture = textureState[name] ?? null
+            if (!texture) return
+            const wrapU = sampler.wrapU
+            if (wrapU !== null && wrapU !== undefined) {
+              texture.wrapU = wrapU
             }
+            const wrapV = sampler.wrapV
+            if (wrapV !== null && wrapV !== undefined) {
+              texture.wrapV = wrapV
+            }
+            const wrapR = sampler.wrapR
+            if (wrapR !== null && wrapR !== undefined) {
+              texture.wrapR = wrapR
+            }
+            texture.updateSamplingMode(sampler.samplingMode)
           },
           setUniforms: () => { },
         }
@@ -955,20 +965,30 @@ export function createPassthruMaterial(scene: BABYLON.Scene, options: PassthruMa
     samplers: ['src'],
     shaderLanguage: BABYLON.ShaderLanguage.GLSL,
   })
+  const textureState: Record<string, BABYLON.BaseTexture | null> = {}
 
   const handles: PassthruMaterialHandles = {
     material,
-    setTexture: (textureName, texture) => material.setTexture(textureName, texture),
+    setTexture: (textureName, texture) => {
+      material.setTexture(textureName, texture)
+      textureState[textureName] = texture
+    },
     setTextureSampler: (textureName, sampler) => {
-      const texture = material.getTexture(textureName)
-      if (texture) {
-        texture.wrapU = sampler.wrapU
-        texture.wrapV = sampler.wrapV
-        if ((sampler as any).wrapR !== undefined) {
-          texture.wrapR = (sampler as any).wrapR
-        }
-        texture.updateSamplingMode(sampler.samplingMode)
+      const texture = textureState[textureName] ?? null
+      if (!texture) return
+      const wrapU = sampler.wrapU
+      if (wrapU !== null && wrapU !== undefined) {
+        texture.wrapU = wrapU
       }
+      const wrapV = sampler.wrapV
+      if (wrapV !== null && wrapV !== undefined) {
+        texture.wrapV = wrapV
+      }
+      const wrapR = sampler.wrapR
+      if (wrapR !== null && wrapR !== undefined) {
+        texture.wrapR = wrapR
+      }
+      texture.updateSamplingMode(sampler.samplingMode)
     },
     setUniforms: () => { },
   }

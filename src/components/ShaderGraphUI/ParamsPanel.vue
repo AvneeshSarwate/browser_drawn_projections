@@ -1,18 +1,18 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { ShaderEffect, UniformDescriptor } from '@/rendering/shaderFXBabylon'
+import type { ShaderEffectLike, UniformDescriptorLike } from './types'
 import FloatSlider from './FloatSlider.vue'
 import VectorInput from './VectorInput.vue'
 
 const props = defineProps<{
-  effect: ShaderEffect
+  effect: ShaderEffectLike
 }>()
 
-const uniformMeta = computed<UniformDescriptor[]>(() => {
+const uniformMeta = computed<UniformDescriptorLike[]>(() => {
   if (!props.effect || typeof (props.effect as any).getUniformsMeta !== 'function') {
     return []
   }
-  return (props.effect as any).getUniformsMeta() as UniformDescriptor[]
+  return (props.effect as any).getUniformsMeta() as UniformDescriptorLike[]
 })
 
 const floatParams = computed(() => uniformMeta.value.filter((entry) => entry.kind === 'f32'))

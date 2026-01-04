@@ -1,3 +1,4 @@
+/* eslint-disable no-useless-escape */
 import { promises as fs } from 'node:fs';
 import * as path from 'node:path';
 import { parseFunctions, parseStructs, type GlslArgument, type GlslStruct } from './parseGlsl';
@@ -481,6 +482,10 @@ export async function generateFragmentShaderArtifacts(filePath: string, options:
   if (textureParams.length === 0) {
     throw new Error('At least one texture argument is required for a pass.');
   }
+  const primaryTexture = textureParams[0];
+  if (!primaryTexture) {
+    throw new Error('At least one texture argument is required for a pass.');
+  }
 
   const shaderBaseName = path.basename(basePath);
   const shaderPrefix = toPascalCase(shaderBaseName);
@@ -609,7 +614,7 @@ export async function generateFragmentShaderArtifacts(filePath: string, options:
   });
   tsLines.push(`] as const;`);
   tsLines.push(`export const ${shaderPrefix}PassCount = ${passCount} as const;`);
-  tsLines.push(`export const ${shaderPrefix}PrimaryTextureName = '${textureParams[0].textureName}' as const;`);
+  tsLines.push(`export const ${shaderPrefix}PrimaryTextureName = '${primaryTexture.textureName}' as const;`);
   tsLines.push('');
 
   const passTextureSourceLines: string[] = [];
@@ -706,9 +711,7 @@ export async function generateFragmentShaderArtifacts(filePath: string, options:
   tsLines.push(`export function create${shaderPrefix}Material(scene: BABYLON.Scene, options: ${materialOptionsName} = {}): ${materialHandlesName} {`);
   tsLines.push('  const passIndex = options.passIndex ?? 0;');
   tsLines.push(`  if (passIndex < 0 || passIndex >= ${passCount}) {`);
-  tsLines.push(`    throw new Error(
-      \\`Invalid passIndex \\${passIndex} for ${shaderPrefix}. Expected 0 <= passIndex < ${passCount}.\\`
-    );`);
+  tsLines.push(`    throw new Error('Invalid passIndex ' + passIndex + ' for ${shaderPrefix}. Expected 0 <= passIndex < ${passCount}.');`);
   tsLines.push('  }');
   tsLines.push(`  const baseName = options.name ?? '${shaderPrefix}Material';`);
   tsLines.push('  const shaderName = `${baseName}_pass${passIndex}`;');
@@ -738,12 +741,20 @@ export async function generateFragmentShaderArtifacts(filePath: string, options:
   tsLines.push('    BABYLON.Texture.BILINEAR_SAMPLINGMODE,');
   tsLines.push('  );');
   tsLines.push('  const samplerState: Record<string, BABYLON.TextureSampler> = {};');
+  tsLines.push(`  const textureState: Partial<Record<${shaderPrefix}TextureName, BABYLON.BaseTexture | null>> = {};`);
   tsLines.push('  const applySamplerToTexture = (texture: BABYLON.BaseTexture | null, sampler: BABYLON.TextureSampler) => {');
   tsLines.push('    if (!texture) return;');
-  tsLines.push('    texture.wrapU = sampler.wrapU;');
-  tsLines.push('    texture.wrapV = sampler.wrapV;');
-  tsLines.push('    if ((sampler as any).wrapR !== undefined) {');
-  tsLines.push('      texture.wrapR = (sampler as any).wrapR;');
+  tsLines.push('    const wrapU = sampler.wrapU;');
+  tsLines.push('    if (wrapU !== null && wrapU !== undefined) {');
+  tsLines.push('      texture.wrapU = wrapU;');
+  tsLines.push('    }');
+  tsLines.push('    const wrapV = sampler.wrapV;');
+  tsLines.push('    if (wrapV !== null && wrapV !== undefined) {');
+  tsLines.push('      texture.wrapV = wrapV;');
+  tsLines.push('    }');
+  tsLines.push('    const wrapR = sampler.wrapR;');
+  tsLines.push('    if (wrapR !== null && wrapR !== undefined) {');
+  tsLines.push('      texture.wrapR = wrapR;');
   tsLines.push('    }');
   tsLines.push('    texture.updateSamplingMode(sampler.samplingMode);');
   tsLines.push('  };');
@@ -753,12 +764,13 @@ export async function generateFragmentShaderArtifacts(filePath: string, options:
   tsLines.push('    material,');
   tsLines.push('    setTexture: (name, texture) => {');
   tsLines.push('      material.setTexture(name, texture);');
+  tsLines.push('      textureState[name] = texture;');
   tsLines.push('      const sampler = samplerState[name] ?? defaultSampler;');
   tsLines.push('      applySamplerToTexture(texture, sampler);');
   tsLines.push('    },');
   tsLines.push('    setTextureSampler: (name, sampler) => {');
   tsLines.push('      samplerState[name] = sampler;');
-  tsLines.push('      const texture = material.getTexture(name);');
+  tsLines.push('      const texture = textureState[name] ?? null;');
   tsLines.push('      applySamplerToTexture(texture, sampler);');
   tsLines.push('    },');
   tsLines.push(`    setUniforms: ${(setUniformsFunctionName ?? `(_uniforms) => { }`)},`);
@@ -781,7 +793,7 @@ export async function generateFragmentShaderArtifacts(filePath: string, options:
   tsLines.push(`      textureBindingKeys: ${inputTextureNamesArrayLiteral},`);
   tsLines.push(`      passTextureSources: ${shaderPrefix}PassTextureSources,`);
   tsLines.push(`      passCount: ${passCount},`);
-  tsLines.push(`      primaryTextureKey: '${textureParams[0].textureName}',`);
+  tsLines.push(`      primaryTextureKey: '${primaryTexture.textureName}',`);
   tsLines.push('      width,');
   tsLines.push('      height,');
   tsLines.push(`      materialName: '${shaderPrefix}Material',`);

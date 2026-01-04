@@ -13,7 +13,7 @@ import { RunnerStrokeMaterial } from './runner.strokeMaterial.gl.generated';
 
 const TEST_CANVAS_SIZE = { width: 320, height: 200 };
 
-const appState = inject<Power2DTestAppState>(appStateName)!!;
+const appState = inject<Power2DTestAppState>(appStateName)!;
 let shaderGraphEndNode: ShaderEffect | undefined = undefined;
 let engineWatcher: WatchStopHandle | undefined;
 

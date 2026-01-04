@@ -2,13 +2,13 @@
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 import cytoscape from 'cytoscape'
 import dagre from 'cytoscape-dagre'
-import type { GraphEdge, GraphNode } from '@/rendering/shaderFXBabylon'
+import type { GraphEdgeView, GraphNodeView } from './types'
 
 cytoscape.use(dagre)
 
 const props = defineProps<{
-  nodes: GraphNode[]
-  edges: GraphEdge[]
+  nodes: GraphNodeView[]
+  edges: GraphEdgeView[]
   selectedNodeId?: string | null
 }>()
 

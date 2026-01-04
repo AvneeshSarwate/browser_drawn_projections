@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import type { ShaderEffect, UniformDescriptor } from '@/rendering/shaderFXBabylon'
+import type { ShaderEffectLike, UniformDescriptorLike } from './types'
 
 const axisLabels = ['x', 'y', 'z', 'w'] as const
 
 const props = defineProps<{
-  effect: ShaderEffect
-  param: UniformDescriptor
+  effect: ShaderEffectLike
+  param: UniformDescriptorLike
 }>()
 
 const componentCount = computed(() => {

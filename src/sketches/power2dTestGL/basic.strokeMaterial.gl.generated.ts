@@ -198,7 +198,7 @@ export interface BasicStrokeMaterialInstance {
   dispose(): void;
 }
 
-export function createBasicStrokeMaterial(scene: BABYLON.Scene, name: string = 'BasicMaterial'): BasicStrokeMaterialInstance {
+export function createBasicStrokeMaterial(scene: BABYLON.Scene, name: string = 'BasicStrokeMaterial'): BasicStrokeMaterialInstance {
   const vertexShaderName = `${name}VertexShader`;
   const fragmentShaderName = `${name}FragmentShader`;
 
@@ -243,7 +243,7 @@ export function createBasicStrokeMaterial(scene: BABYLON.Scene, name: string = '
   return handles;
 }
 
-export const BasicMaterial: BasicStrokeMaterialDef = {
+export const BasicStrokeMaterial: BasicStrokeMaterialDef = {
   uniformType: undefined as unknown as BasicUniforms,
   textureNames: BasicTextureNames,
   vertexSource: BasicVertexSource,
@@ -253,4 +253,6 @@ export const BasicMaterial: BasicStrokeMaterialDef = {
   createMaterial: createBasicStrokeMaterial,
 };
 
-export default BasicMaterial;
+export const BasicMaterial: BasicStrokeMaterialDef = BasicStrokeMaterial;
+
+export default BasicStrokeMaterial;

@@ -1,15 +1,15 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import type { ShaderEffect, ShaderGraph } from '@/rendering/shaderFXBabylon'
+import type { GraphEdgeView, GraphNodeView, ShaderEffectLike, ShaderGraphLike } from './types'
 import GraphPanel from './GraphPanel.vue'
 import ParamsPanel from './ParamsPanel.vue'
 
 const props = defineProps<{
-  finalEffect: ShaderEffect | null | undefined
+  finalEffect: ShaderEffectLike | null | undefined
 }>()
 
 const selectedEffectId = ref<string | null>(null)
-const selectedEffect = ref<ShaderEffect | null>(null)
+const selectedEffect = ref<ShaderEffectLike | null>(null)
 
 function setSelectedNode(nodeId: string | null) {
   if (!nodeId) {
@@ -27,13 +27,19 @@ function setSelectedNode(nodeId: string | null) {
   selectedEffect.value = node.ref
 }
 
-const graph = computed<ShaderGraph>(() => {
+const graph = computed<ShaderGraphLike>(() => {
   const effect = props.finalEffect
   if (effect && typeof (effect as any).getGraph === 'function') {
-    return (effect as any).getGraph() as ShaderGraph
+    return (effect as any).getGraph() as ShaderGraphLike
   }
   return { nodes: [], edges: [] }
 })
+
+const graphNodes = computed<GraphNodeView[]>(() =>
+  graph.value.nodes.map((node) => ({ id: node.id, name: node.name })),
+)
+
+const graphEdges = computed<GraphEdgeView[]>(() => graph.value.edges.map((edge) => ({ from: edge.from, to: edge.to })))
 
 watch(
   () => props.finalEffect,
@@ -73,8 +79,8 @@ const hasGraphData = computed(() => graph.value.nodes.length > 0)
       <div class="graph-section">
         <h3>Effect Chain</h3>
         <GraphPanel
-          :nodes="graph.nodes"
-          :edges="graph.edges"
+          :nodes="graphNodes"
+          :edges="graphEdges"
           :selected-node-id="selectedId ?? undefined"
           @node-click="onNodeClick"
         />
@@ -83,7 +89,7 @@ const hasGraphData = computed(() => graph.value.nodes.length > 0)
       <div class="params-section">
         <h3>Parameters</h3>
         <div class="params-scroll">
-          <ParamsPanel v-if="selectedEffect" :effect="selectedEffect as ShaderEffect" />
+          <ParamsPanel v-if="selectedEffect" :effect="selectedEffect" />
           <div v-else class="no-selection">
             Click a node to view parameters
           </div>
