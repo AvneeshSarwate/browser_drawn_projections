@@ -34,18 +34,15 @@ export function parseStructs(source: string): GlslStruct[] {
   while ((match = structRegex.exec(source))) {
     const structName = match[1];
     const body = match[2];
+    const cleanedBody = stripComments(body);
     const members: GlslStructMember[] = [];
-    const lines = body.split(';');
+    const lines = cleanedBody.split(';');
     for (const rawLine of lines) {
       const trimmed = rawLine.trim();
       if (!trimmed) {
         continue;
       }
-      const line = trimmed.split('//')[0].trim();
-      if (!line) {
-        continue;
-      }
-      const tokens = line.split(/\s+/).filter(Boolean);
+      const tokens = trimmed.split(/\s+/).filter(Boolean);
       if (tokens.length < 2) {
         continue;
       }

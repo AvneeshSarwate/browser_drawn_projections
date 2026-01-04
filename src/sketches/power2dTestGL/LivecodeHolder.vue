@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import { appStateName, type Power2DTestAppState, bypassPostRef, engineRef, shaderGraphEndNodeRef, resolution } from './appState';
 import { inject, onMounted, onUnmounted, watch, type WatchStopHandle } from 'vue';
-import { CanvasPaint, PassthruEffect, type ShaderEffect } from '@/rendering/babylonGL/shaderFXBabylon_GL';
+import { CanvasPaint, FeedbackNode, PassthruEffect, type ShaderEffect } from '@/rendering/babylonGL/shaderFXBabylon_GL';
+import { VerticalBlurEffect } from '@/rendering/postFX/verticalBlur.frag.gl.generated';
+import { HorizontalBlurEffect } from '@/rendering/postFX/horizontalBlur.frag.gl.generated';
+import { LayerBlendEffect } from '@/rendering/postFX/layerBlend.frag.gl.generated';
+import { TransformEffect } from '@/rendering/postFX/transform.frag.gl.generated';
+import { BloomEffect } from '@/rendering/postFX/bloom.frag.gl.generated';
 import * as BABYLON from 'babylonjs';
 import Stats from 'stats-gl';
 import { createPower2DScene, RectPts, CirclePts, StyledShape, BatchedStyledShape, CanvasTexture } from '@/rendering/babylonGL/power2d';
@@ -25,7 +30,7 @@ let batchedCircles: BatchedStyledShape<typeof InstancedBasicMaterial> | undefine
 let webcamRect: StyledShape<typeof WebcamPixelMaterial> | undefined;
 let testCanvasElement: HTMLCanvasElement | undefined;
 let testCanvasTexture: CanvasTexture | undefined;
-let canvasPaint: CanvasPaint | undefined;
+let bypassCanvasPaint: CanvasPaint | undefined;
 let stats: Stats | undefined;
 
 const drawToCanvas = (canvas: HTMLCanvasElement, time: number) => {
@@ -209,7 +214,22 @@ const setupSketch = (engine: BABYLON.Engine) => {
   }
 
   const passthru = new PassthruEffect(engine, { src: powerTarget }, renderWidth, renderHeight, 'linear');
-  canvasPaint = new CanvasPaint(engine, { src: passthru }, renderWidth, renderHeight);
+  const bypassPassthru = new PassthruEffect(engine, { src: powerTarget }, renderWidth, renderHeight, 'linear');
+  const feedback = new FeedbackNode(engine, passthru, renderWidth, renderHeight, 'linear', 'half_float');
+  const vertBlur = new VerticalBlurEffect(engine, { src: feedback }, renderWidth, renderHeight);
+  const horBlur = new HorizontalBlurEffect(engine, { src: vertBlur }, renderWidth, renderHeight);
+  const transform = new TransformEffect(engine, { src: horBlur }, renderWidth, renderHeight);
+  const layerOverlay = new LayerBlendEffect(engine, { src1: passthru, src2: transform }, renderWidth, renderHeight);
+  feedback.setFeedbackSrc(layerOverlay);
+
+  const bloom = new BloomEffect(engine, { src: layerOverlay }, renderWidth, renderHeight);
+
+  transform.setUniforms({ rotate: 0, anchor: [0.5, 0.5], translate: [0, 0], scale: [0.995, 0.995] });
+  vertBlur.setUniforms({ pixels: 2, resolution: renderHeight });
+  horBlur.setUniforms({ pixels: 2, resolution: renderWidth });
+
+  const canvasPaint = new CanvasPaint(engine, { src: bloom }, renderWidth, renderHeight);
+  bypassCanvasPaint = new CanvasPaint(engine, { src: bypassPassthru }, renderWidth, renderHeight);
   shaderGraphEndNode = canvasPaint;
   shaderGraphEndNodeRef.value = shaderGraphEndNode;
 
@@ -259,16 +279,16 @@ const setupSketch = (engine: BABYLON.Engine) => {
     }
 
     engine.beginFrame();
+    powerTarget?.render();
+    engine.restoreDefaultFramebuffer();
     if (bypassPostRef.value) {
-      engine.restoreDefaultFramebuffer();
-      powerScene?.render(false);
+      bypassCanvasPaint?.renderAll(engine);
       engine.endFrame();
       statsRef?.end();
       statsRef?.update();
       return;
     }
-    powerTarget?.render();
-    canvasPaint?.renderAll(engine);
+    shaderGraphEndNode?.renderAll(engine);
     engine.endFrame();
     statsRef?.end();
     statsRef?.update();
@@ -317,8 +337,8 @@ onUnmounted(() => {
     stats.dom.remove();
     stats = undefined;
   }
-  canvasPaint?.disposeAll();
-  canvasPaint = undefined;
+  bypassCanvasPaint?.disposeAll();
+  bypassCanvasPaint = undefined;
   shaderGraphEndNode?.disposeAll();
   shaderGraphEndNode = undefined;
   shaderGraphEndNodeRef.value = undefined;
