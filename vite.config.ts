@@ -10,6 +10,8 @@ import vueDevTools from 'vite-plugin-vue-devtools'
 import { wgslTypesPlugin } from './node_src/wgsl/vitePlugin'
 import { wgslFragmentPlugin } from './node_src/wgsl/viteFragmentPlugin'
 import { wgslMaterialPlugin, wgslStrokeMaterialPlugin } from './node_src/wgsl/viteMaterialPlugin'
+import { glslFragmentPlugin } from './node_src/glsl/viteFragmentPlugin_GL'
+import { glslMaterialPlugin, glslStrokeMaterialPlugin } from './node_src/glsl/viteMaterialPlugin_GL'
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -19,6 +21,9 @@ export default defineConfig({
     wgslFragmentPlugin(),
     wgslMaterialPlugin(),
     wgslStrokeMaterialPlugin(),
+    glslFragmentPlugin(),
+    glslMaterialPlugin(),
+    glslStrokeMaterialPlugin(),
     vue(), 
     // react(),
     // vueJsx()

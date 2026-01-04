@@ -52,7 +52,8 @@ export const sketchNames = [
   'gestaltTest1',
   'text_projmap_sandbox',
   'mpe_projmap',
-  'power2dTest'
+  'power2dTest',
+  'power2dTestGL'
 ]
 
 const sketchRoutes = sketchNames.map(name => {
