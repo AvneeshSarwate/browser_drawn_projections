@@ -131,6 +131,14 @@ function escapeTemplateLiteral(value: string): string {
     .replace(/\$\{/g, '\\${')}\``;
 }
 
+function toImportPath(relativePath: string): string {
+  const normalized = relativePath.replace(/\\/g, '/');
+  if (normalized.startsWith('.')) {
+    return normalized;
+  }
+  return `./${normalized}`;
+}
+
 async function writeFileIfChanged(filePath: string, content: string): Promise<boolean> {
   let existing: string | null = null;
   try {
@@ -554,7 +562,9 @@ export async function generateFragmentShaderArtifacts(filePath: string, options:
   const uniformInterfaceName = `${shaderPrefix}Uniforms`;
   const uniformMetaConstName = `${shaderPrefix}UniformMeta`;
 
-  const shaderFxImportPath = '../babylonGL/shaderFXBabylon_GL';
+  const shaderFxImportPath = toImportPath(
+    path.relative(path.dirname(typesPath), path.join(projectRoot, 'src/rendering/babylonGL/shaderFXBabylon_GL')),
+  );
   const shaderFxImports = [
     'CustomShaderEffect',
     'type ShaderSource',

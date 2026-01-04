@@ -2,11 +2,11 @@
 import { appStateName, type Power2DTestAppState, bypassPostRef, engineRef, shaderGraphEndNodeRef, resolution } from './appState';
 import { inject, onMounted, onUnmounted, watch, type WatchStopHandle } from 'vue';
 import { CanvasPaint, FeedbackNode, PassthruEffect, type ShaderEffect } from '@/rendering/babylonGL/shaderFXBabylon_GL';
-import { VerticalBlurEffect } from '@/rendering/postFX/verticalBlur.frag.gl.generated';
-import { HorizontalBlurEffect } from '@/rendering/postFX/horizontalBlur.frag.gl.generated';
-import { LayerBlendEffect } from '@/rendering/postFX/layerBlend.frag.gl.generated';
-import { TransformEffect } from '@/rendering/postFX/transform.frag.gl.generated';
-import { BloomEffect } from '@/rendering/postFX/bloom.frag.gl.generated';
+import { VerticalBlurEffect } from '@/rendering/babylonGL/postFX/verticalBlur.frag.gl.generated';
+import { HorizontalBlurEffect } from '@/rendering/babylonGL/postFX/horizontalBlur.frag.gl.generated';
+import { LayerBlendEffect } from '@/rendering/babylonGL/postFX/layerBlend.frag.gl.generated';
+import { TransformEffect } from '@/rendering/babylonGL/postFX/transform.frag.gl.generated';
+import { BloomEffect } from '@/rendering/babylonGL/postFX/bloom.frag.gl.generated';
 import * as BABYLON from 'babylonjs';
 import Stats from 'stats-gl';
 import { createPower2DScene, RectPts, CirclePts, StyledShape, BatchedStyledShape, CanvasTexture } from '@/rendering/babylonGL/power2d';
