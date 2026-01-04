@@ -3,6 +3,7 @@ import { bboxOfPoints, getFxMeta } from './textRegionUtils'
 import type { PolygonRenderData } from '@/canvas/canvasState'
 import type { FxChainMeta } from './appState'
 import { PassthruEffect } from '@/rendering/babylonGL/shaderFXBabylon_GL'
+import { TransformEffect } from '@/rendering/babylonGL/postFX/transform.frag.gl.generated'
 import { WobbleEffect } from '@/rendering/babylonGL/postFX/wobble.frag.gl.generated'
 import { HorizontalBlurEffect } from '@/rendering/babylonGL/postFX/horizontalBlur.frag.gl.generated'
 import { VerticalBlurEffect } from '@/rendering/babylonGL/postFX/verticalBlur.frag.gl.generated'
@@ -24,6 +25,7 @@ export type PolygonFxSyncOptions = {
 
 type ChainBundle = {
   end: ShaderEffect
+  flip?: TransformEffect
   wobble: WobbleEffect
   hBlur: HorizontalBlurEffect
   vBlur: VerticalBlurEffect
@@ -46,6 +48,10 @@ type MeshBundle = {
 const chains = new Map<string, ChainBundle>()
 const meshes = new Map<string, MeshBundle>()
 let overlayScene: BABYLON.Scene | undefined
+
+// WebGL samples canvas textures with Y-up UVs, but p5/canvas data is Y-down.
+// Flip once at the input so downstream effects stay consistent with WebGPU.
+const FLIP_P5_CANVAS_Y = true
 
 const MPE_PIXELATE_MIN = 1
 const MPE_PIXELATE_MAX = 24
@@ -98,7 +104,13 @@ const createChain = (
   if (w < 1 || h < 1) return null
 
   const srcPass = new PassthruEffect(engine, { src: graphics.elt as HTMLCanvasElement }, w, h)
-  const wobble = new WobbleEffect(engine, { src: srcPass }, w, h)
+  const flip = FLIP_P5_CANVAS_Y
+    ? new TransformEffect(engine, { src: srcPass }, w, h)
+    : undefined
+  if (flip) {
+    flip.setUniforms({ rotate: 0, anchor: [0.5, 0.5], translate: [0, 0], scale: [1, -1] })
+  }
+  const wobble = new WobbleEffect(engine, { src: flip ?? srcPass }, w, h)
   const hBlur = new HorizontalBlurEffect(engine, { src: wobble }, w, h)
   const vBlur = new VerticalBlurEffect(engine, { src: hBlur }, w, h)
   const pixelate = new PixelateEffect(engine, { src: vBlur }, w, h, 'nearest')
@@ -118,6 +130,7 @@ const createChain = (
   const { fxKey } = makeKeys({ minX: bboxPx.minX, minY: bboxPx.minY, w, h }, fx)
   return {
     end: alphaThresh,
+    flip,
     wobble,
     hBlur,
     vBlur,
@@ -125,7 +138,7 @@ const createChain = (
     width: w,
     height: h,
     fxKey,
-    owned: [alphaThresh, pixelate, vBlur, hBlur, wobble, srcPass],
+    owned: [alphaThresh, pixelate, vBlur, hBlur, wobble, ...(flip ? [flip] : []), srcPass],
     graphics,
     bboxPx,
     bboxLogical,
