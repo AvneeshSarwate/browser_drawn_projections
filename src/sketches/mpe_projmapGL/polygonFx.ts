@@ -9,6 +9,7 @@ import { HorizontalBlurEffect } from '@/rendering/babylonGL/postFX/horizontalBlu
 import { VerticalBlurEffect } from '@/rendering/babylonGL/postFX/verticalBlur.frag.gl.generated'
 import { PixelateEffect } from '@/rendering/babylonGL/postFX/pixelate.frag.gl.generated'
 import { AlphaThresholdEffect } from '@/rendering/babylonGL/postFX/alphaThreshold.frag.gl.generated'
+import { PolygonMaskEffect } from '@/rendering/babylonGL/postFX/polygonMask.frag.gl.generated'
 import type { ShaderEffect } from '@/rendering/babylonGL/shaderFXBabylon_GL'
 import type { RenderState } from './textRegionUtils'
 import { getTextStyle, getTextAnim } from './textRegionUtils'
@@ -30,6 +31,7 @@ type ChainBundle = {
   hBlur: HorizontalBlurEffect
   vBlur: VerticalBlurEffect
   pixelate: PixelateEffect
+  mask: PolygonMaskEffect
   width: number
   height: number
   fxKey: string
@@ -55,6 +57,20 @@ const FLIP_P5_CANVAS_Y = true
 
 const MPE_PIXELATE_MIN = 1
 const MPE_PIXELATE_MAX = 24
+const POLYGON_MASK_MAX_POINTS = 64
+
+const getPolygonMaskUniforms = (
+  poly: PolygonRenderData[number],
+  bboxLogical: { minX: number; minY: number; w: number; h: number },
+) => {
+  const w = Math.max(1e-6, bboxLogical.w)
+  const h = Math.max(1e-6, bboxLogical.h)
+  const points = poly.points.slice(0, POLYGON_MASK_MAX_POINTS).map((point) => ({
+    x: Math.min(1, Math.max(0, (point.x - bboxLogical.minX) / w)),
+    y: Math.min(1, Math.max(0, (point.y - bboxLogical.minY) / h)),
+  }))
+  return { points, pointCount: points.length }
+}
 
 const getMpePixelateSize = (renderState?: RenderState): number => {
   const timbre = renderState?.mpeVoice?.timbre
@@ -115,6 +131,7 @@ const createChain = (
   const vBlur = new VerticalBlurEffect(engine, { src: hBlur }, w, h)
   const pixelate = new PixelateEffect(engine, { src: vBlur }, w, h, 'nearest')
   const alphaThresh = new AlphaThresholdEffect(engine, { src: pixelate }, w, h)
+  const mask = new PolygonMaskEffect(engine, { src: alphaThresh }, w, h)
 
   wobble.setUniforms({
     xStrength: fx.wobbleX,
@@ -129,16 +146,17 @@ const createChain = (
 
   const { fxKey } = makeKeys({ minX: bboxPx.minX, minY: bboxPx.minY, w, h }, fx)
   return {
-    end: alphaThresh,
+    end: mask,
     flip,
     wobble,
     hBlur,
     vBlur,
     pixelate,
+    mask,
     width: w,
     height: h,
     fxKey,
-    owned: [alphaThresh, pixelate, vBlur, hBlur, wobble, ...(flip ? [flip] : []), srcPass],
+    owned: [mask, alphaThresh, pixelate, vBlur, hBlur, wobble, ...(flip ? [flip] : []), srcPass],
     graphics,
     bboxPx,
     bboxLogical,
@@ -372,6 +390,7 @@ export const syncChainsAndMeshes = (
       }
       const rs = renderStates.get(poly.id)
       redrawGraphics(graphics, poly, bboxLogical, rs)
+      chain.mask.setUniforms(getPolygonMaskUniforms(poly, bboxLogical))
       chain.bboxLogical = bboxLogical
       chain.bboxPx = bboxPx
       chain.poly = poly
@@ -397,6 +416,7 @@ export const syncChainsAndMeshes = (
       prev.poly = poly
       const rs = renderStates.get(poly.id)
       redrawGraphics(prev.graphics, poly, bboxLogical, rs)
+      prev.mask.setUniforms(getPolygonMaskUniforms(poly, bboxLogical))
       createOrUpdateMesh(poly.id, engine, prev, bboxLogical, canvasLogical)
     }
   }

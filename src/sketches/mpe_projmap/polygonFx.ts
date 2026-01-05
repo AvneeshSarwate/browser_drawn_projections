@@ -8,6 +8,7 @@ import { HorizontalBlurEffect } from '@/rendering/postFX/horizontalBlur.frag.gen
 import { VerticalBlurEffect } from '@/rendering/postFX/verticalBlur.frag.generated'
 import { PixelateEffect } from '@/rendering/postFX/pixelate.frag.generated'
 import { AlphaThresholdEffect } from '@/rendering/postFX/alphaThreshold.frag.generated'
+import { PolygonMaskEffect } from '@/rendering/postFX/polygonMask.frag.generated'
 import type { ShaderEffect } from '@/rendering/shaderFXBabylon'
 import type { RenderState } from './textRegionUtils'
 import { getTextStyle, getTextAnim } from './textRegionUtils'
@@ -29,6 +30,7 @@ type ChainBundle = {
   hBlur: HorizontalBlurEffect
   vBlur: VerticalBlurEffect
   pixelate: PixelateEffect
+  mask: PolygonMaskEffect
   width: number
   height: number
   fxKey: string
@@ -62,6 +64,20 @@ let overlayScene: BABYLON.Scene | undefined
 
 const MPE_PIXELATE_MIN = 1
 const MPE_PIXELATE_MAX = 24
+const POLYGON_MASK_MAX_POINTS = 64
+
+const getPolygonMaskUniforms = (
+  poly: PolygonRenderData[number],
+  bboxLogical: { minX: number; minY: number; w: number; h: number },
+) => {
+  const w = Math.max(1e-6, bboxLogical.w)
+  const h = Math.max(1e-6, bboxLogical.h)
+  const points = poly.points.slice(0, POLYGON_MASK_MAX_POINTS).map((point) => ({
+    x: Math.min(1, Math.max(0, (point.x - bboxLogical.minX) / w)),
+    y: Math.min(1, Math.max(0, (point.y - bboxLogical.minY) / h)),
+  }))
+  return { points, pointCount: points.length }
+}
 
 const getMpePixelateSize = (renderState?: RenderState): number => {
   const timbre = renderState?.mpeVoice?.timbre
@@ -116,6 +132,7 @@ const createChain = (
   const vBlur = new VerticalBlurEffect(engine, { src: hBlur }, w, h)
   const pixelate = new PixelateEffect(engine, { src: vBlur }, w, h, 'nearest')
   const alphaThresh = new AlphaThresholdEffect(engine, { src: pixelate }, w, h)
+  const mask = new PolygonMaskEffect(engine, { src: alphaThresh }, w, h)
 
   wobble.setUniforms({
     xStrength: fx.wobbleX,
@@ -130,15 +147,16 @@ const createChain = (
 
   const { fxKey } = makeKeys({ minX: bboxPx.minX, minY: bboxPx.minY, w, h }, fx)
   return {
-    end: alphaThresh,
+    end: mask,
     wobble,
     hBlur,
     vBlur,
     pixelate,
+    mask,
     width: w,
     height: h,
     fxKey,
-    owned: [alphaThresh, pixelate, vBlur, hBlur, wobble, srcPass],
+    owned: [mask, alphaThresh, pixelate, vBlur, hBlur, wobble, srcPass],
     graphics,
     bboxPx,
     bboxLogical,
@@ -443,10 +461,11 @@ export const syncChainsAndMeshes = (
           return
         }
         const rs = renderStates.get(poly.id)
-        redrawGraphics(graphics, poly, bboxLogical, rs)
-        chain.bboxLogical = bboxLogical
-        chain.bboxPx = bboxPx
-        chain.poly = poly
+      redrawGraphics(graphics, poly, bboxLogical, rs)
+      chain.mask.setUniforms(getPolygonMaskUniforms(poly, bboxLogical))
+      chain.bboxLogical = bboxLogical
+      chain.bboxPx = bboxPx
+      chain.poly = poly
         chain.fxKey = fxKey
         chains.set(poly.id, chain)
         createOrUpdateMesh(poly.id, engine, chain, bboxLogical, canvasLogical)
@@ -464,12 +483,13 @@ export const syncChainsAndMeshes = (
           prev.fxKey = fxKey
         }
 
-        prev.bboxLogical = bboxLogical
-        prev.bboxPx = bboxPx
-        prev.poly = poly
-        const rs = renderStates.get(poly.id)
-        redrawGraphics(prev.graphics, poly, bboxLogical, rs)
-        createOrUpdateMesh(poly.id, engine, prev, bboxLogical, canvasLogical)
+      prev.bboxLogical = bboxLogical
+      prev.bboxPx = bboxPx
+      prev.poly = poly
+      const rs = renderStates.get(poly.id)
+      redrawGraphics(prev.graphics, poly, bboxLogical, rs)
+      prev.mask.setUniforms(getPolygonMaskUniforms(poly, bboxLogical))
+      createOrUpdateMesh(poly.id, engine, prev, bboxLogical, canvasLogical)
       }
     }
   }
