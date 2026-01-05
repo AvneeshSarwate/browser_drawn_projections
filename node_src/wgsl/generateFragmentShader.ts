@@ -70,6 +70,7 @@ interface ShaderAnalysis {
   uniformStruct: StructInfo | null;
   uniformFields: UniformField[];
   uniformArgName: string | null;
+  uniformArgIsPointer: boolean;
   resourceStartIndex: number;
   baseTextureParams: TextureParam[];
   passAnalyses: PassAnalysis[];
@@ -139,6 +140,7 @@ const HELPER_SNIPPETS: Record<string, string> = {
   ensureVector4: `function ensureVector4(value: BABYLON.Vector4 | readonly [number, number, number, number]): BABYLON.Vector4 {\n  return value instanceof BABYLON.Vector4 ? value : BABYLON.Vector4.FromArray(value as readonly [number, number, number, number]);\n}`,
   ensureMatrix: `function ensureMatrix(value: BABYLON.Matrix | Float32Array | readonly number[]): BABYLON.Matrix {\n  if (value instanceof BABYLON.Matrix) {\n    return value;\n  }\n  const matrix = BABYLON.Matrix.Identity();\n  matrix.copyFromArray(Array.from(value));\n  return matrix;\n}`,
   packVec2Array: `function packVec2Array(arr: Vec2Like[]): number[] {\n  return arr.flatMap(v => [v.x, v.y]);\n}`,
+  packVec2ArrayWGSL: `function packVec2ArrayWGSL(arr: Vec2Like[]): number[] {\n  return arr.flatMap(v => [v.x, v.y, 0, 0]);\n}`,
   packVec3ArrayWGSL: `function packVec3ArrayWGSL(arr: Vec3Like[]): number[] {\n  return arr.flatMap(v => [v.x, v.y, v.z, 0]);\n}`,
   packVec4Array: `function packVec4Array(arr: Vec4Like[]): number[] {\n  return arr.flatMap(v => [v.x, v.y, v.z, v.w]);\n}`,
 };
@@ -157,7 +159,7 @@ const ARRAY_ELEMENT_TYPE_MAP: Record<string, ArrayUniformMeta> = {
   f32: { tsType: 'number[]', setter: 'setFloats', pack: null },
   i32: { tsType: 'number[]', setter: 'setFloats', pack: null },
   u32: { tsType: 'number[]', setter: 'setFloats', pack: null },
-  vec2f: { tsType: 'Vec2Like[]', setter: 'setArray2', pack: 'packVec2Array' },
+  vec2f: { tsType: 'Vec2Like[]', setter: 'setArray4', pack: 'packVec2ArrayWGSL' },
   vec3f: { tsType: 'Vec3Like[]', setter: 'setArray4', pack: 'packVec3ArrayWGSL' },
   vec4f: { tsType: 'Vec4Like[]', setter: 'setArray4', pack: 'packVec4Array' },
 };
@@ -424,7 +426,14 @@ function generateUniformStructConstruction(struct: StructInfo, fields: UniformFi
     return '';
   }
   // Use assignment syntax instead of constructor to support arrays
-  const assignments = fields.map((field) => `  result.${field.name} = uniforms.${field.bindingName};`).join('\n');
+  const assignments = fields
+    .map((field) => {
+      if (field.isArray && field.arraySize) {
+        return `  for (var i = 0; i < ${field.arraySize}; i = i + 1) {\n    result.${field.name}[i] = uniforms.${field.bindingName}[i];\n  }`;
+      }
+      return `  result.${field.name} = uniforms.${field.bindingName};`;
+    })
+    .join('\n');
   return `fn load_${struct.name}() -> ${struct.name} {\n  var result: ${struct.name};\n${assignments}\n  return result;\n}`;
 }
 
@@ -455,6 +464,7 @@ function buildFragmentSource(
   functionName: string,
   uvArgName: string,
   uniformArgName: string | null,
+  uniformArgIsPointer: boolean,
   passArgs: ArgumentInfo[],
   resourceStartIndex: number,
   varyingName: string,
@@ -477,13 +487,14 @@ function buildFragmentSource(
   lines.push('fn main(input: FragmentInputs) -> FragmentOutputs {');
   lines.push('#define CUSTOM_FRAGMENT_MAIN_BEGIN');
   if (uniformStruct) {
-    lines.push(`  let ${uniformArgName}_value = load_${uniformStruct.name}();`);
+    const declKeyword = uniformArgIsPointer ? 'var' : 'let';
+    lines.push(`  ${declKeyword} ${uniformArgName}_value = load_${uniformStruct.name}();`);
   }
   lines.push(`  let ${uvArgName}_local = fragmentInputs.${varyingName};`);
   const resourceArgNames = passArgs.slice(resourceStartIndex).map((argument) => argument.name);
   const args: string[] = [`${uvArgName}_local`];
   if (uniformStruct) {
-    args.push(`${uniformArgName}_value`);
+    args.push(uniformArgIsPointer ? `&${uniformArgName}_value` : `${uniformArgName}_value`);
   }
   resourceArgNames.forEach((name) => {
     args.push(name);
@@ -566,11 +577,22 @@ function analyzeShaderSource(
   let uniformStruct: StructInfo | null = null;
   let uniformFields: UniformField[] = [];
   let uniformArgName: string | null = null;
+  let uniformArgIsPointer = false;
   let resourceStartIndex = 1;
 
   if (primaryArgs.length >= 4) {
     const potentialUniform = primaryArgs[1];
-    const structInfo = reflect.structs.find((entry) => entry.name === potentialUniform.type.getTypeName());
+    const typeName = potentialUniform.type.getTypeName();
+    let structInfo = reflect.structs.find((entry) => entry.name === typeName);
+    if (!structInfo) {
+      const pointerMatch = /^&(.+)$/.exec(typeName);
+      if (pointerMatch) {
+        structInfo = reflect.structs.find((entry) => entry.name === pointerMatch[1]);
+        if (structInfo) {
+          uniformArgIsPointer = true;
+        }
+      }
+    }
     if (structInfo) {
       uniformStruct = structInfo;
       uniformArgName = potentialUniform.name;
@@ -744,6 +766,7 @@ function analyzeShaderSource(
     uniformStruct,
     uniformFields,
     uniformArgName,
+    uniformArgIsPointer,
     resourceStartIndex,
     baseTextureParams,
     passAnalyses,
@@ -780,6 +803,7 @@ export async function generateFragmentShaderArtifacts(
       uniformStruct,
       uniformFields,
       uniformArgName,
+      uniformArgIsPointer,
       resourceStartIndex,
       baseTextureParams,
       passAnalyses,
@@ -859,6 +883,7 @@ export async function generateFragmentShaderArtifacts(
         passInfo.name,
         uvArgName,
         uniformArgName,
+        uniformArgIsPointer,
         passInfo.args,
         resourceStartIndex,
         varyingName,
