@@ -35,9 +35,9 @@ fn pass0(uv: vec2f, uniforms: InvertUniforms, src: texture_2d<f32>, srcSampler: 
 }
 
 fn load_InvertUniforms() -> InvertUniforms {
-  return InvertUniforms(
-  uniforms.uniforms_strength
-  );
+  var result: InvertUniforms;
+  result.strength = uniforms.uniforms_strength;
+  return result;
 }
 
 #define CUSTOM_FRAGMENT_DEFINITIONS

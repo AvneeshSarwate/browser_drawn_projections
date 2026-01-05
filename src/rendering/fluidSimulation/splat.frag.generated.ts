@@ -52,12 +52,12 @@ fn pass0(
 }
 
 fn load_SplatUniforms() -> SplatUniforms {
-  return SplatUniforms(
-  uniforms.uniforms_point,
-  uniforms.uniforms_color,
-  uniforms.uniforms_radius,
-  uniforms.uniforms_aspectRatio
-  );
+  var result: SplatUniforms;
+  result.point = uniforms.uniforms_point;
+  result.color = uniforms.uniforms_color;
+  result.radius = uniforms.uniforms_radius;
+  result.aspectRatio = uniforms.uniforms_aspectRatio;
+  return result;
 }
 
 #define CUSTOM_FRAGMENT_DEFINITIONS

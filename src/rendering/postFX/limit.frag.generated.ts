@@ -288,22 +288,22 @@ fn pass0(uv: vec2f, uniforms: LimitUniforms, src: texture_2d<f32>, srcSampler: s
 }
 
 fn load_LimitUniforms() -> LimitUniforms {
-  return LimitUniforms(
-  uniforms.uniforms_minFunction,
-  uniforms.uniforms_maxFunction,
-  uniforms.uniforms_minValue,
-  uniforms.uniforms_maxValue,
-  uniforms.uniforms_positiveOnly,
-  uniforms.uniforms_normalize,
-  uniforms.uniforms_normalizeMin,
-  uniforms.uniforms_normalizeMax,
-  uniforms.uniforms_quantizeValueMode,
-  uniforms.uniforms_valueStep,
-  uniforms.uniforms_valueOffset,
-  uniforms.uniforms_quantizePositionMode,
-  uniforms.uniforms_positionStep,
-  uniforms.uniforms_positionOffset
-  );
+  var result: LimitUniforms;
+  result.minFunction = uniforms.uniforms_minFunction;
+  result.maxFunction = uniforms.uniforms_maxFunction;
+  result.minValue = uniforms.uniforms_minValue;
+  result.maxValue = uniforms.uniforms_maxValue;
+  result.positiveOnly = uniforms.uniforms_positiveOnly;
+  result.normalize = uniforms.uniforms_normalize;
+  result.normalizeMin = uniforms.uniforms_normalizeMin;
+  result.normalizeMax = uniforms.uniforms_normalizeMax;
+  result.quantizeValueMode = uniforms.uniforms_quantizeValueMode;
+  result.valueStep = uniforms.uniforms_valueStep;
+  result.valueOffset = uniforms.uniforms_valueOffset;
+  result.quantizePositionMode = uniforms.uniforms_quantizePositionMode;
+  result.positionStep = uniforms.uniforms_positionStep;
+  result.positionOffset = uniforms.uniforms_positionOffset;
+  return result;
 }
 
 #define CUSTOM_FRAGMENT_DEFINITIONS

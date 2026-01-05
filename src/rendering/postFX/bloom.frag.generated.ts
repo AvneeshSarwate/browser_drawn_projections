@@ -193,19 +193,19 @@ fn pass1(
 }
 
 fn load_BloomUniforms() -> BloomUniforms {
-  return BloomUniforms(
-  uniforms.uniforms_preBlackLevel,
-  uniforms.uniforms_preGamma,
-  uniforms.uniforms_preBrightness,
-  uniforms.uniforms_minBloomRadius,
-  uniforms.uniforms_maxBloomRadius,
-  uniforms.uniforms_bloomThreshold,
-  uniforms.uniforms_bloomSCurve,
-  uniforms.uniforms_bloomFill,
-  uniforms.uniforms_bloomIntensity,
-  uniforms.uniforms_outputMode,
-  uniforms.uniforms_inputImage
-  );
+  var result: BloomUniforms;
+  result.preBlackLevel = uniforms.uniforms_preBlackLevel;
+  result.preGamma = uniforms.uniforms_preGamma;
+  result.preBrightness = uniforms.uniforms_preBrightness;
+  result.minBloomRadius = uniforms.uniforms_minBloomRadius;
+  result.maxBloomRadius = uniforms.uniforms_maxBloomRadius;
+  result.bloomThreshold = uniforms.uniforms_bloomThreshold;
+  result.bloomSCurve = uniforms.uniforms_bloomSCurve;
+  result.bloomFill = uniforms.uniforms_bloomFill;
+  result.bloomIntensity = uniforms.uniforms_bloomIntensity;
+  result.outputMode = uniforms.uniforms_outputMode;
+  result.inputImage = uniforms.uniforms_inputImage;
+  return result;
 }
 
 #define CUSTOM_FRAGMENT_DEFINITIONS
@@ -398,19 +398,19 @@ fn pass1(
 }
 
 fn load_BloomUniforms() -> BloomUniforms {
-  return BloomUniforms(
-  uniforms.uniforms_preBlackLevel,
-  uniforms.uniforms_preGamma,
-  uniforms.uniforms_preBrightness,
-  uniforms.uniforms_minBloomRadius,
-  uniforms.uniforms_maxBloomRadius,
-  uniforms.uniforms_bloomThreshold,
-  uniforms.uniforms_bloomSCurve,
-  uniforms.uniforms_bloomFill,
-  uniforms.uniforms_bloomIntensity,
-  uniforms.uniforms_outputMode,
-  uniforms.uniforms_inputImage
-  );
+  var result: BloomUniforms;
+  result.preBlackLevel = uniforms.uniforms_preBlackLevel;
+  result.preGamma = uniforms.uniforms_preGamma;
+  result.preBrightness = uniforms.uniforms_preBrightness;
+  result.minBloomRadius = uniforms.uniforms_minBloomRadius;
+  result.maxBloomRadius = uniforms.uniforms_maxBloomRadius;
+  result.bloomThreshold = uniforms.uniforms_bloomThreshold;
+  result.bloomSCurve = uniforms.uniforms_bloomSCurve;
+  result.bloomFill = uniforms.uniforms_bloomFill;
+  result.bloomIntensity = uniforms.uniforms_bloomIntensity;
+  result.outputMode = uniforms.uniforms_outputMode;
+  result.inputImage = uniforms.uniforms_inputImage;
+  return result;
 }
 
 #define CUSTOM_FRAGMENT_DEFINITIONS

@@ -52,10 +52,10 @@ fn pass0(
 }
 
 fn load_VelocityAdvectionUniforms() -> VelocityAdvectionUniforms {
-  return VelocityAdvectionUniforms(
-  uniforms.uniforms_timeStep,
-  uniforms.uniforms_dissipation
-  );
+  var result: VelocityAdvectionUniforms;
+  result.timeStep = uniforms.uniforms_timeStep;
+  result.dissipation = uniforms.uniforms_dissipation;
+  return result;
 }
 
 #define CUSTOM_FRAGMENT_DEFINITIONS

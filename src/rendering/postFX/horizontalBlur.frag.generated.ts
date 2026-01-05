@@ -54,10 +54,10 @@ fn pass0(uv: vec2f, uniforms: HorizontalBlurUniforms, src: texture_2d<f32>, srcS
 }
 
 fn load_HorizontalBlurUniforms() -> HorizontalBlurUniforms {
-  return HorizontalBlurUniforms(
-  uniforms.uniforms_pixels,
-  uniforms.uniforms_resolution
-  );
+  var result: HorizontalBlurUniforms;
+  result.pixels = uniforms.uniforms_pixels;
+  result.resolution = uniforms.uniforms_resolution;
+  return result;
 }
 
 #define CUSTOM_FRAGMENT_DEFINITIONS

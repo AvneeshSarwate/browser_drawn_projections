@@ -39,9 +39,9 @@ fn pass0(
 }
 
 fn load_PressureDampUniforms() -> PressureDampUniforms {
-  return PressureDampUniforms(
-  uniforms.uniforms_scale
-  );
+  var result: PressureDampUniforms;
+  result.scale = uniforms.uniforms_scale;
+  return result;
 }
 
 #define CUSTOM_FRAGMENT_DEFINITIONS

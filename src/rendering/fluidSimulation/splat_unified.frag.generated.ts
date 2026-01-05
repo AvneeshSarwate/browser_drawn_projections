@@ -151,18 +151,18 @@ fn pass1(
 }
 
 fn load_SplatUniforms() -> SplatUniforms {
-  return SplatUniforms(
-  uniforms.uniforms_mode,
-  uniforms.uniforms_splatType,
-  uniforms.uniforms_point,
-  uniforms.uniforms_color,
-  uniforms.uniforms_radius,
-  uniforms.uniforms_aspectRatio,
-  uniforms.uniforms_strength,
-  uniforms.uniforms_time,
-  uniforms.uniforms_shapeParams0,
-  uniforms.uniforms_shapeParams1
-  );
+  var result: SplatUniforms;
+  result.mode = uniforms.uniforms_mode;
+  result.splatType = uniforms.uniforms_splatType;
+  result.point = uniforms.uniforms_point;
+  result.color = uniforms.uniforms_color;
+  result.radius = uniforms.uniforms_radius;
+  result.aspectRatio = uniforms.uniforms_aspectRatio;
+  result.strength = uniforms.uniforms_strength;
+  result.time = uniforms.uniforms_time;
+  result.shapeParams0 = uniforms.uniforms_shapeParams0;
+  result.shapeParams1 = uniforms.uniforms_shapeParams1;
+  return result;
 }
 
 #define CUSTOM_FRAGMENT_DEFINITIONS
@@ -313,18 +313,18 @@ fn pass1(
 }
 
 fn load_SplatUniforms() -> SplatUniforms {
-  return SplatUniforms(
-  uniforms.uniforms_mode,
-  uniforms.uniforms_splatType,
-  uniforms.uniforms_point,
-  uniforms.uniforms_color,
-  uniforms.uniforms_radius,
-  uniforms.uniforms_aspectRatio,
-  uniforms.uniforms_strength,
-  uniforms.uniforms_time,
-  uniforms.uniforms_shapeParams0,
-  uniforms.uniforms_shapeParams1
-  );
+  var result: SplatUniforms;
+  result.mode = uniforms.uniforms_mode;
+  result.splatType = uniforms.uniforms_splatType;
+  result.point = uniforms.uniforms_point;
+  result.color = uniforms.uniforms_color;
+  result.radius = uniforms.uniforms_radius;
+  result.aspectRatio = uniforms.uniforms_aspectRatio;
+  result.strength = uniforms.uniforms_strength;
+  result.time = uniforms.uniforms_time;
+  result.shapeParams0 = uniforms.uniforms_shapeParams0;
+  result.shapeParams1 = uniforms.uniforms_shapeParams1;
+  return result;
 }
 
 #define CUSTOM_FRAGMENT_DEFINITIONS

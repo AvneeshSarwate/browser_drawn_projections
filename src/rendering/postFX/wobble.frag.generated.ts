@@ -42,11 +42,11 @@ fn pass0(uv: vec2f, uniforms: WobbleUniforms, src: texture_2d<f32>, srcSampler: 
 }
 
 fn load_WobbleUniforms() -> WobbleUniforms {
-  return WobbleUniforms(
-  uniforms.uniforms_xStrength,
-  uniforms.uniforms_yStrength,
-  uniforms.uniforms_time
-  );
+  var result: WobbleUniforms;
+  result.xStrength = uniforms.uniforms_xStrength;
+  result.yStrength = uniforms.uniforms_yStrength;
+  result.time = uniforms.uniforms_time;
+  return result;
 }
 
 #define CUSTOM_FRAGMENT_DEFINITIONS

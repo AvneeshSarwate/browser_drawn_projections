@@ -54,10 +54,10 @@ fn pass0(uv: vec2f, uniforms: VerticalBlurUniforms, src: texture_2d<f32>, srcSam
 }
 
 fn load_VerticalBlurUniforms() -> VerticalBlurUniforms {
-  return VerticalBlurUniforms(
-  uniforms.uniforms_pixels,
-  uniforms.uniforms_resolution
-  );
+  var result: VerticalBlurUniforms;
+  result.pixels = uniforms.uniforms_pixels;
+  result.resolution = uniforms.uniforms_resolution;
+  return result;
 }
 
 #define CUSTOM_FRAGMENT_DEFINITIONS

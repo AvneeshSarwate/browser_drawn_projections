@@ -51,9 +51,9 @@ fn pass0(
 }
 
 fn load_DyeForceApplicationUniforms() -> DyeForceApplicationUniforms {
-  return DyeForceApplicationUniforms(
-  uniforms.uniforms_injectionStrength
-  );
+  var result: DyeForceApplicationUniforms;
+  result.injectionStrength = uniforms.uniforms_injectionStrength;
+  return result;
 }
 
 #define CUSTOM_FRAGMENT_DEFINITIONS

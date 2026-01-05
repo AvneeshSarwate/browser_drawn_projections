@@ -194,16 +194,16 @@ fn pass0(uv: vec2f, uniforms: EdgeUniforms, src: texture_2d<f32>, srcSampler: sa
 }
 
 fn load_EdgeUniforms() -> EdgeUniforms {
-  return EdgeUniforms(
-  uniforms.uniforms_channelMode,
-  uniforms.uniforms_blackLevel,
-  uniforms.uniforms_strength,
-  uniforms.uniforms_sampleStep,
-  uniforms.uniforms_sampleStepUnit,
-  uniforms.uniforms_edgeColor,
-  uniforms.uniforms_alphaMode,
-  uniforms.uniforms_composite
-  );
+  var result: EdgeUniforms;
+  result.channelMode = uniforms.uniforms_channelMode;
+  result.blackLevel = uniforms.uniforms_blackLevel;
+  result.strength = uniforms.uniforms_strength;
+  result.sampleStep = uniforms.uniforms_sampleStep;
+  result.sampleStepUnit = uniforms.uniforms_sampleStepUnit;
+  result.edgeColor = uniforms.uniforms_edgeColor;
+  result.alphaMode = uniforms.uniforms_alphaMode;
+  result.composite = uniforms.uniforms_composite;
+  return result;
 }
 
 #define CUSTOM_FRAGMENT_DEFINITIONS

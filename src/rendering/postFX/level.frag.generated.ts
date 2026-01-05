@@ -124,30 +124,30 @@ fn pass0(uv: vec2f, uniforms: LevelUniforms, src: texture_2d<f32>, srcSampler: s
 }
 
 fn load_LevelUniforms() -> LevelUniforms {
-  return LevelUniforms(
-  uniforms.uniforms_clampInputMode,
-  uniforms.uniforms_invert,
-  uniforms.uniforms_blackLevel,
-  uniforms.uniforms_brightness1,
-  uniforms.uniforms_gamma1,
-  uniforms.uniforms_contrast,
-  uniforms.uniforms_inLow,
-  uniforms.uniforms_inHigh,
-  uniforms.uniforms_outLow,
-  uniforms.uniforms_outHigh,
-  uniforms.uniforms_lowRGBA,
-  uniforms.uniforms_highRGBA,
-  uniforms.uniforms_stepping,
-  uniforms.uniforms_stepSize,
-  uniforms.uniforms_stepThreshold,
-  uniforms.uniforms_stepClampLow,
-  uniforms.uniforms_stepClampHigh,
-  uniforms.uniforms_stepSoften,
-  uniforms.uniforms_gamma2,
-  uniforms.uniforms_brightness2,
-  uniforms.uniforms_opacity,
-  uniforms.uniforms_postClamp
-  );
+  var result: LevelUniforms;
+  result.clampInputMode = uniforms.uniforms_clampInputMode;
+  result.invert = uniforms.uniforms_invert;
+  result.blackLevel = uniforms.uniforms_blackLevel;
+  result.brightness1 = uniforms.uniforms_brightness1;
+  result.gamma1 = uniforms.uniforms_gamma1;
+  result.contrast = uniforms.uniforms_contrast;
+  result.inLow = uniforms.uniforms_inLow;
+  result.inHigh = uniforms.uniforms_inHigh;
+  result.outLow = uniforms.uniforms_outLow;
+  result.outHigh = uniforms.uniforms_outHigh;
+  result.lowRGBA = uniforms.uniforms_lowRGBA;
+  result.highRGBA = uniforms.uniforms_highRGBA;
+  result.stepping = uniforms.uniforms_stepping;
+  result.stepSize = uniforms.uniforms_stepSize;
+  result.stepThreshold = uniforms.uniforms_stepThreshold;
+  result.stepClampLow = uniforms.uniforms_stepClampLow;
+  result.stepClampHigh = uniforms.uniforms_stepClampHigh;
+  result.stepSoften = uniforms.uniforms_stepSoften;
+  result.gamma2 = uniforms.uniforms_gamma2;
+  result.brightness2 = uniforms.uniforms_brightness2;
+  result.opacity = uniforms.uniforms_opacity;
+  result.postClamp = uniforms.uniforms_postClamp;
+  return result;
 }
 
 #define CUSTOM_FRAGMENT_DEFINITIONS

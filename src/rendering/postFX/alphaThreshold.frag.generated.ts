@@ -36,9 +36,9 @@ fn pass0(uv: vec2f, uniforms: AlphaThresholdUniforms, src: texture_2d<f32>, srcS
 }
 
 fn load_AlphaThresholdUniforms() -> AlphaThresholdUniforms {
-  return AlphaThresholdUniforms(
-  uniforms.uniforms_threshold
-  );
+  var result: AlphaThresholdUniforms;
+  result.threshold = uniforms.uniforms_threshold;
+  return result;
 }
 
 #define CUSTOM_FRAGMENT_DEFINITIONS

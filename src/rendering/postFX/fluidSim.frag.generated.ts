@@ -251,17 +251,17 @@ fn pass2(
 }
 
 fn load_FluidSimUniforms() -> FluidSimUniforms {
-  return FluidSimUniforms(
-  uniforms.uniforms_timeStep,
-  uniforms.uniforms_velocityDissipation,
-  uniforms.uniforms_densityDissipation,
-  uniforms.uniforms_swirlStrength,
-  uniforms.uniforms_turbulence,
-  uniforms.uniforms_forceRadius,
-  uniforms.uniforms_forceStrength,
-  uniforms.uniforms_attraction,
-  uniforms.uniforms_forcePosition
-  );
+  var result: FluidSimUniforms;
+  result.timeStep = uniforms.uniforms_timeStep;
+  result.velocityDissipation = uniforms.uniforms_velocityDissipation;
+  result.densityDissipation = uniforms.uniforms_densityDissipation;
+  result.swirlStrength = uniforms.uniforms_swirlStrength;
+  result.turbulence = uniforms.uniforms_turbulence;
+  result.forceRadius = uniforms.uniforms_forceRadius;
+  result.forceStrength = uniforms.uniforms_forceStrength;
+  result.attraction = uniforms.uniforms_attraction;
+  result.forcePosition = uniforms.uniforms_forcePosition;
+  return result;
 }
 
 #define CUSTOM_FRAGMENT_DEFINITIONS
@@ -512,17 +512,17 @@ fn pass2(
 }
 
 fn load_FluidSimUniforms() -> FluidSimUniforms {
-  return FluidSimUniforms(
-  uniforms.uniforms_timeStep,
-  uniforms.uniforms_velocityDissipation,
-  uniforms.uniforms_densityDissipation,
-  uniforms.uniforms_swirlStrength,
-  uniforms.uniforms_turbulence,
-  uniforms.uniforms_forceRadius,
-  uniforms.uniforms_forceStrength,
-  uniforms.uniforms_attraction,
-  uniforms.uniforms_forcePosition
-  );
+  var result: FluidSimUniforms;
+  result.timeStep = uniforms.uniforms_timeStep;
+  result.velocityDissipation = uniforms.uniforms_velocityDissipation;
+  result.densityDissipation = uniforms.uniforms_densityDissipation;
+  result.swirlStrength = uniforms.uniforms_swirlStrength;
+  result.turbulence = uniforms.uniforms_turbulence;
+  result.forceRadius = uniforms.uniforms_forceRadius;
+  result.forceStrength = uniforms.uniforms_forceStrength;
+  result.attraction = uniforms.uniforms_attraction;
+  result.forcePosition = uniforms.uniforms_forcePosition;
+  return result;
 }
 
 #define CUSTOM_FRAGMENT_DEFINITIONS
@@ -775,17 +775,17 @@ fn pass2(
 }
 
 fn load_FluidSimUniforms() -> FluidSimUniforms {
-  return FluidSimUniforms(
-  uniforms.uniforms_timeStep,
-  uniforms.uniforms_velocityDissipation,
-  uniforms.uniforms_densityDissipation,
-  uniforms.uniforms_swirlStrength,
-  uniforms.uniforms_turbulence,
-  uniforms.uniforms_forceRadius,
-  uniforms.uniforms_forceStrength,
-  uniforms.uniforms_attraction,
-  uniforms.uniforms_forcePosition
-  );
+  var result: FluidSimUniforms;
+  result.timeStep = uniforms.uniforms_timeStep;
+  result.velocityDissipation = uniforms.uniforms_velocityDissipation;
+  result.densityDissipation = uniforms.uniforms_densityDissipation;
+  result.swirlStrength = uniforms.uniforms_swirlStrength;
+  result.turbulence = uniforms.uniforms_turbulence;
+  result.forceRadius = uniforms.uniforms_forceRadius;
+  result.forceStrength = uniforms.uniforms_forceStrength;
+  result.attraction = uniforms.uniforms_attraction;
+  result.forcePosition = uniforms.uniforms_forcePosition;
+  return result;
 }
 
 #define CUSTOM_FRAGMENT_DEFINITIONS

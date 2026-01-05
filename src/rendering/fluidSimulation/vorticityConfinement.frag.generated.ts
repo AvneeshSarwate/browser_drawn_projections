@@ -79,10 +79,10 @@ fn pass0(
 }
 
 fn load_VorticityConfinementUniforms() -> VorticityConfinementUniforms {
-  return VorticityConfinementUniforms(
-  uniforms.uniforms_curlStrength,
-  uniforms.uniforms_timeStep
-  );
+  var result: VorticityConfinementUniforms;
+  result.curlStrength = uniforms.uniforms_curlStrength;
+  result.timeStep = uniforms.uniforms_timeStep;
+  return result;
 }
 
 #define CUSTOM_FRAGMENT_DEFINITIONS

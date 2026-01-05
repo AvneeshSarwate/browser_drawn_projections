@@ -12,6 +12,7 @@ export interface GlslFunction {
 export interface GlslStructMember {
   name: string;
   type: string;
+  arraySize?: number;
 }
 
 export interface GlslStruct {
@@ -48,8 +49,13 @@ export function parseStructs(source: string): GlslStruct[] {
       }
       const nameToken = tokens[tokens.length - 1];
       const typeToken = tokens[tokens.length - 2];
+      const arrayMatch = nameToken.match(/\[(\d+)\]$/);
       const name = nameToken.replace(/\[.*\]$/, '');
-      members.push({ name, type: typeToken });
+      const member: GlslStructMember = { name, type: typeToken };
+      if (arrayMatch) {
+        member.arraySize = parseInt(arrayMatch[1], 10);
+      }
+      members.push(member);
     }
     structs.push({ name: structName, members });
   }

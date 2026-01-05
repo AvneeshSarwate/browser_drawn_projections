@@ -46,10 +46,10 @@ fn pass0(uv: vec2f, uniforms: InputCropUniforms, src: texture_2d<f32>, srcSample
 }
 
 fn load_InputCropUniforms() -> InputCropUniforms {
-  return InputCropUniforms(
-  uniforms.uniforms_origin,
-  uniforms.uniforms_size
-  );
+  var result: InputCropUniforms;
+  result.origin = uniforms.uniforms_origin;
+  result.size = uniforms.uniforms_size;
+  return result;
 }
 
 #define CUSTOM_FRAGMENT_DEFINITIONS

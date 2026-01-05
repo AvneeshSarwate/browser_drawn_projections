@@ -47,12 +47,12 @@ fn pass0(uv: vec2f, uniforms: TransformUniforms, src: texture_2d<f32>, srcSample
 }
 
 fn load_TransformUniforms() -> TransformUniforms {
-  return TransformUniforms(
-  uniforms.uniforms_rotate,
-  uniforms.uniforms_anchor,
-  uniforms.uniforms_translate,
-  uniforms.uniforms_scale
-  );
+  var result: TransformUniforms;
+  result.rotate = uniforms.uniforms_rotate;
+  result.anchor = uniforms.uniforms_anchor;
+  result.translate = uniforms.uniforms_translate;
+  result.scale = uniforms.uniforms_scale;
+  return result;
 }
 
 #define CUSTOM_FRAGMENT_DEFINITIONS

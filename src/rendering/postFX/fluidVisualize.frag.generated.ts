@@ -52,12 +52,12 @@ fn pass0(
 }
 
 fn load_FluidVisualizeUniforms() -> FluidVisualizeUniforms {
-  return FluidVisualizeUniforms(
-  uniforms.uniforms_velocityScale,
-  uniforms.uniforms_densityScale,
-  uniforms.uniforms_tint,
-  uniforms.uniforms_background
-  );
+  var result: FluidVisualizeUniforms;
+  result.velocityScale = uniforms.uniforms_velocityScale;
+  result.densityScale = uniforms.uniforms_densityScale;
+  result.tint = uniforms.uniforms_tint;
+  result.background = uniforms.uniforms_background;
+  return result;
 }
 
 #define CUSTOM_FRAGMENT_DEFINITIONS

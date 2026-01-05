@@ -39,9 +39,9 @@ vec4 pass0(vec2 uv, PixelateUniforms uniforms, sampler2D src) {
 }
 
 PixelateUniforms load_PixelateUniforms() {
-  return PixelateUniforms(
-    uniforms_pixelSize
-  );
+  PixelateUniforms result;
+  result.pixelSize = uniforms_pixelSize;
+  return result;
 }
 
 void main() {

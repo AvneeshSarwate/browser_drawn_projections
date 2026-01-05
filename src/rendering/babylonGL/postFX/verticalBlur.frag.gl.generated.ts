@@ -49,10 +49,10 @@ vec4 pass0(vec2 uv, VerticalBlurUniforms uniforms, sampler2D src) {
 }
 
 VerticalBlurUniforms load_VerticalBlurUniforms() {
-  return VerticalBlurUniforms(
-    uniforms_pixels,
-    uniforms_resolution
-  );
+  VerticalBlurUniforms result;
+  result.pixels = uniforms_pixels;
+  result.resolution = uniforms_resolution;
+  return result;
 }
 
 void main() {

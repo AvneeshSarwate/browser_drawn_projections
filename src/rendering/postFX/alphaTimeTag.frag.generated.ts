@@ -35,9 +35,9 @@ fn pass0(uv: vec2f, uniforms: AlphaTimeTagUniforms, src: texture_2d<f32>, srcSam
 }
 
 fn load_AlphaTimeTagUniforms() -> AlphaTimeTagUniforms {
-  return AlphaTimeTagUniforms(
-  uniforms.uniforms_drawTime
-  );
+  var result: AlphaTimeTagUniforms;
+  result.drawTime = uniforms.uniforms_drawTime;
+  return result;
 }
 
 #define CUSTOM_FRAGMENT_DEFINITIONS

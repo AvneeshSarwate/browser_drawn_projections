@@ -3,6 +3,10 @@ import type * as BABYLON from 'babylonjs'
 export type SampleMode = 'nearest' | 'linear'
 export type RenderPrecision = 'unsigned_int' | 'half_float'
 
+export interface Vec2Like { x: number; y: number }
+export interface Vec3Like { x: number; y: number; z: number }
+export interface Vec4Like { x: number; y: number; z: number; w: number }
+
 export type Point2DContract = readonly [number, number]
 
 export type TextureSourceContract =

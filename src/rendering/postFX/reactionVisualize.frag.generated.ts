@@ -55,12 +55,12 @@ fn pass0(
 }
 
 fn load_ReactionVisualizeUniforms() -> ReactionVisualizeUniforms {
-  return ReactionVisualizeUniforms(
-  uniforms.uniforms_colorA,
-  uniforms.uniforms_colorB,
-  uniforms.uniforms_edgeColor,
-  uniforms.uniforms_contrast
-  );
+  var result: ReactionVisualizeUniforms;
+  result.colorA = uniforms.uniforms_colorA;
+  result.colorB = uniforms.uniforms_colorB;
+  result.edgeColor = uniforms.uniforms_edgeColor;
+  result.contrast = uniforms.uniforms_contrast;
+  return result;
 }
 
 #define CUSTOM_FRAGMENT_DEFINITIONS

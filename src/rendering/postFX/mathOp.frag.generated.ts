@@ -46,12 +46,12 @@ fn pass0(uv: vec2f, uniforms: MathOpUniforms, src: texture_2d<f32>, srcSampler: 
 }
 
 fn load_MathOpUniforms() -> MathOpUniforms {
-  return MathOpUniforms(
-  uniforms.uniforms_preAdd,
-  uniforms.uniforms_postAdd,
-  uniforms.uniforms_mult,
-  uniforms.uniforms_colorOnly
-  );
+  var result: MathOpUniforms;
+  result.preAdd = uniforms.uniforms_preAdd;
+  result.postAdd = uniforms.uniforms_postAdd;
+  result.mult = uniforms.uniforms_mult;
+  result.colorOnly = uniforms.uniforms_colorOnly;
+  return result;
 }
 
 #define CUSTOM_FRAGMENT_DEFINITIONS

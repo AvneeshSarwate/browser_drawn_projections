@@ -39,11 +39,11 @@ vec4 pass0(vec2 uv, WobbleUniforms uniforms, sampler2D src) {
 }
 
 WobbleUniforms load_WobbleUniforms() {
-  return WobbleUniforms(
-    uniforms_xStrength,
-    uniforms_yStrength,
-    uniforms_time
-  );
+  WobbleUniforms result;
+  result.xStrength = uniforms_xStrength;
+  result.yStrength = uniforms_yStrength;
+  result.time = uniforms_time;
+  return result;
 }
 
 void main() {

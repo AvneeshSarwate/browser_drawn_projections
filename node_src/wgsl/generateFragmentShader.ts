@@ -32,6 +32,9 @@ interface UniformField {
   uiMin?: number;
   uiMax?: number;
   uiStep?: number;
+  isArray?: boolean;
+  arraySize?: number;
+  elementType?: string;
 }
 
 interface UniformCommentAnnotation {
@@ -135,6 +138,28 @@ const HELPER_SNIPPETS: Record<string, string> = {
   ensureVector3: `function ensureVector3(value: BABYLON.Vector3 | readonly [number, number, number]): BABYLON.Vector3 {\n  return value instanceof BABYLON.Vector3 ? value : BABYLON.Vector3.FromArray(value as readonly [number, number, number]);\n}`,
   ensureVector4: `function ensureVector4(value: BABYLON.Vector4 | readonly [number, number, number, number]): BABYLON.Vector4 {\n  return value instanceof BABYLON.Vector4 ? value : BABYLON.Vector4.FromArray(value as readonly [number, number, number, number]);\n}`,
   ensureMatrix: `function ensureMatrix(value: BABYLON.Matrix | Float32Array | readonly number[]): BABYLON.Matrix {\n  if (value instanceof BABYLON.Matrix) {\n    return value;\n  }\n  const matrix = BABYLON.Matrix.Identity();\n  matrix.copyFromArray(Array.from(value));\n  return matrix;\n}`,
+  packVec2Array: `function packVec2Array(arr: Vec2Like[]): number[] {\n  return arr.flatMap(v => [v.x, v.y]);\n}`,
+  packVec3ArrayWGSL: `function packVec3ArrayWGSL(arr: Vec3Like[]): number[] {\n  return arr.flatMap(v => [v.x, v.y, v.z, 0]);\n}`,
+  packVec4Array: `function packVec4Array(arr: Vec4Like[]): number[] {\n  return arr.flatMap(v => [v.x, v.y, v.z, v.w]);\n}`,
+};
+
+const VEC_LIKE_INTERFACES = `export interface Vec2Like { x: number; y: number }
+export interface Vec3Like { x: number; y: number; z: number }
+export interface Vec4Like { x: number; y: number; z: number; w: number }`;
+
+interface ArrayUniformMeta {
+  tsType: string;
+  setter: string;
+  pack: string | null;
+}
+
+const ARRAY_ELEMENT_TYPE_MAP: Record<string, ArrayUniformMeta> = {
+  f32: { tsType: 'number[]', setter: 'setFloats', pack: null },
+  i32: { tsType: 'number[]', setter: 'setFloats', pack: null },
+  u32: { tsType: 'number[]', setter: 'setFloats', pack: null },
+  vec2f: { tsType: 'Vec2Like[]', setter: 'setArray2', pack: 'packVec2Array' },
+  vec3f: { tsType: 'Vec3Like[]', setter: 'setArray4', pack: 'packVec3ArrayWGSL' },
+  vec4f: { tsType: 'Vec4Like[]', setter: 'setArray4', pack: 'packVec4Array' },
 };
 
 function toPascalCase(value: string): string {
@@ -194,15 +219,42 @@ function validateSamplerArgument(argument: ArgumentInfo): void {
 function collectUniformFields(struct: StructInfo, uniformArgName: string, shaderSource: string): UniformField[] {
   const annotationMap = extractUniformAnnotations(shaderSource, struct.name);
   return struct.members.map((member) => {
-    if (member.type.isStruct || member.type.isArray) {
-      throw new Error(`Uniform field ${member.name} uses unsupported type ${member.type.getTypeName()}. Nested structs/arrays are not supported.`);
+    if (member.type.isStruct) {
+      throw new Error(`Uniform field ${member.name} uses unsupported type ${member.type.getTypeName()}. Nested structs are not supported.`);
     }
+    const bindingName = `${uniformArgName}_${member.name}`;
+    const annotations = annotationMap[member.name];
+
+    if (member.type.isArray) {
+      const elementType = member.format?.getTypeName();
+      if (!elementType) {
+        throw new Error(`Uniform field ${member.name} is an array but element type could not be determined.`);
+      }
+      if (!ARRAY_ELEMENT_TYPE_MAP[elementType]) {
+        throw new Error(`Uniform array field ${member.name} uses unsupported element type ${elementType}.`);
+      }
+      const arraySize = member.count;
+      if (!arraySize || arraySize <= 0) {
+        throw new Error(`Uniform array field ${member.name} must have a fixed size.`);
+      }
+      return {
+        name: member.name,
+        bindingName,
+        wgslType: member.type.getTypeName(),
+        defaultExpression: annotations?.defaultExpression,
+        uiMin: annotations?.uiMin,
+        uiMax: annotations?.uiMax,
+        uiStep: annotations?.uiStep,
+        isArray: true,
+        arraySize,
+        elementType,
+      };
+    }
+
     const typeName = member.type.getTypeName();
     if (!UNIFORM_TYPE_MAP[typeName]) {
       throw new Error(`Uniform field ${member.name} uses unsupported type ${typeName}.`);
     }
-    const bindingName = `${uniformArgName}_${member.name}`;
-    const annotations = annotationMap[member.name];
     return {
       name: member.name,
       bindingName,
@@ -371,8 +423,9 @@ function generateUniformStructConstruction(struct: StructInfo, fields: UniformFi
   if (fields.length === 0) {
     return '';
   }
-  const ctorArguments = fields.map((field) => `  uniforms.${field.bindingName}`).join(',\n');
-  return `fn load_${struct.name}() -> ${struct.name} {\n  return ${struct.name}(\n${ctorArguments}\n  );\n}`;
+  // Use assignment syntax instead of constructor to support arrays
+  const assignments = fields.map((field) => `  result.${field.name} = uniforms.${field.bindingName};`).join('\n');
+  return `fn load_${struct.name}() -> ${struct.name} {\n  var result: ${struct.name};\n${assignments}\n  return result;\n}`;
 }
 
 function buildVertexSource(commonDeclarations: string[], varyingName: string): string {
@@ -760,7 +813,12 @@ export async function generateFragmentShaderArtifacts(
     }
 
     const uniformLoaderFn = uniformStruct ? generateUniformStructConstruction(uniformStruct, uniformFields) : '';
-    const uniformDeclarations = uniformFields.map((field) => `uniform ${field.bindingName}: ${field.wgslType};`);
+    const uniformDeclarations = uniformFields.map((field) => {
+      if (field.isArray && field.elementType && field.arraySize) {
+        return `uniform ${field.bindingName}: array<${field.elementType}, ${field.arraySize}>;`;
+      }
+      return `uniform ${field.bindingName}: ${field.wgslType};`;
+    });
 
     const varyingName = 'vUV';
 
@@ -815,16 +873,29 @@ export async function generateFragmentShaderArtifacts(
     const uniformInterfaceLines: string[] = [];
     const uniformSetterLines: string[] = [];
 
+    const hasArrayFields = uniformFields.some((field) => field.isArray);
+
     if (uniformStruct && uniformFields.length > 0) {
       uniformInterfaceLines.push(`export interface ${uniformInterfaceName} {`);
       for (const field of uniformFields) {
-        const meta = UNIFORM_TYPE_MAP[field.wgslType];
-        if (!meta) {
-          throw new Error(`Unsupported uniform field type ${field.wgslType}.`);
-        }
-        uniformInterfaceLines.push(`  ${field.name}: ${meta.tsType};`);
-        if (meta.helper) {
-          helperNames.add(meta.helper);
+        if (field.isArray && field.elementType) {
+          const arrayMeta = ARRAY_ELEMENT_TYPE_MAP[field.elementType];
+          if (!arrayMeta) {
+            throw new Error(`Unsupported array element type ${field.elementType}.`);
+          }
+          uniformInterfaceLines.push(`  ${field.name}: ${arrayMeta.tsType};`);
+          if (arrayMeta.pack) {
+            helperNames.add(arrayMeta.pack);
+          }
+        } else {
+          const meta = UNIFORM_TYPE_MAP[field.wgslType];
+          if (!meta) {
+            throw new Error(`Unsupported uniform field type ${field.wgslType}.`);
+          }
+          uniformInterfaceLines.push(`  ${field.name}: ${meta.tsType};`);
+          if (meta.helper) {
+            helperNames.add(meta.helper);
+          }
         }
       }
       uniformInterfaceLines.push('}');
@@ -834,9 +905,18 @@ export async function generateFragmentShaderArtifacts(
       uniformSetterLines.push('    return;');
       uniformSetterLines.push('  }');
       for (const field of uniformFields) {
-        const meta = expectMeta(field.wgslType);
         uniformSetterLines.push(`  if (uniforms.${field.name} !== undefined) {`);
-        uniformSetterLines.push(`    material.${meta.setter}('${field.bindingName}', ${meta.expression(`uniforms.${field.name}`)});`);
+        if (field.isArray && field.elementType) {
+          const arrayMeta = ARRAY_ELEMENT_TYPE_MAP[field.elementType];
+          if (arrayMeta.pack) {
+            uniformSetterLines.push(`    material.${arrayMeta.setter}('${field.bindingName}', ${arrayMeta.pack}(uniforms.${field.name}));`);
+          } else {
+            uniformSetterLines.push(`    material.${arrayMeta.setter}('${field.bindingName}', uniforms.${field.name});`);
+          }
+        } else {
+          const meta = expectMeta(field.wgslType);
+          uniformSetterLines.push(`    material.${meta.setter}('${field.bindingName}', ${meta.expression(`uniforms.${field.name}`)});`);
+        }
         uniformSetterLines.push('  }');
       }
       uniformSetterLines.push('}');
@@ -901,7 +981,13 @@ export async function generateFragmentShaderArtifacts(
       uniformFields.forEach((field) => {
         uniformMetaLines.push('  {');
         uniformMetaLines.push(`    name: '${field.name}',`);
-        uniformMetaLines.push(`    kind: '${field.wgslType}',`);
+        if (field.isArray && field.elementType) {
+          uniformMetaLines.push(`    kind: '${field.elementType}',`);
+          uniformMetaLines.push(`    isArray: true,`);
+          uniformMetaLines.push(`    arraySize: ${field.arraySize},`);
+        } else {
+          uniformMetaLines.push(`    kind: '${field.wgslType}',`);
+        }
         uniformMetaLines.push(`    bindingName: '${field.bindingName}',`);
         if (field.defaultExpression) {
           uniformMetaLines.push(`    default: ${field.defaultExpression},`);
@@ -928,6 +1014,10 @@ export async function generateFragmentShaderArtifacts(
     uniformMetaLines.push('');
     tsLines.push(...uniformMetaLines);
 
+    if (hasArrayFields) {
+      tsLines.push(VEC_LIKE_INTERFACES);
+      tsLines.push('');
+    }
     if (helperBlocks.length > 0) {
       tsLines.push(...helperBlocks);
       tsLines.push('');
@@ -1048,6 +1138,10 @@ export async function generateFragmentShaderArtifacts(
     if (uniformFields.length > 0) {
       const uniformParams = uniformFields
         .map((field) => {
+          if (field.isArray && field.elementType) {
+            const arrayMeta = ARRAY_ELEMENT_TYPE_MAP[field.elementType];
+            return `${field.name}?: Dynamic<${arrayMeta.tsType}>`;
+          }
           const meta = UNIFORM_TYPE_MAP[field.wgslType];
           return `${field.name}?: Dynamic<${meta.tsType}>`;
         })

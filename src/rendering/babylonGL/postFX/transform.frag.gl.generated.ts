@@ -46,12 +46,12 @@ vec4 pass0(vec2 uv, TransformUniforms uniforms, sampler2D src) {
 }
 
 TransformUniforms load_TransformUniforms() {
-  return TransformUniforms(
-    uniforms_rotate,
-    uniforms_anchor,
-    uniforms_translate,
-    uniforms_scale
-  );
+  TransformUniforms result;
+  result.rotate = uniforms_rotate;
+  result.anchor = uniforms_anchor;
+  result.translate = uniforms_translate;
+  result.scale = uniforms_scale;
+  return result;
 }
 
 void main() {

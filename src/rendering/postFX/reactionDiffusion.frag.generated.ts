@@ -158,17 +158,17 @@ fn pass2(
 }
 
 fn load_ReactionDiffusionUniforms() -> ReactionDiffusionUniforms {
-  return ReactionDiffusionUniforms(
-  uniforms.uniforms_feed,
-  uniforms.uniforms_kill,
-  uniforms.uniforms_diffRateA,
-  uniforms.uniforms_diffRateB,
-  uniforms.uniforms_deltaT,
-  uniforms.uniforms_brushRadius,
-  uniforms.uniforms_brushStrength,
-  uniforms.uniforms_noiseAmount,
-  uniforms.uniforms_brushPosition
-  );
+  var result: ReactionDiffusionUniforms;
+  result.feed = uniforms.uniforms_feed;
+  result.kill = uniforms.uniforms_kill;
+  result.diffRateA = uniforms.uniforms_diffRateA;
+  result.diffRateB = uniforms.uniforms_diffRateB;
+  result.deltaT = uniforms.uniforms_deltaT;
+  result.brushRadius = uniforms.uniforms_brushRadius;
+  result.brushStrength = uniforms.uniforms_brushStrength;
+  result.noiseAmount = uniforms.uniforms_noiseAmount;
+  result.brushPosition = uniforms.uniforms_brushPosition;
+  return result;
 }
 
 #define CUSTOM_FRAGMENT_DEFINITIONS
@@ -326,17 +326,17 @@ fn pass2(
 }
 
 fn load_ReactionDiffusionUniforms() -> ReactionDiffusionUniforms {
-  return ReactionDiffusionUniforms(
-  uniforms.uniforms_feed,
-  uniforms.uniforms_kill,
-  uniforms.uniforms_diffRateA,
-  uniforms.uniforms_diffRateB,
-  uniforms.uniforms_deltaT,
-  uniforms.uniforms_brushRadius,
-  uniforms.uniforms_brushStrength,
-  uniforms.uniforms_noiseAmount,
-  uniforms.uniforms_brushPosition
-  );
+  var result: ReactionDiffusionUniforms;
+  result.feed = uniforms.uniforms_feed;
+  result.kill = uniforms.uniforms_kill;
+  result.diffRateA = uniforms.uniforms_diffRateA;
+  result.diffRateB = uniforms.uniforms_diffRateB;
+  result.deltaT = uniforms.uniforms_deltaT;
+  result.brushRadius = uniforms.uniforms_brushRadius;
+  result.brushStrength = uniforms.uniforms_brushStrength;
+  result.noiseAmount = uniforms.uniforms_noiseAmount;
+  result.brushPosition = uniforms.uniforms_brushPosition;
+  return result;
 }
 
 #define CUSTOM_FRAGMENT_DEFINITIONS
@@ -496,17 +496,17 @@ fn pass2(
 }
 
 fn load_ReactionDiffusionUniforms() -> ReactionDiffusionUniforms {
-  return ReactionDiffusionUniforms(
-  uniforms.uniforms_feed,
-  uniforms.uniforms_kill,
-  uniforms.uniforms_diffRateA,
-  uniforms.uniforms_diffRateB,
-  uniforms.uniforms_deltaT,
-  uniforms.uniforms_brushRadius,
-  uniforms.uniforms_brushStrength,
-  uniforms.uniforms_noiseAmount,
-  uniforms.uniforms_brushPosition
-  );
+  var result: ReactionDiffusionUniforms;
+  result.feed = uniforms.uniforms_feed;
+  result.kill = uniforms.uniforms_kill;
+  result.diffRateA = uniforms.uniforms_diffRateA;
+  result.diffRateB = uniforms.uniforms_diffRateB;
+  result.deltaT = uniforms.uniforms_deltaT;
+  result.brushRadius = uniforms.uniforms_brushRadius;
+  result.brushStrength = uniforms.uniforms_brushStrength;
+  result.noiseAmount = uniforms.uniforms_noiseAmount;
+  result.brushPosition = uniforms.uniforms_brushPosition;
+  return result;
 }
 
 #define CUSTOM_FRAGMENT_DEFINITIONS

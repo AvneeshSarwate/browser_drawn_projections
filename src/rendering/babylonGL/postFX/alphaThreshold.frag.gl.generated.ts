@@ -34,9 +34,9 @@ vec4 pass0(vec2 uv, AlphaThresholdUniforms uniforms, sampler2D src) {
 }
 
 AlphaThresholdUniforms load_AlphaThresholdUniforms() {
-  return AlphaThresholdUniforms(
-    uniforms_threshold
-  );
+  AlphaThresholdUniforms result;
+  result.threshold = uniforms_threshold;
+  return result;
 }
 
 void main() {

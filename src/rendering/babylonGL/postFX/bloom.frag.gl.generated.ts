@@ -168,19 +168,19 @@ vec4 pass1(vec2 uv, BloomUniforms uniforms, sampler2D src, sampler2D pass0Textur
 }
 
 BloomUniforms load_BloomUniforms() {
-  return BloomUniforms(
-    uniforms_preBlackLevel,
-    uniforms_preGamma,
-    uniforms_preBrightness,
-    uniforms_minBloomRadius,
-    uniforms_maxBloomRadius,
-    uniforms_bloomThreshold,
-    uniforms_bloomSCurve,
-    uniforms_bloomFill,
-    uniforms_bloomIntensity,
-    uniforms_outputMode,
-    uniforms_inputImage
-  );
+  BloomUniforms result;
+  result.preBlackLevel = uniforms_preBlackLevel;
+  result.preGamma = uniforms_preGamma;
+  result.preBrightness = uniforms_preBrightness;
+  result.minBloomRadius = uniforms_minBloomRadius;
+  result.maxBloomRadius = uniforms_maxBloomRadius;
+  result.bloomThreshold = uniforms_bloomThreshold;
+  result.bloomSCurve = uniforms_bloomSCurve;
+  result.bloomFill = uniforms_bloomFill;
+  result.bloomIntensity = uniforms_bloomIntensity;
+  result.outputMode = uniforms_outputMode;
+  result.inputImage = uniforms_inputImage;
+  return result;
 }
 
 void main() {
@@ -344,19 +344,19 @@ vec4 pass1(vec2 uv, BloomUniforms uniforms, sampler2D src, sampler2D pass0Textur
 }
 
 BloomUniforms load_BloomUniforms() {
-  return BloomUniforms(
-    uniforms_preBlackLevel,
-    uniforms_preGamma,
-    uniforms_preBrightness,
-    uniforms_minBloomRadius,
-    uniforms_maxBloomRadius,
-    uniforms_bloomThreshold,
-    uniforms_bloomSCurve,
-    uniforms_bloomFill,
-    uniforms_bloomIntensity,
-    uniforms_outputMode,
-    uniforms_inputImage
-  );
+  BloomUniforms result;
+  result.preBlackLevel = uniforms_preBlackLevel;
+  result.preGamma = uniforms_preGamma;
+  result.preBrightness = uniforms_preBrightness;
+  result.minBloomRadius = uniforms_minBloomRadius;
+  result.maxBloomRadius = uniforms_maxBloomRadius;
+  result.bloomThreshold = uniforms_bloomThreshold;
+  result.bloomSCurve = uniforms_bloomSCurve;
+  result.bloomFill = uniforms_bloomFill;
+  result.bloomIntensity = uniforms_bloomIntensity;
+  result.outputMode = uniforms_outputMode;
+  result.inputImage = uniforms_inputImage;
+  return result;
 }
 
 void main() {

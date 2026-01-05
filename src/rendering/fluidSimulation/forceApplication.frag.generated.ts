@@ -51,9 +51,9 @@ fn pass0(
 }
 
 fn load_ForceApplicationUniforms() -> ForceApplicationUniforms {
-  return ForceApplicationUniforms(
-  uniforms.uniforms_forceStrength
-  );
+  var result: ForceApplicationUniforms;
+  result.forceStrength = uniforms.uniforms_forceStrength;
+  return result;
 }
 
 #define CUSTOM_FRAGMENT_DEFINITIONS

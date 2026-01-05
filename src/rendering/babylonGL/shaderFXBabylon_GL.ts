@@ -5,6 +5,8 @@ export interface UniformDescriptor {
   kind: 'f32' | 'i32' | 'u32' | 'bool' | 'vec2f' | 'vec3f' | 'vec4f' | 'mat4x4f'
   bindingName: string
   default?: unknown
+  isArray?: boolean
+  arraySize?: number
   ui?: {
     min?: number
     max?: number

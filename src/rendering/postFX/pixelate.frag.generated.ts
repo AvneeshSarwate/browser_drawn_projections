@@ -40,9 +40,9 @@ fn pass0(uv: vec2f, uniforms: PixelateUniforms, src: texture_2d<f32>, srcSampler
 }
 
 fn load_PixelateUniforms() -> PixelateUniforms {
-  return PixelateUniforms(
-  uniforms.uniforms_pixelSize
-  );
+  var result: PixelateUniforms;
+  result.pixelSize = uniforms.uniforms_pixelSize;
+  return result;
 }
 
 #define CUSTOM_FRAGMENT_DEFINITIONS
