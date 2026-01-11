@@ -3,7 +3,18 @@ import type { LoopHandle } from '@/channels/base_time_context'
 import type { AbletonClip } from '@/io/abletonClips'
 import { clipMap } from '@/io/abletonClips'
 import { splitTextToGroups, buildClipFromLine, parseRampLine } from './transformHelpers'
-import type { VoiceState, SonarAppState } from '../appState'
+
+// Minimal type definitions for voice state (only properties actually used)
+export type PlaybackVoiceState = {
+  isPlaying: boolean
+  hotSwapCued: boolean
+}
+
+// Minimal type for appState (only properties actually used)
+export type PlaybackAppState = {
+  sliders: number[]
+  voices: PlaybackVoiceState[]
+}
 
 // Type definitions for playback functions
 export type PlayNoteFunc = (pitch: number, velocity: number, ctx: TimeContext, noteDur: number, instInd: number) => void
@@ -33,7 +44,7 @@ export const runLineClean = async (
   ctx: TimeContext,
   voiceIndex: number,
   sliders: number[],
-  voices: VoiceState[],
+  voices: PlaybackVoiceState[],
   onVoiceStart: () => void,
   onVoiceEnd: () => void,
   playNoteF: PlayNoteFunc,
@@ -95,7 +106,7 @@ export const runLineWithDelay = (
   baseTransform: string,
   delayTransform: string,
   ctx: TimeContext,
-  appState: SonarAppState,
+  appState: PlaybackAppState,
   playNote: PlayNoteFunc
 ) => {
   const baseLine = baseClipName + ' : ' + baseTransform
@@ -107,7 +118,7 @@ export const runLineWithDelay = (
   const { clip: delayRootClip } = buildClipFromLine(groups[0].clipLine, appState.sliders)
   clipMap.set(delayRootClipName, delayRootClip!)
 
-  const dummyVoices = appState.voices.map(v => ({...v, isPlaying: true}))
+  const dummyVoices = appState.voices.map((v): PlaybackVoiceState => ({...v, isPlaying: true}))
 
   const handle = ctx.branch(async ctx => {
     playClipSimple(delayRootClip!, ctx, 0, playNote)
