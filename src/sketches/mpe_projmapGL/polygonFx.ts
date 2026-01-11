@@ -15,6 +15,7 @@ import type { RenderState } from './textRegionUtils'
 import { getTextStyle, getTextAnim } from './textRegionUtils'
 import type p5 from 'p5'
 import { pitchToColor, releaseColor } from './mpeColor'
+import { normalizePointForShader, shouldFlipPolygonY } from '@/rendering/coordinateConfig'
 
 export type PolygonFxSyncOptions = {
   engine: BABYLON.Engine
@@ -26,7 +27,6 @@ export type PolygonFxSyncOptions = {
 
 type ChainBundle = {
   end: ShaderEffect
-  flip?: TransformEffect
   wobble: WobbleEffect
   hBlur: HorizontalBlurEffect
   vBlur: VerticalBlurEffect
@@ -51,10 +51,6 @@ const chains = new Map<string, ChainBundle>()
 const meshes = new Map<string, MeshBundle>()
 let overlayScene: BABYLON.Scene | undefined
 
-// WebGL samples canvas textures with Y-up UVs, but p5/canvas data is Y-down.
-// Flip once at the input so downstream effects stay consistent with WebGPU.
-const FLIP_P5_CANVAS_Y = true
-
 const MPE_PIXELATE_MIN = 1
 const MPE_PIXELATE_MAX = 24
 const POLYGON_MASK_MAX_POINTS = 64
@@ -62,13 +58,12 @@ const POLYGON_MASK_MAX_POINTS = 64
 const getPolygonMaskUniforms = (
   poly: PolygonRenderData[number],
   bboxLogical: { minX: number; minY: number; w: number; h: number },
+  engine: BABYLON.Engine,
 ) => {
-  const w = Math.max(1e-6, bboxLogical.w)
-  const h = Math.max(1e-6, bboxLogical.h)
-  const points = poly.points.slice(0, POLYGON_MASK_MAX_POINTS).map((point) => ({
-    x: Math.min(1, Math.max(0, (point.x - bboxLogical.minX) / w)),
-    y: Math.min(1, Math.max(0, (point.y - bboxLogical.minY) / h)),
-  }))
+  const flipY = shouldFlipPolygonY(engine)
+  const points = poly.points.slice(0, POLYGON_MASK_MAX_POINTS).map((point) =>
+    normalizePointForShader(point, bboxLogical, flipY)
+  )
   return { points, pointCount: points.length }
 }
 
@@ -120,18 +115,15 @@ const createChain = (
   if (w < 1 || h < 1) return null
 
   const srcPass = new PassthruEffect(engine, { src: graphics.elt as HTMLCanvasElement }, w, h)
-  const flip = FLIP_P5_CANVAS_Y
-    ? new TransformEffect(engine, { src: srcPass }, w, h)
-    : undefined
-  if (flip) {
-    flip.setUniforms({ rotate: 0, anchor: [0.5, 0.5], translate: [0, 0], scale: [1, -1] })
-  }
-  const wobble = new WobbleEffect(engine, { src: flip ?? srcPass }, w, h)
+  const wobble = new WobbleEffect(engine, { src: srcPass }, w, h)
   const hBlur = new HorizontalBlurEffect(engine, { src: wobble }, w, h)
   const vBlur = new VerticalBlurEffect(engine, { src: hBlur }, w, h)
   const pixelate = new PixelateEffect(engine, { src: vBlur }, w, h, 'nearest')
   const alphaThresh = new AlphaThresholdEffect(engine, { src: pixelate }, w, h)
   const mask = new PolygonMaskEffect(engine, { src: alphaThresh }, w, h)
+  // WebGL canvas textures are Y-flipped relative to render output; flip at end of chain
+  const flipY = new TransformEffect(engine, { src: mask }, w, h)
+  flipY.setUniforms({ rotate: 0, anchor: [0.5, 0.5], translate: [0, 0], scale: [1, -1] })
 
   wobble.setUniforms({
     xStrength: fx.wobbleX,
@@ -146,8 +138,7 @@ const createChain = (
 
   const { fxKey } = makeKeys({ minX: bboxPx.minX, minY: bboxPx.minY, w, h }, fx)
   return {
-    end: mask,
-    flip,
+    end: flipY,
     wobble,
     hBlur,
     vBlur,
@@ -156,7 +147,7 @@ const createChain = (
     width: w,
     height: h,
     fxKey,
-    owned: [mask, alphaThresh, pixelate, vBlur, hBlur, wobble, ...(flip ? [flip] : []), srcPass],
+    owned: [flipY, mask, alphaThresh, pixelate, vBlur, hBlur, wobble, srcPass],
     graphics,
     bboxPx,
     bboxLogical,
@@ -390,7 +381,7 @@ export const syncChainsAndMeshes = (
       }
       const rs = renderStates.get(poly.id)
       redrawGraphics(graphics, poly, bboxLogical, rs)
-      chain.mask.setUniforms(getPolygonMaskUniforms(poly, bboxLogical))
+      chain.mask.setUniforms(getPolygonMaskUniforms(poly, bboxLogical, engine))
       chain.bboxLogical = bboxLogical
       chain.bboxPx = bboxPx
       chain.poly = poly
@@ -416,7 +407,7 @@ export const syncChainsAndMeshes = (
       prev.poly = poly
       const rs = renderStates.get(poly.id)
       redrawGraphics(prev.graphics, poly, bboxLogical, rs)
-      prev.mask.setUniforms(getPolygonMaskUniforms(poly, bboxLogical))
+      prev.mask.setUniforms(getPolygonMaskUniforms(poly, bboxLogical, engine))
       createOrUpdateMesh(poly.id, engine, prev, bboxLogical, canvasLogical)
     }
   }

@@ -15,6 +15,7 @@ import { getTextStyle, getTextAnim } from './textRegionUtils'
 import type p5 from 'p5'
 import { LetterParticlesRenderer } from './letterParticles'
 import { pitchToColor, releaseColor } from './mpeColor'
+import { normalizePointForShader, shouldFlipPolygonY } from '@/rendering/coordinateConfig'
 
 export type PolygonFxSyncOptions = {
   engine: BABYLON.WebGPUEngine
@@ -69,13 +70,14 @@ const POLYGON_MASK_MAX_POINTS = 64
 const getPolygonMaskUniforms = (
   poly: PolygonRenderData[number],
   bboxLogical: { minX: number; minY: number; w: number; h: number },
+  engine: BABYLON.WebGPUEngine,
 ) => {
-  const w = Math.max(1e-6, bboxLogical.w)
-  const h = Math.max(1e-6, bboxLogical.h)
-  const points = poly.points.slice(0, POLYGON_MASK_MAX_POINTS).map((point) => ({
-    x: Math.min(1, Math.max(0, (point.x - bboxLogical.minX) / w)),
-    y: Math.min(1, Math.max(0, (point.y - bboxLogical.minY) / h)),
-  }))
+  const flipY = shouldFlipPolygonY(engine)
+  const points = poly.points.slice(0, POLYGON_MASK_MAX_POINTS).map((point) => {
+    const normalized = normalizePointForShader(point, bboxLogical, flipY)
+    // WebGPU shader expects vec4 for alignment (z, w unused but required)
+    return { x: normalized.x, y: normalized.y, z: 0, w: 0 }
+  })
   return { points, pointCount: points.length }
 }
 
@@ -462,7 +464,7 @@ export const syncChainsAndMeshes = (
         }
         const rs = renderStates.get(poly.id)
       redrawGraphics(graphics, poly, bboxLogical, rs)
-      chain.mask.setUniforms(getPolygonMaskUniforms(poly, bboxLogical))
+      chain.mask.setUniforms(getPolygonMaskUniforms(poly, bboxLogical, engine))
       chain.bboxLogical = bboxLogical
       chain.bboxPx = bboxPx
       chain.poly = poly
@@ -488,7 +490,7 @@ export const syncChainsAndMeshes = (
       prev.poly = poly
       const rs = renderStates.get(poly.id)
       redrawGraphics(prev.graphics, poly, bboxLogical, rs)
-      prev.mask.setUniforms(getPolygonMaskUniforms(poly, bboxLogical))
+      prev.mask.setUniforms(getPolygonMaskUniforms(poly, bboxLogical, engine))
       createOrUpdateMesh(poly.id, engine, prev, bboxLogical, canvasLogical)
       }
     }
