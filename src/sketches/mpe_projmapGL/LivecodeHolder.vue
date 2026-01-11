@@ -415,7 +415,7 @@ onMounted(async () => {
     mpeLog(`MIDI READY - Available inputs: [${availableInputs.join(', ')}]`)
 
     // Try to connect to common MPE controllers - adjust device name as needed
-    const mpeDeviceNames = ['Sensel Morph', 'LinnStrument MIDI', 'Seaboard', 'Continuum']
+    const mpeDeviceNames = ['IAC Driver Bus 2', 'Sensel Morph', 'LinnStrument MIDI', 'Seaboard', 'Continuum']
     for (const name of mpeDeviceNames) {
       mpeLog(`  -> Trying to connect to: ${name}`)
       const input = getMPEInput(name, { zone: 'lower' })

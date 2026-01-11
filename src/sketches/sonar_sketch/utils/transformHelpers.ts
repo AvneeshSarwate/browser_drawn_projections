@@ -1,8 +1,8 @@
 // transformHelpers.ts - Pure helper utilities for Sonar sketch clip transformations
 
 import { AbletonClip, clipMap } from '@/io/abletonClips'
-import { TRANSFORM_REGISTRY } from '../clipTransforms'
-import { evaluate } from '../sliderExprParser'
+import { TRANSFORM_REGISTRY } from './clipTransforms'
+import { evaluate } from './sliderExprParser'
 import { oneshotCall, type SonarAppState } from '../appState'
 import {
   findLineCallMatches as findLineCallMatchesAST,

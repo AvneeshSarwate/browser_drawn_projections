@@ -1,5 +1,5 @@
 import { AbletonClip } from '@/io/abletonClips'
-import { ease } from '@/sketches/sonar_sketch/clipTransforms'
+import { ease } from '@/sketches/sonar_sketch/utils/clipTransforms'
 import Anthropic from '@anthropic-ai/sdk'
 
 export type TransformOp = 'easeIn' | 'easeOut' | 'octaveShift'
