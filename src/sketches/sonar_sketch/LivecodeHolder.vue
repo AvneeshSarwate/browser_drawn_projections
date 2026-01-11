@@ -1,13 +1,13 @@
 <!-- eslint-disable no-debugger -->
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
-import { type SonarAppState, appStateName, type VoiceState, globalStore, type SaveableProperties, oneshotCall } from './appState';
+import { type SonarAppState, appStateName, globalStore, type SaveableProperties, oneshotCall } from './appState';
 import { inject, onMounted, onUnmounted, reactive, ref, computed, watch, nextTick } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
 import { launch, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
-import { AbletonClip, clipMap, INITIALIZE_ABLETON_CLIPS, type AbletonNote, quickNote } from '@/io/abletonClips';
+import { INITIALIZE_ABLETON_CLIPS, type AbletonNote, quickNote } from '@/io/abletonClips';
 import { MIDI_READY, midiInputs, midiOutputs } from '@/io/midi';
 import { getPiano, getPianoChain, TONE_AUDIO_START, getSynthChain, getDriftChain } from '@/music/synths';
 import { m2f } from '@/music/mpeSynth';
@@ -18,6 +18,7 @@ import * as Tone from 'tone'
 import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
 import TsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
 import { buildClipFromLine, splitTextToGroups, generateUUID, findLineCallMatches, preprocessJavaScript, transformToRuntime, createExecutableFunction, resolveSliderExpressionsInJavaScript, type UUIDMapping, parseRampLine, analyzeExecutableLines, executeParamSetterString } from './utils/transformHelpers'
+import { runLineWithDelay } from './utils/playbackUtils'
 import { monacoEditors, codeMirrorEditors, setCodeMirrorContent, highlightCurrentLine, highlightScheduledLines, initializeMonacoEditorComplete, initializeCodeMirrorEditorComplete, highlightCurrentLineByUUID, applyScheduledHighlightByUUID, handleDslLineClick, setPianoRollFromDslLine, clickedDslRanges, highlightClickedDsl, updateDslOutlines, clearPianoRoll, clickedDslOriginalText, clearAllDslHighlights, extractDslFromLine, clickedDslSegmentCounts, codeMirrorEditorsByName } from './utils/editorManager'
 import { saveSnapshot as saveSnapshotSM, loadSnapshotStateOnly as loadSnapshotStateOnlySM, downloadSnapshotsFile, loadSnapshotsFromFile as loadSnapshotsFromFileSM, saveToLocalStorage as saveToLocalStorageSM, loadFromLocalStorage as loadFromLocalStorageSM, saveBank, loadBank, makeBankClickHandler, saveTopLevelSliderBank as saveTopLevelSliderBankSM, loadTopLevelSliderBank as loadTopLevelSliderBankSM, saveFxSliderBank as saveFxSliderBankSM, loadFxSliderBank as loadFxSliderBankSM, saveTopLevelToggleBank as saveTopLevelToggleBankSM, loadTopLevelToggleBank as loadTopLevelToggleBankSM, saveTopLevelOneShotBank as saveTopLevelOneShotBankSM, loadTopLevelOneShotBank as loadTopLevelOneShotBankSM, saveJsCodeBank as saveJsCodeBankSM, loadJsCodeBank as loadJsCodeBankSM } from './utils/snapshotManager'
 import type { LoopHandle } from '@/channels/base_time_context';
@@ -281,111 +282,6 @@ const runLine = async (lineText: string, ctx: TimeContext, uuid: string, voiceIn
   }
 
   return voice.hotSwapCued
-}
-
-
-const DELAY_SLIDER = 16
-const runLineWithDelay = (baseClipName: string, baseTransform: string, delayTransform: string, ctx: TimeContext) => {
-  const baseLine = baseClipName + ' : ' + baseTransform
-  const delayRootClipName = baseClipName + '-delayRoot-' + crypto.randomUUID()
-  const delayLine = delayRootClipName + ' : ' + delayTransform
-  console.log('play lines', baseLine, delayLine)
-
-  const groups = splitTextToGroups(baseLine)
-  const { clip: delayRootClip, updatedClipLine } = buildClipFromLine(groups[0].clipLine, appState.sliders)
-  clipMap.set(delayRootClipName, delayRootClip!)
-
-  const delay = appState.sliders[DELAY_SLIDER]
-
-  const dummyVoices = appState.voices.map(v => ({...v, isPlaying: true}))
-
-  const handle = ctx.branch(async ctx => {
-    // runLineClean(baseLine, ctx, 0, appState.sliders, dummyVoices, () => { }, () => { }, playNote, (() => { }) as any)
-    playClipSimple(delayRootClip!, ctx, 0, playNote)
-
-    // await ctx.wait(4)
-    await ctx.wait(appState.sliders[DELAY_SLIDER]**2 * 8)
-
-    runLineClean(delayLine, ctx, 1, appState.sliders, dummyVoices, () => { }, () => { }, playNote, (() => { }) as any)
-  })
-  
-  return handle
-}
-
-// runLine function - executes livecoding lines and manages highlighting
-type PlayNoteFunc = (pitch: number, velocity: number, ctx: TimeContext, noteDur: number, instInd: number) => void
-type LaunchRampFunc = (paramName: string, startVal: number, endVal: number, duration: number, voiceIdx: number, ctx: TimeContext) => LoopHandle
-const runLineClean = async (lineText: string, ctx: TimeContext, voiceIndex: number, sliders: number[], voices: VoiceState[], onVoiceStart: () => void, onVoiceEnd: () => void, playNoteF: PlayNoteFunc, launchParamRampF: LaunchRampFunc) => {
-  // Highlight the current line being executed using UUID
-  // highlightCurrentLineByUUID(voiceIndex, uuid, voiceActiveUUIDs, getMappingsForVoice)
-  onVoiceStart()
-
-  // Check if voice is still playing
-  const voice = voices[voiceIndex]
-  
-  try {
-    // Parse the line using existing parsing logic
-    const groups = splitTextToGroups(lineText)
-    if (!groups.length) return
-    
-    const group = groups[0] // runLine handles one group at a time
-    const { clip, updatedClipLine } = buildClipFromLine(group.clipLine, sliders)
-    console.log("logged clip", clip)
-    if (!clip) return
-
-    console.log("running line", lineText, clip.notes.map(n => [n.position, n.pitch]), playNoteF)
-    
-    // Execute the clip similar to existing playClips logic
-    const notes = clip.noteBuffer()
-    const ramps = group.rampLines.map(parseRampLine).map(r => 
-      launchParamRampF(r.paramName, r.startVal, r.endVal, clip.duration, voiceIndex, ctx)
-    )
-
-    if (notes.length === 0 && clip.duration > 0) {
-      await ctx.wait(clip.duration)
-    }
-
-    // Play the notes
-    for (const nextNote of notes) {
-      await ctx.wait(nextNote.preDelta)
-      
-      if (!voice.isPlaying) {
-        ramps.forEach(r => r.cancel())
-        break
-      }
-      
-      playNoteF(nextNote.note.pitch, nextNote.note.velocity, ctx, nextNote.note.duration, voiceIndex)
-      if (nextNote.postDelta) await ctx.wait(nextNote.postDelta)
-    }
-    
-    // Clean up ramps if we completed normally
-    if (voices[voiceIndex].isPlaying) {
-      // Let ramps complete naturally
-    } else {
-      ramps.forEach(r => r.cancel())
-    }
-    
-  } catch (error) {
-    console.error('Error in runLine:', error)
-  } finally {
-    // Clear current line highlighting after execution
-    // highlightCurrentLineByUUID(voiceIndex, null, voiceActiveUUIDs, getMappingsForVoice)
-    onVoiceEnd()
-  }
-
-  return voice.hotSwapCued
-}
-
-const playClipSimple = async (clip: AbletonClip, ctx: TimeContext, voiceIndex: number, playNoteF: (pitch: number, velocity: number, ctx: TimeContext, duration: number, voiceIndex: number) => void) => {
-  // Play the notes
-    const notes = clip.noteBuffer()
-  ctx.branch(async ctx => {
-    for (const nextNote of notes) {
-      await ctx.wait(nextNote.preDelta)
-      playNoteF(nextNote.note.pitch, nextNote.note.velocity, ctx, nextNote.note.duration, voiceIndex)
-      if (nextNote.postDelta) await ctx.wait(nextNote.postDelta)
-    }
-  })
 }
 
 
@@ -704,16 +600,16 @@ onMounted(async() => {
           lpd8.onNoteOn(lpdButtonMap[ind], (msg) => {
             console.log('oneShot', ind, lpdButtonMap[ind], baseClipNames[ind])
             immediateLaunchQueue.push((ctx) => {
-              runLineWithDelay(baseClipNames[ind], baseTransform, delayTransform, ctx)
+              runLineWithDelay(baseClipNames[ind], baseTransform, delayTransform, ctx, appState, playNote)
               return Promise.resolve()
             })
           })
         } else {
-          //gate launch 
+          //gate launch
           lpd8.onNoteOn(lpdButtonMap[ind], (msg) => {
             console.log('gate', ind, lpdButtonMap[ind], baseClipNames[ind])
             immediateLaunchQueue.push((ctx) => {
-              const handle = runLineWithDelay(baseClipNames[ind-4], baseTransform, delayTransform, ctx)
+              const handle = runLineWithDelay(baseClipNames[ind-4], baseTransform, delayTransform, ctx, appState, playNote)
               gateButtonMelodies[ind] = handle
               return Promise.resolve()
             })
