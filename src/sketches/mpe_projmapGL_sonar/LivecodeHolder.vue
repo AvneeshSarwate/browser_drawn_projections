@@ -61,9 +61,13 @@ const melodyMapRenderStates = new Map<string, RenderState>()
 // MIDI playback state
 const midiOuts: MIDIValOutput[] = []
 let playNote: (pitch: number, velocity: number, ctx: TimeContext, noteDur: number, instInd: number) => void = () => {}
-const sliders: number[] = Array(16).fill(0.5) // Local slider state for LPD8/TouchOSC
+const sliders: number[] = Array(17).fill(0.5) // Local slider state for LPD8/TouchOSC
 let timeLoops: CancelablePromiseProxy<any>[] = []
 const immediateLaunchQueue: Array<(ctx: TimeContext) => Promise<void>> = []
+
+// Button state for UI buttons
+const gateButtonStates = ref<Record<number, boolean>>({})
+const gateButtonMelodiesUI: Record<number, LoopHandle> = {}
 
 // Note-off protector: tracks active notes per channel/pitch to prevent premature note-offs
 const activeNotes = new Map<string, Set<symbol>>() // key: "channel-pitch", value: set of note IDs
@@ -441,6 +445,89 @@ function createMelodyMappedPlayNote(
   }
 }
 
+// UI Button handlers (shared with MIDI button logic)
+const baseClipNames = ['dscale5', 'dscale7', 'd7mel']
+const baseTransform = 's_tr s0 dR7 : str s1 : rot s2 : rev s3 : orn s4 dR7 : easeCirc s5 : spread s7 dR7'
+const delayTransform = 's_tr s8 dR7 : str s9 : rot s10 : rev s11 : orn s12 dR7 : easeCirc s13'
+
+function triggerOneShotButton(ind: number) {
+  console.log('UI oneShot', ind, baseClipNames[ind % baseClipNames.length])
+
+  immediateLaunchQueue.push((ctx) => {
+    // Create a unique melody ID for this trigger (for both original and delayed melodies)
+    const baseMelodyId = `melody_${Date.now()}_${ind}_base`
+    const delayMelodyId = `melody_${Date.now()}_${ind}_delay`
+
+    // Create melody-mapped play notes (allocates polygons and creates combined audio+visual play funcs)
+    const baseMelodyPlayNote = createMelodyMappedPlayNote(baseMelodyId, playNote)
+    const delayMelodyPlayNote = createMelodyMappedPlayNote(delayMelodyId, playNote)
+
+    // Use a combined play note that routes based on voice index
+    const combinedPlayNote: VisualNotePlayFunc = (pitch, velocity, ctx, noteDur, voiceIdx) => {
+      if (voiceIdx === 0) {
+        baseMelodyPlayNote(pitch, velocity, ctx, noteDur, voiceIdx)
+      } else {
+        delayMelodyPlayNote(pitch, velocity, ctx, noteDur, voiceIdx)
+      }
+    }
+
+    const playbackAppState = {
+      sliders,
+      voices: [{ isPlaying: true, hotSwapCued: false }, { isPlaying: true, hotSwapCued: false }]
+    }
+
+    runLineWithDelay(baseClipNames[ind % baseClipNames.length], baseTransform, delayTransform, ctx, playbackAppState, combinedPlayNote)
+    return Promise.resolve()
+  })
+}
+
+function triggerGateButtonDown(ind: number) {
+  if (gateButtonStates.value[ind]) return // Already pressed
+
+  console.log('UI gate down', ind, baseClipNames[(ind - 4) % baseClipNames.length])
+  gateButtonStates.value[ind] = true
+
+  immediateLaunchQueue.push((ctx) => {
+    // Create a unique melody ID for this trigger
+    const baseMelodyId = `melody_${Date.now()}_${ind}_base`
+    const delayMelodyId = `melody_${Date.now()}_${ind}_delay`
+
+    // Create melody-mapped play notes
+    const baseMelodyPlayNote = createMelodyMappedPlayNote(baseMelodyId, playNote)
+    const delayMelodyPlayNote = createMelodyMappedPlayNote(delayMelodyId, playNote)
+
+    const combinedPlayNote: VisualNotePlayFunc = (pitch, velocity, ctx, noteDur, voiceIdx) => {
+      if (voiceIdx === 0) {
+        baseMelodyPlayNote(pitch, velocity, ctx, noteDur, voiceIdx)
+      } else {
+        delayMelodyPlayNote(pitch, velocity, ctx, noteDur, voiceIdx)
+      }
+    }
+
+    const playbackAppState = {
+      sliders,
+      voices: [{ isPlaying: true, hotSwapCued: false }, { isPlaying: true, hotSwapCued: false }]
+    }
+
+    const handle = runLineWithDelay(baseClipNames[(ind - 4) % baseClipNames.length], baseTransform, delayTransform, ctx, playbackAppState, combinedPlayNote)
+    gateButtonMelodiesUI[ind] = handle
+    return Promise.resolve()
+  })
+}
+
+function triggerGateButtonUp(ind: number) {
+  if (!gateButtonStates.value[ind]) return // Already released
+
+  console.log('UI gate up', ind)
+  gateButtonStates.value[ind] = false
+
+  const handle = gateButtonMelodiesUI[ind]
+  if (handle) {
+    handle.cancel()
+    delete gateButtonMelodiesUI[ind]
+  }
+}
+
 onMounted(async () => {
   const params = new URLSearchParams(window.location.search)
   const presetName = params.get('preset')
@@ -802,4 +889,285 @@ onUnmounted(() => {
     :show-snapshots="true"
     :metadata-schemas="metadataSchemas"
   />
+
+  <!-- Teleport sliders to SketchHtml.vue -->
+  <Teleport to="#slider-controls-target">
+    <div class="slider-container">
+      <!-- Row 1: Sliders 0-7 (vertical) -->
+      <div class="slider-row">
+        <div class="slider-label-row">Sliders 0-7 (LPD8)</div>
+        <div class="sliders-vertical">
+          <div v-for="i in 8" :key="i-1" class="slider-group">
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.001"
+              :value="sliders[i-1]"
+              @input="sliders[i-1] = parseFloat(($event.target as HTMLInputElement).value)"
+              orient="vertical"
+              class="slider-vertical"
+            />
+            <span class="slider-value">{{ sliders[i-1].toFixed(3) }}</span>
+            <span class="slider-index">{{ i-1 }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Row 2: Sliders 8-15 (vertical) -->
+      <div class="slider-row">
+        <div class="slider-label-row">Sliders 8-15 (TouchOSC)</div>
+        <div class="sliders-vertical">
+          <div v-for="i in 8" :key="i+7" class="slider-group">
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.001"
+              :value="sliders[i+7]"
+              @input="sliders[i+7] = parseFloat(($event.target as HTMLInputElement).value)"
+              orient="vertical"
+              class="slider-vertical"
+            />
+            <span class="slider-value">{{ sliders[i+7].toFixed(3) }}</span>
+            <span class="slider-index">{{ i+7 }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Horizontal slider: Slider 16 -->
+      <div class="slider-row horizontal">
+        <div class="slider-label-row">Slider 16 (Delay)</div>
+        <div class="slider-horizontal-container">
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.001"
+            :value="sliders[16]"
+            @input="sliders[16] = parseFloat(($event.target as HTMLInputElement).value)"
+            class="slider-horizontal"
+          />
+          <span class="slider-value">{{ sliders[16].toFixed(3) }}</span>
+        </div>
+      </div>
+
+      <!-- Button Grid -->
+      <div class="button-section">
+        <div class="slider-label-row">Melody Triggers</div>
+
+        <!-- Row 1: One-shot buttons (0-3) -->
+        <div class="button-row">
+          <div class="button-row-label">One-Shot</div>
+          <div class="button-grid">
+            <button
+              v-for="i in 4"
+              :key="`oneshot-${i-1}`"
+              @click="triggerOneShotButton(i-1)"
+              class="trigger-button oneshot"
+            >
+              {{ i-1 }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Row 2: Gate buttons (4-7) -->
+        <div class="button-row">
+          <div class="button-row-label">Gate</div>
+          <div class="button-grid">
+            <button
+              v-for="i in 4"
+              :key="`gate-${i+3}`"
+              @mousedown="triggerGateButtonDown(i+3)"
+              @mouseup="triggerGateButtonUp(i+3)"
+              @mouseleave="triggerGateButtonUp(i+3)"
+              @touchstart.prevent="triggerGateButtonDown(i+3)"
+              @touchend.prevent="triggerGateButtonUp(i+3)"
+              @touchcancel.prevent="triggerGateButtonUp(i+3)"
+              class="trigger-button gate"
+              :class="{ active: gateButtonStates[i+3] }"
+            >
+              {{ i+3 }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
+
+<style scoped>
+.slider-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  user-select: none;
+}
+
+.slider-row {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.slider-row.horizontal {
+  flex-direction: column;
+}
+
+.slider-label-row {
+  font-weight: 600;
+  font-size: 14px;
+  color: #333;
+  text-align: left;
+}
+
+.sliders-vertical {
+  display: flex;
+  gap: 24px;
+  justify-content: center;
+}
+
+.slider-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.slider-vertical {
+  writing-mode: bt-lr; /* IE */
+  -webkit-appearance: slider-vertical; /* WebKit */
+  appearance: slider-vertical;
+  width: 8px;
+  height: 150px;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+}
+
+.slider-horizontal-container {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.slider-horizontal {
+  flex: 1;
+  height: 8px;
+  cursor: pointer;
+}
+
+.slider-value {
+  font-size: 11px;
+  color: #666;
+  font-family: 'Courier New', monospace;
+  min-width: 45px;
+  text-align: center;
+}
+
+.slider-index {
+  font-size: 10px;
+  color: #999;
+  font-weight: 600;
+}
+
+/* Custom slider styling */
+input[type="range"] {
+  background: #ddd;
+  border-radius: 4px;
+  outline: none;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #4CAF50;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  background: #45a049;
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #4CAF50;
+  cursor: pointer;
+  border: none;
+  transition: background 0.15s;
+}
+
+input[type="range"]::-moz-range-thumb:hover {
+  background: #45a049;
+}
+
+/* Button section */
+.button-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 10px;
+  border-top: 2px solid #ddd;
+}
+
+.button-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.button-row-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+  min-width: 70px;
+}
+
+.button-grid {
+  display: flex;
+  gap: 12px;
+}
+
+.trigger-button {
+  width: 60px;
+  height: 60px;
+  border: 2px solid #666;
+  border-radius: 8px;
+  background: linear-gradient(145deg, #ffffff, #e0e0e0);
+  color: #333;
+  font-size: 18px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.15s;
+  box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
+  user-select: none;
+}
+
+.trigger-button:hover {
+  background: linear-gradient(145deg, #f0f0f0, #d0d0d0);
+  transform: translateY(-2px);
+  box-shadow: 3px 3px 8px rgba(0, 0, 0, 0.25);
+}
+
+.trigger-button:active {
+  transform: translateY(0);
+  box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.trigger-button.oneshot:active {
+  background: linear-gradient(145deg, #FFD54F, #FFC107);
+  border-color: #FF6F00;
+}
+
+.trigger-button.gate.active {
+  background: linear-gradient(145deg, #81C784, #4CAF50);
+  border-color: #2E7D32;
+  box-shadow: inset 2px 2px 5px rgba(0, 0, 0, 0.2);
+}
+</style>

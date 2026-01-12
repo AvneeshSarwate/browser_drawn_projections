@@ -26,17 +26,7 @@ const popped = ref(false)
         }" abitrary-prop="somethi"></canvas>
       </div>
     </PopoutWindow>
-    <div id="description">
-      <ul>
-        <li>Below (the canvas below these instructions) is a simple vector drawing canvas. It supports drawing polygons, freehand lines, and circles</li>
-        <li>There are 4 tools - freehand, polygon, circle, and select. The first 3 let you draw shapes of the corresponding type. The last one lets you select and move/rotate/scale individual shapes</li>
-        <li>This demo app lets you draw polygons in the canvas below, and for each polygon, the app will automatically render an animated text layout area in the top canvas (above these instructions). Freehand lines and circles don't get rendered to the top.</li>
-        <li>For each shape, you can select it to see it's metadata - there are menus that let you control the text styling and animation parameters for each shape</li>
-        <li>To draw polygons, select the polygon tool, and then click on the canvas to add points. Press the end shape button (or escape key) to end the polygon - it will autoclose (or press cancel shape to delete the in progress polygon)</li>
-        <li>To drag polygons around or stretch and rotate them, use the select tool - click on them an a transform handle will appear for rotation/stretch</li>
-        <li>To edit the actual shape of the polygon, use the polygon tool and make sure you've selected Edit Shape. You can drag individual points around, or click to add new points where the green highlight shows they will be added. Use ctrl-click to delete a point.</li>
-      </ul>
-    </div>
+    <div id="slider-controls-target"></div>
     <div id="debugInfo"></div>
   </div>
 </template>
@@ -78,24 +68,13 @@ const popped = ref(false)
   visibility: visible;
 }
 
-#description {
-  max-width: 850px;
-  font-size: 14px;
-  line-height: 1.3;
-  color: #333;
-}
-
-#description ul {
-  margin: 0;
-  padding-left: 20px;
-  text-align: left;
-}
-
-#description li {
-  margin: 0 0 6px 0;
-}
-
-#description li:last-child {
-  margin-bottom: 0;
+#slider-controls-target {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 20px;
+  background-color: #f5f5f5;
+  border-radius: 8px;
+  min-width: 850px;
 }
 </style>
