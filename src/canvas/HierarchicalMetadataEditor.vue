@@ -17,6 +17,12 @@ interface Props {
   schemaOptions?: { name: string; schema: ZodTypeAny }[]
 }
 
+// Architecture note:
+// This component owns selection context (single vs hierarchical) and derives a
+// stable selection key from the active node. That key is passed down so deeper
+// editors can reset their local draft state when the selected node changes,
+// avoiding stale metadata leaks across selections.
+
 const props = withDefaults(defineProps<Props>(), {
   schemaOptions: () => []
 })
@@ -48,6 +54,15 @@ const entries = computed(() => {
 })
 
 const activeNode = shallowRef<Konva.Node | null>(null)
+const selectionKey = computed(() => {
+  if (mode.value === 'simple') {
+    return singleNode.value?.id?.() ?? ''
+  }
+  if (mode.value === 'hierarchical') {
+    return activeNode.value?.id?.() ?? ''
+  }
+  return ''
+})
 
 const singleNodeMetadata = computed(() => {
   const node = singleNode.value
@@ -170,6 +185,7 @@ const handleMouseLeave = () => {
         :visible="true"
         :can-edit="!!singleNode"
         :schema-options="props.schemaOptions"
+        :selection-key="selectionKey"
         @apply="applyMetadataSingle"
       />
     </template>
@@ -211,6 +227,7 @@ const handleMouseLeave = () => {
           :visible="true"
           :can-edit="true"
           :schema-options="props.schemaOptions"
+          :selection-key="selectionKey"
           @apply="applyMetadata"
         />
         

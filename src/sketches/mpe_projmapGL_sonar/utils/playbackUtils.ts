@@ -22,6 +22,20 @@ export type LaunchRampFunc = (paramName: string, startVal: number, endVal: numbe
 
 export const DELAY_SLIDER = 16
 
+/**
+ * Options for melody-to-polygon mapping in runLineWithDelay.
+ * The wrapPlayNote callback is called right before each melody plays,
+ * allowing for just-in-time polygon allocation and counter incrementing.
+ */
+export type MelodyMapOptions = {
+  /**
+   * Called right before a melody starts playing.
+   * Should allocate a polygon and return a wrapped playNote that includes visual effects.
+   * This is called once for the base melody and once for the delay melody (if not cancelled).
+   */
+  wrapPlayNote: (basePlayNote: PlayNoteFunc) => PlayNoteFunc
+}
+
 export const playClipSimple = async (
   clip: AbletonClip,
   ctx: TimeContext,
@@ -107,7 +121,8 @@ export const runLineWithDelay = (
   delayTransform: string,
   ctx: TimeContext,
   appState: PlaybackAppState,
-  playNote: PlayNoteFunc
+  playNote: PlayNoteFunc,
+  melodyMapOpts?: MelodyMapOptions
 ) => {
   const baseLine = baseClipName + ' : ' + baseTransform
   const delayRootClipName = baseClipName + '-delayRoot-' + crypto.randomUUID()
@@ -121,11 +136,17 @@ export const runLineWithDelay = (
   const dummyVoices = appState.voices.map((v): PlaybackVoiceState => ({...v, isPlaying: true}))
 
   const handle = ctx.branch(async ctx => {
-    playClipSimple(delayRootClip!, ctx, 0, playNote)
+    // Wrap playNote for base melody right before it plays
+    // This is when polygon allocation should happen (increments left/right counter)
+    const basePlayNote = melodyMapOpts?.wrapPlayNote(playNote) ?? playNote
+    playClipSimple(delayRootClip!, ctx, 0, basePlayNote)
 
     await ctx.wait(appState.sliders[DELAY_SLIDER]**2 * 8)
 
-    runLineClean(delayLine, ctx, 1, appState.sliders, dummyVoices, () => { }, () => { }, playNote, (() => { }) as any)
+    // Wrap playNote for delay melody right before it plays (only if we reach here, i.e., not cancelled)
+    // This is when polygon allocation should happen for the delay melody
+    const delayPlayNote = melodyMapOpts?.wrapPlayNote(playNote) ?? playNote
+    runLineClean(delayLine, ctx, 1, appState.sliders, dummyVoices, () => { }, () => { }, delayPlayNote, (() => { }) as any)
   })
 
   return handle

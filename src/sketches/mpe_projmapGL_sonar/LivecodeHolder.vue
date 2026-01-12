@@ -21,7 +21,7 @@ import { TONE_AUDIO_START } from '@/music/synths'
 import { INITIALIZE_ABLETON_CLIPS } from '@/io/abletonClips'
 import { clipData as staticClipData } from '../sonar_sketch/clipData'
 import { TimeContext, launchBrowser, CancelablePromiseProxy } from '@/channels/offline_time_context'
-import { runLineWithDelay } from './utils/playbackUtils'
+import { runLineWithDelay, type MelodyMapOptions } from './utils/playbackUtils'
 import type { LoopHandle } from '@/channels/base_time_context'
 import { MPEInput } from '@/io/mpe'
 import type { MPEAnimBundle } from './mpeState'
@@ -425,58 +425,57 @@ function disposeMelodyMap() {
   melodyMapRenderStates.clear()
 }
 
-/**
- * Creates a play note function that includes visual arcs for melody mapping
- * @param melodyId Unique ID for this melody
- * @param basePlayNote The base audio play note function
- */
-function createMelodyMappedPlayNote(
-  melodyId: string,
-  basePlayNote: VisualNotePlayFunc
-): VisualNotePlayFunc {
-  // Allocate polygon for this melody
-  const polygonId = allocateMelodyToPolygon(melodyId, melodyMapState, appState.polygonRenderData)
-  if (polygonId) {
-    melodyMapLog(`Melody ${melodyId} allocated to polygon ${polygonId}`)
-    return buildCombinedNotePlayFunction(melodyId, melodyMapState, basePlayNote)
-  } else {
-    melodyMapLog(`No melodyMap polygon available for melody ${melodyId}`)
-    return basePlayNote
-  }
-}
-
 // UI Button handlers (shared with MIDI button logic)
 const baseClipNames = ['dscale5', 'dscale7', 'd7mel']
 const baseTransform = 's_tr s0 dR7 : str s1 : rot s2 : rev s3 : orn s4 dR7 : easeCirc s5 : spread s7 dR7'
 const delayTransform = 's_tr s8 dR7 : str s9 : rot s10 : rev s11 : orn s12 dR7 : easeCirc s13'
 
+/**
+ * Creates melodyMapOpts for runLineWithDelay.
+ * The wrapPlayNote callback is called right before each melody plays,
+ * allocating a polygon and creating a combined audio+visual playNote.
+ * This ensures proper left/right alternation - counter only increments when melody actually plays.
+ */
+function createMelodyMapOpts(): MelodyMapOptions {
+  return {
+    wrapPlayNote: (basePlayNote: VisualNotePlayFunc) => {
+      // Generate unique melody ID at the moment the melody is about to play
+      const melodyId = `melody_${Date.now()}_${crypto.randomUUID()}`
+
+      // Allocate polygon (this increments the left/right counter)
+      const polygonId = allocateMelodyToPolygon(melodyId, melodyMapState, appState.polygonRenderData)
+
+      if (polygonId) {
+        melodyMapLog(`Melody ${melodyId} allocated to polygon ${polygonId} (counter: ${melodyMapState.columnCounter})`)
+        return buildCombinedNotePlayFunction(melodyId, melodyMapState, basePlayNote)
+      } else {
+        melodyMapLog(`No melodyMap polygon available for melody ${melodyId}`)
+        return basePlayNote
+      }
+    }
+  }
+}
+
 function triggerOneShotButton(ind: number) {
   console.log('UI oneShot', ind, baseClipNames[ind % baseClipNames.length])
 
   immediateLaunchQueue.push((ctx) => {
-    // Create a unique melody ID for this trigger (for both original and delayed melodies)
-    const baseMelodyId = `melody_${Date.now()}_${ind}_base`
-    const delayMelodyId = `melody_${Date.now()}_${ind}_delay`
-
-    // Create melody-mapped play notes (allocates polygons and creates combined audio+visual play funcs)
-    const baseMelodyPlayNote = createMelodyMappedPlayNote(baseMelodyId, playNote)
-    const delayMelodyPlayNote = createMelodyMappedPlayNote(delayMelodyId, playNote)
-
-    // Use a combined play note that routes based on voice index
-    const combinedPlayNote: VisualNotePlayFunc = (pitch, velocity, ctx, noteDur, voiceIdx) => {
-      if (voiceIdx === 0) {
-        baseMelodyPlayNote(pitch, velocity, ctx, noteDur, voiceIdx)
-      } else {
-        delayMelodyPlayNote(pitch, velocity, ctx, noteDur, voiceIdx)
-      }
-    }
-
     const playbackAppState = {
       sliders,
       voices: [{ isPlaying: true, hotSwapCued: false }, { isPlaying: true, hotSwapCued: false }]
     }
 
-    runLineWithDelay(baseClipNames[ind % baseClipNames.length], baseTransform, delayTransform, ctx, playbackAppState, combinedPlayNote)
+    // Pass melodyMapOpts - polygon allocation happens inside runLineWithDelay
+    // right before each melody plays (proper left/right alternation)
+    runLineWithDelay(
+      baseClipNames[ind % baseClipNames.length],
+      baseTransform,
+      delayTransform,
+      ctx,
+      playbackAppState,
+      playNote,
+      createMelodyMapOpts()
+    )
     return Promise.resolve()
   })
 }
@@ -488,28 +487,22 @@ function triggerGateButtonDown(ind: number) {
   gateButtonStates.value[ind] = true
 
   immediateLaunchQueue.push((ctx) => {
-    // Create a unique melody ID for this trigger
-    const baseMelodyId = `melody_${Date.now()}_${ind}_base`
-    const delayMelodyId = `melody_${Date.now()}_${ind}_delay`
-
-    // Create melody-mapped play notes
-    const baseMelodyPlayNote = createMelodyMappedPlayNote(baseMelodyId, playNote)
-    const delayMelodyPlayNote = createMelodyMappedPlayNote(delayMelodyId, playNote)
-
-    const combinedPlayNote: VisualNotePlayFunc = (pitch, velocity, ctx, noteDur, voiceIdx) => {
-      if (voiceIdx === 0) {
-        baseMelodyPlayNote(pitch, velocity, ctx, noteDur, voiceIdx)
-      } else {
-        delayMelodyPlayNote(pitch, velocity, ctx, noteDur, voiceIdx)
-      }
-    }
-
     const playbackAppState = {
       sliders,
       voices: [{ isPlaying: true, hotSwapCued: false }, { isPlaying: true, hotSwapCued: false }]
     }
 
-    const handle = runLineWithDelay(baseClipNames[(ind - 4) % baseClipNames.length], baseTransform, delayTransform, ctx, playbackAppState, combinedPlayNote)
+    // Pass melodyMapOpts - if gate is released before delay plays,
+    // the delay melody's polygon won't be allocated (correct behavior)
+    const handle = runLineWithDelay(
+      baseClipNames[(ind - 4) % baseClipNames.length],
+      baseTransform,
+      delayTransform,
+      ctx,
+      playbackAppState,
+      playNote,
+      createMelodyMapOpts()
+    )
     gateButtonMelodiesUI[ind] = handle
     return Promise.resolve()
   })
@@ -727,9 +720,7 @@ onMounted(async () => {
       })
 
       // Setup button triggers for clip playback
-      const baseClipNames = ['dscale5', 'dscale7', 'd7mel']
-      const baseTransform = 's_tr s0 dR7 : str s1 : rot s2 : rev s3 : orn s4 dR7 : easeCirc s5 : spread s7 dR7'
-      const delayTransform = 's_tr s8 dR7 : str s9 : rot s10 : rev s11 : orn s12 dR7 : easeCirc s13'
+      // Note: baseClipNames, baseTransform, delayTransform are defined at module level
       const gateButtonMelodies: Record<number, LoopHandle> = {}
 
       // Simple appState-like object for runLineWithDelay
@@ -744,24 +735,17 @@ onMounted(async () => {
           lpd8.onNoteOn(lpdButtonMap[ind], (_msg) => {
             console.log('oneShot', ind, lpdButtonMap[ind], baseClipNames[ind % baseClipNames.length])
             immediateLaunchQueue.push((ctx) => {
-              // Create a unique melody ID for this trigger (for both original and delayed melodies)
-              const baseMelodyId = `melody_${Date.now()}_${ind}_base`
-              const delayMelodyId = `melody_${Date.now()}_${ind}_delay`
-
-              // Create melody-mapped play notes (allocates polygons and creates combined audio+visual play funcs)
-              const baseMelodyPlayNote = createMelodyMappedPlayNote(baseMelodyId, playNote)
-              const delayMelodyPlayNote = createMelodyMappedPlayNote(delayMelodyId, playNote)
-
-              // Use a combined play note that routes based on voice index
-              const combinedPlayNote: VisualNotePlayFunc = (pitch, velocity, ctx, noteDur, voiceIdx) => {
-                if (voiceIdx === 0) {
-                  baseMelodyPlayNote(pitch, velocity, ctx, noteDur, voiceIdx)
-                } else {
-                  delayMelodyPlayNote(pitch, velocity, ctx, noteDur, voiceIdx)
-                }
-              }
-
-              runLineWithDelay(baseClipNames[ind % baseClipNames.length], baseTransform, delayTransform, ctx, playbackAppState, combinedPlayNote)
+              // Pass melodyMapOpts - polygon allocation happens inside runLineWithDelay
+              // right before each melody plays (proper left/right alternation)
+              runLineWithDelay(
+                baseClipNames[ind % baseClipNames.length],
+                baseTransform,
+                delayTransform,
+                ctx,
+                playbackAppState,
+                playNote,
+                createMelodyMapOpts()
+              )
               return Promise.resolve()
             })
           })
@@ -770,23 +754,17 @@ onMounted(async () => {
           lpd8.onNoteOn(lpdButtonMap[ind], (_msg) => {
             console.log('gate', ind, lpdButtonMap[ind], baseClipNames[(ind - 4) % baseClipNames.length])
             immediateLaunchQueue.push((ctx) => {
-              // Create a unique melody ID for this trigger
-              const baseMelodyId = `melody_${Date.now()}_${ind}_base`
-              const delayMelodyId = `melody_${Date.now()}_${ind}_delay`
-
-              // Create melody-mapped play notes
-              const baseMelodyPlayNote = createMelodyMappedPlayNote(baseMelodyId, playNote)
-              const delayMelodyPlayNote = createMelodyMappedPlayNote(delayMelodyId, playNote)
-
-              const combinedPlayNote: VisualNotePlayFunc = (pitch, velocity, ctx, noteDur, voiceIdx) => {
-                if (voiceIdx === 0) {
-                  baseMelodyPlayNote(pitch, velocity, ctx, noteDur, voiceIdx)
-                } else {
-                  delayMelodyPlayNote(pitch, velocity, ctx, noteDur, voiceIdx)
-                }
-              }
-
-              const handle = runLineWithDelay(baseClipNames[(ind - 4) % baseClipNames.length], baseTransform, delayTransform, ctx, playbackAppState, combinedPlayNote)
+              // Pass melodyMapOpts - if gate is released before delay plays,
+              // the delay melody's polygon won't be allocated (correct behavior)
+              const handle = runLineWithDelay(
+                baseClipNames[(ind - 4) % baseClipNames.length],
+                baseTransform,
+                delayTransform,
+                ctx,
+                playbackAppState,
+                playNote,
+                createMelodyMapOpts()
+              )
               gateButtonMelodies[ind] = handle
               return Promise.resolve()
             })

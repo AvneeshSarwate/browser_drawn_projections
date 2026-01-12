@@ -269,9 +269,16 @@ export function switchedSchema(
   // SOLUTION: First parse through the base schema to apply its defaults
   // (including the discriminator's default), then validate with discriminatedUnion.
   // ─────────────────────────────────────────────────────────────────────────
+  // Preserve variant fields while applying base defaults.
+  // Zod object parsing strips unknown keys by default, so if we only parse with baseSchema
+  // we would drop variant-specific fields (e.g., melodyMap.column) before the discriminated
+  // union runs. That silently rewrites metadata back to defaults on every validation.
+  // Using passthrough keeps extra keys intact while still applying base defaults, then the
+  // union validator enforces the correct variant shape.
+  const baseDefaultsSchema = baseSchema.passthrough()
   const applyBaseDefaults = (data: unknown) => {
     if (typeof data !== 'object' || data === null) return data
-    const baseResult = baseSchema.safeParse(data)
+    const baseResult = baseDefaultsSchema.safeParse(data)
     return baseResult.success ? baseResult.data : data
   }
 

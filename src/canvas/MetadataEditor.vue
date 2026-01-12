@@ -13,7 +13,14 @@ interface Props {
   visible: boolean
   canEdit: boolean
   schemaOptions?: SchemaOption[]
+  selectionKey?: string | number | null
 }
+
+// Architecture note:
+// MetadataEditor owns the JSON draft + schema validation layer and resets that
+// draft whenever selectionKey changes. This ensures each selected node gets its
+// own clean editing session, while ZodDataEditor remains a focused, schema-driven
+// field editor that can be reset with the same key.
 
 const props = withDefaults(defineProps<Props>(), {
   schemaOptions: () => []
@@ -80,7 +87,7 @@ function runSchemaValidations(metadata: Record<string, any>) {
 }
 
 watch(
-  [() => props.metadata, () => props.canEdit],
+  [() => props.metadata, () => props.canEdit, () => props.selectionKey],
   ([metadata, canEdit]) => {
     debugLog('props changed', { canEdit, metadata, activeEditor: activeEditor.value })
     if (canEdit) {
@@ -230,6 +237,7 @@ const cancelEdit = () => {
           :schema="currentSchema.schema"
           :model-value="currentSchemaValue"
           :disabled="!canEdit"
+          :sync-key="props.selectionKey"
           @update:model-value="(val) => updateSchemaValue(activeSchemaName, val)"
         />
         <p v-if="schemaValidationMessages[activeSchemaName]" class="inline-error">
