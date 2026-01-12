@@ -7,6 +7,7 @@ const resRef = ref(resolution)
 
 const dpr = window.devicePixelRatio || 1
 const popped = ref(false)
+const poppedControls = ref(false)
 </script>
 
 <template>
@@ -26,7 +27,9 @@ const popped = ref(false)
         }" abitrary-prop="somethi"></canvas>
       </div>
     </PopoutWindow>
-    <div id="slider-controls-target"></div>
+    <PopoutWindow v-model="poppedControls" title="Controls">
+      <div id="slider-controls-target"></div>
+    </PopoutWindow>
     <div id="debugInfo"></div>
   </div>
 </template>
