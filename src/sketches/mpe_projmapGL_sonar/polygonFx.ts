@@ -231,6 +231,7 @@ const redrawGraphics = (g: p5.Graphics, poly: PolygonRenderData[number], bboxLog
   const isDropAndScroll = fillAnim === 'dropAndScroll'
   const isMatterExplode = fillAnim === 'matterExplode'
   const isMPE = fillAnim === 'mpe'
+  const isMelodyMap = fillAnim === 'melodyMap'
 
   g.push()
   g.translate(-bboxLogical.minX, -bboxLogical.minY)
@@ -297,6 +298,72 @@ const redrawGraphics = (g: p5.Graphics, poly: PolygonRenderData[number], bboxLog
         g.vertex(point.x, point.y)
       })
       g.endShape(p.CLOSE)
+    }
+  } else if (isMelodyMap) {
+    // MelodyMap mode: draw traveling circles along arcs
+    const baseSize = textAnim.circleSize ?? 12
+    const trailLength = textAnim.trailLength ?? 0.3
+    const currentTime = performance.now()
+
+    if (renderState?.melodyMapArcs && renderState.melodyMapArcs.length > 0) {
+      g.noStroke()
+
+      for (const arc of renderState.melodyMapArcs) {
+        const elapsed = (currentTime - arc.startTime) / 1000
+        const progress = Math.min(1, elapsed / arc.duration)
+
+        // Skip completed arcs
+        if (progress >= 1) continue
+
+        // Get color based on pitch
+        const rgb = pitchToColor(arc.pitch, 0)
+
+        // Calculate size based on velocity
+        const velocityScale = 0.5 + (arc.velocity / 127) * 1.0
+        const size = baseSize * velocityScale
+
+        // Main circle position
+        const x = arc.startPoint.x + (arc.endPoint.x - arc.startPoint.x) * progress
+        const y = arc.startPoint.y + (arc.endPoint.y - arc.startPoint.y) * progress
+
+        // Draw trail (fading circles behind the main circle)
+        const numTrailSegments = Math.floor(trailLength * 10)
+        for (let i = numTrailSegments; i >= 0; i--) {
+          const trailProgress = progress - (i / numTrailSegments) * trailLength
+          if (trailProgress < 0) continue
+
+          const trailX = arc.startPoint.x + (arc.endPoint.x - arc.startPoint.x) * trailProgress
+          const trailY = arc.startPoint.y + (arc.endPoint.y - arc.startPoint.y) * trailProgress
+          const alpha = ((numTrailSegments - i) / numTrailSegments) * 255
+          const trailSize = size * ((numTrailSegments - i) / numTrailSegments)
+
+          g.fill(rgb.r * 255, rgb.g * 255, rgb.b * 255, alpha)
+          g.circle(trailX, trailY, trailSize)
+        }
+
+        // Draw main circle
+        g.fill(rgb.r * 255, rgb.g * 255, rgb.b * 255, 255)
+        g.circle(x, y, size)
+      }
+    } else {
+      // No active arcs, draw polygon outline with column-based color hint
+      const columnColors: Record<string, { r: number; g: number; b: number }> = {
+        left: { r: 255, g: 100, b: 100 },
+        middle: { r: 100, g: 255, b: 100 },
+        right: { r: 100, g: 100, b: 255 }
+      }
+      const column = textAnim.column ?? 'left'
+      const colColor = columnColors[column] ?? columnColors.left
+
+      g.noFill()
+      g.stroke(colColor.r, colColor.g, colColor.b, 100)
+      g.strokeWeight(2)
+      g.beginShape()
+      poly.points.forEach((point) => {
+        g.vertex(point.x, point.y)
+      })
+      g.endShape(p.CLOSE)
+      g.strokeWeight(1)
     }
   } else {
     g.fill(color.r, color.g, color.b, color.a)

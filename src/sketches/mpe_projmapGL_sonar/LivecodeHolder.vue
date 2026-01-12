@@ -28,6 +28,17 @@ import type { MPEAnimBundle } from './mpeState'
 import { allocateVoice, releaseVoice, type VoiceRotationState } from './mpeVoiceAlloc'
 import { generateSparseGrid } from './mpeFillSpots'
 import { startFillAnimation, startReleaseAnimation } from './mpeAnimLoop'
+// MelodyMap imports
+import { createMelodyMapState, type MelodyMapGlobalState } from './melodyMapState'
+import {
+  syncPolygonCache,
+  allocateMelodyToPolygon,
+  releaseMelody,
+  cleanupCompletedArcs,
+  buildCombinedNotePlayFunction,
+  type VisualNotePlayFunc
+} from './melodyMapUtils'
+import type { ArcRenderData } from './textRegionUtils'
 
 const appState = inject<TemplateAppState>(appStateName)!!
 const canvasRootRef = ref<InstanceType<typeof CanvasRoot> | null>(null)
@@ -42,6 +53,10 @@ const channelToPolygon = new Map<number, string>()
 const mpeRenderStates = new Map<string, RenderState>()
 let mpeInput: MPEInput | null = null
 const voiceRotation: VoiceRotationState = { nextIndex: 0 }
+
+// MelodyMap state
+const melodyMapState: MelodyMapGlobalState = createMelodyMapState()
+const melodyMapRenderStates = new Map<string, RenderState>()
 
 // MIDI playback state
 const midiOuts: MIDIValOutput[] = []
@@ -151,6 +166,9 @@ const syncCanvasState = (state: CanvasStateSnapshot) => {
   // Sync MPE bundles
   syncMPEBundles(state.polygon.bakedRenderData)
 
+  // Sync MelodyMap polygons
+  syncMelodyMapPolygons(state.polygon.bakedRenderData)
+
   if (polygonFxOpts) {
     const dropStates = dropAndScrollManager.getRenderStates()
     const matterStates = matterExplodeManager.getRenderStates()
@@ -158,6 +176,7 @@ const syncCanvasState = (state: CanvasStateSnapshot) => {
     dropStates.forEach((v, k) => mergedStates.set(k, v))
     matterStates.forEach((v, k) => mergedStates.set(k, v))
     mpeRenderStates.forEach((v, k) => mergedStates.set(k, v))
+    melodyMapRenderStates.forEach((v, k) => mergedStates.set(k, v))
 
     syncChainsAndMeshes(polygonSyncPayload, { ...polygonFxOpts, renderStates: mergedStates })
   }
@@ -337,6 +356,91 @@ function disposeMPE() {
   }
 }
 
+// MelodyMap Functions
+const MELODY_MAP_LOG = true
+const melodyMapLog = (...args: any[]) => MELODY_MAP_LOG && console.log('[MelodyMap]', ...args)
+
+function syncMelodyMapPolygons(polygonData: PolygonRenderData) {
+  // Sync the polygon cache with current data
+  syncPolygonCache(melodyMapState, polygonData)
+
+  // Update render states for all melodyMap polygons
+  updateMelodyMapRenderStates()
+}
+
+function updateMelodyMapRenderStates() {
+  // Group arcs by polygon
+  const arcsByPolygon = new Map<string, ArcRenderData[]>()
+
+  for (const drawInfo of melodyMapState.melodyDrawInfo.values()) {
+    const existing = arcsByPolygon.get(drawInfo.polygonId) || []
+    // Convert internal arc format to render format
+    const arcs: ArcRenderData[] = drawInfo.activeArcs.map(arc => ({
+      id: arc.id,
+      startPoint: arc.startPoint,
+      endPoint: arc.endPoint,
+      startTime: arc.startTime,
+      duration: arc.duration,
+      pitch: arc.pitch,
+      velocity: arc.velocity
+    }))
+    existing.push(...arcs)
+    arcsByPolygon.set(drawInfo.polygonId, existing)
+  }
+
+  // Update render states
+  melodyMapRenderStates.clear()
+  for (const [polygonId, arcs] of arcsByPolygon) {
+    melodyMapRenderStates.set(polygonId, {
+      letters: [],
+      textOffset: 0,
+      text: '',
+      melodyMapArcs: arcs
+    })
+  }
+
+  // Also ensure melodyMap polygons without arcs have a render state
+  for (const polygonId of melodyMapState.polygonColumns.keys()) {
+    if (!melodyMapRenderStates.has(polygonId)) {
+      melodyMapRenderStates.set(polygonId, {
+        letters: [],
+        textOffset: 0,
+        text: '',
+        melodyMapArcs: []
+      })
+    }
+  }
+}
+
+function disposeMelodyMap() {
+  melodyMapState.melodyToPolygon.clear()
+  melodyMapState.melodyDrawInfo.clear()
+  melodyMapState.columnCounter = 0
+  melodyMapState.polygonColumns.clear()
+  melodyMapState.polygonEdgePoints.clear()
+  melodyMapRenderStates.clear()
+}
+
+/**
+ * Creates a play note function that includes visual arcs for melody mapping
+ * @param melodyId Unique ID for this melody
+ * @param basePlayNote The base audio play note function
+ */
+function createMelodyMappedPlayNote(
+  melodyId: string,
+  basePlayNote: VisualNotePlayFunc
+): VisualNotePlayFunc {
+  // Allocate polygon for this melody
+  const polygonId = allocateMelodyToPolygon(melodyId, melodyMapState, appState.polygonRenderData)
+  if (polygonId) {
+    melodyMapLog(`Melody ${melodyId} allocated to polygon ${polygonId}`)
+    return buildCombinedNotePlayFunction(melodyId, melodyMapState, basePlayNote)
+  } else {
+    melodyMapLog(`No melodyMap polygon available for melody ${melodyId}`)
+    return basePlayNote
+  }
+}
+
 onMounted(async () => {
   const params = new URLSearchParams(window.location.search)
   const presetName = params.get('preset')
@@ -472,6 +576,11 @@ onMounted(async () => {
     if (!eng) return
     const frameId = `f${frameCounter++}`
 
+    // Cleanup completed arcs each frame
+    cleanupCompletedArcs(melodyMapState, performance.now())
+    // Update render states for melodyMap (arcs may have changed)
+    updateMelodyMapRenderStates()
+
     // Get fresh render states each frame for animations
     const dropStates = dropAndScrollManager.getRenderStates()
     const matterStates = matterExplodeManager.getRenderStates()
@@ -479,6 +588,7 @@ onMounted(async () => {
     dropStates.forEach((v, k) => mergedStates.set(k, v))
     matterStates.forEach((v, k) => mergedStates.set(k, v))
     mpeRenderStates.forEach((v, k) => mergedStates.set(k, v))
+    melodyMapRenderStates.forEach((v, k) => mergedStates.set(k, v))
 
     eng.beginFrame()
     renderPolygonFx(eng as any, mergedStates, frameId)
@@ -547,7 +657,24 @@ onMounted(async () => {
           lpd8.onNoteOn(lpdButtonMap[ind], (_msg) => {
             console.log('oneShot', ind, lpdButtonMap[ind], baseClipNames[ind % baseClipNames.length])
             immediateLaunchQueue.push((ctx) => {
-              runLineWithDelay(baseClipNames[ind % baseClipNames.length], baseTransform, delayTransform, ctx, playbackAppState, playNote)
+              // Create a unique melody ID for this trigger (for both original and delayed melodies)
+              const baseMelodyId = `melody_${Date.now()}_${ind}_base`
+              const delayMelodyId = `melody_${Date.now()}_${ind}_delay`
+
+              // Create melody-mapped play notes (allocates polygons and creates combined audio+visual play funcs)
+              const baseMelodyPlayNote = createMelodyMappedPlayNote(baseMelodyId, playNote)
+              const delayMelodyPlayNote = createMelodyMappedPlayNote(delayMelodyId, playNote)
+
+              // Use a combined play note that routes based on voice index
+              const combinedPlayNote: VisualNotePlayFunc = (pitch, velocity, ctx, noteDur, voiceIdx) => {
+                if (voiceIdx === 0) {
+                  baseMelodyPlayNote(pitch, velocity, ctx, noteDur, voiceIdx)
+                } else {
+                  delayMelodyPlayNote(pitch, velocity, ctx, noteDur, voiceIdx)
+                }
+              }
+
+              runLineWithDelay(baseClipNames[ind % baseClipNames.length], baseTransform, delayTransform, ctx, playbackAppState, combinedPlayNote)
               return Promise.resolve()
             })
           })
@@ -556,7 +683,23 @@ onMounted(async () => {
           lpd8.onNoteOn(lpdButtonMap[ind], (_msg) => {
             console.log('gate', ind, lpdButtonMap[ind], baseClipNames[(ind - 4) % baseClipNames.length])
             immediateLaunchQueue.push((ctx) => {
-              const handle = runLineWithDelay(baseClipNames[(ind - 4) % baseClipNames.length], baseTransform, delayTransform, ctx, playbackAppState, playNote)
+              // Create a unique melody ID for this trigger
+              const baseMelodyId = `melody_${Date.now()}_${ind}_base`
+              const delayMelodyId = `melody_${Date.now()}_${ind}_delay`
+
+              // Create melody-mapped play notes
+              const baseMelodyPlayNote = createMelodyMappedPlayNote(baseMelodyId, playNote)
+              const delayMelodyPlayNote = createMelodyMappedPlayNote(delayMelodyId, playNote)
+
+              const combinedPlayNote: VisualNotePlayFunc = (pitch, velocity, ctx, noteDur, voiceIdx) => {
+                if (voiceIdx === 0) {
+                  baseMelodyPlayNote(pitch, velocity, ctx, noteDur, voiceIdx)
+                } else {
+                  delayMelodyPlayNote(pitch, velocity, ctx, noteDur, voiceIdx)
+                }
+              }
+
+              const handle = runLineWithDelay(baseClipNames[(ind - 4) % baseClipNames.length], baseTransform, delayTransform, ctx, playbackAppState, combinedPlayNote)
               gateButtonMelodies[ind] = handle
               return Promise.resolve()
             })
@@ -635,6 +778,7 @@ onUnmounted(() => {
   dropAndScrollManager.dispose()
   matterExplodeManager.dispose()
   disposeMPE()
+  disposeMelodyMap()
   disposePolygonFx()
   polygonFxOpts = null
   clearListeners()

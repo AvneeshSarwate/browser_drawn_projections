@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, toRaw } from 'vue'
 import {
   ZodBoolean,
   ZodEnum,
@@ -39,6 +39,15 @@ const props = defineProps<Props>()
 const emit = defineEmits<{
   (e: 'update:modelValue', value: any): void
 }>()
+
+const DEBUG_METADATA = typeof window !== 'undefined' && (window as any).__DEBUG_METADATA__ === true
+const debugLog = (...args: any[]) => {
+  if (DEBUG_METADATA) console.log('[ZodDataEditor]', ...args)
+}
+
+// Track the last value emitted by this editor so we only ignore the echo
+// from our own v-model update, while still allowing new external selections.
+const lastEmittedKey = ref<string>('')
 
 const normalizedSchema = computed(() => unwrapSchema(props.schema))
 const schemaKind = computed<SupportedKind | 'unsupported'>(() => getKind(normalizedSchema.value))
@@ -91,10 +100,17 @@ const isFieldVisible = (fieldKey: string): boolean => {
 watch(
   () => props.modelValue,
   (val) => {
-    if (isInternalUpdate.value) {
+    const nextKey = stableStringify(val)
+    if (isInternalUpdate.value && nextKey === lastEmittedKey.value) {
+      debugLog('modelValue change skipped (internal)', val)
       isInternalUpdate.value = false
       return
     }
+    if (isInternalUpdate.value) {
+      debugLog('modelValue change (external override)', val)
+      isInternalUpdate.value = false
+    }
+    debugLog('modelValue change', val)
     syncFromModel(val)
   },
   { immediate: true, deep: true, flush: 'sync' }
@@ -205,6 +221,7 @@ const clearValue = () => {
     case 'object':
       objectState.value = buildObjectState(undefined)
       issues.value = []
+      lastEmittedKey.value = stableStringify(undefined)
       isInternalUpdate.value = true
       emit('update:modelValue', undefined)
       break
@@ -236,12 +253,14 @@ function validateObject() {
   const candidate = buildObjectCandidate()
   if (isOptionalSchema.value && isEmptyObject(candidate)) {
     issues.value = []
+    lastEmittedKey.value = stableStringify(undefined)
     isInternalUpdate.value = true
     emit('update:modelValue', undefined)
     return
   }
   const result = props.schema.safeParse(candidate)
   issues.value = result.success ? [] : result.error.issues.map(formatIssue)
+  lastEmittedKey.value = stableStringify(result.success ? result.data : candidate)
   isInternalUpdate.value = true
   emit('update:modelValue', result.success ? result.data : candidate)
 }
@@ -249,6 +268,7 @@ function validateObject() {
 function validateAndEmit(value: any) {
   const result = props.schema.safeParse(value)
   issues.value = result.success ? [] : result.error.issues.map(formatIssue)
+  lastEmittedKey.value = stableStringify(result.success ? result.data : value)
   isInternalUpdate.value = true
   emit('update:modelValue', result.success ? result.data : value)
 }
@@ -381,6 +401,69 @@ function isPartialNumber(str: string): boolean {
   if (/^[-+]?\d*\.$/.test(str)) return true // trailing dot
   return false
 }
+
+function stableStringify(val: any): string {
+  if (val === undefined) return 'undefined'
+  if (val === null) return 'null'
+  const rawVal = toRaw(val)
+  const seen = new WeakSet()
+  const normalize = (v: any): any => {
+    if (v === undefined) return undefined
+    if (v === null) return null
+    if (typeof v !== 'object') return v
+    if (seen.has(v)) return '[Circular]'
+    seen.add(v)
+    if (Array.isArray(v)) return v.map(normalize)
+    const out: Record<string, any> = {}
+    Object.keys(v).sort().forEach((key) => {
+      out[key] = normalize(v[key])
+    })
+    return out
+  }
+  try {
+    return JSON.stringify(normalize(rawVal))
+  } catch {
+    return String(rawVal)
+  }
+}
+
+/*
+there are a few cleaner patterns that would make ZodDataEditor’s update flow less fragile than the current “internal update + lastEmittedKey” guard. Here are the most realistic refactors (analysis only):
+
+1) Separate “source of truth” from “draft”
+
+Treat modelValue as the canonical value, and maintain a local draft that only updates on user input.
+Sync draft from modelValue only when the selection changes, not on every model change. That avoids guard logic entirely.
+Requires a stable prop like selectionId or nodeId to detect when to reset the draft.
+2) Use a keyed remount to reset editor state
+
+Pass a :key to ZodDataEditor or the schema editor wrapper that changes on selection (e.g., node id + schema name).
+Forces a clean re-init without any internal update guard, at the cost of remounting (acceptable for small forms).
+3) Replace “internal update” flag with a single state machine
+
+Centralize updates in a single setDraft(reason, value) function; track origin: 'user' | 'external'.
+Sync loop: on external modelValue change, always apply if origin !== 'user' OR if modelValue differs from draft.
+This avoids storing emitted snapshots.
+4) Use watch on a serialized “value signature”
+
+Compute a stable hash/key of modelValue and watch that.
+Skip guard entirely: always syncFromModel when signature changes.
+This removes “internal update” but you still need to ensure emitted values don’t immediately loop back with identical signatures.
+5) Let MetadataEditor own the draft; make ZodDataEditor fully controlled
+
+Move all parsing/validation + draft handling into MetadataEditor.
+ZodDataEditor becomes a dumb, controlled component with no internal isInternalUpdate.
+This is the cleanest architectural approach but is a bigger refactor.
+6) Vue 3 v-model helpers (useVModel)
+
+You can use @vueuse/core’s useVModel with passive: true to decouple local state from prop updates cleanly.
+Still benefits from a selection key to decide when to reset local state.
+If you want the cleanest option with minimal code churn, I’d pick either:
+
+Option 2 (keyed remount) for quickest reliability, or
+Option 1 (explicit draft tied to selection id) for a proper fix with minimal extra complexity.
+If you want, tell me which direction you prefer and I can sketch the refactor plan.
+*/
 
 </script>
 

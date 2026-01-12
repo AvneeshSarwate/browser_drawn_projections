@@ -16,7 +16,7 @@ export const defaultQuoteText = `Lorem ipsum dolor sit amet, consectetur adipisc
 
 export const textAnimSchema = switchedSchema(
   z.object({
-    fillAnim: z.enum(['dropAndScroll', 'matterExplode', 'mpe']).default('mpe'),
+    fillAnim: z.enum(['dropAndScroll', 'matterExplode', 'mpe', 'melodyMap']).default('mpe'),
     textInd: z.coerce.string().default(defaultQuoteText)
   }),
   'fillAnim',
@@ -28,6 +28,11 @@ export const textAnimSchema = switchedSchema(
       releaseTime: z.number().positive().default(0.3),   // seconds
       gridStep: z.number().positive().default(20),       // pixels
       circleSize: z.number().positive().default(8),      // base circle size in pixels
+    },
+    melodyMap: {
+      column: z.enum(['left', 'middle', 'right']).default('left'),  // which column this polygon belongs to
+      circleSize: z.number().positive().default(12),                 // size of traveling circles
+      trailLength: z.number().min(0).max(1).default(0.3),           // trail length as fraction of arc
     }
   }
 )

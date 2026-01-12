@@ -21,6 +21,11 @@ const props = withDefaults(defineProps<Props>(), {
   schemaOptions: () => []
 })
 
+const DEBUG_METADATA = typeof window !== 'undefined' && (window as any).__DEBUG_METADATA__ === true
+const debugLog = (...args: any[]) => {
+  if (DEBUG_METADATA) console.log('[HierarchicalMetadataEditor]', ...args)
+}
+
 const selectedNodes = computed(() => props.selectedNodes)
 const singleNode = computed(() => props.singleNode)
 const multiSelected = computed(() => props.multiSelected)
@@ -80,6 +85,7 @@ watch([mode, groupSelected, selectedNodes], ([newMode, isGroupSelected]) => {
 
 // Watch for single node selection changes
 watch(singleNode, (node) => {
+  debugLog('singleNode changed', node?.id?.() ?? null, node?.getAttr?.('metadata'))
   if (mode.value === 'simple') {
     activeNode.value = node
     props.updateMetadataHighlight(node as Konva.Node | undefined)

@@ -11,6 +11,19 @@ export type MPEVoiceRenderData = {
   bend: number
 } | null
 
+/**
+ * Arc animation data for melodyMap rendering
+ */
+export type ArcRenderData = {
+  id: string
+  startPoint: Point
+  endPoint: Point
+  startTime: number
+  duration: number
+  pitch: number
+  velocity: number
+}
+
 export type RenderState = {
   letters: { pos: Point; idx: number }[]
   textOffset: number
@@ -18,6 +31,8 @@ export type RenderState = {
   // MPE-specific render data (optional)
   mpeVoice?: MPEVoiceRenderData
   mpeFillProgress?: number
+  // MelodyMap-specific render data (optional)
+  melodyMapArcs?: ArcRenderData[]
 }
 
 export type PreparedPolygon = {

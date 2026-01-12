@@ -19,6 +19,11 @@ const props = withDefaults(defineProps<Props>(), {
   schemaOptions: () => []
 })
 
+const DEBUG_METADATA = typeof window !== 'undefined' && (window as any).__DEBUG_METADATA__ === true
+const debugLog = (...args: any[]) => {
+  if (DEBUG_METADATA) console.log('[MetadataEditor]', ...args)
+}
+
 const emit = defineEmits<{
   apply: [metadata: any]
   cancel: []
@@ -77,6 +82,7 @@ function runSchemaValidations(metadata: Record<string, any>) {
 watch(
   [() => props.metadata, () => props.canEdit],
   ([metadata, canEdit]) => {
+    debugLog('props changed', { canEdit, metadata, activeEditor: activeEditor.value })
     if (canEdit) {
       const jsonText = JSON.stringify(metadata ?? {}, null, 2)
       metadataText.value = jsonText
