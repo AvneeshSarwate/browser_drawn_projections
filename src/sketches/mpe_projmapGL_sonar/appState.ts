@@ -32,7 +32,7 @@ export const textAnimSchema = switchedSchema(
     melodyMap: {
       column: z.enum(['left', 'middle', 'right']).default('left'),  // which column this polygon belongs to
       circleSize: z.number().positive().default(12),                 // size of traveling circles
-      trailLength: z.number().min(0).max(1).default(0.3),           // trail length as fraction of arc
+      arcType: z.enum(['linear', 'catmulRom', 'spiral']).default('linear'),  // arc path type
     }
   }
 )

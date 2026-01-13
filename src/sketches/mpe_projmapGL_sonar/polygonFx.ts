@@ -16,6 +16,7 @@ import { getTextStyle, getTextAnim } from './textRegionUtils'
 import type p5 from 'p5'
 import { pitchToColor, releaseColor } from './mpeColor'
 import { normalizePointForShader, shouldFlipPolygonY } from '@/rendering/coordinateConfig'
+import { computeGeometry, getArcPathFn, type ArcType } from './arcPaths'
 
 export type PolygonFxSyncOptions = {
   engine: BABYLON.Engine
@@ -302,11 +303,15 @@ const redrawGraphics = (g: p5.Graphics, poly: PolygonRenderData[number], bboxLog
   } else if (isMelodyMap) {
     // MelodyMap mode: draw traveling circles along arcs
     const baseSize = textAnim.circleSize ?? 12
-    const trailLength = textAnim.trailLength ?? 0.3
+    const arcType = (textAnim.arcType ?? 'linear') as ArcType
     const currentTime = performance.now()
 
     if (renderState?.melodyMapArcs && renderState.melodyMapArcs.length > 0) {
       g.noStroke()
+
+      // Compute geometry once per polygon per frame
+      const geometry = computeGeometry(poly.points as { x: number; y: number }[])
+      const pathFn = getArcPathFn(arcType)
 
       for (const arc of renderState.melodyMapArcs) {
         const elapsed = (currentTime - arc.startTime) / 1000
@@ -322,28 +327,12 @@ const redrawGraphics = (g: p5.Graphics, poly: PolygonRenderData[number], bboxLog
         const velocityScale = 0.5 + (arc.velocity / 127) * 1.0
         const size = baseSize * velocityScale
 
-        // Main circle position
-        const x = arc.startPoint.x + (arc.endPoint.x - arc.startPoint.x) * progress
-        const y = arc.startPoint.y + (arc.endPoint.y - arc.startPoint.y) * progress
-
-        // Draw trail (fading circles behind the main circle)
-        const numTrailSegments = Math.floor(trailLength * 10)
-        for (let i = numTrailSegments; i >= 0; i--) {
-          const trailProgress = progress - (i / numTrailSegments) * trailLength
-          if (trailProgress < 0) continue
-
-          const trailX = arc.startPoint.x + (arc.endPoint.x - arc.startPoint.x) * trailProgress
-          const trailY = arc.startPoint.y + (arc.endPoint.y - arc.startPoint.y) * trailProgress
-          const alpha = ((numTrailSegments - i) / numTrailSegments) * 255
-          const trailSize = size * ((numTrailSegments - i) / numTrailSegments)
-
-          g.fill(rgb.r * 255, rgb.g * 255, rgb.b * 255, alpha)
-          g.circle(trailX, trailY, trailSize)
-        }
+        // Get position from arc path function
+        const pos = pathFn(arc.startPoint, arc.endPoint, progress, geometry)
 
         // Draw main circle
         g.fill(rgb.r * 255, rgb.g * 255, rgb.b * 255, 255)
-        g.circle(x, y, size)
+        g.circle(pos.x, pos.y, size)
       }
     } else {
       // No active arcs, draw polygon outline with column-based color hint

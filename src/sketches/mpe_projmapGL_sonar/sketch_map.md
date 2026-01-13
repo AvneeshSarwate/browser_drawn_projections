@@ -291,7 +291,7 @@ fillAnim: 'dropAndScroll' | 'matterExplode' | 'mpe' | 'melodyMap'
 // For melodyMap:
 column: 'left' | 'middle' | 'right'  // allocation target
 circleSize: number                    // arc circle radius
-trailLength: number                   // fading trail circles
+arcType: 'linear' | 'catmulRom' | 'spiral'  // arc path type
 
 // For mpe:
 attackTime: number                    // fill ramp duration
@@ -311,6 +311,7 @@ pixelate: { pixelSize, useTimbre }
 
 | File | Purpose |
 |------|---------|
+| `arcPaths.ts` | Arc path functions (linear, catmulRom, spiral) + geometry computation |
 | `mpeAnimLoop.ts` | Attack/release animation loops for MPE |
 | `mpeVoiceAlloc.ts` | MIDI channel → polygon allocation |
 | `mpeFillSpots.ts` | Sparse/dense grid generation inside polygons |
@@ -337,6 +338,12 @@ pixelate: { pixelSize, useTimbre }
 ### Changing allocation logic
 1. Modify `allocateMelodyToPolygon()` in `melodyMapUtils.ts`
 2. Adjust `createMelodyMapOpts()` in `LivecodeHolder.vue` if wrapper behavior changes
+
+### Adding a new arc path type
+1. Add to `ArcType` union in `arcPaths.ts`
+2. Implement path function with signature `(startPt, endPt, progress, geometry) => Point`
+3. Add to `arcPathRegistry` in `arcPaths.ts`
+4. Add to `arcType` enum in melodyMap schema in `appState.ts`
 
 ### Adding a new shader effect
 1. Create shader in shaders directory
