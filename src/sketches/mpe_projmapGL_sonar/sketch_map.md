@@ -9,6 +9,11 @@ This sketch combines three visual systems driven by MIDI/music input:
 2. **MelodyMap System**: Visual arcs across polygons synchronized with melody playback
 3. **FX System**: Post-processing effects (wobble, blur, pixelation, polygon masking)
 
+**Key External Dependencies**:
+- **CanvasRoot** (`@/canvas/CanvasRoot.vue`): External component that provides polygon/freehand drawing UI. Shape data flows INTO this sketch via `syncCanvasState()` callback.
+- **offline_time_context** (`@/channels/offline_time_context`): Custom timing library providing `TimeContext`, `launchBrowser()`, and `CancelablePromiseProxy`. This is the core timing system, NOT Tone.js.
+- **Tone.js**: Only used for audio synthesis triggering (`Tone.now()` for synth attacks), not for logical timing.
+
 ---
 
 ## Core Files & Responsibilities
@@ -36,8 +41,10 @@ const immediateLaunchQueue: Array<(ctx: TimeContext) => Promise<void>> = []
 - `triggerOneShotButton(ind)` / `triggerGateButtonDown/Up(ind)`: UI/MIDI button handlers
 
 **Data Flow**:
-- IN: CanvasRoot (polygons), MIDI inputs, Ableton clips, UI buttons
+- IN: CanvasRoot component (polygon shapes + metadata via `syncCanvasState` callback), MIDI inputs, Ableton clips, UI buttons
 - OUT: appState, Babylon.js engine, MIDI outputs, p5.js canvas
+
+**Canvas Integration**: The `<CanvasRoot>` component is mounted in the template with `:sync-state="syncCanvasState"`. When shapes are drawn/modified in the canvas UI, `syncCanvasState()` is called with the updated `CanvasStateSnapshot` containing all polygon and freehand data.
 
 ---
 
@@ -58,7 +65,7 @@ releaseMelody(melodyId, state): void
 // Arc management
 launchArc(melodyId, pitch, velocity, duration, state): ArcAnimation | null
   // Gets two random edge points from polygon
-  // Creates arc with startTime = Tone.now()
+  // Creates arc with startTime = performance.now()
 
 cleanupCompletedArcs(state, currentTime): void
   // Called each frame, removes finished arcs
@@ -240,7 +247,7 @@ runLineWithDelay() in playbackUtils.ts
 ```
 Each Animation Frame:
   │
-  ├─ cleanupCompletedArcs(state, Tone.now())
+  ├─ cleanupCompletedArcs(state, performance.now())
   │    └─ Removes arcs where elapsed > duration
   │
   ├─ getMelodyMapRenderStates(state)
@@ -252,8 +259,7 @@ Each Animation Frame:
        │
        └─ For each polygon with melodyMap fillAnim:
             └─ redrawGraphics() draws:
-                 ├─ Arc circles at interpolated positions
-                 ├─ Trails (fading previous positions)
+                 ├─ Circle or stroke at arc positions (based on noteDrawStyle)
                  └─ Polygon outline (when no arcs active)
 ```
 
@@ -292,6 +298,8 @@ fillAnim: 'dropAndScroll' | 'matterExplode' | 'mpe' | 'melodyMap'
 column: 'left' | 'middle' | 'right'  // allocation target
 circleSize: number                    // arc circle radius
 arcType: 'linear' | 'catmulRom' | 'spiral'  // arc path type
+noteDrawStyle: 'circle' | 'stroke'   // how to draw notes
+phaserEdge: number                    // stroke stagger width (small=sequential, large=overlapping)
 
 // For mpe:
 attackTime: number                    // fill ramp duration
@@ -311,7 +319,7 @@ pixelate: { pixelSize, useTimbre }
 
 | File | Purpose |
 |------|---------|
-| `arcPaths.ts` | Arc path functions (linear, catmulRom, spiral) + geometry computation |
+| `arcPaths.ts` | Arc path functions (linear, catmulRom, spiral), phaser formula, stroke generation |
 | `mpeAnimLoop.ts` | Attack/release animation loops for MPE |
 | `mpeVoiceAlloc.ts` | MIDI channel → polygon allocation |
 | `mpeFillSpots.ts` | Sparse/dense grid generation inside polygons |
@@ -344,6 +352,12 @@ pixelate: { pixelSize, useTimbre }
 2. Implement path function with signature `(startPt, endPt, progress, geometry) => Point`
 3. Add to `arcPathRegistry` in `arcPaths.ts`
 4. Add to `arcType` enum in melodyMap schema in `appState.ts`
+
+### Adding a new note draw style
+1. Add to `NoteDrawStyle` union in `arcPaths.ts`
+2. Add to `noteDrawStyle` enum in melodyMap schema in `appState.ts`
+3. Add rendering branch in `redrawGraphics()` melodyMap section in `polygonFx.ts`
+4. Use `phaser()` + `generateStrokePoints()` for multi-point styles
 
 ### Adding a new shader effect
 1. Create shader in shaders directory

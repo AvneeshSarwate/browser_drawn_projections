@@ -141,7 +141,7 @@ export function spiralPath(
 
   // Deviation amplitude - sin curve makes it lerp in/out smoothly
   // Peaks at progress = 0.5, zero at 0 and 1
-  const deviationAmp = Math.sin(t * Math.PI * 2 * 5) * 15
+  const deviationAmp = Math.sin(t * Math.PI * 2 * 2) * 15
 
   // Spiral rotation - 2 full rotations over the path
   const angle = t * Math.PI * 4
@@ -166,4 +166,68 @@ const arcPathRegistry: Record<ArcType, ArcPathFn> = {
  */
 export function getArcPathFn(arcType: ArcType): ArcPathFn {
   return arcPathRegistry[arcType] ?? linearPath
+}
+
+/**
+ * Phaser function - creates staggered progress values for multiple points
+ * Based on David Braun's "Quantitative Easing" technique
+ *
+ * @param globalProgress - Overall animation progress (0-1)
+ * @param phase - Individual point's phase offset (0-1), typically index/count
+ * @param edge - Stagger width. Small = sequential, Large = overlapping
+ * @returns Local progress for this point (0-1)
+ *
+ * Properties:
+ * - When globalProgress=0, all outputs are 0
+ * - When globalProgress=1, all outputs are 1
+ * - Edge controls overlap: 0.01 = staccato, 2.0 = fluid
+ */
+export function phaser(globalProgress: number, phase: number, edge: number): number {
+  // Ensure edge is positive to avoid division issues
+  const e = Math.max(0.001, edge)
+  // Formula: clamp((globalProgress * (1 + edge) - phase * edge) / edge, 0, 1)
+  const result = (globalProgress * (1 + e) - phase * e) / e
+  return Math.max(0, Math.min(1, result))
+}
+
+/**
+ * Note draw style types
+ */
+export type NoteDrawStyle = 'circle' | 'stroke'
+
+/**
+ * Generates stroke points using the phaser formula
+ * Returns an array of points along the arc path, staggered by the phaser
+ *
+ * @param startPt - Arc start point
+ * @param endPt - Arc end point
+ * @param globalProgress - Overall arc progress (0-1)
+ * @param geometry - Derived polygon geometry
+ * @param pathFn - Arc path function to use
+ * @param edge - Phaser edge parameter
+ * @param numPoints - Number of points in the stroke (default 10)
+ * @returns Array of points for the stroke
+ */
+export function generateStrokePoints(
+  startPt: Point,
+  endPt: Point,
+  globalProgress: number,
+  geometry: DerivedPolygonGeometry,
+  pathFn: ArcPathFn,
+  edge: number,
+  numPoints: number = 10
+): Point[] {
+  const points: Point[] = []
+
+  for (let i = 0; i < numPoints; i++) {
+    // Phase for this point (0 to ~0.9 for 10 points)
+    const phase = i / numPoints
+    // Get local progress for this point using phaser
+    const localProgress = phaser(globalProgress, phase, edge)
+    // Get position along the arc path
+    const pos = pathFn(startPt, endPt, localProgress, geometry)
+    points.push(pos)
+  }
+
+  return points
 }

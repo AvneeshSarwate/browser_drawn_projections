@@ -33,6 +33,8 @@ export const textAnimSchema = switchedSchema(
       column: z.enum(['left', 'middle', 'right']).default('left'),  // which column this polygon belongs to
       circleSize: z.number().positive().default(12),                 // size of traveling circles
       arcType: z.enum(['linear', 'catmulRom', 'spiral']).default('linear'),  // arc path type
+      noteDrawStyle: z.enum(['circle', 'stroke']).default('circle'),  // how to draw notes
+      phaserEdge: z.number().positive().default(0.3),                 // phaser stagger width for stroke
     }
   }
 )

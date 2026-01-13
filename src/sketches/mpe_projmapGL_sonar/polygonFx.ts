@@ -16,7 +16,7 @@ import { getTextStyle, getTextAnim } from './textRegionUtils'
 import type p5 from 'p5'
 import { pitchToColor, releaseColor } from './mpeColor'
 import { normalizePointForShader, shouldFlipPolygonY } from '@/rendering/coordinateConfig'
-import { computeGeometry, getArcPathFn, type ArcType } from './arcPaths'
+import { computeGeometry, getArcPathFn, generateStrokePoints, type ArcType, type NoteDrawStyle } from './arcPaths'
 
 export type PolygonFxSyncOptions = {
   engine: BABYLON.Engine
@@ -301,14 +301,14 @@ const redrawGraphics = (g: p5.Graphics, poly: PolygonRenderData[number], bboxLog
       g.endShape(p.CLOSE)
     }
   } else if (isMelodyMap) {
-    // MelodyMap mode: draw traveling circles along arcs
+    // MelodyMap mode: draw traveling shapes along arcs
     const baseSize = textAnim.circleSize ?? 12
     const arcType = (textAnim.arcType ?? 'linear') as ArcType
+    const noteDrawStyle = (textAnim.noteDrawStyle ?? 'circle') as NoteDrawStyle
+    const phaserEdge = textAnim.phaserEdge ?? 0.3
     const currentTime = performance.now()
 
     if (renderState?.melodyMapArcs && renderState.melodyMapArcs.length > 0) {
-      g.noStroke()
-
       // Compute geometry once per polygon per frame
       const geometry = computeGeometry(poly.points as { x: number; y: number }[])
       const pathFn = getArcPathFn(arcType)
@@ -327,12 +327,39 @@ const redrawGraphics = (g: p5.Graphics, poly: PolygonRenderData[number], bboxLog
         const velocityScale = 0.5 + (arc.velocity / 127) * 1.0
         const size = baseSize * velocityScale
 
-        // Get position from arc path function
-        const pos = pathFn(arc.startPoint, arc.endPoint, progress, geometry)
+        if (noteDrawStyle === 'circle') {
+          // Draw single circle at current position
+          g.noStroke()
+          const pos = pathFn(arc.startPoint, arc.endPoint, progress, geometry)
+          g.fill(rgb.r * 255, rgb.g * 255, rgb.b * 255, 255)
+          g.circle(pos.x, pos.y, size)
+        } else {
+          // Draw stroke as a spline of phaser-staggered points
+          const strokePoints = generateStrokePoints(
+            arc.startPoint,
+            arc.endPoint,
+            progress,
+            geometry,
+            pathFn,
+            phaserEdge,
+            10
+          )
 
-        // Draw main circle
-        g.fill(rgb.r * 255, rgb.g * 255, rgb.b * 255, 255)
-        g.circle(pos.x, pos.y, size)
+          // Draw as a curved stroke using curveVertex
+          g.noFill()
+          g.stroke(rgb.r * 255, rgb.g * 255, rgb.b * 255, 255)
+          g.strokeWeight(size / 3)
+          g.beginShape()
+          // Add first point as curve anchor
+          g.curveVertex(strokePoints[0].x, strokePoints[0].y)
+          for (const pt of strokePoints) {
+            g.curveVertex(pt.x, pt.y)
+          }
+          // Add last point as curve anchor
+          g.curveVertex(strokePoints[strokePoints.length - 1].x, strokePoints[strokePoints.length - 1].y)
+          g.endShape()
+          g.strokeWeight(1)
+        }
       }
     } else {
       // No active arcs, draw polygon outline with column-based color hint
