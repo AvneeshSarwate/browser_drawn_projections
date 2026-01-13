@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { inject, onMounted, onUnmounted, ref } from 'vue'
+import { inject, onMounted, onUnmounted, reactive, ref } from 'vue'
 import * as BABYLON from 'babylonjs'
 import CanvasRoot from '@/canvas/CanvasRoot.vue'
 import { appStateName, engineRef, type TemplateAppState, drawFlattenedStrokeGroup, resolution, textAnimMetadataSchema, textStyleMetadataSchema, fxChainMetadataSchema } from './appState'
@@ -61,8 +61,126 @@ const melodyMapRenderStates = new Map<string, RenderState>()
 // MIDI playback state
 const midiOuts: MIDIValOutput[] = []
 let playNote: (pitch: number, velocity: number, ctx: TimeContext, noteDur: number, instInd: number) => void = () => {}
-const sliders: number[] = Array(17).fill(0.5) // Local slider state for LPD8/TouchOSC
+const sliders = reactive<number[]>(Array(17).fill(0.5)) // Local slider state for LPD8/TouchOSC
 let timeLoops: CancelablePromiseProxy<any>[] = []
+
+// Slider presets
+interface SliderPreset {
+  name: string
+  values: number[]
+}
+const PRESETS_STORAGE_KEY = 'mpe-slider-presets'
+const sliderPresets = ref<SliderPreset[]>([])
+const selectedPresetName = ref<string>('')
+
+function loadPresetsFromStorage() {
+  try {
+    const stored = localStorage.getItem(PRESETS_STORAGE_KEY)
+    if (stored) {
+      sliderPresets.value = JSON.parse(stored)
+      if (sliderPresets.value.length > 0) {
+        selectedPresetName.value = sliderPresets.value[0].name
+        // Auto-load the first preset's values
+        sliderPresets.value[0].values.forEach((val, i) => {
+          if (i < sliders.length) sliders[i] = val
+        })
+      }
+    }
+  } catch (e) {
+    console.error('Failed to load slider presets:', e)
+  }
+}
+
+function savePresetsToStorage() {
+  try {
+    localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(sliderPresets.value))
+  } catch (e) {
+    console.error('Failed to save slider presets:', e)
+  }
+}
+
+function getNextPresetName(): string {
+  const existingNumbers = sliderPresets.value
+    .map(p => {
+      const match = p.name.match(/^preset (\d+)$/)
+      return match ? parseInt(match[1], 10) : 0
+    })
+    .filter(n => n > 0)
+  const maxNum = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0
+  return `preset ${maxNum + 1}`
+}
+
+function savePreset() {
+  const newPreset: SliderPreset = {
+    name: getNextPresetName(),
+    values: [...sliders]
+  }
+  sliderPresets.value.push(newPreset)
+  selectedPresetName.value = newPreset.name
+  savePresetsToStorage()
+}
+
+function loadPreset() {
+  const preset = sliderPresets.value.find(p => p.name === selectedPresetName.value)
+  if (preset) {
+    preset.values.forEach((val, i) => {
+      if (i < sliders.length) sliders[i] = val
+    })
+  }
+}
+
+function deletePreset() {
+  const idx = sliderPresets.value.findIndex(p => p.name === selectedPresetName.value)
+  if (idx >= 0) {
+    sliderPresets.value.splice(idx, 1)
+    selectedPresetName.value = sliderPresets.value.length > 0 ? sliderPresets.value[0].name : ''
+    savePresetsToStorage()
+  }
+}
+
+function downloadPresets() {
+  const data = JSON.stringify(sliderPresets.value, null, 2)
+  const blob = new Blob([data], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'slider-presets.json'
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+const fileInputRef = ref<HTMLInputElement | null>(null)
+
+function triggerUpload() {
+  fileInputRef.value?.click()
+}
+
+function uploadPresets(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target?.result as string)
+      if (Array.isArray(data)) {
+        sliderPresets.value = data
+        if (sliderPresets.value.length > 0) {
+          selectedPresetName.value = sliderPresets.value[0].name
+        }
+        savePresetsToStorage()
+      }
+    } catch (err) {
+      console.error('Failed to parse presets file:', err)
+    }
+  }
+  reader.readAsText(file)
+  input.value = '' // Reset so same file can be uploaded again
+}
+
+// Load presets on module init
+loadPresetsFromStorage()
 const immediateLaunchQueue: Array<(ctx: TimeContext) => Promise<void>> = []
 
 // Button state for UI buttons
@@ -238,6 +356,7 @@ function syncMPEBundles(polygonData: PolygonRenderData) {
       bundle = {
         polygonId: poly.id,
         voice: null,
+        lastNoteInfo: null,
         fillProgress: 0,
         spots,
         animLoop: null,
@@ -333,6 +452,15 @@ function handleNoteEnd(evt: MPENoteEnd) {
     return
   }
 
+  // Save note info for continuity during release (color, size, noise animation)
+  if (bundle.voice) {
+    bundle.lastNoteInfo = {
+      noteNum: bundle.voice.noteNum,
+      bend: bundle.voice.bend,
+      pressure: bundle.voice.pressure,
+      timbre: bundle.voice.timbre
+    }
+  }
   bundle.voice = null
 
   // Get release time from polygon metadata
@@ -931,6 +1059,26 @@ onUnmounted(() => {
         </div>
       </div>
 
+      <!-- Slider Presets -->
+      <div class="preset-section">
+        <div class="slider-label-row">Slider Presets</div>
+        <div class="preset-controls">
+          <select v-model="selectedPresetName" class="preset-select">
+            <option v-for="preset in sliderPresets" :key="preset.name" :value="preset.name">
+              {{ preset.name }}
+            </option>
+          </select>
+          <button @click="loadPreset" :disabled="!selectedPresetName" class="preset-btn load">Load</button>
+          <button @click="savePreset" class="preset-btn save">Save</button>
+          <button @click="deletePreset" :disabled="!selectedPresetName" class="preset-btn delete">Delete</button>
+        </div>
+        <div class="preset-controls">
+          <button @click="downloadPresets" :disabled="sliderPresets.length === 0" class="preset-btn download">Download JSON</button>
+          <button @click="triggerUpload" class="preset-btn upload">Upload JSON</button>
+          <input ref="fileInputRef" type="file" accept=".json" @change="uploadPresets" style="display: none" />
+        </div>
+      </div>
+
       <!-- Button Grid -->
       <div class="button-section">
         <div class="slider-label-row">Melody Triggers</div>
@@ -1084,6 +1232,102 @@ input[type="range"]::-moz-range-thumb {
 
 input[type="range"]::-moz-range-thumb:hover {
   background: #45a049;
+}
+
+/* Preset section */
+.preset-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 10px;
+  border-top: 2px solid #ddd;
+}
+
+.preset-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.preset-select {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 13px;
+  background: white;
+  cursor: pointer;
+  min-width: 120px;
+}
+
+.preset-select:focus {
+  outline: none;
+  border-color: #4CAF50;
+}
+
+.preset-btn {
+  padding: 6px 12px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.preset-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.preset-btn.load {
+  background: #e3f2fd;
+  border-color: #2196F3;
+  color: #1565C0;
+}
+
+.preset-btn.load:hover:not(:disabled) {
+  background: #bbdefb;
+}
+
+.preset-btn.save {
+  background: #e8f5e9;
+  border-color: #4CAF50;
+  color: #2E7D32;
+}
+
+.preset-btn.save:hover:not(:disabled) {
+  background: #c8e6c9;
+}
+
+.preset-btn.delete {
+  background: #ffebee;
+  border-color: #f44336;
+  color: #c62828;
+}
+
+.preset-btn.delete:hover:not(:disabled) {
+  background: #ffcdd2;
+}
+
+.preset-btn.download {
+  background: #fff3e0;
+  border-color: #FF9800;
+  color: #E65100;
+}
+
+.preset-btn.download:hover:not(:disabled) {
+  background: #ffe0b2;
+}
+
+.preset-btn.upload {
+  background: #f3e5f5;
+  border-color: #9C27B0;
+  color: #6A1B9A;
+}
+
+.preset-btn.upload:hover:not(:disabled) {
+  background: #e1bee7;
 }
 
 /* Button section */

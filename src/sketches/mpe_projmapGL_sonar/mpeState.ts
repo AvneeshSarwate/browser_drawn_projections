@@ -21,6 +21,7 @@ export type MPEVoiceState = {
 export type MPEAnimBundle = {
   polygonId: string
   voice: MPEVoiceState | null  // null = no active note on this polygon
+  lastNoteInfo: { noteNum: number; bend: number; pressure: number; timbre: number } | null  // preserved after release for continuity
   fillProgress: number         // 0-1, driven by attack/release animation
   spots: Point[]               // pre-computed fill positions (sparse grid)
   animLoop: CancelablePromiseProxy<void> | null

@@ -165,7 +165,12 @@ function updateRenderState(
   const numSpots = Math.floor(bundle.spots.length * bundle.fillProgress)
 
   // Get timbre value (0-1 range) for noise animation
-  const timbreNorm = bundle.voice ? bundle.voice.timbre / 127 : 0
+  // Use lastNoteInfo during release to maintain noise animation
+  const timbreNorm = bundle.voice
+    ? bundle.voice.timbre / 127
+    : bundle.lastNoteInfo
+      ? bundle.lastNoteInfo.timbre / 127
+      : 0
 
   // Increment simplex time based on timbre (higher timbre = faster animation)
   bundle.simplexTime += timbreNorm * NOISE_SPEED_FACTOR
@@ -188,11 +193,17 @@ function updateRenderState(
   })
 
   // Include MPE voice data for rendering (color, size modulation)
+  // Use lastNoteInfo during release phase to maintain continuity
   const mpeVoice = bundle.voice ? {
     noteNum: bundle.voice.noteNum,
     pressure: bundle.voice.pressure,
     timbre: bundle.voice.timbre,
     bend: bundle.voice.bend
+  } : bundle.lastNoteInfo ? {
+    noteNum: bundle.lastNoteInfo.noteNum,
+    pressure: bundle.lastNoteInfo.pressure,
+    timbre: bundle.lastNoteInfo.timbre,
+    bend: bundle.lastNoteInfo.bend
   } : null
 
   renderStates.set(bundle.polygonId, {
