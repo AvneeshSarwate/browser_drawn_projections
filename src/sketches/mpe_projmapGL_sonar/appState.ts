@@ -69,7 +69,7 @@ export const textStyleMetadataSchema = {
 
 // Simple per-polygon FX parameters
 export const fxChainSchema = z.object({
-  chain: z.enum(['basicBlur']).default('basicBlur'),
+  chain: z.enum(['basicBlur', 'feedbackBloom']).default('basicBlur'),
   enabled: z.boolean().default(true),
   wobbleX: z.coerce.number().default(0.003),
   wobbleY: z.coerce.number().default(0.003),

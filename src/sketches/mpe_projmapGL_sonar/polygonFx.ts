@@ -2,7 +2,7 @@ import * as BABYLON from 'babylonjs'
 import { bboxOfPoints, getFxMeta } from './textRegionUtils'
 import type { PolygonRenderData } from '@/canvas/canvasState'
 import type { FxChainMeta } from './appState'
-import { PassthruEffect } from '@/rendering/babylonGL/shaderFXBabylon_GL'
+import { PassthruEffect, FeedbackNode } from '@/rendering/babylonGL/shaderFXBabylon_GL'
 import { TransformEffect } from '@/rendering/babylonGL/postFX/transform.frag.gl.generated'
 import { WobbleEffect } from '@/rendering/babylonGL/postFX/wobble.frag.gl.generated'
 import { HorizontalBlurEffect } from '@/rendering/babylonGL/postFX/horizontalBlur.frag.gl.generated'
@@ -10,6 +10,8 @@ import { VerticalBlurEffect } from '@/rendering/babylonGL/postFX/verticalBlur.fr
 import { PixelateEffect } from '@/rendering/babylonGL/postFX/pixelate.frag.gl.generated'
 import { AlphaThresholdEffect } from '@/rendering/babylonGL/postFX/alphaThreshold.frag.gl.generated'
 import { PolygonMaskEffect } from '@/rendering/babylonGL/postFX/polygonMask.frag.gl.generated'
+import { LayerBlendEffect } from '@/rendering/babylonGL/postFX/layerBlend.frag.gl.generated'
+import { BloomEffect } from '@/rendering/babylonGL/postFX/bloom.frag.gl.generated'
 import type { ShaderEffect } from '@/rendering/babylonGL/shaderFXBabylon_GL'
 import type { RenderState } from './textRegionUtils'
 import { getTextStyle, getTextAnim } from './textRegionUtils'
@@ -26,7 +28,9 @@ export type PolygonFxSyncOptions = {
   mainP5: p5
 }
 
-type ChainBundle = {
+// Bundle type for basicBlur chain (original)
+type BasicBlurBundle = {
+  chainType: 'basicBlur'
   end: ShaderEffect
   wobble: WobbleEffect
   hBlur: HorizontalBlurEffect
@@ -43,6 +47,29 @@ type ChainBundle = {
   poly: PolygonRenderData[number]
 }
 
+// Bundle type for feedbackBloom chain (new)
+type FeedbackBloomBundle = {
+  chainType: 'feedbackBloom'
+  end: ShaderEffect
+  feedback: FeedbackNode
+  vBlur: VerticalBlurEffect
+  hBlur: HorizontalBlurEffect
+  transform: TransformEffect
+  layerBlend: LayerBlendEffect
+  bloom: BloomEffect
+  mask: PolygonMaskEffect
+  width: number
+  height: number
+  fxKey: string
+  owned: ShaderEffect[]
+  graphics: p5.Graphics
+  bboxPx: { minX: number; minY: number; w: number; h: number }
+  bboxLogical: { minX: number; minY: number; w: number; h: number }
+  poly: PolygonRenderData[number]
+}
+
+type ChainBundle = BasicBlurBundle | FeedbackBloomBundle
+
 type MeshBundle = {
   mesh: BABYLON.Mesh
   material: BABYLON.StandardMaterial
@@ -56,6 +83,13 @@ const MPE_PIXELATE_MIN = 1
 const MPE_PIXELATE_MAX = 24
 const POLYGON_MASK_MAX_POINTS = 64
 
+const getMpePixelateSize = (renderState?: RenderState): number => {
+  const timbre = renderState?.mpeVoice?.timbre
+  if (timbre === undefined || timbre === null) return MPE_PIXELATE_MIN
+  const t = Math.min(1, Math.max(0, timbre / 127))
+  return MPE_PIXELATE_MIN + (MPE_PIXELATE_MAX - MPE_PIXELATE_MIN) * t
+}
+
 const getPolygonMaskUniforms = (
   poly: PolygonRenderData[number],
   bboxLogical: { minX: number; minY: number; w: number; h: number },
@@ -66,13 +100,6 @@ const getPolygonMaskUniforms = (
     normalizePointForShader(point, bboxLogical, flipY)
   )
   return { points, pointCount: points.length }
-}
-
-const getMpePixelateSize = (renderState?: RenderState): number => {
-  const timbre = renderState?.mpeVoice?.timbre
-  if (timbre === undefined || timbre === null) return MPE_PIXELATE_MIN
-  const t = Math.min(1, Math.max(0, timbre / 127))
-  return MPE_PIXELATE_MIN + (MPE_PIXELATE_MAX - MPE_PIXELATE_MIN) * t
 }
 
 const ensureOverlayScene = (engine: BABYLON.Engine) => {
@@ -102,7 +129,7 @@ const makeKeys = (bbox: { minX: number; minY: number; w: number; h: number }, fx
   fxKey: JSON.stringify({ ...fx }),
 })
 
-const createChain = (
+const createBasicBlurChain = (
   engine: BABYLON.Engine,
   p5Canvas: HTMLCanvasElement,
   graphics: p5.Graphics,
@@ -110,7 +137,7 @@ const createChain = (
   bboxLogical: { minX: number; minY: number; w: number; h: number },
   poly: PolygonRenderData[number],
   fx: FxChainMeta,
-): ChainBundle | null => {
+): BasicBlurBundle | null => {
   const w = Math.max(1, Math.round(bboxPx.w))
   const h = Math.max(1, Math.round(bboxPx.h))
   if (w < 1 || h < 1) return null
@@ -139,6 +166,7 @@ const createChain = (
 
   const { fxKey } = makeKeys({ minX: bboxPx.minX, minY: bboxPx.minY, w, h }, fx)
   return {
+    chainType: 'basicBlur',
     end: flipY,
     wobble,
     hBlur,
@@ -149,6 +177,64 @@ const createChain = (
     height: h,
     fxKey,
     owned: [flipY, mask, alphaThresh, pixelate, vBlur, hBlur, wobble, srcPass],
+    graphics,
+    bboxPx,
+    bboxLogical,
+    poly,
+  }
+}
+
+const createFeedbackBloomChain = (
+  engine: BABYLON.Engine,
+  p5Canvas: HTMLCanvasElement,
+  graphics: p5.Graphics,
+  bboxPx: { minX: number; minY: number; w: number; h: number },
+  bboxLogical: { minX: number; minY: number; w: number; h: number },
+  poly: PolygonRenderData[number],
+  fx: FxChainMeta,
+): FeedbackBloomBundle | null => {
+  const w = Math.max(1, Math.round(bboxPx.w))
+  const h = Math.max(1, Math.round(bboxPx.h))
+  if (w < 1 || h < 1) return null
+
+  // Effects chain matching clickAVMelodyLauncherBabylon
+  const srcPass = new PassthruEffect(engine, { src: graphics.elt as HTMLCanvasElement }, w, h)
+  const feedback = new FeedbackNode(engine, srcPass, w, h, 'linear', 'half_float')
+  const vBlur = new VerticalBlurEffect(engine, { src: feedback }, w, h)
+  const hBlur = new HorizontalBlurEffect(engine, { src: vBlur }, w, h)
+  const transform = new TransformEffect(engine, { src: hBlur }, w, h)
+  const layerBlend = new LayerBlendEffect(engine, { src1: srcPass, src2: transform }, w, h)
+  feedback.setFeedbackSrc(layerBlend)
+  const bloom = new BloomEffect(engine, { src: layerBlend }, w, h)
+
+  // Utility effects
+  const alphaThresh = new AlphaThresholdEffect(engine, { src: bloom }, w, h)
+  const mask = new PolygonMaskEffect(engine, { src: alphaThresh }, w, h)
+  // WebGL canvas textures are Y-flipped relative to render output; flip at end of chain
+  const flipY = new TransformEffect(engine, { src: mask }, w, h)
+  flipY.setUniforms({ rotate: 0, anchor: [0.5, 0.5], translate: [0, 0], scale: [1, -1] })
+
+  // Hardcoded uniforms matching clickAVMelodyLauncherBabylon
+  transform.setUniforms({ rotate: 0, anchor: [0.5, 0.5], translate: [0, 0], scale: [0.995, 0.995] })
+  vBlur.setUniforms({ pixels: 2, resolution: h })
+  hBlur.setUniforms({ pixels: 2, resolution: w })
+  alphaThresh.setUniforms({ threshold: 0 })
+
+  const { fxKey } = makeKeys({ minX: bboxPx.minX, minY: bboxPx.minY, w, h }, fx)
+  return {
+    chainType: 'feedbackBloom',
+    end: flipY,
+    feedback,
+    vBlur,
+    hBlur,
+    transform,
+    layerBlend,
+    bloom,
+    mask,
+    width: w,
+    height: h,
+    fxKey,
+    owned: [flipY, mask, alphaThresh, bloom, layerBlend, transform, hBlur, vBlur, feedback, srcPass],
     graphics,
     bboxPx,
     bboxLogical,
@@ -451,13 +537,20 @@ export const syncChainsAndMeshes = (
 
     const { fxKey } = makeKeys({ minX: bboxPx.minX, minY: bboxPx.minY, w: bboxPx.w, h: bboxPx.h }, fx)
     const prev = chains.get(poly.id)
-    const needsRecreate = !prev || prev.width !== targetWidth || prev.height !== targetHeight
+    // Also recreate if chain type changed
+    const chainTypeChanged = prev && prev.chainType !== fx.chain
+    const needsRecreate = !prev || prev.width !== targetWidth || prev.height !== targetHeight || chainTypeChanged
 
     if (needsRecreate) {
       disposeEntry(poly.id)
       const graphics = opts.mainP5.createGraphics(Math.max(1, Math.round(bboxLogical.w)), Math.max(1, Math.round(bboxLogical.h))) as p5.Graphics
       graphics.pixelDensity(dpr)
-      const chain = createChain(engine, p5Canvas, graphics, bboxPx, bboxLogical, poly, fx)
+
+      // Create appropriate chain based on fx.chain setting
+      const chain = fx.chain === 'feedbackBloom'
+        ? createFeedbackBloomChain(engine, p5Canvas, graphics, bboxPx, bboxLogical, poly, fx)
+        : createBasicBlurChain(engine, p5Canvas, graphics, bboxPx, bboxLogical, poly, fx)
+
       if (!chain) {
         graphics.remove()
         return
@@ -475,13 +568,17 @@ export const syncChainsAndMeshes = (
       // Reuse existing chain when only position/metadata changed
       const fxChanged = prev.fxKey !== fxKey
       if (fxChanged) {
-        prev.wobble.setUniforms({
-          xStrength: fx.wobbleX,
-          yStrength: fx.wobbleY,
-          time: () => performance.now() / 1000,
-        })
-        prev.hBlur.setUniforms({ pixels: fx.blurX, resolution: prev.width })
-        prev.vBlur.setUniforms({ pixels: fx.blurY, resolution: prev.height })
+        // Update uniforms for basicBlur chain
+        if (prev.chainType === 'basicBlur') {
+          prev.wobble.setUniforms({
+            xStrength: fx.wobbleX,
+            yStrength: fx.wobbleY,
+            time: () => performance.now() / 1000,
+          })
+          prev.hBlur.setUniforms({ pixels: fx.blurX, resolution: prev.width })
+          prev.vBlur.setUniforms({ pixels: fx.blurY, resolution: prev.height })
+        }
+        // feedbackBloom has hardcoded uniforms, no update needed
         prev.fxKey = fxKey
       }
 
@@ -507,7 +604,10 @@ export const renderPolygonFx = (engine: BABYLON.Engine, renderStates: Map<string
   chains.forEach((chain, id) => {
     const rs = renderStates.get(id)
     redrawGraphics(chain.graphics, chain.poly, chain.bboxLogical, rs)
-    chain.pixelate.setUniforms({ pixelSize: getMpePixelateSize(rs) })
+    // Update pixelate for basicBlur chains
+    if (chain.chainType === 'basicBlur') {
+      chain.pixelate.setUniforms({ pixelSize: getMpePixelateSize(rs) })
+    }
   })
 
   // Render shader chains

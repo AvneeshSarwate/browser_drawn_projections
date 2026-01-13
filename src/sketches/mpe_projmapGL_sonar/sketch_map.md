@@ -7,7 +7,9 @@ Quick-reference document for understanding the core data flows in this music-gra
 This sketch combines three visual systems driven by MIDI/music input:
 1. **MPE System**: Polygon fills driven by MIDI pressure/timbre from MPE controllers
 2. **MelodyMap System**: Visual arcs across polygons synchronized with melody playback
-3. **FX System**: Post-processing effects (wobble, blur, pixelation, polygon masking)
+3. **FX System**: Post-processing effects with selectable chain types:
+   - `basicBlur`: wobble, blur, pixelation, polygon masking (original)
+   - `feedbackBloom`: feedback loop, blur, transform, layer blend, bloom, polygon masking
 
 **Key External Dependencies**:
 - **CanvasRoot** (`@/canvas/CanvasRoot.vue`): External component that provides polygon/freehand drawing UI. Shape data flows INTO this sketch via `syncCanvasState()` callback.
@@ -133,18 +135,24 @@ This ensures left/right column alternation happens only when melodies actually p
 ### polygonFx.ts (Rendering Pipeline)
 **Path**: `polygonFx.ts`
 
-Babylon.js shader pipeline for all visual animations.
+Babylon.js shader pipeline for all visual animations. Supports two selectable chain types via `fx.chain` metadata.
 
 **Key Functions**:
 ```typescript
 syncChainsAndMeshes(payload, opts): void
   // Removes chains for deleted polygons
-  // Creates/updates shader pipelines:
-  // passthru → wobble → hBlur → vBlur → pixelate → alphaThresh → mask → flipY
+  // Creates/updates shader pipelines based on fx.chain setting
   // Creates Babylon meshes with shader output as texture
+
+createBasicBlurChain(engine, p5Canvas, graphics, bboxPx, bboxLogical, poly, fx): BasicBlurBundle
+  // Original chain with wobble and pixelate effects
+
+createFeedbackBloomChain(engine, p5Canvas, graphics, bboxPx, bboxLogical, poly, fx): FeedbackBloomBundle
+  // New chain with feedback loop and bloom effects
 
 renderPolygonFx(engine, renderStates, frameId): void
   // Per-frame: calls redrawGraphics, updates uniforms, renders chains
+  // Updates pixelate only for basicBlur chains
 
 redrawGraphics(g, poly, bboxLogical, renderState): void
   // Drawing logic varies by fillAnim mode:
@@ -155,14 +163,27 @@ redrawGraphics(g, poly, bboxLogical, renderState): void
 disposePolygonFx(): void
 ```
 
-**Shader Pipeline Order**:
+**Chain Types**:
+
+**basicBlur** (default):
 1. Passthru (pulls from p5.Graphics)
-2. Wobble (sine distortion)
-3. HBlur/VBlur (gaussian blur)
-4. Pixelate (pixel grid)
+2. Wobble (sine distortion, controlled by fx.wobbleX/Y)
+3. HBlur/VBlur (gaussian blur, controlled by fx.blurX/Y)
+4. Pixelate (pixel grid, controlled by MPE timbre)
 5. AlphaThreshold (cleanup)
 6. PolygonMask (crop to polygon)
 7. FlipY (WebGL correction)
+
+**feedbackBloom**:
+1. Passthru (pulls from p5.Graphics)
+2. FeedbackNode (creates feedback loop)
+3. VBlur/HBlur (gaussian blur, hardcoded 2px)
+4. Transform (scale 0.995 for feedback shrinking)
+5. LayerBlend (blends fresh source with transformed feedback)
+6. Bloom (glow effect)
+7. AlphaThreshold (cleanup)
+8. PolygonMask (crop to polygon)
+9. FlipY (WebGL correction)
 
 ---
 
@@ -308,9 +329,16 @@ gridStep: number                      // spot density
 circleSize: number
 
 // FX chain (all modes):
-wobble: { xStrength, yStrength, speed }
-blur: { passes, pixels }
-pixelate: { pixelSize, useTimbre }
+chain: 'basicBlur' | 'feedbackBloom'  // selects post-processing pipeline
+enabled: boolean
+pad: number                           // bounding box padding
+
+// For basicBlur chain:
+wobbleX: number                       // horizontal wobble strength
+wobbleY: number                       // vertical wobble strength
+blurX: number                         // horizontal blur pixels
+blurY: number                         // vertical blur pixels
+// pixelate controlled by MPE timbre
 ```
 
 ---
@@ -359,7 +387,15 @@ pixelate: { pixelSize, useTimbre }
 3. Add rendering branch in `redrawGraphics()` melodyMap section in `polygonFx.ts`
 4. Use `phaser()` + `generateStrokePoints()` for multi-point styles
 
-### Adding a new shader effect
-1. Create shader in shaders directory
-2. Add to pipeline in `syncChainsAndMeshes()` in `polygonFx.ts`
-3. Add uniforms update in `renderPolygonFx()`
+### Adding a new shader effect to existing chain
+1. Create shader in `src/rendering/babylonGL/postFX/` directory
+2. Add to pipeline in appropriate `createXxxChain()` function in `polygonFx.ts`
+3. Add uniforms update in `renderPolygonFx()` if needed
+
+### Adding a new FX chain type
+1. Add to `chain` enum in `fxChainSchema` in `appState.ts`
+2. Create new bundle type (e.g., `NewChainBundle`) in `polygonFx.ts`
+3. Add to `ChainBundle` union type
+4. Create `createNewChain()` function with shader pipeline
+5. Add branching in `syncChainsAndMeshes()` to select chain based on `fx.chain`
+6. Add any per-frame uniform updates in `renderPolygonFx()` with chain type check
