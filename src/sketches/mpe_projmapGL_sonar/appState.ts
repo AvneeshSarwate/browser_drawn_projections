@@ -16,7 +16,7 @@ export const defaultQuoteText = `Lorem ipsum dolor sit amet, consectetur adipisc
 
 export const textAnimSchema = switchedSchema(
   z.object({
-    fillAnim: z.enum(['dropAndScroll', 'matterExplode', 'mpe', 'melodyMap']).default('mpe'),
+    fillAnim: z.enum(['dropAndScroll', 'matterExplode', 'mpe', 'melodyMap']).default('melodyMap'),
     textInd: z.coerce.string().default(defaultQuoteText)
   }),
   'fillAnim',

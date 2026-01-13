@@ -138,7 +138,7 @@ export function allocateMelodyToPolygon(
 
   // Cache edge points if not already cached
   if (!state.polygonEdgePoints.has(polygonId)) {
-    const edgePoints = generateEdgePoints(selectedPolygon.points as Point[])
+    const edgePoints = selectedPolygon.points.map(p => ({...p})) //generateEdgePoints(selectedPolygon.points as Point[])
     state.polygonEdgePoints.set(polygonId, edgePoints)
   }
 
@@ -322,7 +322,7 @@ export function syncPolygonCache(
     state.polygonColumns.set(poly.id, anim.column as PolygonColumn)
 
     // Regenerate edge points (polygon shape might have changed)
-    const edgePoints = generateEdgePoints(poly.points as Point[])
+    const edgePoints = poly.points.map(p => ({...p})) //generateEdgePoints(poly.points as Point[])
     state.polygonEdgePoints.set(poly.id, edgePoints)
   }
 

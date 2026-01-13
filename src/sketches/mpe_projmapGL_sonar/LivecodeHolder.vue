@@ -427,7 +427,7 @@ function disposeMelodyMap() {
 
 // UI Button handlers (shared with MIDI button logic)
 const baseClipNames = ['dscale5', 'dscale7', 'd7mel']
-const baseTransform = 's_tr s0 dR7 : str s1 : rot s2 : rev s3 : orn s4 dR7 : easeCirc s5 : spread s7 dR7'
+const baseTransform = 's_tr s0 dR7 : str s1 : rot s2 : rev s3 : orn s4 dR7 : easeCirc s5 : spread s6 dR7'
 const delayTransform = 's_tr s8 dR7 : str s9 : rot s10 : rev s11 : orn s12 dR7 : easeCirc s13'
 
 /**

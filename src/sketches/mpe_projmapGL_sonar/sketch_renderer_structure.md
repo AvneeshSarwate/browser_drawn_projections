@@ -1,4 +1,4 @@
-i want to add music-graphics mappings in mpe_projmapGL_sonar
+this is the description of the music-graphics mappings in mpe_projmapGL_sonar
 
 
 here is the set up of the graphics stack 
@@ -17,7 +17,7 @@ There is also a music system that i want to map into the graphics system. here a
 
 
 
-I want to set up a mapping like the following
+here is how the 
 
 
 I will make polygons in 3 columns, left/middle/right
