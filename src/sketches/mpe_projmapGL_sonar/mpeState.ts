@@ -24,4 +24,5 @@ export type MPEAnimBundle = {
   fillProgress: number         // 0-1, driven by attack/release animation
   spots: Point[]               // pre-computed fill positions (sparse grid)
   animLoop: CancelablePromiseProxy<void> | null
+  simplexTime: number          // accumulated time for noise animation, incremented by timbre each frame
 }

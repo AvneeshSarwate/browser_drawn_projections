@@ -240,7 +240,8 @@ function syncMPEBundles(polygonData: PolygonRenderData) {
         voice: null,
         fillProgress: 0,
         spots,
-        animLoop: null
+        animLoop: null,
+        simplexTime: 0
       }
       mpeBundles.set(poly.id, bundle)
       // Initialize empty render state

@@ -2,6 +2,15 @@ import { launchBrowser, type CancelablePromiseProxy } from '@/channels/offline_t
 import type { MPEAnimBundle } from './mpeState'
 import type { RenderState, Point } from './textRegionUtils'
 import { FRAME_WAIT } from './textRegionUtils'
+import { createNoise2D } from 'simplex-noise'
+
+// Module-level noise instance for consistent animation across all bundles
+const noise2D = createNoise2D()
+
+// Noise animation parameters
+const NOISE_SPEED_FACTOR = 0.05      // How fast time advances per unit timbre (0-1 range)
+const NOISE_MAGNITUDE_MAX = 85       // Maximum pixel deviation at full timbre
+const NOISE_SPATIAL_SCALE = 10      // Scale factor for point index in noise space
 
 // Enable/disable logging
 const LOG_ENABLED = true
@@ -147,13 +156,36 @@ export function startReleaseAnimation(
  * Update the render state for a bundle based on current fill progress.
  * The number of visible spots is proportional to fillProgress.
  * Also includes MPE voice data for color/size modulation.
+ * Applies simplex noise deviation to positions based on timbre.
  */
 function updateRenderState(
   bundle: MPEAnimBundle,
   renderStates: Map<string, RenderState>
 ) {
   const numSpots = Math.floor(bundle.spots.length * bundle.fillProgress)
-  const letters = bundle.spots.slice(0, numSpots).map((pos, idx) => ({ pos, idx }))
+
+  // Get timbre value (0-1 range) for noise animation
+  const timbreNorm = bundle.voice ? bundle.voice.timbre / 127 : 0
+
+  // Increment simplex time based on timbre (higher timbre = faster animation)
+  bundle.simplexTime += timbreNorm * NOISE_SPEED_FACTOR
+
+  // Calculate noise magnitude based on timbre (higher timbre = larger deviation)
+  const noiseMagnitude = timbreNorm * NOISE_MAGNITUDE_MAX
+
+  // Apply noise deviation to each visible spot position
+  const letters = bundle.spots.slice(0, numSpots).map((pos, idx) => {
+    // Use different noise offsets for x and y (offset y by 1000 in noise space)
+    const noiseX = noise2D(idx * NOISE_SPATIAL_SCALE, bundle.simplexTime)
+    const noiseY = noise2D(idx * NOISE_SPATIAL_SCALE, bundle.simplexTime + 1000)
+
+    const deviatedPos: Point = {
+      x: pos.x + noiseX * noiseMagnitude,
+      y: pos.y + noiseY * noiseMagnitude
+    }
+
+    return { pos: deviatedPos, idx }
+  })
 
   // Include MPE voice data for rendering (color, size modulation)
   const mpeVoice = bundle.voice ? {
