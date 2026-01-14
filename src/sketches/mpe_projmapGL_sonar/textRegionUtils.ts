@@ -22,6 +22,7 @@ export type ArcRenderData = {
   duration: number
   pitch: number
   velocity: number
+  melodyRootBlend: number
 }
 
 export type RenderState = {

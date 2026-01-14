@@ -31,8 +31,8 @@ export const textAnimSchema = switchedSchema(
     },
     melodyMap: {
       column: z.enum(['left', 'middle', 'right']).default('left'),  // which column this polygon belongs to
-      circleSize: z.number().positive().default(12),                 // size of traveling circles
-      arcType: z.enum(['linear', 'catmulRom', 'spiral']).default('linear'),  // arc path type
+      circleSize: z.number().positive().default(24),                 // size of traveling circles
+      arcType: z.enum(['linear', 'catmulRom', 'spiral']).default('catmulRom'),  // arc path type
       noteDrawStyle: z.enum(['circle', 'stroke']).default('circle'),  // how to draw notes
       phaserEdge: z.number().positive().default(0.3),                 // phaser stagger width for stroke
     }
@@ -69,7 +69,7 @@ export const textStyleMetadataSchema = {
 
 // Simple per-polygon FX parameters
 export const fxChainSchema = z.object({
-  chain: z.enum(['basicBlur', 'feedbackBloom']).default('basicBlur'),
+  chain: z.enum(['basicBlur', 'feedbackBloom']).default('feedbackBloom'),
   enabled: z.boolean().default(true),
   wobbleX: z.coerce.number().default(0.003),
   wobbleY: z.coerce.number().default(0.003),

@@ -523,7 +523,8 @@ function updateMelodyMapRenderStates() {
       startTime: arc.startTime,
       duration: arc.duration,
       pitch: arc.pitch,
-      velocity: arc.velocity
+      velocity: arc.velocity,
+      melodyRootBlend: arc.melodyRootBlend
     }))
     existing.push(...arcs)
     arcsByPolygon.set(drawInfo.polygonId, existing)
