@@ -138,6 +138,14 @@ function deletePreset() {
   }
 }
 
+function overwritePreset() {
+  const preset = sliderPresets.value.find(p => p.name === selectedPresetName.value)
+  if (preset) {
+    preset.values = [...sliders]
+    savePresetsToStorage()
+  }
+}
+
 function downloadPresets() {
   const data = JSON.stringify(sliderPresets.value, null, 2)
   const blob = new Blob([data], { type: 'application/json' })
@@ -1070,6 +1078,7 @@ onUnmounted(() => {
           </select>
           <button @click="loadPreset" :disabled="!selectedPresetName" class="preset-btn load">Load</button>
           <button @click="savePreset" class="preset-btn save">Save</button>
+          <button @click="overwritePreset" :disabled="!selectedPresetName" class="preset-btn overwrite">Overwrite</button>
           <button @click="deletePreset" :disabled="!selectedPresetName" class="preset-btn delete">Delete</button>
         </div>
         <div class="preset-controls">
@@ -1258,6 +1267,7 @@ input[type="range"]::-moz-range-thumb:hover {
   background: white;
   cursor: pointer;
   min-width: 120px;
+  max-width: 200px;
 }
 
 .preset-select:focus {
@@ -1298,6 +1308,16 @@ input[type="range"]::-moz-range-thumb:hover {
 
 .preset-btn.save:hover:not(:disabled) {
   background: #c8e6c9;
+}
+
+.preset-btn.overwrite {
+  background: #e0f7fa;
+  border-color: #00BCD4;
+  color: #00838F;
+}
+
+.preset-btn.overwrite:hover:not(:disabled) {
+  background: #b2ebf2;
 }
 
 .preset-btn.delete {
