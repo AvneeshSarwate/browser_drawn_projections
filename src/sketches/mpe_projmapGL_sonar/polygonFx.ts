@@ -16,7 +16,7 @@ import type { ShaderEffect } from '@/rendering/babylonGL/shaderFXBabylon_GL'
 import type { RenderState } from './textRegionUtils'
 import { getTextStyle, getTextAnim } from './textRegionUtils'
 import type p5 from 'p5'
-import { pitchToColor, releaseColor } from './mpeColor'
+import { pitchToColor, pitchToColor2, releaseColor } from './mpeColor'
 import { normalizePointForShader, shouldFlipPolygonY } from '@/rendering/coordinateConfig'
 import { computeGeometry, getArcPathFn, generateStrokePoints, type ArcType, type NoteDrawStyle } from './arcPaths'
 
@@ -219,6 +219,7 @@ const createFeedbackBloomChain = (
   vBlur.setUniforms({ pixels: 2, resolution: h })
   hBlur.setUniforms({ pixels: 2, resolution: w })
   alphaThresh.setUniforms({ threshold: 0 })
+  bloom.setUniforms({ bloomIntensity: 0.7 })
 
   const { fxKey } = makeKeys({ minX: bboxPx.minX, minY: bboxPx.minY, w, h }, fx)
   return {
@@ -406,8 +407,8 @@ const redrawGraphics = (g: p5.Graphics, poly: PolygonRenderData[number], bboxLog
         // Skip completed arcs
         if (progress >= 1) continue
 
-        // Get color based on pitch
-        const rgb = pitchToColor(arc.pitch, 0)
+        // Get color based on melodyRootBlend and progress through the arc
+        const rgb = pitchToColor2(arc.melodyRootBlend, progress)
 
         // Calculate size based on velocity
         const velocityScale = 0.5 + (arc.velocity / 127) * 1.0

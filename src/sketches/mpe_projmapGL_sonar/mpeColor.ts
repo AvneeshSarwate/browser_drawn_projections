@@ -48,7 +48,7 @@ export function pitchToColor(noteNum: number, bend: number, bendRange = 48): RGB
 export function pitchToColor2(melodyRootBlend: number, melodyProgBlend: number): RGB {
 
   const g1 = gradient1;
-  const g2 = gradient2;
+  const g2 = gradient3;
   
   const colorA = sampleGradient(g1, melodyProgBlend)
   const colorB = sampleGradient(g2, melodyProgBlend)
@@ -147,5 +147,20 @@ const gradient2: GradientStop[] = [
   {
     s: 1,
     rgb: [0.2888, 0.1516, 0.9331],
+  },
+]
+
+const gradient3: GradientStop[] = [
+  {
+    s: 0,
+    rgb: [0.9645, 0.9348, 0.9339],
+  },
+  {
+    s: 0.5,
+    rgb: [0.6437, 0.1906, 0.4073],
+  },
+  {
+    s: 1,
+    rgb: [0.0568, 0.3515, 0.0807],
   },
 ]

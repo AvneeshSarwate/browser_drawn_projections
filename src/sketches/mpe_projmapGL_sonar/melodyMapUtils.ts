@@ -133,7 +133,8 @@ export function allocateMelodyToPolygon(
   state.melodyDrawInfo.set(melodyId, {
     melodyId,
     polygonId,
-    activeArcs: []
+    activeArcs: [],
+    melodyRootBlend: null
   })
 
   // Cache edge points if not already cached
@@ -173,6 +174,17 @@ function createArcId(): string {
  * @param state Global melody map state
  * @returns The created arc animation, or null if melody not allocated
  */
+/**
+ * Calculates melodyRootBlend from a pitch.
+ * D (pitch class 2) = 0, C# (pitch class 1) = 1, spanning the octave.
+ */
+function calculateMelodyRootBlend(pitch: number): number {
+  const pitchClass = pitch % 12
+  // Shift so D (2) = 0, then normalize to 0-1 range
+  const shifted = (pitchClass - 2 + 12) % 12
+  return shifted / 11
+}
+
 export function launchArc(
   melodyId: string,
   pitch: number,
@@ -186,6 +198,11 @@ export function launchArc(
   const edgePoints = state.polygonEdgePoints.get(drawInfo.polygonId)
   if (!edgePoints || edgePoints.length === 0) return null
 
+  // Calculate melodyRootBlend from first note if not set
+  if (drawInfo.melodyRootBlend === null) {
+    drawInfo.melodyRootBlend = calculateMelodyRootBlend(pitch)
+  }
+
   const { start, end } = twoRandomPoints(edgePoints)
 
   const arc: ArcAnimation = {
@@ -195,7 +212,8 @@ export function launchArc(
     startTime: performance.now(),
     duration: Math.max(0.05, duration), // Minimum duration to prevent instant disappearance
     pitch,
-    velocity
+    velocity,
+    melodyRootBlend: drawInfo.melodyRootBlend
   }
 
   drawInfo.activeArcs.push(arc)
