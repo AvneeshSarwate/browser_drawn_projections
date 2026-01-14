@@ -13,6 +13,7 @@ export type ArcAnimation = {
   pitch: number                 // MIDI pitch for color
   velocity: number              // Note velocity for opacity/size
   melodyRootBlend: number       // 0-1 blend based on first note (D=0, C#=1)
+  melodyProgBlend: number       // 0-1 position of this note within the melody timeline
 }
 
 /**
@@ -23,6 +24,7 @@ export type MelodyDrawInfo = {
   polygonId: string
   activeArcs: ArcAnimation[]    // Currently animating arcs
   melodyRootBlend: number | null // Calculated from first note's pitch (D=0, C#=1)
+  melodyStartTime: number | null // When the first note of the melody was launched
 }
 
 /**
