@@ -920,7 +920,22 @@ onMounted(async () => {
     const touchOSCBridge = midiInputs.get("TouchOSC Bridge")
     if (touchOSCBridge) {
       console.log("TouchOSC Bridge connected")
-      Array.from({ length: 9 }, (_, i) => i).forEach(ind => {
+      // CC 0: preset switching (values 0-7 switch to preset index)
+      touchOSCBridge.onControlChange(100, (msg) => {
+        const rawValue = msg.data2
+        if (rawValue >= 0 && rawValue <= 7 && rawValue < sliderPresets.value.length) {
+          const preset = sliderPresets.value[rawValue]
+          if (preset) {
+            console.log(`TouchOSC preset switch: index ${rawValue} -> "${preset.name}"`)
+            selectedPresetName.value = preset.name
+            preset.values.forEach((val, i) => {
+              if (i < sliders.length) sliders[i] = val
+            })
+          }
+        }
+      })
+      // CC 1-8: map to sliders 9-16
+      Array.from({ length: 8 }, (_, i) => i + 1).forEach(ind => {
         touchOSCBridge.onControlChange(ind, (msg) => {
           sliders[ind + 8] = midiNorm(msg.data2)
         })

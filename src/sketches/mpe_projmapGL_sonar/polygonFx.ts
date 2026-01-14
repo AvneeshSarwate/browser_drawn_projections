@@ -364,7 +364,7 @@ const redrawGraphics = (g: p5.Graphics, poly: PolygonRenderData[number], bboxLog
         g.fill(rgb.r * 255, rgb.g * 255, rgb.b * 255, 255)
 
         renderState.letters.forEach(({ pos }) => {
-          const size = baseSize * pressureScale
+          const size = (10 + baseSize) * pressureScale * 0.3
           g.circle(pos.x, pos.y, size)
         })
       } else {
