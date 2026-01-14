@@ -45,6 +45,17 @@ export function pitchToColor(noteNum: number, bend: number, bendRange = 48): RGB
   return lerpRgb(colorA, colorB, t)
 }
 
+export function pitchToColor2(melodyRootBlend: number, melodyProgBlend: number): RGB {
+
+  const g1 = gradient1;
+  const g2 = gradient2;
+  
+  const colorA = sampleGradient(g1, melodyProgBlend)
+  const colorB = sampleGradient(g2, melodyProgBlend)
+  
+  return lerpRgb(colorA, colorB, melodyRootBlend)
+}
+
 /**
  * Get a color for a released note (no pitch modulation).
  * Uses a neutral white-ish color.
@@ -81,3 +92,60 @@ function lerpRgb(a: RGB, b: RGB, t: number): RGB {
     b: a.b + (b.b - a.b) * tt,
   }
 }
+
+function sampleGradient(gradient: GradientStop[], s: number): RGB {
+  const stop1 = gradient.find((stop) => stop.s <= s)
+  const stop2 = gradient.find((stop) => stop.s > s)
+  if (!stop1 || !stop2) return { r: 0, g: 0, b: 0 }
+  const t = (s - stop1.s) / (stop2.s - stop1.s)
+  const rgb1 = {
+    r: stop1.rgb[0],
+    g: stop1.rgb[1],
+    b: stop1.rgb[2],
+  }
+  const rgb2 = {
+    r: stop2.rgb[0],
+    g: stop2.rgb[1],
+    b: stop2.rgb[2],
+  }
+  return lerpRgb(rgb1, rgb2, t)
+}
+
+type GradientStop = {
+  s: number
+  rgb: [number, number, number]
+}
+
+const gradient1: GradientStop[] = [
+  {
+    s: 0,
+    rgb: [0.74, 0.8748, 0.3724],
+  },
+  {
+    s: 0.5,
+    rgb: [0.5513, 0.2665, 0.2722],
+  },
+  {
+    s: 1,
+    rgb: [0.2567, 0.1789, 0.6694],
+  },
+]
+
+const gradient2: GradientStop[] = [
+  {
+    s: 0,
+    rgb: [0.93, 0.48, 0.074],
+  },
+  {
+    s: 0.3,
+    rgb: [0.563, 0.2969, 0.2114],
+  },
+  {
+    s: 0.6,
+    rgb: [0.5846, 0.2553, 0.4176],
+  },
+  {
+    s: 1,
+    rgb: [0.2888, 0.1516, 0.9331],
+  },
+]
