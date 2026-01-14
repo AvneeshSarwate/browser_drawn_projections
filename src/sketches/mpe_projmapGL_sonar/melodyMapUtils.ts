@@ -134,7 +134,8 @@ export function allocateMelodyToPolygon(
     melodyId,
     polygonId,
     activeArcs: [],
-    melodyRootBlend: null
+    melodyRootBlend: null,
+    melodyStartTime: null
   })
 
   // Cache edge points if not already cached
@@ -185,6 +186,9 @@ function calculateMelodyRootBlend(pitch: number): number {
   return shifted / 11
 }
 
+// Default melody duration for normalizing melodyProgBlend (in ms)
+const DEFAULT_MELODY_DURATION_MS = 3000
+
 export function launchArc(
   melodyId: string,
   pitch: number,
@@ -198,10 +202,17 @@ export function launchArc(
   const edgePoints = state.polygonEdgePoints.get(drawInfo.polygonId)
   if (!edgePoints || edgePoints.length === 0) return null
 
-  // Calculate melodyRootBlend from first note if not set
-  if (drawInfo.melodyRootBlend === null) {
+  const currentTime = performance.now()
+
+  // Track melody start time and calculate melodyRootBlend from first note
+  if (drawInfo.melodyStartTime === null) {
+    drawInfo.melodyStartTime = currentTime
     drawInfo.melodyRootBlend = calculateMelodyRootBlend(pitch)
   }
+
+  // Calculate melodyProgBlend based on time elapsed since melody started
+  const elapsedMs = currentTime - drawInfo.melodyStartTime
+  const melodyProgBlend = Math.min(1, elapsedMs / DEFAULT_MELODY_DURATION_MS)
 
   const { start, end } = twoRandomPoints(edgePoints)
 
@@ -209,11 +220,12 @@ export function launchArc(
     id: createArcId(),
     startPoint: start,
     endPoint: end,
-    startTime: performance.now(),
+    startTime: currentTime,
     duration: Math.max(0.05, duration), // Minimum duration to prevent instant disappearance
     pitch,
     velocity,
-    melodyRootBlend: drawInfo.melodyRootBlend
+    melodyRootBlend: drawInfo.melodyRootBlend!,
+    melodyProgBlend
   }
 
   drawInfo.activeArcs.push(arc)

@@ -407,8 +407,8 @@ const redrawGraphics = (g: p5.Graphics, poly: PolygonRenderData[number], bboxLog
         // Skip completed arcs
         if (progress >= 1) continue
 
-        // Get color based on melodyRootBlend and progress through the arc
-        const rgb = pitchToColor2(arc.melodyRootBlend, progress)
+        // Get color based on melodyRootBlend and note's position in the melody
+        const rgb = pitchToColor2(arc.melodyRootBlend, arc.melodyProgBlend)
 
         // Calculate size based on velocity
         const velocityScale = 0.5 + (arc.velocity / 127) * 1.0

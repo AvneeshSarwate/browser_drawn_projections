@@ -399,3 +399,136 @@ blurY: number                         // vertical blur pixels
 4. Create `createNewChain()` function with shader pipeline
 5. Add branching in `syncChainsAndMeshes()` to select chain based on `fx.chain`
 6. Add any per-frame uniform updates in `renderPolygonFx()` with chain type check
+
+---
+
+## MelodyMap Color System
+
+The melodyMap system uses a two-parameter color scheme that creates visual continuity across melodies while differentiating between different root notes.
+
+### Color Parameters
+
+**`melodyRootBlend`** (0-1): Based on the first note's pitch class
+- D (pitch class 2) = 0
+- D# = 1/11
+- E = 2/11
+- ... continuing through the octave ...
+- C# (pitch class 1) = 1
+
+**`melodyProgBlend`** (0-1): Time-based position within the melody
+- First note = 0
+- Notes later in the melody approach 1
+- Normalized over `DEFAULT_MELODY_DURATION_MS` (3000ms)
+
+### Color Function (`mpeColor.ts`)
+
+```typescript
+function pitchToColor2(melodyRootBlend: number, melodyProgBlend: number): RGB {
+  const colorA = sampleGradient(gradient1, melodyProgBlend)
+  const colorB = sampleGradient(gradient3, melodyProgBlend)
+  return lerpRgb(colorA, colorB, melodyRootBlend)
+}
+```
+
+The function:
+1. Samples two gradient ramps at `melodyProgBlend` position
+2. Interpolates between them using `melodyRootBlend`
+
+This creates a 2D color space where:
+- Horizontal axis (melodyProgBlend): Colors evolve as melody progresses
+- Vertical axis (melodyRootBlend): Different root notes get different color trajectories
+
+### Data Flow
+
+```
+allocateMelodyToPolygon() [melodyMapUtils.ts]
+  │
+  └─ Initializes: melodyRootBlend: null, melodyStartTime: null
+       │
+       ▼
+launchArc() [melodyMapUtils.ts] - First note
+  │
+  ├─ melodyStartTime = performance.now()
+  ├─ melodyRootBlend = calculateMelodyRootBlend(pitch)
+  │     └─ Formula: ((pitchClass - 2 + 12) % 12) / 11
+  └─ melodyProgBlend = 0 (first note)
+       │
+       ▼
+launchArc() [melodyMapUtils.ts] - Subsequent notes
+  │
+  ├─ elapsedMs = currentTime - melodyStartTime
+  └─ melodyProgBlend = min(1, elapsedMs / 3000)
+       │
+       ▼
+ArcAnimation stored with both blend values
+       │
+       ▼
+updateMelodyMapRenderStates() [LivecodeHolder.vue]
+  │
+  └─ Converts to ArcRenderData (preserves blend values)
+       │
+       ▼
+redrawGraphics() [polygonFx.ts]
+  │
+  └─ pitchToColor2(arc.melodyRootBlend, arc.melodyProgBlend)
+       └─ Note color is FIXED at launch time
+          (does not change as note travels along arc)
+```
+
+### Key Behavior
+
+1. **Per-melody consistency**: All notes in a melody share the same `melodyRootBlend` (based on first note)
+2. **Temporal progression**: Notes launched later have higher `melodyProgBlend` values
+3. **Fixed note color**: Each note's color is calculated once at launch and remains constant throughout its arc animation
+4. **Root-based variation**: Melodies starting on different pitches get different color trajectories
+
+### Type Changes
+
+**ArcAnimation** (`melodyMapState.ts`):
+```typescript
+type ArcAnimation = {
+  // ... existing fields ...
+  melodyRootBlend: number   // Set from first note, shared by melody
+  melodyProgBlend: number   // Set at launch, unique per note
+}
+```
+
+**MelodyDrawInfo** (`melodyMapState.ts`):
+```typescript
+type MelodyDrawInfo = {
+  // ... existing fields ...
+  melodyRootBlend: number | null   // Calculated from first note
+  melodyStartTime: number | null   // Timestamp of first note
+}
+```
+
+**ArcRenderData** (`textRegionUtils.ts`):
+```typescript
+type ArcRenderData = {
+  // ... existing fields ...
+  melodyRootBlend: number
+  melodyProgBlend: number
+}
+```
+
+### Gradients (`mpeColor.ts`)
+
+The color system uses configurable gradient ramps:
+
+```typescript
+// gradient1: Green → Dark red → Purple
+const gradient1: GradientStop[] = [
+  { s: 0,   rgb: [0.74, 0.87, 0.37] },   // lime green
+  { s: 0.5, rgb: [0.55, 0.27, 0.27] },   // dark red
+  { s: 1,   rgb: [0.26, 0.18, 0.67] },   // purple
+]
+
+// gradient3: White → Magenta → Dark green
+const gradient3: GradientStop[] = [
+  { s: 0,   rgb: [0.96, 0.93, 0.93] },   // near white
+  { s: 0.5, rgb: [0.64, 0.19, 0.41] },   // magenta
+  { s: 1,   rgb: [0.06, 0.35, 0.08] },   // dark green
+]
+```
+
+To modify colors, edit these gradients. The `s` value is the position (0-1) along the gradient.
