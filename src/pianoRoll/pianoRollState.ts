@@ -102,6 +102,10 @@ export interface PianoRollState {
       noteId: string
       pointIndex: number
       beforeState: string
+      selectedIndices?: number[]
+      startPointer?: { x: number, y: number }
+      startPoints?: MpePitchPoint[]
+      handleRefs?: Map<number, Konva.Circle>
       fineMode?: boolean
       fineStart?: {
         pointer: { x: number, y: number }
@@ -163,6 +167,7 @@ export interface PianoRollState {
   // MPE pitch curve editing
   mpe: {
     enabled: boolean
+    selectedHandles: Set<number>
   }
 }
 
@@ -276,7 +281,8 @@ export const createPianoRollState = (): PianoRollState => {
     notifyExternalChange: undefined,
 
     mpe: {
-      enabled: false
+      enabled: false,
+      selectedHandles: new Set()
     }
   }
 }

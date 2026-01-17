@@ -234,6 +234,10 @@ watch(mpeMode, (enabled) => {
   state.mpe.enabled = enabled
   if (enabled) {
     state.selection.selectedIds.clear()
+    state.mpe.selectedHandles.clear()
+  }
+  if (!enabled) {
+    state.mpe.selectedHandles.clear()
   }
   state.needsRedraw = true
   props.syncState?.(state)
