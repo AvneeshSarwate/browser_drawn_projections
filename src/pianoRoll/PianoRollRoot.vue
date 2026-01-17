@@ -104,6 +104,7 @@ const state: PianoRollState = createPianoRollState()
 
 state.viewport = reactive(state.viewport) as PianoRollState['viewport']
 state.grid = reactive(state.grid) as PianoRollState['grid']
+state.mpe = reactive(state.mpe) as PianoRollState['mpe']
 
 // Refs
 const konvaContainer = ref<HTMLDivElement>()
@@ -115,6 +116,7 @@ const gridSubdivision = ref(state.grid.subdivision)
 const showMetadataEditor = ref(false)
 const selectedNoteId = ref<string | null>(null)
 const selectedNoteMetadata = ref<Record<string, any> | null>(null)
+const mpeMode = ref(false)
 
 // Computed properties
 const noteCount = ref(state.notes.size)
@@ -226,6 +228,16 @@ watch(gridSubdivision, (newValue) => {
   state.grid.subdivision = newValue
   state.needsRedraw = true
   props.syncState?.(state)
+})
+
+watch(mpeMode, (enabled) => {
+  state.mpe.enabled = enabled
+  if (enabled) {
+    state.selection.selectedIds.clear()
+  }
+  state.needsRedraw = true
+  props.syncState?.(state)
+  syncUiCounters()
 })
 
 type EmitStateOptions = {
@@ -478,6 +490,15 @@ defineExpose({
         </button>
         <span class="separator">|</span>
         <button
+          class="mpe-toggle"
+          :class="{ active: mpeMode }"
+          :disabled="!isInteractive"
+          @click="mpeMode = !mpeMode"
+        >
+          MPE
+        </button>
+        <span class="separator">|</span>
+        <button
           class="metadata-toggle"
           :class="{ active: showMetadataEditor }"
           @click="showMetadataEditor = !showMetadataEditor"
@@ -611,10 +632,22 @@ defineExpose({
   gap: 6px;
 }
 
+.mpe-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .metadata-toggle.active {
   background: #d6eaff;
   border-color: #6aa8ff;
   color: #0b5394;
+}
+
+.mpe-toggle.active {
+  background: #ffe7cc;
+  border-color: #ffb14a;
+  color: #8a4b00;
 }
 
 .info {

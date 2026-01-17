@@ -8,7 +8,17 @@ export type NoteData = {
   position: number  // in quarter notes
   duration: number  // in quarter notes
   velocity: number
+  mpePitch?: MpePitchData
   metadata?: any
+}
+
+export type MpePitchPoint = {
+  time: number
+  pitchOffset: number
+}
+
+export type MpePitchData = {
+  points: MpePitchPoint[]
 }
 
 // Input type for notes that may be missing id or velocity
@@ -18,6 +28,7 @@ export type NoteDataInput = {
   position: number
   duration: number
   velocity?: number
+  mpePitch?: MpePitchData
   metadata?: any
 }
 
@@ -85,6 +96,24 @@ export interface PianoRollState {
     hiddenNoteIds: Set<string>  // notes hidden due to drag/resize overlap
     truncatedNotes: Map<string, number>  // noteId -> truncated duration for display
     createEmptyOverlapAdjustments: () => { toDelete: Set<string>, toTruncate: Map<string, number> }
+
+    // MPE pitch point drag state
+    mpeDrag?: {
+      noteId: string
+      pointIndex: number
+      beforeState: string
+      fineMode?: boolean
+      fineStart?: {
+        pointer: { x: number, y: number }
+        handle: { x: number, y: number }
+      }
+      tooltip?: {
+        group: Konva.Group
+        background: Konva.Rect
+        text: Konva.Text
+        padding: number
+      }
+    }
   }
 
   // Undo/redo (simple snapshot-based)
@@ -130,6 +159,11 @@ export interface PianoRollState {
 
   // Optional callback to notify external listeners when state changes outside command stack
   notifyExternalChange?: (source?: ExternalChangeSource) => void
+
+  // MPE pitch curve editing
+  mpe: {
+    enabled: boolean
+  }
 }
 
 export type ExternalChangeSource =
@@ -239,6 +273,10 @@ export const createPianoRollState = (): PianoRollState => {
       element: undefined
     },
 
-    notifyExternalChange: undefined
+    notifyExternalChange: undefined,
+
+    mpe: {
+      enabled: false
+    }
   }
 }

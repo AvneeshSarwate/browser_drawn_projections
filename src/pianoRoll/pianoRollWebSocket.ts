@@ -13,6 +13,13 @@ export type UpdateSource = ExternalChangeSource
 
 // Schema for arbitrary metadata objects
 const MetadataSchema = z.record(z.string(), z.unknown()).optional()
+const MpePitchPointSchema = z.object({
+  time: z.number(),
+  pitchOffset: z.number()
+})
+const MpePitchSchema = z.object({
+  points: z.array(MpePitchPointSchema)
+}).optional()
 
 // Base note schema matching NoteDataInput (incoming notes may lack id/velocity)
 const NoteDataInputSchema = z.object({
@@ -21,6 +28,7 @@ const NoteDataInputSchema = z.object({
   position: z.number(),
   duration: z.number().positive(),
   velocity: z.number().int().min(0).max(127).optional(),
+  mpePitch: MpePitchSchema,
   metadata: MetadataSchema
 })
 
@@ -31,6 +39,7 @@ const NoteDataSchema = z.object({
   position: z.number(),
   duration: z.number().positive(),
   velocity: z.number().int().min(0).max(127),
+  mpePitch: MpePitchSchema,
   metadata: MetadataSchema
 })
 
