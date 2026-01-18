@@ -15,7 +15,9 @@ export type UpdateSource = ExternalChangeSource
 const MetadataSchema = z.record(z.string(), z.unknown()).optional()
 const MpePitchPointSchema = z.object({
   time: z.number(),
-  pitchOffset: z.number()
+  pitchOffset: z.number(),
+  metadata: MetadataSchema,
+  rooted: z.boolean().optional()
 })
 const MpePitchSchema = z.object({
   points: z.array(MpePitchPointSchema)

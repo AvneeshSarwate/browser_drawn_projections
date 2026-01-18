@@ -5,6 +5,13 @@ interface Props {
   metadata: Record<string, any> | null | undefined
   visible: boolean
   canEdit: boolean
+  helpText?: string
+  emptyText?: string
+  showRooted?: boolean
+  rootedValue?: boolean | null
+  canEditRooted?: boolean
+  rootedLabel?: string
+  rootedMixedText?: string
 }
 
 const props = defineProps<Props>()
@@ -12,6 +19,7 @@ const props = defineProps<Props>()
 const emit = defineEmits<{
   apply: [metadata: any]
   cancel: []
+  setRooted: [value: boolean]
 }>()
 
 const metadataText = ref('')
@@ -50,6 +58,15 @@ const cancelEdit = () => {
   metadataText.value = originalMetadataText.value
   emit('cancel')
 }
+
+const toggleRooted = () => {
+  if (!props.canEditRooted) return
+  if (props.rootedValue === null) {
+    emit('setRooted', true)
+    return
+  }
+  emit('setRooted', !props.rootedValue)
+}
 </script>
 
 <template>
@@ -61,8 +78,28 @@ const cancelEdit = () => {
       </div>
     </div>
 
+    <div v-if="showRooted" class="rooted-row" :class="{ disabled: !canEditRooted }">
+      <span class="rooted-label">{{ rootedLabel ?? 'Rooted' }}</span>
+      <button
+        type="button"
+        class="rooted-toggle"
+        :class="{ on: rootedValue === true, mixed: rootedValue === null, off: rootedValue === false }"
+        :disabled="!canEditRooted"
+        @click="toggleRooted"
+      >
+        <span class="rooted-icon"></span>
+      </button>
+      <span v-if="canEditRooted && rootedValue === null" class="rooted-mixed-text">
+        {{ rootedMixedText ?? 'multiple values' }}
+      </span>
+      <span v-else-if="canEditRooted && rootedValue !== null" class="rooted-state-text">
+        {{ rootedValue ? 'true' : 'false' }}
+      </span>
+      <span v-else class="rooted-empty-text">Select MPE points to edit rooted.</span>
+    </div>
+
     <div v-if="canEdit">
-      <p class="help">Edit the selected note metadata as JSON:</p>
+      <p class="help">{{ helpText ?? 'Edit the selected note metadata as JSON:' }}</p>
       <textarea
         v-model="metadataText"
         class="textarea"
@@ -79,7 +116,7 @@ const cancelEdit = () => {
     </div>
 
     <div v-else class="warning">
-      <p>Select exactly one note to edit its metadata.</p>
+      <p>{{ emptyText ?? 'Select exactly one note to edit its metadata.' }}</p>
     </div>
   </div>
 </template>
@@ -129,6 +166,91 @@ const cancelEdit = () => {
   margin: 0 0 4px 0;
   color: #666;
   font-size: 14px;
+}
+
+.rooted-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.rooted-row.disabled {
+  opacity: 0.6;
+}
+
+.rooted-label {
+  font-weight: 600;
+  color: #333;
+}
+
+.rooted-toggle {
+  width: 26px;
+  height: 18px;
+  border: 1px solid #bbb;
+  border-radius: 4px;
+  background: #f7f7f7;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  position: relative;
+}
+
+.rooted-toggle:disabled {
+  cursor: not-allowed;
+}
+
+.rooted-toggle.on {
+  background: #e6f3ff;
+  border-color: #6aa8ff;
+}
+
+.rooted-toggle.off {
+  background: #f7f7f7;
+}
+
+.rooted-icon {
+  width: 12px;
+  height: 12px;
+  border: 2px solid #555;
+  box-sizing: border-box;
+}
+
+.rooted-toggle.on .rooted-icon {
+  background: #6aa8ff;
+  border-color: #2f6fd8;
+}
+
+.rooted-toggle.mixed .rooted-icon {
+  position: relative;
+}
+
+.rooted-toggle.mixed .rooted-icon::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: -2px;
+  right: -2px;
+  height: 2px;
+  background: #555;
+  transform: rotate(-20deg);
+}
+
+.rooted-mixed-text {
+  color: #a05a00;
+  font-weight: 600;
+}
+
+.rooted-state-text {
+  color: #444;
+}
+
+.rooted-empty-text {
+  color: #888;
+  font-size: 13px;
 }
 
 .textarea {

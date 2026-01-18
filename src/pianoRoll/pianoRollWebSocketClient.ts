@@ -33,6 +33,8 @@ export interface NoteData {
     readonly points: ReadonlyArray<{
       readonly time: number
       readonly pitchOffset: number
+      readonly metadata?: Readonly<Record<string, unknown>>
+      readonly rooted?: boolean
     }>
   }
   readonly metadata?: Readonly<Record<string, unknown>>
@@ -48,6 +50,8 @@ export interface NoteDataInput {
     readonly points: ReadonlyArray<{
       readonly time: number
       readonly pitchOffset: number
+      readonly metadata?: Readonly<Record<string, unknown>>
+      readonly rooted?: boolean
     }>
   }
   readonly metadata?: Readonly<Record<string, unknown>>

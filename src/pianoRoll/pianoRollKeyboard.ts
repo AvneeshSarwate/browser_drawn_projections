@@ -8,6 +8,7 @@ export interface KeyboardControllerOptions {
   deleteSelected: () => void
   updateCommandStackButtons: () => void
   executeOverlapChanges: (state: PianoRollState, ids: Set<string>) => void
+  getContainer: () => HTMLElement | null
 }
 
 export interface KeyboardController {
@@ -23,9 +24,39 @@ export const createKeyboardController = ({
   redo,
   deleteSelected,
   updateCommandStackButtons,
-  executeOverlapChanges
+  executeOverlapChanges,
+  getContainer
 }: KeyboardControllerOptions): KeyboardController => {
   let attached = false
+
+  const deleteSelectedMpePoints = () => {
+    if (!state.mpe.enabled) return false
+    if (state.selection.selectedIds.size !== 1) return false
+    if (state.mpe.selectedHandles.size === 0) return false
+
+    const noteId = Array.from(state.selection.selectedIds)[0]
+    const indices = Array.from(state.mpe.selectedHandles).sort((a, b) => b - a)
+    const note = state.notes.get(noteId)
+    if (!note?.mpePitch) return false
+
+    state.command.stack?.executeCommand('Delete MPE Pitch Points', () => {
+      const target = state.notes.get(noteId)
+      if (!target?.mpePitch) return
+      const updatedPoints = [...target.mpePitch.points]
+      indices.forEach((idx) => {
+        if (idx >= 0 && idx < updatedPoints.length) {
+          updatedPoints.splice(idx, 1)
+        }
+      })
+      target.mpePitch = { points: updatedPoints }
+      state.mpe.selectedHandles = new Set()
+      state.needsRedraw = true
+      state.notifyExternalChange?.('selection')
+    })
+
+    updateCommandStackButtons()
+    return true
+  }
 
   const handleKeyDown = (e: KeyboardEvent) => {
     if (!isInteractive()) return
@@ -44,6 +75,10 @@ export const createKeyboardController = ({
 
     if (e.key === 'Backspace' || e.key === 'Delete') {
       e.preventDefault()
+      if (state.mpe.enabled) {
+        deleteSelectedMpePoints()
+        return
+      }
       deleteSelected()
       return
     }
@@ -131,13 +166,20 @@ export const createKeyboardController = ({
 
   const attach = () => {
     if (attached) return
-    window.addEventListener('keydown', handleKeyDown)
+    const container = getContainer()
+    if (!container) return
+
+    container.setAttribute('tabindex', '0')
+    container.addEventListener('keydown', handleKeyDown)
     attached = true
   }
 
   const detach = () => {
     if (!attached) return
-    window.removeEventListener('keydown', handleKeyDown)
+    const container = getContainer()
+    if (container) {
+      container.removeEventListener('keydown', handleKeyDown)
+    }
     attached = false
   }
 

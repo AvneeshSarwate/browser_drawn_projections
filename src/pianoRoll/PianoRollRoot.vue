@@ -114,8 +114,13 @@ const canUndo = ref(false)
 const canRedo = ref(false)
 const gridSubdivision = ref(state.grid.subdivision)
 const showMetadataEditor = ref(false)
+const showMpePointMetadataEditor = ref(false)
 const selectedNoteId = ref<string | null>(null)
 const selectedNoteMetadata = ref<Record<string, any> | null>(null)
+const selectedMpePointIndex = ref<number | null>(null)
+const selectedMpePointIndices = ref<number[]>([])
+const selectedMpePointMetadata = ref<Record<string, any> | null>(null)
+const selectedMpePointRooted = ref<boolean | null>(null)
 const mpeMode = ref(false)
 
 // Computed properties
@@ -125,6 +130,9 @@ const isInteractive = computed(() => effectiveInteractive.value)
 const isControlPanelVisible = computed(() => effectiveShowControlPanel.value)
 const canEditMetadata = computed(() => selectedNoteId.value !== null && isInteractive.value)
 const metadataEditorVisible = computed(() => isControlPanelVisible.value && showMetadataEditor.value)
+const canEditMpePointMetadata = computed(() => selectedMpePointIndex.value !== null && isInteractive.value && state.mpe.enabled)
+const canEditMpePointRooted = computed(() => selectedMpePointIndices.value.length > 0 && isInteractive.value && state.mpe.enabled)
+const mpePointEditorVisible = computed(() => isControlPanelVisible.value && showMpePointMetadataEditor.value)
 
 const normalizeMetadata = (metadata: any) => {
   if (metadata === null || metadata === undefined) {
@@ -149,10 +157,53 @@ const syncUiCounters = () => {
     selectedNoteId.value = null
     selectedNoteMetadata.value = null
   }
+
+  if (state.mpe.enabled && state.selection.selectedIds.size === 1 && state.mpe.selectedHandles.size > 0) {
+    const [id] = Array.from(state.selection.selectedIds)
+    const note = state.notes.get(id)
+    const handleIndices = Array.from(state.mpe.selectedHandles).sort((a, b) => a - b)
+    selectedMpePointIndices.value = handleIndices
+
+    if (handleIndices.length === 1) {
+      const handleIndex = handleIndices[0]
+      const point = note?.mpePitch?.points?.[handleIndex ?? -1]
+      if (point) {
+        selectedMpePointIndex.value = handleIndex ?? null
+        selectedMpePointMetadata.value = normalizeMetadata(point.metadata)
+      } else {
+        selectedMpePointIndex.value = null
+        selectedMpePointMetadata.value = null
+      }
+    } else {
+      selectedMpePointIndex.value = null
+      selectedMpePointMetadata.value = null
+    }
+
+    if (note?.mpePitch?.points) {
+      const rootedValues = handleIndices.map(idx => !!note.mpePitch!.points[idx]?.rooted)
+      if (rootedValues.length > 0) {
+        const allSame = rootedValues.every(val => val === rootedValues[0])
+        selectedMpePointRooted.value = allSame ? rootedValues[0] : null
+      } else {
+        selectedMpePointRooted.value = null
+      }
+    } else {
+      selectedMpePointRooted.value = null
+    }
+  } else {
+    selectedMpePointIndex.value = null
+    selectedMpePointIndices.value = []
+    selectedMpePointMetadata.value = null
+    selectedMpePointRooted.value = null
+  }
 }
 
 const notifyViewportChange = () => {
   props.syncState?.(state)
+}
+
+const focusPianoRoll = () => {
+  konvaContainer.value?.focus()
 }
 
 const fitZoomToNotes = () => {
@@ -234,10 +285,11 @@ watch(mpeMode, (enabled) => {
   state.mpe.enabled = enabled
   if (enabled) {
     state.selection.selectedIds.clear()
-    state.mpe.selectedHandles.clear()
+    state.mpe.selectedHandles = new Set()
   }
   if (!enabled) {
-    state.mpe.selectedHandles.clear()
+    state.mpe.selectedHandles = new Set()
+    showMpePointMetadataEditor.value = false
   }
   state.needsRedraw = true
   props.syncState?.(state)
@@ -268,6 +320,7 @@ const emitStateUpdate = (options: EmitStateOptions = {}) => {
 watch(isControlPanelVisible, (visible) => {
   if (!visible) {
     showMetadataEditor.value = false
+    showMpePointMetadataEditor.value = false
   }
 })
 
@@ -309,6 +362,74 @@ const handleApplyNoteMetadata = (metadata: any) => {
   })
 }
 
+const handleApplyMpePointMetadata = (metadata: any) => {
+  if (!selectedNoteId.value || selectedMpePointIndex.value === null) {
+    return
+  }
+
+  const noteId = selectedNoteId.value
+  const pointIndex = selectedMpePointIndex.value
+  const note = state.notes.get(noteId)
+  const point = note?.mpePitch?.points?.[pointIndex]
+  if (!note || !point) {
+    return
+  }
+
+  const normalizedIncoming = metadata ?? {}
+  const normalizedExisting = point.metadata ?? {}
+
+  if (JSON.stringify(normalizedExisting) === JSON.stringify(normalizedIncoming)) {
+    return
+  }
+
+  state.command.stack?.executeCommand('Edit MPE Point Metadata', () => {
+    const target = state.notes.get(noteId)
+    if (!target?.mpePitch) {
+      return
+    }
+    const nextMetadata = normalizedIncoming && Object.keys(normalizedIncoming).length === 0
+      ? undefined
+      : normalizedIncoming
+    const updatedPoints = target.mpePitch.points.map((entry, idx) => {
+      if (idx !== pointIndex) return entry
+      const updated: Record<string, any> = { ...entry }
+      if (nextMetadata) {
+        updated.metadata = nextMetadata
+      } else {
+        delete updated.metadata
+      }
+      return updated as typeof entry
+    })
+    target.mpePitch = { points: updatedPoints }
+    state.needsRedraw = true
+  })
+}
+
+const handleSetMpePointRooted = (value: boolean) => {
+  if (!selectedNoteId.value || selectedMpePointIndices.value.length === 0) {
+    return
+  }
+
+  const noteId = selectedNoteId.value
+  const indices = selectedMpePointIndices.value
+
+  state.command.stack?.executeCommand('Set MPE Point Rooted', () => {
+    const target = state.notes.get(noteId)
+    if (!target?.mpePitch) {
+      return
+    }
+    const updatedPoints = target.mpePitch.points.map((entry, idx) => {
+      if (!indices.includes(idx)) return entry
+      return {
+        ...entry,
+        rooted: value
+      }
+    })
+    target.mpePitch = { points: updatedPoints }
+    state.needsRedraw = true
+  })
+}
+
 state.notifyExternalChange = (source) => {
   emitStateUpdate({ source: source ?? 'other' })
 }
@@ -333,7 +454,8 @@ const keyboardController = createKeyboardController({
   redo,
   deleteSelected,
   updateCommandStackButtons,
-  executeOverlapChanges
+  executeOverlapChanges,
+  getContainer: () => konvaContainer.value ?? null
 })
 
 const stageManager = new StageManager({
@@ -509,16 +631,27 @@ defineExpose({
         >
           📝 Metadata
         </button>
+        <span v-if="mpeMode" class="separator">|</span>
+        <button
+          v-if="mpeMode"
+          class="mpe-point-toggle"
+          :class="{ active: showMpePointMetadataEditor }"
+          @click="showMpePointMetadataEditor = !showMpePointMetadataEditor"
+        >
+          🎯 Point Metadata
+        </button>
         <span class="separator">|</span>
         <span class="info">{{ noteCount }} notes, {{ selectionCount }} selected</span>
       </div>
       <div class="piano-roll-layout">
         <div class="stage-wrapper">
-          <div
-            ref="konvaContainer"
-            :class="['piano-roll-container', { 'is-disabled': !isInteractive }]"
-            :style="{ width: scaledWidth + 'px', height: scaledHeight + 'px' }"
-          ></div>
+        <div
+          ref="konvaContainer"
+          :class="['piano-roll-container', { 'is-disabled': !isInteractive }]"
+          :style="{ width: scaledWidth + 'px', height: scaledHeight + 'px' }"
+          tabindex="0"
+          @pointerdown="focusPianoRoll"
+        ></div>
           <div
             ref="horizontalTrack"
             class="scrollbar horizontal"
@@ -568,6 +701,18 @@ defineExpose({
           :metadata="selectedNoteMetadata ?? undefined"
           :can-edit="canEditMetadata"
           @apply="handleApplyNoteMetadata"
+        />
+        <NoteMetadataEditor
+          :visible="mpePointEditorVisible"
+          :metadata="selectedMpePointMetadata ?? undefined"
+          :can-edit="canEditMpePointMetadata"
+          :show-rooted="true"
+          :rooted-value="selectedMpePointRooted"
+          :can-edit-rooted="canEditMpePointRooted"
+          help-text="Edit the selected MPE point metadata as JSON:"
+          empty-text="Select exactly one MPE point to edit its metadata."
+          @apply="handleApplyMpePointMetadata"
+          @set-rooted="handleSetMpePointRooted"
         />
       </div>
     </div>
@@ -636,6 +781,12 @@ defineExpose({
   gap: 6px;
 }
 
+.mpe-point-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .mpe-toggle {
   display: flex;
   align-items: center;
@@ -646,6 +797,12 @@ defineExpose({
   background: #d6eaff;
   border-color: #6aa8ff;
   color: #0b5394;
+}
+
+.mpe-point-toggle.active {
+  background: #f3e7ff;
+  border-color: #b78cff;
+  color: #4b2a7a;
 }
 
 .mpe-toggle.active {
@@ -788,6 +945,8 @@ select {
 .metadata-editor-wrapper {
   width: 100%;
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
 }
 </style>

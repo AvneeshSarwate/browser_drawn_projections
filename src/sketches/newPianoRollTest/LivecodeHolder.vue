@@ -7,10 +7,19 @@ import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, tar
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
 import PianoRollRoot from '@/pianoRoll/PianoRollRoot.vue';
+import type { NoteData } from '@/pianoRoll/pianoRollState';
 
 const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
 let timeLoops: CancelablePromisePoxy<any>[] = []
+
+const initialNotes: Array<[string, NoteData]> = [
+  ['note-1', { id: 'note-1', pitch: 60, position: 0, duration: 1, velocity: 100 }],
+  ['note-2', { id: 'note-2', pitch: 64, position: 0, duration: 1, velocity: 100 }],
+  ['note-3', { id: 'note-3', pitch: 67, position: 0, duration: 1, velocity: 100 }],
+  ['note-4', { id: 'note-4', pitch: 72, position: 2, duration: 1.5, velocity: 96 }],
+  ['note-5', { id: 'note-5', pitch: 69, position: 3.5, duration: 0.5, velocity: 92 }]
+]
 
 const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromisePoxy<any> => {
   const loop = launch(block)
@@ -72,7 +81,7 @@ onUnmounted(() => {
 
 <template>
   <div>
-    <PianoRollRoot />
+    <PianoRollRoot :initial-notes="initialNotes" />
   </div>
 </template>
 

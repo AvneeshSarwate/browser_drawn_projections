@@ -14,7 +14,9 @@ export type NoteData = {
 
 export type MpePitchPoint = {
   time: number
-  pitchOffset: number
+  pitchOffset: number //in semitons.cents
+  metadata?: any
+  rooted?: boolean
 }
 
 export type MpePitchData = {

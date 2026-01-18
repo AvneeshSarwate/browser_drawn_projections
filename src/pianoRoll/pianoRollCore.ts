@@ -21,6 +21,10 @@ import { CommandStack } from './commandStack'
 const MPE_PITCH_OFFSET_RANGE = 24
 const MPE_FINE_DRAG_FACTOR = 0.2
 const MPE_TOOLTIP_OFFSET = { x: 12, y: -14 }
+const MPE_HANDLE_RADIUS = 4
+const MPE_HANDLE_FILL_DEFAULT = '#000000'
+const MPE_HANDLE_FILL_ROOTED = '#39d353'
+const MPE_HANDLE_FILL_SELECTED = '#ff8c00'
 
 // ================= State Serialization =================
 
@@ -377,7 +381,7 @@ function renderMpePitchCurve({
 
   const line = new Konva.Line({
     points: linePoints.flatMap(point => [point.x, point.y]),
-    stroke: isEditable ? '#185adb' : '#222',
+    stroke: '#000000',
     strokeWidth: 2,
     hitStrokeWidth: 12,
     lineCap: 'round',
@@ -413,7 +417,12 @@ function renderMpePitchCurve({
         const nextPoint: MpePitchPoint = { time, pitchOffset }
         const existing = target.mpePitch?.points ?? []
         const updatedPoints = [...existing, nextPoint]
-        target.mpePitch = { points: sortMpePoints(updatedPoints) }
+        const sortedPoints = sortMpePoints(updatedPoints)
+        target.mpePitch = { points: sortedPoints }
+        const newIndex = sortedPoints.findIndex(point => point === nextPoint)
+        if (newIndex >= 0) {
+          setMpeSelectedHandles(state, [newIndex])
+        }
         state.needsRedraw = true
       })
     })
@@ -437,14 +446,14 @@ function renderMpePitchCurve({
       width,
       noteHeight
     })
-    const isHandleSelected = state.mpe.selectedHandles.has(index)
+    const isHandleSelected = isSelected && state.mpe.selectedHandles.has(index)
+    const handleStyle = getMpeHandleStyle(point, isHandleSelected)
     const handle = new Konva.Circle({
       x: handlePosition.x,
       y: handlePosition.y,
-      radius: 5,
-      fill: isHandleSelected ? '#ffe7cc' : '#ffffff',
-      stroke: isHandleSelected ? '#ff8c00' : '#185adb',
-      strokeWidth: 2,
+      radius: MPE_HANDLE_RADIUS,
+      fill: handleStyle.fill,
+      strokeEnabled: false,
       draggable: true,
       name: 'mpe-handle'
     })
@@ -460,16 +469,14 @@ function renderMpePitchCurve({
 
     handle.on('mousedown touchstart', () => {
       if (!state.mpe.selectedHandles.has(index)) {
-        state.mpe.selectedHandles.clear()
-        state.mpe.selectedHandles.add(index)
+        setMpeSelectedHandles(state, [index])
         updateMpeHandleSelectionVisual(state)
       }
     })
 
     handle.on('dragstart', () => {
       if (!state.mpe.selectedHandles.has(index)) {
-        state.mpe.selectedHandles.clear()
-        state.mpe.selectedHandles.add(index)
+        setMpeSelectedHandles(state, [index])
         updateMpeHandleSelectionVisual(state)
       }
       const tooltip = createMpeDragTooltip(state)
@@ -501,6 +508,19 @@ function renderMpePitchCurve({
       if (tooltip) {
         updateMpeDragTooltip(tooltip, handle.x(), handle.y(), point.pitchOffset)
       }
+    })
+
+    handle.on('dblclick dbltap', () => {
+      state.command.stack?.executeCommand('Delete MPE Pitch Point', () => {
+        const target = state.notes.get(noteId)
+        if (!target?.mpePitch) return
+        const updatedPoints = [...target.mpePitch.points]
+        if (index < 0 || index >= updatedPoints.length) return
+        updatedPoints.splice(index, 1)
+        target.mpePitch = { points: updatedPoints }
+        clearMpeSelectedHandles(state)
+        state.needsRedraw = true
+      })
     })
 
     handle.on('dragmove', (event) => {
@@ -575,6 +595,7 @@ function renderMpePitchCurve({
         const startPoint = startPoints[idx]
         if (!startPoint) return
         updatedPoints[idx] = {
+          ...startPoint,
           time: startPoint.time + deltaTime,
           pitchOffset: startPoint.pitchOffset + deltaPitch
         }
@@ -636,7 +657,12 @@ function renderMpePitchCurve({
       const nextPoint: MpePitchPoint = { time, pitchOffset }
       const existing = target.mpePitch?.points ?? []
       const updatedPoints = [...existing, nextPoint]
-      target.mpePitch = { points: sortMpePoints(updatedPoints) }
+      const sortedPoints = sortMpePoints(updatedPoints)
+      target.mpePitch = { points: sortedPoints }
+      const newIndex = sortedPoints.findIndex(point => point === nextPoint)
+      if (newIndex >= 0) {
+        setMpeSelectedHandles(state, [newIndex])
+      }
       state.needsRedraw = true
     })
   })
@@ -711,11 +737,42 @@ function updateMpeHandleSelectionVisual(state: PianoRollState) {
     const nodeNoteId = handleNode.getAttr('mpeHandleNoteId')
     if (!Number.isFinite(nodeIndex)) return
     const isSelected = nodeNoteId === selectedNoteId && state.mpe.selectedHandles.has(nodeIndex)
-    handleNode.fill(isSelected ? '#ffe7cc' : '#ffffff')
-    handleNode.stroke(isSelected ? '#ff8c00' : '#185adb')
+    const note = nodeNoteId ? state.notes.get(nodeNoteId) : undefined
+    const point = note?.mpePitch?.points?.[nodeIndex]
+    const handleStyle = getMpeHandleStyle(point, isSelected)
+    handleNode.fill(handleStyle.fill)
   })
 
   notesLayer.batchDraw()
+}
+
+function getMpeHandleStyle(point: MpePitchPoint | undefined, isSelected: boolean) {
+  const isRooted = !!point?.rooted
+  return {
+    fill: isSelected ? MPE_HANDLE_FILL_SELECTED : (isRooted ? MPE_HANDLE_FILL_ROOTED : MPE_HANDLE_FILL_DEFAULT)
+  }
+}
+
+function setMpeSelectedHandles(state: PianoRollState, indices: number[]) {
+  const next = new Set(indices)
+  const prev = state.mpe.selectedHandles
+  let changed = prev.size !== next.size
+  if (!changed) {
+    for (const idx of next) {
+      if (!prev.has(idx)) {
+        changed = true
+        break
+      }
+    }
+  }
+  if (!changed) return false
+  state.mpe.selectedHandles = next
+  state.notifyExternalChange?.('selection')
+  return true
+}
+
+function clearMpeSelectedHandles(state: PianoRollState) {
+  return setMpeSelectedHandles(state, [])
 }
 
 function getMpeHandlesInRect(state: PianoRollState, noteId: string, rect: { x: number; y: number; width: number; height: number }) {
@@ -1010,7 +1067,7 @@ export function setupEventHandlers(state: PianoRollState, stage: Konva.Stage) {
       })
 
       if (state.mpe.enabled) {
-        state.mpe.selectedHandles.clear()
+        clearMpeSelectedHandles(state)
         updateMpeHandleSelectionVisual(state)
         state.needsRedraw = true
         return
@@ -1033,7 +1090,7 @@ export function setupEventHandlers(state: PianoRollState, stage: Konva.Stage) {
       state.interaction.marqueeIsShift = false
 
       if (state.mpe.enabled) {
-        state.mpe.selectedHandles.clear()
+        clearMpeSelectedHandles(state)
         updateMpeHandleSelectionVisual(state)
       } else {
         mutateSelection(state, () => {
@@ -1080,7 +1137,7 @@ export function setupEventHandlers(state: PianoRollState, stage: Konva.Stage) {
         const selectedNoteId = getSingleSelectedNoteId(state)
         if (selectedNoteId) {
           const handleIndices = getMpeHandlesInRect(state, selectedNoteId, rect)
-          state.mpe.selectedHandles = new Set(handleIndices)
+          setMpeSelectedHandles(state, handleIndices)
           updateMpeHandleSelectionVisual(state)
         }
       } else {
