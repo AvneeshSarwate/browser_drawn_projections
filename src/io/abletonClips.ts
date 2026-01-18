@@ -2,6 +2,47 @@ import type { Scale } from "@/music/scale";
 
 const ws = new WebSocket('ws://localhost:8080');
 
+export type CurveValue = {
+  timeOffset: number;
+  value: number;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+};
+
+export function createCurveValue(
+  timeOffset: number,
+  value: number,
+  x1 = 0.5,
+  y1 = 0.5,
+  x2 = 0.5,
+  y2 = 0.5
+): CurveValue {
+  return { timeOffset, value, x1, y1, x2, y2 };
+}
+
+export function cloneCurveValue(cv: CurveValue): CurveValue {
+  return { ...cv };
+}
+
+export type PianoRollMpePoint = {
+  time: number;
+  pitchOffset: number;
+  metadata?: any;
+  rooted?: boolean;
+};
+
+export type PianoRollNoteLike = {
+  id?: string;
+  pitch: number;
+  position: number;
+  duration: number;
+  velocity: number;
+  mpePitch?: { points: PianoRollMpePoint[] };
+  metadata?: any;
+};
+
 //todo api - consolidate AbletonNote/Clip type def with the one in alsParsing.ts
 export type AbletonNote<T = any> = { 
   pitch: number,
@@ -11,7 +52,12 @@ export type AbletonNote<T = any> = {
   probability: number,
   position: number,
   isEnabled: boolean,
-  metadata?: T
+  metadata?: T,
+  noteId?: string,
+  velocityDeviation?: number,
+  pitchCurve?: CurveValue[],
+  pressureCurve?: CurveValue[],
+  timbreCurve?: CurveValue[]
 }
 // export type AbletonClip = { name: string, duration: number, notes: AbletonNote[] }
 export const quickNote = <T = any>(pitch: number, duration: number, velocity: number, position: number, metadata?: T): AbletonNote<T> => {
@@ -29,6 +75,12 @@ export type AbletonClipRawData = {
     probability: number;
     position: number;
     isEnabled: boolean;
+    noteId?: string;
+    velocityDeviation?: number;
+    pitchCurve?: CurveValue[];
+    pressureCurve?: CurveValue[];
+    timbreCurve?: CurveValue[];
+    metadata?: any;
   }[];
 };
 
@@ -48,6 +100,208 @@ function positionsToDeltas(positions: number[], totalTime?: number) {
 }
 
 type NoteWithDelta = { note: AbletonNote, preDelta: number, postDelta?: number }
+
+function scaleCurveOffsets(note: AbletonNote, factor: number) {
+  if (note.pitchCurve) note.pitchCurve.forEach((cv) => cv.timeOffset *= factor);
+  if (note.pressureCurve) note.pressureCurve.forEach((cv) => cv.timeOffset *= factor);
+  if (note.timbreCurve) note.timbreCurve.forEach((cv) => cv.timeOffset *= factor);
+}
+
+type MpeCurveValue = CurveValue & { rooted?: boolean; metadata?: any };
+
+type NormalizedPitchPoint = {
+  time: number;
+  pitchOffset: number;
+  rooted?: boolean;
+};
+
+type RootedPitchSegment = {
+  startTime: number;
+  endTime: number;
+  roundedPitch: number;
+  shiftAbs: number;
+};
+
+function toNormalizedPitchPoints(
+  pitchCurve: MpeCurveValue[],
+  duration: number,
+): NormalizedPitchPoint[] {
+  const denom = duration > 0 ? duration : 1;
+  return pitchCurve.map((point) => ({
+    time: point.timeOffset / denom,
+    pitchOffset: point.value,
+    rooted: point.rooted,
+  }));
+}
+
+function buildRootedPitchSegments(
+  points: NormalizedPitchPoint[],
+  basePitch: number,
+  baseIndex: number,
+  newBaseIndex: number,
+  scale: Scale,
+): RootedPitchSegment[] {
+  const segments: RootedPitchSegment[] = [];
+  let current: Omit<RootedPitchSegment, "shiftAbs"> | null = null;
+
+  const finalize = () => {
+    if (!current) return;
+    const rawIndex = scale.getIndFromPitch(current.roundedPitch);
+    const segmentIndex = Number.isInteger(rawIndex) ? rawIndex : Math.round(rawIndex);
+    const deltaIndex = segmentIndex - baseIndex;
+    const newSegmentPitch = scale.getByIndex(newBaseIndex + deltaIndex);
+    if (Number.isFinite(newSegmentPitch)) {
+      segments.push({
+        ...current,
+        shiftAbs: newSegmentPitch - current.roundedPitch,
+      });
+    }
+    current = null;
+  };
+
+  for (let i = 0; i < points.length; i++) {
+    const point = points[i];
+    if (!point.rooted) {
+      finalize();
+      continue;
+    }
+    const roundedPitch = Math.round(basePitch + point.pitchOffset);
+    if (!current || roundedPitch !== current.roundedPitch) {
+      finalize();
+      current = {
+        startTime: point.time,
+        endTime: point.time,
+        roundedPitch,
+      };
+    } else {
+      current.endTime = point.time;
+    }
+  }
+  finalize();
+
+  return segments;
+}
+
+function shiftForTime(time: number, segments: RootedPitchSegment[]): number {
+  if (segments.length === 0) return 0;
+  const first = segments[0];
+  if (time <= first.startTime) return first.shiftAbs;
+  const last = segments[segments.length - 1];
+  if (time >= last.endTime) return last.shiftAbs;
+
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i];
+    if (time >= seg.startTime && time <= seg.endTime) {
+      return seg.shiftAbs;
+    }
+    const next = segments[i + 1];
+    if (next && time > seg.endTime && time < next.startTime) {
+      const span = next.startTime - seg.endTime;
+      if (span <= 0) return next.shiftAbs;
+      const lerp = (time - seg.endTime) / span;
+      return seg.shiftAbs + lerp * (next.shiftAbs - seg.shiftAbs);
+    }
+  }
+
+  return last.shiftAbs;
+}
+
+export function pianoRollNoteToAbletonNote(note: PianoRollNoteLike): AbletonNote {
+  const curvePoints = note.mpePitch?.points ?? [];
+  const pitchCurve = curvePoints.length
+    ? curvePoints.map((point) => ({
+        timeOffset: (note.duration ?? 0) * point.time,
+        value: point.pitchOffset,
+        x1: 0.5,
+        y1: 0.5,
+        x2: 0.5,
+        y2: 0.5,
+        rooted: point.rooted,
+        metadata: point.metadata,
+      }))
+    : undefined;
+
+  return {
+    pitch: note.pitch,
+    duration: note.duration,
+    velocity: note.velocity,
+    offVelocity: note.velocity,
+    probability: 1,
+    position: note.position,
+    isEnabled: true,
+    metadata: note.metadata,
+    pitchCurve,
+  };
+}
+
+export function abletonNoteToPianoRollNote(note: AbletonNote, id?: string): PianoRollNoteLike {
+  const duration = note.duration ?? 0;
+  const pitchCurve = note.pitchCurve as MpeCurveValue[] | undefined;
+  const points = pitchCurve?.length
+    ? pitchCurve.map((point) => ({
+        time: duration > 0 ? point.timeOffset / duration : 0,
+        pitchOffset: point.value,
+        rooted: point.rooted,
+        metadata: point.metadata,
+      }))
+    : undefined;
+
+  return {
+    id: id ?? note.noteId,
+    pitch: note.pitch,
+    position: note.position,
+    duration: note.duration,
+    velocity: note.velocity,
+    mpePitch: points ? { points } : undefined,
+    metadata: note.metadata,
+  };
+}
+
+export function scaleTransposeMPE(note: AbletonNote, transpose: number, scale: Scale): AbletonNote {
+  const clone: AbletonNote = {
+    ...note,
+    pitchCurve: note.pitchCurve ? note.pitchCurve.map(cloneCurveValue) : undefined,
+    pressureCurve: note.pressureCurve ? note.pressureCurve.map(cloneCurveValue) : undefined,
+    timbreCurve: note.timbreCurve ? note.timbreCurve.map(cloneCurveValue) : undefined,
+  };
+
+  const basePitch = note.pitch;
+  const baseIndex = scale.getIndFromPitch(basePitch);
+  const newBaseIndex = baseIndex + transpose;
+  const newBasePitch = scale.getByIndex(newBaseIndex);
+  clone.pitch = newBasePitch;
+
+  const pitchCurve = clone.pitchCurve as MpeCurveValue[] | undefined;
+  if (!pitchCurve || pitchCurve.length === 0) return clone;
+
+  const normalizedPoints = toNormalizedPitchPoints(pitchCurve, clone.duration);
+  let segments = buildRootedPitchSegments(normalizedPoints, basePitch, baseIndex, newBaseIndex, scale);
+  if (segments.length === 0) {
+    return clone;
+  }
+
+  const baseShift = newBasePitch - basePitch;
+  if (segments[0].startTime > 0) {
+    segments = [
+      {
+        startTime: 0,
+        endTime: 0,
+        roundedPitch: Math.round(basePitch),
+        shiftAbs: baseShift,
+      },
+      ...segments,
+    ];
+  }
+
+  const baseDelta = basePitch - newBasePitch;
+  pitchCurve.forEach((point, idx) => {
+    const time = normalizedPoints[idx]?.time ?? 0;
+    const shiftAbs = shiftForTime(time, segments);
+    point.value = point.value + baseDelta + shiftAbs;
+  });
+
+  return clone;
+}
 
 export class AbletonClip {
   name: string;
@@ -79,7 +333,12 @@ export class AbletonClip {
   }
 
   clone(): AbletonClip {
-    const noteClone = this.notes.map(note => ({ ...note }));
+    const noteClone = this.notes.map(note => ({
+      ...note,
+      pitchCurve: note.pitchCurve ? note.pitchCurve.map(cloneCurveValue) : undefined,
+      pressureCurve: note.pressureCurve ? note.pressureCurve.map(cloneCurveValue) : undefined,
+      timbreCurve: note.timbreCurve ? note.timbreCurve.map(cloneCurveValue) : undefined,
+    }));
     return new AbletonClip(this.name, this.duration, noteClone);
   }
 
@@ -89,6 +348,7 @@ export class AbletonClip {
     clone.notes.forEach(note => {
       note.position *= factor;
       note.duration *= factor;
+      scaleCurveOffsets(note, factor);
     });
     clone.duration *= factor;
     return clone;
@@ -123,6 +383,9 @@ export class AbletonClip {
 
   timeSlice(start: number, end: number): AbletonClip {
     const clone = this.clone();
+    const originalDurations = new Map<AbletonNote, number>();
+    clone.notes.forEach((note) => originalDurations.set(note, note.duration));
+
     clone.notes = clone.notes.filter(note => note.position + note.duration >= start && note.position <= end)
     clone.notes.filter(note => note.position + note.duration > end).forEach(note => note.duration = end - note.position)
 
@@ -133,6 +396,14 @@ export class AbletonClip {
 
     //filter out notes with duration <= 0
     clone.notes = clone.notes.filter(note => note.duration > 0)
+
+    clone.notes.forEach((note) => {
+      const original = originalDurations.get(note) ?? note.duration;
+      if (original > 0 && note.duration !== original) {
+        const factor = note.duration / original;
+        scaleCurveOffsets(note, factor);
+      }
+    });
 
     clone.duration = end - start
     return clone
