@@ -1,18 +1,19 @@
 <!-- eslint-disable @typescript-eslint/no-unused-vars -->
 <script setup lang="ts">
 import { type TemplateAppState, appStateName } from './appState';
-import { inject, onMounted, onUnmounted } from 'vue';
+import { inject, onMounted, onUnmounted, ref } from 'vue';
 import { CanvasPaint, Passthru, type ShaderEffect } from '@/rendering/shaderFX';
 import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse';
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
 import PianoRollRoot from '@/pianoRoll/PianoRollRoot.vue';
-import type { NoteData } from '@/pianoRoll/pianoRollState';
+import type { NoteData, NoteDataInput } from '@/pianoRoll/pianoRollState';
+import { Scale } from '@/music/scale';
+import { abletonNoteToPianoRollNote, pianoRollNoteToAbletonNote, scaleTransposeMPE } from '@/io/abletonClips';
 
 const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
 let timeLoops: CancelablePromisePoxy<any>[] = []
-
 const initialNotes: Array<[string, NoteData]> = [
   ['note-1', { id: 'note-1', pitch: 60, position: 0, duration: 1, velocity: 100 }],
   ['note-2', { id: 'note-2', pitch: 64, position: 0, duration: 1, velocity: 100 }],
@@ -20,6 +21,12 @@ const initialNotes: Array<[string, NoteData]> = [
   ['note-4', { id: 'note-4', pitch: 72, position: 2, duration: 1.5, velocity: 96 }],
   ['note-5', { id: 'note-5', pitch: 69, position: 3.5, duration: 0.5, velocity: 92 }]
 ]
+type PianoRollRootInstance = InstanceType<typeof PianoRollRoot> & {
+  setNotes(notes: NoteDataInput[]): void
+}
+
+const pianoRollRef = ref<PianoRollRootInstance | null>(null)
+const latestNotes = ref<Array<[string, NoteData]>>(initialNotes)
 
 const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromisePoxy<any> => {
   const loop = launch(block)
@@ -30,6 +37,25 @@ const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromis
 const clearDrawFuncs = () => {
   appState.drawFunctions = []
   appState.drawFuncMap = new Map()
+}
+
+const handleNotesUpdate = (notes: Array<[string, NoteData]>) => {
+  latestNotes.value = notes
+}
+
+const transposeDownScale = () => {
+  const scale = new Scale()
+  const updatedNotes = latestNotes.value.map(([id, note]) => {
+    const abletonNote = pianoRollNoteToAbletonNote(note)
+    const transposed = scaleTransposeMPE(abletonNote, -1, scale)
+    const pianoRollNote = abletonNoteToPianoRollNote(transposed, id)
+    return {
+      ...pianoRollNote,
+      id
+    }
+  })
+
+  pianoRollRef.value?.setNotes(updatedNotes)
 }
 
 onMounted(() => {
@@ -81,7 +107,8 @@ onUnmounted(() => {
 
 <template>
   <div>
-    <PianoRollRoot :initial-notes="initialNotes" />
+    <button @click="transposeDownScale">Transpose down 1 scale degree</button>
+    <PianoRollRoot ref="pianoRollRef" :initial-notes="initialNotes" @notes-update="handleNotesUpdate" />
   </div>
 </template>
 
