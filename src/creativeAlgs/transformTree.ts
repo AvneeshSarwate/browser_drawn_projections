@@ -1,5 +1,7 @@
 /* eslint-disable no-case-declarations */
-class VariationNode<T> {
+
+const mod2 = (x: number, m: number) => ((x % m) + m) % m
+export class VariationNode<T> {
   value: T
   children: VariationNode<T>[]
   childrenByTransform: Map<string, VariationNode<T>[]>
@@ -15,7 +17,7 @@ class VariationNode<T> {
   }
 }
 
-class VariationTree<T> {
+export class VariationTree<T> {
   root: VariationNode<T>
   currentNode: VariationNode<T>
   defaultTransform: (value: T) => T
@@ -136,9 +138,6 @@ class VariationTree<T> {
   }
 
   jumpToChild(transformKey: string, ind: number) {
-    // Assuming mod2 function is defined similar to the Kotlin code
-    const mod2 = (x: number, m: number) => ((x % m) + m) % m
-
     if (this.currentNode.children.length === 0) {
       this.makeChild(transformKey)
     } else {
@@ -177,9 +176,6 @@ class VariationTree<T> {
   }
 
   jumpToSibling(transformKey: string, ind: number) {
-    // Assuming mod2 function is defined as in jumpToChild
-    const mod2 = (x: number, m: number) => ((x % m) + m) % m
-
     if (this.currentNode === this.root) {
       this.jumpToRandomChild(transformKey)
     } else {
@@ -198,9 +194,6 @@ class VariationTree<T> {
   }
 
   moveInSiblingList(transformKey: string, amt: number) {
-    // Assuming mod2 function is defined as in jumpToChild
-    const mod2 = (x: number, m: number) => ((x % m) + m) % m
-
     if (this.currentNode === this.root) {
       this.jumpToRandomChild(transformKey)
     } else {

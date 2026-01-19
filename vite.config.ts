@@ -7,23 +7,13 @@ import vue from '@vitejs/plugin-vue'
 import ts from 'typescript';
 import { vitePluginTypescriptTransform } from 'vite-plugin-typescript-transform';
 import vueDevTools from 'vite-plugin-vue-devtools'
-import { wgslTypesPlugin } from './node_src/wgsl/vitePlugin'
-import { wgslFragmentPlugin } from './node_src/wgsl/viteFragmentPlugin'
-import { wgslMaterialPlugin, wgslStrokeMaterialPlugin } from './node_src/wgsl/viteMaterialPlugin'
-import { glslFragmentPlugin } from './node_src/glsl/viteFragmentPlugin_GL'
-import { glslMaterialPlugin, glslStrokeMaterialPlugin } from './node_src/glsl/viteMaterialPlugin_GL'
+import { shaderCodegenPlugin } from './node_src/shaderWrapperGenerator/viteShaderPlugin'
 
 // https://vitejs.dev/config/
 export default defineConfig({
   base: "/",
   plugins: [
-    wgslTypesPlugin(),
-    wgslFragmentPlugin(),
-    wgslMaterialPlugin(),
-    wgslStrokeMaterialPlugin(),
-    glslFragmentPlugin(),
-    glslMaterialPlugin(),
-    glslStrokeMaterialPlugin(),
+    shaderCodegenPlugin(),
     vue(), 
     // react(),
     // vueJsx()
