@@ -17,7 +17,8 @@ import { MIDI_READY, getMPEInput, midiInputs, midiOutputs, type MPENoteStart, ty
 import type { MIDIValOutput } from '@midival/core'
 import * as Tone from 'tone'
 import { m2f } from '@/music/mpeSynth'
-import { TONE_AUDIO_START } from '@/music/synths'
+import { note } from '@/music/clipPlayback'
+import { getPiano, TONE_AUDIO_START } from '@/music/synths'
 import { INITIALIZE_ABLETON_CLIPS } from '@/io/abletonClips'
 import { clipData as staticClipData } from '../sonar_sketch/clipData'
 import { TimeContext, launchBrowser, CancelablePromiseProxy } from '@/channels/offline_time_context'
@@ -61,6 +62,8 @@ const melodyMapRenderStates = new Map<string, RenderState>()
 // MIDI playback state
 const midiOuts: MIDIValOutput[] = []
 let playNote: (pitch: number, velocity: number, ctx: TimeContext, noteDur: number, instInd: number) => void = () => {}
+// Toggle: true = MIDI note output, false = sampler via clipPlayback.note
+const useMidiOutput = ref(false)
 const sliders = reactive<number[]>(Array(17).fill(0.5)) // Local slider state for LPD8/TouchOSC
 let timeLoops: CancelablePromiseProxy<any>[] = []
 
@@ -251,6 +254,14 @@ const playNotePiano = (pitch: number, velocity: number, ctx: TimeContext, noteDu
     synth.triggerRelease()
     synth.dispose()
   })
+}
+
+const samplerVoices = [getPiano(true), getPiano(true)]
+
+const playNoteSampler = (pitch: number, velocity: number, _ctx: TimeContext, noteDur: number, voiceIdx = 0) => {
+  const sampler = samplerVoices[voiceIdx % samplerVoices.length]
+  const normalizedVelocity = velocity > 1 ? velocity / 127 : velocity
+  note(sampler, pitch, noteDur, normalizedVelocity)
 }
 
 const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromiseProxy<any> => {
@@ -842,8 +853,15 @@ onMounted(async () => {
     await TONE_AUDIO_START
     console.log('Tone.js audio ready')
 
-    // Set playNote to use MIDI output
-    playNote = playNoteMidi
+    // Set playNote based on toggle (MIDI output vs sampler)
+    if (useMidiOutput.value && midiOuts.length > 0) {
+      playNote = playNoteMidi
+    } else {
+      if (useMidiOutput.value && midiOuts.length === 0) {
+        console.warn('[MPE] MIDI output toggle is on, but no outputs found; falling back to sampler.')
+      }
+      playNote = playNoteSampler
+    }
 
     // Setup LPD8 mk2 controller
     const lpd8 = midiInputs.get("LPD8 mk2")
