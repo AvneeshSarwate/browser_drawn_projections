@@ -674,9 +674,10 @@ function triggerGateButtonUp(ind: number) {
 onMounted(async () => {
   const params = new URLSearchParams(window.location.search)
   const presetName = params.get('preset')
-  
+  console.log('presetName', presetName)
   if (presetName && canvasRootRef.value) {
     const preset = getPreset(presetName)
+    console.log('preset', preset)
     if (preset) {
       const canvasState = (canvasRootRef.value as any).canvasState
       if (canvasState) {
