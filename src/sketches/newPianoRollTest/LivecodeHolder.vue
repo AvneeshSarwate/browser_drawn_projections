@@ -9,7 +9,9 @@ import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN
 import PianoRollRoot from '@/pianoRoll/PianoRollRoot.vue';
 import type { MpePitchPoint, NoteData, NoteDataInput } from '@/pianoRoll/pianoRollState';
 import { Scale } from '@/music/scale';
-import { abletonNoteToPianoRollNote, pianoRollNoteToAbletonNote, scaleTransposeMPE } from '@/io/abletonClips';
+import { AbletonClip, abletonNoteToPianoRollNote, pianoRollNoteToAbletonNote, scaleTransposeMPE } from '@/io/abletonClips';
+import { MIDI_READY, midiOutputs, getMPEDevice } from '@/io/midi';
+import { playMPEClip, type ClipPlaybackHandle } from '@/io/mpePlayback';
 
 const appState = inject<TemplateAppState>(appStateName)!!
 let shaderGraphEndNode: ShaderEffect | undefined = undefined
@@ -27,6 +29,10 @@ type PianoRollRootInstance = InstanceType<typeof PianoRollRoot> & {
 
 const pianoRollRef = ref<PianoRollRootInstance | null>(null)
 const latestNotes = ref<Array<[string, NoteData]>>(initialNotes)
+const midiOutputNames = ref<string[]>([])
+const selectedMidiOutput = ref<string>('')
+const activePlayback = ref<{ handle: ClipPlaybackHandle; context: CancelablePromisePoxy<any> } | null>(null)
+const activePlaybackContext = ref<CancelablePromisePoxy<any> | null>(null)
 
 const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromisePoxy<any> => {
   const loop = launch(block)
@@ -41,6 +47,71 @@ const clearDrawFuncs = () => {
 
 const handleNotesUpdate = (notes: Array<[string, NoteData]>) => {
   latestNotes.value = notes
+}
+
+const refreshMidiOutputs = () => {
+  midiOutputNames.value = Array.from(midiOutputs.keys())
+  if (!selectedMidiOutput.value || !midiOutputs.has(selectedMidiOutput.value)) {
+    selectedMidiOutput.value = midiOutputNames.value[0] ?? ''
+  }
+}
+
+const buildClipFromNotes = (notes: Array<[string, NoteData]>) => {
+  const abletonNotes = notes.map(([id, note]) => {
+    const abletonNote = pianoRollNoteToAbletonNote(note)
+    return {
+      ...abletonNote,
+      noteId: id
+    }
+  })
+  const duration = notes.reduce((maxEnd, [, note]) => {
+    const end = note.position + note.duration
+    return Math.max(maxEnd, end)
+  }, 0)
+  return new AbletonClip('piano-roll', duration, abletonNotes)
+}
+
+const stopPianoRollPlayback = () => {
+  const playback = activePlayback.value
+  if (playback) {
+    playback.handle.cancel()
+    playback.context.cancel()
+  }
+  activePlaybackContext.value?.cancel()
+  activePlayback.value = null
+  activePlaybackContext.value = null
+}
+
+const playPianoRoll = async () => {
+  await MIDI_READY
+  refreshMidiOutputs()
+
+  if (!selectedMidiOutput.value) {
+    console.warn('No MIDI output selected')
+    return
+  }
+
+  const device = getMPEDevice(selectedMidiOutput.value, { zone: 'lower' })
+  if (!device) {
+    console.warn('Failed to create MPE device')
+    return
+  }
+
+  stopPianoRollPlayback()
+
+  const clip = buildClipFromNotes(latestNotes.value)
+  if (clip.notes.length === 0 || clip.duration <= 0) {
+    console.warn('No notes to play')
+    return
+  }
+
+  const context = launch(async (ctx) => {
+    const handle = playMPEClip(clip, ctx, device)
+    activePlayback.value = { handle, context }
+    await handle.promise
+    activePlayback.value = null
+  })
+  activePlaybackContext.value = context
 }
 
 const transposeDownScale = () => {
@@ -162,6 +233,9 @@ const handleConvertToSlides = () => {
 
 onMounted(() => {
   try {
+    MIDI_READY.then(() => {
+      refreshMidiOutputs()
+    })
 
     const p5i = appState.p5Instance!!
     const p5Canvas = document.getElementById('p5Canvas') as HTMLCanvasElement
@@ -199,6 +273,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   console.log("disposing livecoded resources")
+  stopPianoRollPlayback()
   shaderGraphEndNode?.disposeAll()
   clearListeners()
   clearDrawFuncs()
@@ -211,6 +286,17 @@ onUnmounted(() => {
   <div>
     <button @click="transposeDownScale">Transpose down 1 scale degree</button>
     <button @click="handleConvertToSlides">Convert to slides</button>
+    <div>
+      <label>
+        MIDI Output:
+        <select v-model="selectedMidiOutput">
+          <option v-for="name in midiOutputNames" :key="name" :value="name">{{ name }}</option>
+        </select>
+      </label>
+      <button @click="refreshMidiOutputs">Refresh MIDI Outputs</button>
+      <button @click="playPianoRoll">Play Piano Roll</button>
+      <button @click="stopPianoRollPlayback">Stop</button>
+    </div>
     <PianoRollRoot ref="pianoRollRef" :initial-notes="initialNotes" @notes-update="handleNotesUpdate" />
   </div>
 </template>
