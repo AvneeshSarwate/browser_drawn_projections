@@ -1045,6 +1045,7 @@ export function setupEventHandlers(state: PianoRollState, stage: Konva.Stage) {
   // Click on note or handle
   stage.on('mousedown touchstart', (e) => {
     const target = e.target
+    const isShift = !!(e.evt as MouseEvent | PointerEvent | TouchEvent | undefined)?.shiftKey
 
     // Check if clicking on resize handle
     const handleNoteId = target.getAttr?.('handleNoteId')
@@ -1060,6 +1061,14 @@ export function setupEventHandlers(state: PianoRollState, stage: Konva.Stage) {
       const isSelected = state.selection.selectedIds.has(noteId)
 
       mutateSelection(state, () => {
+        if (isShift) {
+          if (isSelected) {
+            state.selection.selectedIds.delete(noteId)
+          } else {
+            state.selection.selectedIds.add(noteId)
+          }
+          return
+        }
         if (!isSelected) {
           state.selection.selectedIds.clear()
           state.selection.selectedIds.add(noteId)
@@ -1087,15 +1096,18 @@ export function setupEventHandlers(state: PianoRollState, stage: Konva.Stage) {
       state.interaction.isMarqueeSelecting = true
       state.interaction.marqueeStart = pos
       state.interaction.marqueeCurrent = pos
-      state.interaction.marqueeIsShift = false
+      state.interaction.marqueeIsShift = isShift
+      state.interaction.marqueeInitialSelection = isShift ? new Set(state.selection.selectedIds) : new Set()
 
       if (state.mpe.enabled) {
         clearMpeSelectedHandles(state)
         updateMpeHandleSelectionVisual(state)
       } else {
-        mutateSelection(state, () => {
-          state.selection.selectedIds.clear()
-        })
+        if (!isShift) {
+          mutateSelection(state, () => {
+            state.selection.selectedIds.clear()
+          })
+        }
       }
 
       state.needsRedraw = true
@@ -1144,11 +1156,13 @@ export function setupEventHandlers(state: PianoRollState, stage: Konva.Stage) {
         const intersecting = getNotesInRect(state, rect)
 
         mutateSelection(state, () => {
-          state.selection.selectedIds.clear()
-          const first = intersecting[0]
-          if (first) {
-            state.selection.selectedIds.add(first)
+          if (state.interaction.marqueeIsShift) {
+            const base = state.interaction.marqueeInitialSelection ?? new Set<string>()
+            state.selection.selectedIds = new Set(base)
+          } else {
+            state.selection.selectedIds.clear()
           }
+          intersecting.forEach((id) => state.selection.selectedIds.add(id))
         })
 
         state.needsRedraw = true
@@ -1174,6 +1188,7 @@ export function setupEventHandlers(state: PianoRollState, stage: Konva.Stage) {
         Math.abs(state.interaction.marqueeStart.y - state.interaction.marqueeCurrent.y) < 5
 
       state.interaction.isMarqueeSelecting = false
+      state.interaction.marqueeInitialSelection = undefined
       if (state.selection.selectionRect) {
         state.selection.selectionRect.visible(false)
         state.layers.overlay?.batchDraw()

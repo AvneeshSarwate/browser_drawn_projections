@@ -93,6 +93,7 @@ export interface PianoRollState {
     marqueeStart?: { x: number, y: number }
     marqueeCurrent?: { x: number, y: number }
     marqueeIsShift: boolean
+    marqueeInitialSelection?: Set<string>
 
     // Overlap preview tracking
     hiddenNoteIds: Set<string>  // notes hidden due to drag/resize overlap
@@ -236,6 +237,7 @@ export const createPianoRollState = (): PianoRollState => {
       marqueeStart: undefined,
       marqueeCurrent: undefined,
       marqueeIsShift: false,
+      marqueeInitialSelection: undefined,
 
       hiddenNoteIds: new Set(),
       truncatedNotes: new Map(),
