@@ -7,7 +7,7 @@ import { clearListeners, mousedownEvent, singleKeydownEvent, mousemoveEvent, tar
 import type p5 from 'p5';
 import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN, Ramp, tri } from '@/channels/channels';
 import PianoRollRoot from '@/pianoRoll/PianoRollRoot.vue';
-import type { NoteData, NoteDataInput } from '@/pianoRoll/pianoRollState';
+import type { MpePitchPoint, NoteData, NoteDataInput } from '@/pianoRoll/pianoRollState';
 import { Scale } from '@/music/scale';
 import { abletonNoteToPianoRollNote, pianoRollNoteToAbletonNote, scaleTransposeMPE } from '@/io/abletonClips';
 
@@ -55,6 +55,108 @@ const transposeDownScale = () => {
     }
   })
 
+  pianoRollRef.value?.setNotes(updatedNotes)
+}
+
+const convertToSlides = (notes: Array<[string, NoteData]>, slideDurationBeats = 0.1): NoteDataInput[] => {
+  if (notes.length === 0) return []
+
+  const sortedNotes = [...notes]
+    .map(([id, note]) => ({ id, note }))
+    .sort((a, b) => {
+      const posDelta = a.note.position - b.note.position
+      if (posDelta !== 0) return posDelta
+      return a.note.pitch - b.note.pitch
+    })
+
+  const baseEntry = sortedNotes[0]
+  const baseNote = baseEntry.note
+  const baseStart = baseNote.position
+  const basePitch = baseNote.pitch
+  const baseVelocity = baseNote.velocity ?? 100
+  const endTime = sortedNotes.reduce((maxEnd, entry) => {
+    const noteEnd = entry.note.position + entry.note.duration
+    return Math.max(maxEnd, noteEnd)
+  }, baseStart + baseNote.duration)
+  const totalDuration = Math.max(endTime - baseStart, baseNote.duration)
+
+  if (sortedNotes.length === 1 || totalDuration <= 0) {
+    return [{
+      id: baseEntry.id,
+      pitch: basePitch,
+      position: baseStart,
+      duration: totalDuration > 0 ? totalDuration : baseNote.duration,
+      velocity: baseVelocity,
+      metadata: baseNote.metadata
+    }]
+  }
+
+  const safeSlideDuration = Math.max(0, slideDurationBeats)
+  const epsilon = 1e-6
+  const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
+  const toNormalizedTime = (absoluteTime: number) => {
+    if (totalDuration <= 0) return 0
+    return clamp((absoluteTime - baseStart) / totalDuration, 0, 1)
+  }
+
+  const points: MpePitchPoint[] = []
+  points.push({ time: 0, pitchOffset: 0 })
+
+  for (let i = 0; i < sortedNotes.length - 1; i += 1) {
+    const current = sortedNotes[i].note
+    const next = sortedNotes[i + 1].note
+    const currentStart = current.position
+    const nextStart = next.position
+    const currentOffset = current.pitch - basePitch
+    const nextOffset = next.pitch - basePitch
+    const halfTime = currentStart + (nextStart - currentStart) / 2
+    const slideStartAbsolute = Math.max(nextStart - safeSlideDuration, halfTime)
+    const slideStart = toNormalizedTime(slideStartAbsolute)
+    const nextTime = toNormalizedTime(nextStart)
+
+    if (slideStart < nextTime - epsilon) {
+      points.push({ time: slideStart, pitchOffset: currentOffset })
+    }
+    points.push({ time: nextTime, pitchOffset: nextOffset })
+  }
+
+  const lastOffset = sortedNotes[sortedNotes.length - 1].note.pitch - basePitch
+  const endTimeNormalized = toNormalizedTime(endTime)
+  if (endTimeNormalized > 0) {
+    const lastPoint = points[points.length - 1]
+    if (!lastPoint || Math.abs(lastPoint.time - endTimeNormalized) > epsilon) {
+      points.push({ time: endTimeNormalized, pitchOffset: lastOffset })
+    } else {
+      lastPoint.pitchOffset = lastOffset
+    }
+  }
+
+  const sortedPoints = points
+    .slice()
+    .sort((a, b) => a.time - b.time)
+    .reduce((acc, point) => {
+      const prev = acc[acc.length - 1]
+      if (prev && Math.abs(prev.time - point.time) <= epsilon) {
+        acc[acc.length - 1] = point
+      } else {
+        acc.push(point)
+      }
+      return acc
+    }, [] as MpePitchPoint[])
+
+  return [{
+    id: baseEntry.id,
+    pitch: basePitch,
+    position: baseStart,
+    duration: totalDuration,
+    velocity: baseVelocity,
+    mpePitch: { points: sortedPoints },
+    metadata: baseNote.metadata
+  }]
+}
+
+const handleConvertToSlides = () => {
+  const updatedNotes = convertToSlides(latestNotes.value, 0.1)
   pianoRollRef.value?.setNotes(updatedNotes)
 }
 
@@ -108,6 +210,7 @@ onUnmounted(() => {
 <template>
   <div>
     <button @click="transposeDownScale">Transpose down 1 scale degree</button>
+    <button @click="handleConvertToSlides">Convert to slides</button>
     <PianoRollRoot ref="pianoRollRef" :initial-notes="initialNotes" @notes-update="handleNotesUpdate" />
   </div>
 </template>
