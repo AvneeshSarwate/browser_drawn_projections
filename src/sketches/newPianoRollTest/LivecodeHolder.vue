@@ -9,6 +9,9 @@ import { launch, type CancelablePromisePoxy, type TimeContext, xyZip, cosN, sinN
 import PianoRollRoot from '@/pianoRoll/PianoRollRoot.vue';
 import type { MpePitchPoint, NoteData, NoteDataInput } from '@/pianoRoll/pianoRollState';
 import { Scale } from '@/music/scale';
+import * as Tone from 'tone';
+import { getFMSynthChain, TONE_AUDIO_START } from '@/music/synths';
+import { m2f } from '@/music/mpeSynth';
 import { AbletonClip, abletonNoteToPianoRollNote, pianoRollNoteToAbletonNote, scaleTransposeMPE } from '@/io/abletonClips';
 import { MIDI_READY, midiOutputs, getMPEDevice } from '@/io/midi';
 import { playMPEClip, type ClipPlaybackHandle } from '@/io/mpePlayback';
@@ -33,6 +36,12 @@ const midiOutputNames = ref<string[]>([])
 const selectedMidiOutput = ref<string>('')
 const activePlayback = ref<{ handle: ClipPlaybackHandle; context: CancelablePromisePoxy<any> } | null>(null)
 const activePlaybackContext = ref<CancelablePromisePoxy<any> | null>(null)
+const activeSynthPlayback = ref<CancelablePromisePoxy<any> | null>(null)
+const slideDebugPitch = ref<number | null>(null)
+const slideDebugFreq = ref<number | null>(null)
+
+const fmChain = getFMSynthChain({ monophonic: true })
+const fmSynth = fmChain.instrument as Tone.FMSynth
 
 const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromisePoxy<any> => {
   const loop = launch(block)
@@ -96,6 +105,136 @@ const stopPianoRollPlayback = () => {
   activePlaybackContext.value?.cancel()
   activePlayback.value = null
   activePlaybackContext.value = null
+}
+
+const stopSynthPlayback = () => {
+  activeSynthPlayback.value?.cancel()
+  activeSynthPlayback.value = null
+  slideDebugPitch.value = null
+  slideDebugFreq.value = null
+  try {
+    fmSynth.triggerRelease()
+    const now = Tone.now()
+    if (fmSynth.frequency?.cancelAndHoldAtTime) {
+      fmSynth.frequency.cancelAndHoldAtTime(now)
+    } else if (fmSynth.frequency?.cancelScheduledValues) {
+      fmSynth.frequency.cancelScheduledValues(now)
+    }
+  } catch (err) {
+    console.warn('Failed to stop synth playback', err)
+  }
+}
+
+const stopAllPlayback = () => {
+  stopPianoRollPlayback()
+  stopSynthPlayback()
+}
+
+const normalizeMpePoints = (points: MpePitchPoint[] | undefined): MpePitchPoint[] => {
+  if (!points || points.length === 0) {
+    return [
+      { time: 0, pitchOffset: 0 },
+      { time: 1, pitchOffset: 0 }
+    ]
+  }
+  const sorted = [...points].sort((a, b) => a.time - b.time)
+  const first = sorted[0]
+  const last = sorted[sorted.length - 1]
+  const anchored: MpePitchPoint[] = [...sorted]
+  if (first.time > 0) {
+    anchored.unshift({ time: 0, pitchOffset: first.pitchOffset })
+  }
+  if (last.time < 1) {
+    anchored.push({ time: 1, pitchOffset: last.pitchOffset })
+  }
+  return anchored
+}
+
+const getPitchOffsetAt = (points: MpePitchPoint[], normTime: number) => {
+  if (points.length === 0) return 0
+  const clamped = Math.max(0, Math.min(1, normTime))
+  if (clamped <= points[0].time) return points[0].pitchOffset
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const current = points[i]
+    const next = points[i + 1]
+    if (clamped <= next.time) {
+      const span = next.time - current.time
+      if (span <= 0) return next.pitchOffset
+      const t = (clamped - current.time) / span
+      return current.pitchOffset + t * (next.pitchOffset - current.pitchOffset)
+    }
+  }
+  return points[points.length - 1].pitchOffset
+}
+
+const getSlidePlaybackNote = () => {
+  if (latestNotes.value.length === 1) {
+    const [, note] = latestNotes.value[0]
+    if (note.mpePitch?.points?.length) {
+      return note
+    }
+  }
+  const slideNotes = convertToSlides(latestNotes.value, 0.1)
+  return slideNotes[0]
+}
+
+const playPianoRollSlidesSynth = async () => {
+  await TONE_AUDIO_START
+  stopSynthPlayback()
+
+  const slideNote = getSlidePlaybackNote()
+  if (!slideNote) {
+    console.warn('No notes to play')
+    return
+  }
+
+  const basePitch = slideNote.pitch
+  const baseFreq = m2f(basePitch)
+  const velocity = (slideNote.velocity ?? 100) / 127
+  const duration = slideNote.duration ?? 0
+  if (duration <= 0) {
+    console.warn('Note duration is zero')
+    return
+  }
+  const points = normalizeMpePoints(slideNote.mpePitch?.points)
+  const noteStart = slideNote.position ?? 0
+
+  activeSynthPlayback.value = launch(async (ctx) => {
+    await ctx.wait(noteStart)
+
+    const initialOffset = getPitchOffsetAt(points, 0)
+    fmSynth.triggerAttack(m2f(basePitch + initialOffset), undefined, velocity)
+    const now = Tone.now()
+    if (fmSynth.frequency?.cancelAndHoldAtTime) {
+      fmSynth.frequency.cancelAndHoldAtTime(now)
+    } else if (fmSynth.frequency?.cancelScheduledValues) {
+      fmSynth.frequency.cancelScheduledValues(now)
+    }
+
+    const startProgTime = ctx.progTime
+    const durationSec = duration * 60 / ctx.bpm
+    try {
+      while (true) {
+        const elapsedSec = ctx.progTime - startProgTime
+        if (elapsedSec >= durationSec) break
+        const normTime = durationSec > 0 ? elapsedSec / durationSec : 1
+        const pitchOffset = getPitchOffsetAt(points, normTime)
+        const pitch = basePitch + pitchOffset
+        const freq = m2f(pitch)
+        slideDebugPitch.value = pitch
+        slideDebugFreq.value = freq
+        fmSynth.frequency.setValueAtTime(freq, Tone.now())
+        await ctx.waitSec(1 / 60)
+      }
+      const finalOffset = getPitchOffsetAt(points, 1)
+      const finalPitch = basePitch + finalOffset
+      slideDebugPitch.value = finalPitch
+      slideDebugFreq.value = m2f(finalPitch)
+      fmSynth.frequency.setValueAtTime(slideDebugFreq.value, Tone.now())
+    } finally {
+      fmSynth.triggerRelease()
+    }
+  })
 }
 
 const playPianoRoll = async () => {
@@ -295,6 +434,7 @@ onMounted(() => {
 onUnmounted(() => {
   console.log("disposing livecoded resources")
   stopPianoRollPlayback()
+  stopSynthPlayback()
   shaderGraphEndNode?.disposeAll()
   clearListeners()
   clearDrawFuncs()
@@ -316,7 +456,12 @@ onUnmounted(() => {
       </label>
       <button @click="refreshMidiOutputs">Refresh MIDI Outputs</button>
       <button @click="playPianoRoll">Play Piano Roll</button>
-      <button @click="stopPianoRollPlayback">Stop</button>
+      <button @click="playPianoRollSlidesSynth">Play FM Slides</button>
+      <button @click="stopAllPlayback">Stop</button>
+    </div>
+    <div>
+      <div>Slide pitch (base + offset): {{ slideDebugPitch ?? '-' }}</div>
+      <div>Slide freq (m2f): {{ slideDebugFreq ?? '-' }}</div>
     </div>
     <PianoRollRoot ref="pianoRollRef" :initial-notes="initialNotes" @notes-update="handleNotesUpdate" />
   </div>
