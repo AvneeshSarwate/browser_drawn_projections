@@ -56,7 +56,7 @@ const refreshMidiOutputs = () => {
   }
 }
 
-const configureMpeOutput = async (outputName: string, pitchBendRange = 96) => {
+const configureMpeOutput = async (outputName: string, pitchBendRange = 48) => {
   const output = midiOutputs.get(outputName)
   if (!output) return false
   try {
@@ -107,7 +107,7 @@ const playPianoRoll = async () => {
     return
   }
 
-  const configured = await configureMpeOutput(selectedMidiOutput.value, 96)
+  const configured = await configureMpeOutput(selectedMidiOutput.value, 48)
   if (!configured) {
     console.warn('Unable to configure MPE output')
   }
@@ -127,7 +127,7 @@ const playPianoRoll = async () => {
   }
 
   const context = launch(async (ctx) => {
-    const handle = playMPEClip(clip, ctx, device, { pitchBendRange: 96 })
+    const handle = playMPEClip(clip, ctx, device, { pitchBendRange: 48 })
     activePlayback.value = { handle, context }
     await handle.promise
     activePlayback.value = null
