@@ -419,8 +419,21 @@ export function getSynthChain() {
   }
 }
 
-export function getFMSynthChain() {
-  const synth = new Tone.PolySynth(Tone.FMSynth, {
+export type FMSynthChainOptions = {
+  monophonic?: boolean
+}
+
+export function getFMSynthChain(options: FMSynthChainOptions = {}) {
+  const synth = options.monophonic
+    ? new Tone.FMSynth({
+      harmonicity: 2,
+      modulationIndex: 10,
+      oscillator: { type: "sine" },           // carrier
+      modulation: { type: "square" },         // modulator
+      envelope: { attack: 1, decay: 0.2, sustain: 1, release: 10.0 },
+      modulationEnvelope: { attack: 2, decay: 0.1, sustain: 1.0, release: 5 }
+    })
+    : new Tone.PolySynth(Tone.FMSynth, {
     harmonicity: 2,
     modulationIndex: 10,
     oscillator: { type: "sine" },           // carrier
