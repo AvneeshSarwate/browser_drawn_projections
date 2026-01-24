@@ -56,6 +56,22 @@ const refreshMidiOutputs = () => {
   }
 }
 
+const configureMpeOutput = async (outputName: string, pitchBendRange = 96) => {
+  const output = midiOutputs.get(outputName)
+  if (!output) return false
+  try {
+    // Lower zone with 15 member channels (standard MPE), no upper zone
+    await output.initializeMPE(15, 0, 10)
+    for (let channel = 1; channel <= 16; channel += 1) {
+      await output.setPitchBendSensitivity(pitchBendRange, 0, channel, 10)
+    }
+    return true
+  } catch (err) {
+    console.warn('Failed to configure MPE output', err)
+    return false
+  }
+}
+
 const buildClipFromNotes = (notes: Array<[string, NoteData]>) => {
   const abletonNotes = notes.map(([id, note]) => {
     const abletonNote = pianoRollNoteToAbletonNote(note)
@@ -91,6 +107,11 @@ const playPianoRoll = async () => {
     return
   }
 
+  const configured = await configureMpeOutput(selectedMidiOutput.value, 96)
+  if (!configured) {
+    console.warn('Unable to configure MPE output')
+  }
+
   const device = getMPEDevice(selectedMidiOutput.value, { zone: 'lower' })
   if (!device) {
     console.warn('Failed to create MPE device')
@@ -106,7 +127,7 @@ const playPianoRoll = async () => {
   }
 
   const context = launch(async (ctx) => {
-    const handle = playMPEClip(clip, ctx, device)
+    const handle = playMPEClip(clip, ctx, device, { pitchBendRange: 96 })
     activePlayback.value = { handle, context }
     await handle.promise
     activePlayback.value = null
