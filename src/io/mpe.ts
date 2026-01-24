@@ -75,8 +75,8 @@ export class MPEInput {
     this.#timbreCC = config.timbreCC ?? 74;
 
     const members: number[] = [];
-    const min = Math.max(0, Math.min(15, memberRange[0]));
-    const max = Math.max(0, Math.min(15, memberRange[1]));
+    const min = Math.max(1, Math.min(16, memberRange[0]));
+    const max = Math.max(1, Math.min(16, memberRange[1]));
     for (let ch = min; ch <= max; ch++) {
       if (ch !== masterChannel) members.push(ch);
     }
@@ -97,7 +97,7 @@ export class MPEInput {
     const noteOnUnsub = this.#input.onAllNoteOn((event: NoteMessage) => {
       if (!this.#memberSet.has(event.channel)) return;
 
-      const voice = this.#voices[event.channel];
+      const voice = this.#voices[event.channel - 1];
       voice.noteNum = event.note;
       voice.velocity = event.velocity;
 
@@ -117,7 +117,7 @@ export class MPEInput {
     const noteOffUnsub = this.#input.onAllNoteOff((event: NoteMessage) => {
       if (!this.#memberSet.has(event.channel)) return;
 
-      const voice = this.#voices[event.channel];
+      const voice = this.#voices[event.channel - 1];
       if (voice.noteNum !== event.note) return;
 
       const payload: MPENoteEnd = {
@@ -136,7 +136,7 @@ export class MPEInput {
     const pitchBendUnsub = this.#input.onPitchBend((event) => {
       if (!this.#memberSet.has(event.channel)) return;
 
-      const voice = this.#voices[event.channel];
+      const voice = this.#voices[event.channel - 1];
       voice.bend = event.value;
 
       if (voice.noteNum !== null) {
@@ -156,7 +156,7 @@ export class MPEInput {
     const pressureUnsub = this.#input.onChannelPressure((event) => {
       if (!this.#memberSet.has(event.channel)) return;
 
-      const voice = this.#voices[event.channel];
+      const voice = this.#voices[event.channel - 1];
       voice.pressure = event.data1;
 
       if (voice.noteNum !== null) {
@@ -176,7 +176,7 @@ export class MPEInput {
     const ccUnsub = this.#input.onControlChange(this.#timbreCC, (event) => {
       if (!this.#memberSet.has(event.channel)) return;
 
-      const voice = this.#voices[event.channel];
+      const voice = this.#voices[event.channel - 1];
       voice.timbre = event.data2;
 
       if (voice.noteNum !== null) {
@@ -218,7 +218,7 @@ export class MPEInput {
   /** Get active voice state for a channel (for debugging) */
   getVoiceState(channel: number): VoiceState | null {
     if (!this.#memberSet.has(channel)) return null;
-    return { ...this.#voices[channel] };
+    return { ...this.#voices[channel - 1] };
   }
 }
 
@@ -255,8 +255,8 @@ export class MPEDevice {
     this.#overflow = config.overflow ?? "oldest";
 
     const channels: number[] = [];
-    const min = Math.max(0, Math.min(15, memberRange[0]));
-    const max = Math.max(0, Math.min(15, memberRange[1]));
+    const min = Math.max(1, Math.min(16, memberRange[0]));
+    const max = Math.max(1, Math.min(16, memberRange[1]));
     for (let ch = min; ch <= max; ch++) {
       if (ch !== masterChannel) channels.push(ch);
     }
@@ -457,7 +457,7 @@ export function asMPE(input: MIDIValInput, config: MPEConfig): MPEInput {
 
 function defaultZone(zone: "lower" | "upper") {
   if (zone === "upper") {
-    return { masterChannel: 15, memberChannels: [0, 14] as [number, number] };
+    return { masterChannel: 16, memberChannels: [1, 15] as [number, number] };
   }
-  return { masterChannel: 0, memberChannels: [1, 15] as [number, number] };
+  return { masterChannel: 1, memberChannels: [2, 16] as [number, number] };
 }

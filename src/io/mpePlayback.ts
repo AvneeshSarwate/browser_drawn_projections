@@ -46,9 +46,7 @@ const ABLETON_PB_RANGE = 48
 // Converts Ableton pitch curve values to MIDIVal pitch bend range (-1..1).
 export function abletonBendToMidi(abletonValue: number, targetPbRange: number): number {
   if (!Number.isFinite(targetPbRange) || targetPbRange <= 0) return 0
-  const scale = targetPbRange / ABLETON_PB_RANGE
-  const delta = abletonValue * scale
-  const normalized = delta / targetPbRange
+  const normalized = abletonValue / targetPbRange
   return clamp(normalized, -1, 1)
 }
 
