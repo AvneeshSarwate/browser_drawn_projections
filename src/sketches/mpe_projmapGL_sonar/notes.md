@@ -1,15 +1,6 @@
-
-todo (on below plan)
-- color spectrum is just full rainbow - pick specifics
-  - let me specify individual RGB colors by pitch-class hardcoded into the file, and then the spectrump and pitch bend blending behavior is derived from that
-- pitch bend doesn't map properly to change colors (math/coordinate-scaling issue?)
-  - linnstrument uses high resolution pitchbend format 
-- timbre not wired up and no post-processing stack for mpe viz
-  - add a pixelation fragFunc to this - map it's amount of pixelation to mpe timbre
-- need to rotate mpe voice idx even on single notes like some MPE controllers do (makes notes move around polygons even when melody is monophonic)
-
-
-
+alg for merging a monophonic melody with slides
+- all notes with note starts closer than a certain threshold get joined with same slide speed (selected randomly)
+- for all other note pairs, random prob that they are joined with random slide length
 
 
 

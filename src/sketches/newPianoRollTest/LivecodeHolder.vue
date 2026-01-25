@@ -167,72 +167,73 @@ const getPitchOffsetAt = (points: MpePitchPoint[], normTime: number) => {
   return points[points.length - 1].pitchOffset
 }
 
-const getSlidePlaybackNote = () => {
-  if (latestNotes.value.length === 1) {
-    const [, note] = latestNotes.value[0]
-    if (note.mpePitch?.points?.length) {
-      return note
-    }
+const playSlideNoteOnSynth = async (ctx: TimeContext, note: NoteData) => {
+  const basePitch = note.pitch
+  const velocity = (note.velocity ?? 100) / 127
+  const durationBeats = note.duration ?? 0
+  if (durationBeats <= 0) return
+
+  const points = normalizeMpePoints(note.mpePitch?.points)
+  const durationSec = durationBeats * 60 / ctx.bpm
+  const initialOffset = getPitchOffsetAt(points, 0)
+
+  fmSynth.triggerAttack(m2f(basePitch + initialOffset), undefined, velocity)
+  const now = Tone.now()
+  if (fmSynth.frequency?.cancelAndHoldAtTime) {
+    fmSynth.frequency.cancelAndHoldAtTime(now)
+  } else if (fmSynth.frequency?.cancelScheduledValues) {
+    fmSynth.frequency.cancelScheduledValues(now)
   }
-  const slideNotes = convertToSlides(latestNotes.value, 0.1)
-  return slideNotes[0]
+
+  const startProgTime = ctx.progTime
+  try {
+    while (true) {
+      const elapsedSec = ctx.progTime - startProgTime
+      if (elapsedSec >= durationSec) break
+      const normTime = durationSec > 0 ? elapsedSec / durationSec : 1
+      const pitchOffset = getPitchOffsetAt(points, normTime)
+      const pitch = basePitch + pitchOffset
+      const freq = m2f(pitch)
+      slideDebugPitch.value = pitch
+      slideDebugFreq.value = freq
+      fmSynth.frequency.setValueAtTime(freq, Tone.now())
+      await ctx.waitSec(1 / 60)
+    }
+    const finalOffset = getPitchOffsetAt(points, 1)
+    const finalPitch = basePitch + finalOffset
+    slideDebugPitch.value = finalPitch
+    slideDebugFreq.value = m2f(finalPitch)
+    fmSynth.frequency.setValueAtTime(slideDebugFreq.value, Tone.now())
+  } finally {
+    fmSynth.triggerRelease()
+  }
 }
 
 const playPianoRollSlidesSynth = async () => {
   await TONE_AUDIO_START
   stopSynthPlayback()
 
-  const slideNote = getSlidePlaybackNote()
-  if (!slideNote) {
+  const sortedNotes = [...latestNotes.value]
+    .map(([, note]) => note)
+    .sort((a, b) => {
+      const posDelta = a.position - b.position
+      if (posDelta !== 0) return posDelta
+      return a.pitch - b.pitch
+    })
+
+  if (sortedNotes.length === 0) {
     console.warn('No notes to play')
     return
   }
 
-  const basePitch = slideNote.pitch
-  const baseFreq = m2f(basePitch)
-  const velocity = (slideNote.velocity ?? 100) / 127
-  const duration = slideNote.duration ?? 0
-  if (duration <= 0) {
-    console.warn('Note duration is zero')
-    return
-  }
-  const points = normalizeMpePoints(slideNote.mpePitch?.points)
-  const noteStart = slideNote.position ?? 0
-
   activeSynthPlayback.value = launch(async (ctx) => {
-    await ctx.wait(noteStart)
-
-    const initialOffset = getPitchOffsetAt(points, 0)
-    fmSynth.triggerAttack(m2f(basePitch + initialOffset), undefined, velocity)
-    const now = Tone.now()
-    if (fmSynth.frequency?.cancelAndHoldAtTime) {
-      fmSynth.frequency.cancelAndHoldAtTime(now)
-    } else if (fmSynth.frequency?.cancelScheduledValues) {
-      fmSynth.frequency.cancelScheduledValues(now)
-    }
-
-    const startProgTime = ctx.progTime
-    const durationSec = duration * 60 / ctx.bpm
-    try {
-      while (true) {
-        const elapsedSec = ctx.progTime - startProgTime
-        if (elapsedSec >= durationSec) break
-        const normTime = durationSec > 0 ? elapsedSec / durationSec : 1
-        const pitchOffset = getPitchOffsetAt(points, normTime)
-        const pitch = basePitch + pitchOffset
-        const freq = m2f(pitch)
-        slideDebugPitch.value = pitch
-        slideDebugFreq.value = freq
-        fmSynth.frequency.setValueAtTime(freq, Tone.now())
-        await ctx.waitSec(1 / 60)
+    for (const note of sortedNotes) {
+      const currentBeats = ctx.progBeats
+      const noteStart = note.position ?? 0
+      if (noteStart > currentBeats) {
+        await ctx.wait(noteStart - currentBeats)
       }
-      const finalOffset = getPitchOffsetAt(points, 1)
-      const finalPitch = basePitch + finalOffset
-      slideDebugPitch.value = finalPitch
-      slideDebugFreq.value = m2f(finalPitch)
-      fmSynth.frequency.setValueAtTime(slideDebugFreq.value, Tone.now())
-    } finally {
-      fmSynth.triggerRelease()
+      await playSlideNoteOnSynth(ctx, note)
     }
   })
 }
@@ -287,6 +288,94 @@ const transposeDownScale = () => {
   })
 
   pianoRollRef.value?.setNotes(updatedNotes)
+}
+
+const randomInRange = (min: number, max: number) => {
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return min
+  const lo = Math.min(min, max)
+  const hi = Math.max(min, max)
+  return lo + Math.random() * (hi - lo)
+}
+
+const buildSlideNoteFromSequence = (
+  sequence: Array<{ id: string; note: NoteData }>,
+  slideDurations: number[],
+  fallbackSlideDuration = 0.1
+): NoteDataInput => {
+  const baseEntry = sequence[0]
+  const baseNote = baseEntry.note
+  const baseStart = baseNote.position
+  const basePitch = baseNote.pitch
+  const baseVelocity = baseNote.velocity ?? 100
+  const endTime = sequence.reduce((maxEnd, entry) => {
+    const noteEnd = entry.note.position + entry.note.duration
+    return Math.max(maxEnd, noteEnd)
+  }, baseStart + baseNote.duration)
+  const totalDuration = Math.max(endTime - baseStart, baseNote.duration)
+
+  const safeSlideDuration = Math.max(0, fallbackSlideDuration)
+  const epsilon = 1e-6
+  const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
+  const toNormalizedTime = (absoluteTime: number) => {
+    if (totalDuration <= 0) return 0
+    return clamp((absoluteTime - baseStart) / totalDuration, 0, 1)
+  }
+
+  const points: MpePitchPoint[] = []
+  points.push({ time: 0, pitchOffset: 0 })
+
+  for (let i = 0; i < sequence.length - 1; i += 1) {
+    const current = sequence[i].note
+    const next = sequence[i + 1].note
+    const currentStart = current.position
+    const nextStart = next.position
+    const currentOffset = current.pitch - basePitch
+    const nextOffset = next.pitch - basePitch
+    const halfTime = currentStart + (nextStart - currentStart) / 2
+    const slideDuration = slideDurations[i] ?? safeSlideDuration
+    const slideStartAbsolute = Math.max(nextStart - slideDuration, halfTime)
+    const slideStart = toNormalizedTime(slideStartAbsolute)
+    const nextTime = toNormalizedTime(nextStart)
+
+    if (slideStart < nextTime - epsilon) {
+      points.push({ time: slideStart, pitchOffset: currentOffset })
+    }
+    points.push({ time: nextTime, pitchOffset: nextOffset })
+  }
+
+  const lastOffset = sequence[sequence.length - 1].note.pitch - basePitch
+  const endTimeNormalized = toNormalizedTime(endTime)
+  if (endTimeNormalized > 0) {
+    const lastPoint = points[points.length - 1]
+    if (!lastPoint || Math.abs(lastPoint.time - endTimeNormalized) > epsilon) {
+      points.push({ time: endTimeNormalized, pitchOffset: lastOffset })
+    } else {
+      lastPoint.pitchOffset = lastOffset
+    }
+  }
+
+  const sortedPoints = points
+    .slice()
+    .sort((a, b) => a.time - b.time)
+    .reduce((acc, point) => {
+      const prev = acc[acc.length - 1]
+      if (prev && Math.abs(prev.time - point.time) <= epsilon) {
+        acc[acc.length - 1] = point
+      } else {
+        acc.push(point)
+      }
+      return acc
+    }, [] as MpePitchPoint[])
+
+  return {
+    id: baseEntry.id,
+    pitch: basePitch,
+    position: baseStart,
+    duration: totalDuration,
+    velocity: baseVelocity,
+    mpePitch: { points: sortedPoints },
+    metadata: baseNote.metadata
+  }
 }
 
 const convertToSlides = (notes: Array<[string, NoteData]>, slideDurationBeats = 0.1): NoteDataInput[] => {
@@ -386,8 +475,85 @@ const convertToSlides = (notes: Array<[string, NoteData]>, slideDurationBeats = 
   }]
 }
 
+const convertToSmartSlides = (
+  notes: Array<[string, NoteData]>,
+  closeThreshold: number,
+  joinProbability: number
+): NoteDataInput[] => {
+  if (notes.length === 0) return []
+
+  const sortedNotes = [...notes]
+    .map(([id, note]) => ({ id, note }))
+    .sort((a, b) => {
+      const posDelta = a.note.position - b.note.position
+      if (posDelta !== 0) return posDelta
+      return a.note.pitch - b.note.pitch
+    })
+
+  const safeThreshold = Math.max(0, closeThreshold)
+  const safeProbability = Math.max(0, Math.min(1, joinProbability))
+  const closeSlideDuration = randomInRange(0.03, Math.max(0.03, Math.min(0.25, safeThreshold * 0.9)))
+  const randomSlideDuration = () => randomInRange(0.03, 0.25)
+
+  const groups: Array<{ notes: Array<{ id: string; note: NoteData }>; slideDurations: number[] }> = []
+  let currentGroup = { notes: [sortedNotes[0]], slideDurations: [] as number[] }
+
+  for (let i = 0; i < sortedNotes.length - 1; i += 1) {
+    const current = sortedNotes[i].note
+    const next = sortedNotes[i + 1].note
+    const gap = next.position - current.position
+
+    let join = false
+    let slideDuration = 0.1
+    if (gap <= safeThreshold) {
+      join = true
+      slideDuration = closeSlideDuration
+    } else if (Math.random() < safeProbability) {
+      join = true
+      slideDuration = randomSlideDuration()
+    }
+
+    if (join) {
+      currentGroup.notes.push(sortedNotes[i + 1])
+      currentGroup.slideDurations.push(slideDuration)
+    } else {
+      groups.push(currentGroup)
+      currentGroup = { notes: [sortedNotes[i + 1]], slideDurations: [] }
+    }
+  }
+  groups.push(currentGroup)
+
+  return groups.flatMap(group => {
+    if (group.notes.length === 1) {
+      const entry = group.notes[0]
+      return [{
+        id: entry.id,
+        pitch: entry.note.pitch,
+        position: entry.note.position,
+        duration: entry.note.duration,
+        velocity: entry.note.velocity,
+        mpePitch: entry.note.mpePitch,
+        metadata: entry.note.metadata
+      }]
+    }
+    return [buildSlideNoteFromSequence(group.notes, group.slideDurations, 0.1)]
+  })
+}
+
 const handleConvertToSlides = () => {
   const updatedNotes = convertToSlides(latestNotes.value, 0.1)
+  pianoRollRef.value?.setNotes(updatedNotes)
+}
+
+const smartSmoothThreshold = ref(0.25)
+const smartSmoothProbability = ref(0.3)
+
+const handleSmartSmooth = () => {
+  const updatedNotes = convertToSmartSlides(
+    latestNotes.value,
+    Number(smartSmoothThreshold.value),
+    Number(smartSmoothProbability.value)
+  )
   pianoRollRef.value?.setNotes(updatedNotes)
 }
 
@@ -458,6 +624,17 @@ onUnmounted(() => {
       <button @click="playPianoRoll">Play Piano Roll</button>
       <button @click="playPianoRollSlidesSynth">Play FM Slides</button>
       <button @click="stopAllPlayback">Stop</button>
+    </div>
+    <div>
+      <label>
+        Smart smooth threshold (beats):
+        <input type="number" step="0.01" min="0" v-model.number="smartSmoothThreshold" />
+      </label>
+      <label>
+        Join probability:
+        <input type="number" step="0.05" min="0" max="1" v-model.number="smartSmoothProbability" />
+      </label>
+      <button @click="handleSmartSmooth">Apply smart smooth</button>
     </div>
     <div>
       <div>Slide pitch (base + offset): {{ slideDebugPitch ?? '-' }}</div>
