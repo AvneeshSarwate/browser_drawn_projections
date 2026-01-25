@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { inject, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { inject, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import * as BABYLON from 'babylonjs'
 import CanvasRoot from '@/canvas/CanvasRoot.vue'
 import { appStateName, engineRef, type TemplateAppState, drawFlattenedStrokeGroup, resolution, textAnimMetadataSchema, textStyleMetadataSchema, fxChainMetadataSchema } from './appState'
@@ -20,7 +20,9 @@ import * as Tone from 'tone'
 import { m2f } from '@/music/mpeSynth'
 import { note } from '@/music/clipPlayback'
 import { getFMSynthChain, getPiano, TONE_AUDIO_START } from '@/music/synths'
-import { INITIALIZE_ABLETON_CLIPS, createClipDataTsDownloadCallback, type AbletonClip, type AbletonNote } from '@/io/abletonClips'
+import { INITIALIZE_ABLETON_CLIPS, createClipDataTsDownloadCallback, AbletonClip, abletonNoteToPianoRollNote, pianoRollNoteToAbletonNote, clipMap, type AbletonNote } from '@/io/abletonClips'
+import PianoRollRoot from '@/pianoRoll/PianoRollRoot.vue'
+import type { NoteData, NoteDataInput } from '@/pianoRoll/pianoRollState'
 import { curve2val } from '@/io/curveInterpolation'
 import { clipData as staticClipData } from './clipData'
 import { TimeContext, launchBrowser, CancelablePromiseProxy } from '@/channels/offline_time_context'
@@ -725,9 +727,73 @@ function disposeMelodyMap() {
 }
 
 // UI Button handlers (shared with MIDI button logic)
-const baseClipNames = ['dscale5', 'dscale7', 'd7mel']
+const baseClipNames = ['dscale5', 'dscale7', 'd7mel', 'melody4']
 const baseTransform = 's_tr s0 dR7 : str s1 : rot s2 : rev s3 : orn s4 dR7 : easeCirc s5 : spread s6 dR7'
 const delayTransform = 's_tr s8 dR7 : str s9 : rot s10 : rev s11 : orn s12 dR7 : easeCirc s13'
+const DEFAULT_EMPTY_CLIP_LENGTH_BEATS = 16
+
+type PianoRollRootInstance = InstanceType<typeof PianoRollRoot> & {
+  setNotes(notes: NoteDataInput[]): void
+}
+
+const pianoRollRef = ref<PianoRollRootInstance | null>(null)
+const selectedMelodyClip = ref(baseClipNames[0])
+const initialPianoNotes: Array<[string, NoteData]> = []
+
+const ensureClipExists = (name: string) => {
+  const existing = clipMap.get(name)
+  if (existing) return existing
+  const emptyClip = new AbletonClip(name, DEFAULT_EMPTY_CLIP_LENGTH_BEATS, [])
+  clipMap.set(name, emptyClip)
+  return emptyClip
+}
+
+const ensureClipNoteIds = (clip: AbletonClip) => {
+  let changed = false
+  const updatedNotes = clip.notes.map((note, idx) => {
+    if (note.noteId) return note
+    changed = true
+    const suffix = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+    return { ...note, noteId: `${clip.name}-n${idx}-${suffix}` }
+  })
+  if (!changed) return clip
+  const updated = new AbletonClip(clip.name, clip.duration, updatedNotes)
+  clipMap.set(clip.name, updated)
+  return updated
+}
+
+const loadSelectedClipIntoPianoRoll = () => {
+  const clip = ensureClipNoteIds(ensureClipExists(selectedMelodyClip.value))
+  const notes = clip.notes.map((note, idx) => {
+    const noteId = note.noteId ?? `${clip.name}-n${idx}`
+    const pianoNote = abletonNoteToPianoRollNote({ ...note, noteId }, noteId)
+    return {
+      ...pianoNote,
+      id: pianoNote.id ?? noteId
+    }
+  })
+  pianoRollRef.value?.setNotes(notes)
+}
+
+const handlePianoRollNotesUpdate = (notes: Array<[string, NoteData]>) => {
+  const clip = ensureClipExists(selectedMelodyClip.value)
+  const updatedNotes = notes.map(([id, note]) => {
+    const abletonNote = pianoRollNoteToAbletonNote(note)
+    return { ...abletonNote, noteId: id }
+  })
+  const maxEnd = notes.reduce((maxEnd, [, note]) => {
+    const end = note.position + note.duration
+    return Math.max(maxEnd, end)
+  }, 0)
+  const duration = Math.max(clip.duration, DEFAULT_EMPTY_CLIP_LENGTH_BEATS, maxEnd)
+  clipMap.set(selectedMelodyClip.value, new AbletonClip(selectedMelodyClip.value, duration, updatedNotes))
+}
+
+watch(selectedMelodyClip, () => {
+  loadSelectedClipIntoPianoRoll()
+})
 
 /**
  * Creates melodyMapOpts for runLineWithDelay.
@@ -1010,6 +1076,10 @@ onMounted(async () => {
     // Initialize Ableton clips
     await INITIALIZE_ABLETON_CLIPS('src/sketches/sonar_sketch/piano_melodies Project/freeze_loop_setup_sonar.als', staticClipData, true)
     console.log('Ableton clips ready')
+    baseClipNames.forEach((name) => {
+      ensureClipExists(name)
+    })
+    loadSelectedClipIntoPianoRoll()
 
     // Wait for Tone.js audio to be ready
     await TONE_AUDIO_START
@@ -1337,6 +1407,23 @@ onUnmounted(() => {
           </div>
         </div>
       </div>
+
+      <details class="piano-roll-panel">
+        <summary>Melody Editor</summary>
+        <div class="piano-roll-controls">
+          <label>
+            Melody:
+            <select v-model="selectedMelodyClip">
+              <option v-for="name in baseClipNames" :key="name" :value="name">{{ name }}</option>
+            </select>
+          </label>
+        </div>
+        <PianoRollRoot
+          ref="pianoRollRef"
+          :initial-notes="initialPianoNotes"
+          @notes-update="handlePianoRollNotesUpdate"
+        />
+      </details>
     </div>
   </Teleport>
 </template>
@@ -1621,5 +1708,27 @@ input[type="range"]::-moz-range-thumb:hover {
   background: linear-gradient(145deg, #81C784, #4CAF50);
   border-color: #2E7D32;
   box-shadow: inset 2px 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.piano-roll-panel {
+  margin-top: 16px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: #fafafa;
+}
+
+.piano-roll-panel summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 8px;
+}
+
+.piano-roll-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 8px 0 12px;
 }
 </style>
