@@ -3,11 +3,16 @@ import { deserializeCanvasState } from '@/canvas/canvasPersistence'
 import '@/canvas/typographyGuides'
 import { mappingState } from './mappingState'
 import { sliderPresests } from './sliderPresets'
+import { clipMap, AbletonClip } from '@/io/abletonClips'
+import { clipData } from './clipData'
 import { setSliderPresetsState } from './sliderPresetState'
 
 export type PresetCallback = (canvasState: CanvasRuntimeState) => Promise<void>
 
 const presetRegistry = new Map<string, PresetCallback>()
+export const projectionPresetState = {
+  hasRun: false
+}
 
 export const registerPreset = (name: string, callback: PresetCallback) => {
   presetRegistry.set(name, callback)
@@ -39,6 +44,17 @@ export const projectionPreset: PresetCallback = async (canvasState: CanvasRuntim
   console.log('projection preset')
   deserializeCanvasState(canvasState, JSON.stringify(mappingState))
   setSliderPresetsState(sliderPresests, true)
+  const allowedClips = ['dscale5', 'dscale7', 'd7mel', 'melody4']
+  clipMap.clear()
+  allowedClips.forEach((name) => {
+    const data = clipData[name]
+    if (data) {
+      clipMap.set(name, new AbletonClip(data.name, data.duration, data.notes))
+    } else {
+      clipMap.set(name, new AbletonClip(name, 16, []))
+    }
+  })
+  projectionPresetState.hasRun = true
 }
 
 registerPreset('projection', projectionPreset)

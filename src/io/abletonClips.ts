@@ -497,6 +497,45 @@ export const createClipDataTsDownloadCallback = (fileName = 'clipData.ts') => {
   }
 }
 
+export const createClipDataJsonSource = (data?: Record<string, AbletonClipRawData>) => {
+  const clipData = data ?? clipMapToRawData()
+  return JSON.stringify(clipData, null, 2)
+}
+
+export const createClipDataJsonDownloadCallback = (fileName = 'clipData.json') => {
+  return () => {
+    if (typeof window === 'undefined') {
+      console.warn('createClipDataJsonDownloadCallback called outside browser context')
+      return
+    }
+    const json = createClipDataJsonSource()
+    const blob = new Blob([json], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = fileName
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+}
+
+export const loadClipDataFromJson = (jsonText: string) => {
+  let parsed: Record<string, AbletonClipRawData> | null = null
+  try {
+    parsed = JSON.parse(jsonText)
+  } catch (err) {
+    console.warn('Failed to parse clip JSON', err)
+    return false
+  }
+  if (!parsed || typeof parsed !== 'object') return false
+
+  clipMap.clear()
+  Object.entries(parsed).forEach(([key, value]) => {
+    clipMap.set(key, new AbletonClip(value.name, value.duration, value.notes))
+  })
+  return true
+}
+
 
 ws.onopen = () => {
   console.log('Connected to server');

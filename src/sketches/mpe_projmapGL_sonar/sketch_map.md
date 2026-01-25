@@ -162,6 +162,31 @@ This ensures left/right column alternation happens only when melodies actually p
 
 ---
 
+## Editable MIDI (Piano Roll + Download/Upload)
+
+This sketch exposes a piano-roll editor for the **four melodies** used by the installation:
+`dscale5`, `dscale7`, `d7mel`, `melody4`.
+
+**UI placement**:
+- Collapsible *Melody Editor* section under the slider/button UI.
+- A selector chooses which melody is shown in the piano roll.
+
+**Editing behavior**:
+- Notes edited in the piano roll are written back into `clipMap` immediately.
+- Missing clips are auto-created with a default duration of **16 beats** (4 measures).
+- Switching the selector reloads the corresponding clip into the roll.
+
+**Persistence**:
+- **Download clipData.json** saves the current `clipMap` (only the active clips if the projection preset prunes it).
+- **Upload clipData.json** loads a previously saved file back into `clipMap`.
+- The upload reloads the currently selected melody into the roll.
+
+**Projection preset behavior**:
+- `projectionPreset` clears `clipMap` and repopulates only the four installation clips from `clipData.ts`.
+- If a clip is missing from `clipData.ts`, it is created empty (16 beats).
+
+---
+
 ### polygonFx.ts (Rendering Pipeline)
 **Path**: `polygonFx.ts`
 

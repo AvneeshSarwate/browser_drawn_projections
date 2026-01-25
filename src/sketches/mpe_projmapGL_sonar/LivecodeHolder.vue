@@ -6,7 +6,7 @@ import { appStateName, engineRef, type TemplateAppState, drawFlattenedStrokeGrou
 import type { CanvasStateSnapshot, PolygonRenderData } from '@/canvas/canvasState'
 import { clearListeners, singleKeydownEvent, mousemoveEvent, targetToP5Coords } from '@/io/keyboardAndMouse'
 import type p5 from 'p5'
-import { getPreset } from './presets'
+import { getPreset, projectionPresetState } from './presets'
 import { DropAndScrollManager } from './dropAndScroll'
 import { MatterExplodeManager } from './matterExplode'
 import { syncChainsAndMeshes, renderPolygonFx, disposePolygonFx, type PolygonFxSyncOptions } from './polygonFx'
@@ -20,7 +20,7 @@ import * as Tone from 'tone'
 import { m2f } from '@/music/mpeSynth'
 import { note } from '@/music/clipPlayback'
 import { getFMSynthChain, getPiano, TONE_AUDIO_START } from '@/music/synths'
-import { INITIALIZE_ABLETON_CLIPS, createClipDataTsDownloadCallback, AbletonClip, abletonNoteToPianoRollNote, pianoRollNoteToAbletonNote, clipMap, type AbletonNote } from '@/io/abletonClips'
+import { INITIALIZE_ABLETON_CLIPS, createClipDataJsonDownloadCallback, loadClipDataFromJson, AbletonClip, abletonNoteToPianoRollNote, pianoRollNoteToAbletonNote, clipMap, type AbletonNote } from '@/io/abletonClips'
 import PianoRollRoot from '@/pianoRoll/PianoRollRoot.vue'
 import type { NoteData, NoteDataInput } from '@/pianoRoll/pianoRollState'
 import { curve2val } from '@/io/curveInterpolation'
@@ -199,7 +199,31 @@ function uploadPresets(event: Event) {
 // Load presets on module init
 loadPresetsFromStorage()
 const immediateLaunchQueue: Array<(ctx: TimeContext) => Promise<void>> = []
-const downloadClipData = createClipDataTsDownloadCallback()
+const downloadClipData = createClipDataJsonDownloadCallback()
+const clipUploadInputRef = ref<HTMLInputElement | null>(null)
+
+const triggerClipUpload = () => {
+  clipUploadInputRef.value?.click()
+}
+
+const uploadClipData = (event: Event) => {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    const text = String(e.target?.result ?? '')
+    const success = loadClipDataFromJson(text)
+    if (success) {
+      baseClipNames.forEach((name) => ensureClipExists(name))
+      loadSelectedClipIntoPianoRoll()
+    } else {
+      console.warn('Failed to load clip data JSON')
+    }
+  }
+  reader.readAsText(file)
+  input.value = ''
+}
 
 // Button state for UI buttons
 const gateButtonStates = ref<Record<number, boolean>>({})
@@ -739,6 +763,7 @@ type PianoRollRootInstance = InstanceType<typeof PianoRollRoot> & {
 const pianoRollRef = ref<PianoRollRootInstance | null>(null)
 const selectedMelodyClip = ref(baseClipNames[0])
 const initialPianoNotes: Array<[string, NoteData]> = []
+const clipsReady = ref(false)
 
 const ensureClipExists = (name: string) => {
   const existing = clipMap.get(name)
@@ -746,6 +771,13 @@ const ensureClipExists = (name: string) => {
   const emptyClip = new AbletonClip(name, DEFAULT_EMPTY_CLIP_LENGTH_BEATS, [])
   clipMap.set(name, emptyClip)
   return emptyClip
+}
+
+const pruneClipMapToBaseClips = () => {
+  const allowed = new Set(baseClipNames)
+  Array.from(clipMap.keys()).forEach((name) => {
+    if (!allowed.has(name)) clipMap.delete(name)
+  })
 }
 
 const ensureClipNoteIds = (clip: AbletonClip) => {
@@ -791,9 +823,10 @@ const handlePianoRollNotesUpdate = (notes: Array<[string, NoteData]>) => {
   clipMap.set(selectedMelodyClip.value, new AbletonClip(selectedMelodyClip.value, duration, updatedNotes))
 }
 
-watch(selectedMelodyClip, () => {
+watch([selectedMelodyClip, pianoRollRef, clipsReady], () => {
+  if (!clipsReady.value || !pianoRollRef.value) return
   loadSelectedClipIntoPianoRoll()
-})
+}, { flush: 'post', immediate: true })
 
 /**
  * Creates melodyMapOpts for runLineWithDelay.
@@ -916,6 +949,24 @@ onMounted(async () => {
       }
     }
   }
+
+  const initClipMap = async () => {
+    if (!projectionPresetState.hasRun || clipMap.size === 0) {
+      await INITIALIZE_ABLETON_CLIPS('src/sketches/sonar_sketch/piano_melodies Project/freeze_loop_setup_sonar.als', staticClipData, true)
+      console.log('Ableton clips ready')
+    } else {
+      console.log('Skipping clip initialization (projection preset already applied)')
+    }
+    if (projectionPresetState.hasRun) {
+      pruneClipMapToBaseClips()
+    }
+    baseClipNames.forEach((name) => {
+      ensureClipExists(name)
+    })
+    clipsReady.value = true
+  }
+
+  await initClipMap()
 
   // p5/Three canvas elements
   const p5i = appState.p5Instance!!
@@ -1073,13 +1124,9 @@ onMounted(async () => {
     if (iac4) midiOuts.push(iac4)
     console.log('MIDI outputs configured:', midiOuts.length)
 
-    // Initialize Ableton clips
-    await INITIALIZE_ABLETON_CLIPS('src/sketches/sonar_sketch/piano_melodies Project/freeze_loop_setup_sonar.als', staticClipData, true)
-    console.log('Ableton clips ready')
-    baseClipNames.forEach((name) => {
-      ensureClipExists(name)
-    })
-    loadSelectedClipIntoPianoRoll()
+    if (!clipsReady.value) {
+      await initClipMap()
+    }
 
     // Wait for Tone.js audio to be ready
     await TONE_AUDIO_START
@@ -1368,8 +1415,22 @@ onUnmounted(() => {
           class="preset-btn download"
           @click="downloadClipData"
         >
-          Download clipData.ts
+          Download clipData.json
         </button>
+        <button
+          v-if="SHOW_CLIP_DATA_DOWNLOAD"
+          class="preset-btn upload"
+          @click="triggerClipUpload"
+        >
+          Upload clipData.json
+        </button>
+        <input
+          ref="clipUploadInputRef"
+          type="file"
+          accept=".json"
+          @change="uploadClipData"
+          style="display: none"
+        />
 
         <!-- Row 1: One-shot buttons (0-3) -->
         <div class="button-row">
