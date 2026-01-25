@@ -25,6 +25,7 @@ export type MelodyDrawInfo = {
   activeArcs: ArcAnimation[]    // Currently animating arcs
   melodyRootBlend: number | null // Calculated from first note's pitch (D=0, C#=1)
   melodyStartTime: number | null // When the first note of the melody was launched
+  melodyDurationMs: number | null // Duration used to normalize melodyProgBlend
 }
 
 /**

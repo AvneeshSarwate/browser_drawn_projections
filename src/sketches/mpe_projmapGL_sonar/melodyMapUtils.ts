@@ -97,7 +97,8 @@ export function getMelodyMapPolygons(polygons: PolygonRenderData): PolygonRender
 export function allocateMelodyToPolygon(
   melodyId: string,
   state: MelodyMapGlobalState,
-  polygons: PolygonRenderData
+  polygons: PolygonRenderData,
+  melodyDurationMs?: number
 ): string | null {
   // Determine target column based on counter
   const targetColumn = getTargetColumn(state.columnCounter)
@@ -135,7 +136,8 @@ export function allocateMelodyToPolygon(
     polygonId,
     activeArcs: [],
     melodyRootBlend: null,
-    melodyStartTime: null
+    melodyStartTime: null,
+    melodyDurationMs: melodyDurationMs ?? null
   })
 
   // Cache edge points if not already cached
@@ -188,6 +190,7 @@ function calculateMelodyRootBlend(pitch: number): number {
 
 // Default melody duration for normalizing melodyProgBlend (in ms)
 const DEFAULT_MELODY_DURATION_MS = 3000
+const MELODY_PROG_EPSILON = 1e-6
 
 export function launchArc(
   melodyId: string,
@@ -212,7 +215,9 @@ export function launchArc(
 
   // Calculate melodyProgBlend based on time elapsed since melody started
   const elapsedMs = currentTime - drawInfo.melodyStartTime
-  const melodyProgBlend = Math.min(1, elapsedMs / DEFAULT_MELODY_DURATION_MS)
+  const durationMs = drawInfo.melodyDurationMs ?? DEFAULT_MELODY_DURATION_MS
+  const rawBlend = elapsedMs / durationMs
+  const melodyProgBlend = Math.max(0, Math.min(1 - MELODY_PROG_EPSILON, Number.isFinite(rawBlend) ? rawBlend : 0))
 
   const { start, end } = twoRandomPoints(edgePoints)
 

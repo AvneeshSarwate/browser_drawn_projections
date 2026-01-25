@@ -11,6 +11,12 @@ This sketch combines three visual systems driven by MIDI/music input:
    - `basicBlur`: wobble, blur, pixelation, polygon masking (original)
    - `feedbackBloom`: feedback loop, blur, transform, layer blend, bloom, polygon masking
 
+**Audio + MPE generation**:
+- **MIDI or Sampler playback** for clip notes (piano samples by default)
+- **Monophonic FM synth** for generated MPE slide melodies
+- **Generated MPE events** feed the same handlers as live controllers
+- **Live MPE input** is optional and can be toggled in code
+
 **Key External Dependencies**:
 - **CanvasRoot** (`@/canvas/CanvasRoot.vue`): External component that provides polygon/freehand drawing UI. Shape data flows INTO this sketch via `syncCanvasState()` callback.
 - **offline_time_context** (`@/channels/offline_time_context`): Custom timing library providing `TimeContext`, `launchBrowser()`, and `CancelablePromiseProxy`. This is the core timing system, NOT Tone.js.
@@ -33,18 +39,21 @@ const mpeRenderStates = new Map<string, RenderState>()     // polygon -> render 
 const melodyMapState: MelodyMapGlobalState                 // global melody tracking
 const sliders: number[] = Array(17).fill(0.5)              // combined LPD8 + TouchOSC
 const immediateLaunchQueue: Array<(ctx: TimeContext) => Promise<void>> = []
+const fmSynth = getFMSynthChain({ monophonic: true }).instrument
+const mpeEventBus = mitt()                                 // synthetic MPE event bus
+const activeSmoothedMpePlayback: LoopHandle | null         // single monophonic MPE melody
 ```
 
 **Key Functions**:
 - `syncCanvasState()`: Pulls polygon changes, updates all managers
 - `syncMPEBundles()`: Allocates/removes MPE bundles for polygons
-- `handleNoteStart/Update/End()`: MPE MIDI event handlers
+- `handleNoteStart/Update/End()`: MPE event handlers (live or synthetic)
 - `createMelodyMapOpts()`: Creates wrappers for polygon allocation during playback
 - `triggerOneShotButton(ind)` / `triggerGateButtonDown/Up(ind)`: UI/MIDI button handlers
 
 **Data Flow**:
 - IN: CanvasRoot component (polygon shapes + metadata via `syncCanvasState` callback), MIDI inputs, Ableton clips, UI buttons
-- OUT: appState, Babylon.js engine, MIDI outputs, p5.js canvas
+- OUT: appState, Babylon.js engine, MIDI outputs, p5.js canvas, Tone.js synths
 
 **Canvas Integration**: The `<CanvasRoot>` component is mounted in the template with `:sync-state="syncCanvasState"`. When shapes are drawn/modified in the canvas UI, `syncCanvasState()` is called with the updated `CanvasStateSnapshot` containing all polygon and freehand data.
 
@@ -58,7 +67,7 @@ Manages melody-to-polygon allocation and arc animations.
 **Key Functions**:
 ```typescript
 // Allocation
-allocateMelodyToPolygon(melodyId, state, polygons): string | null
+allocateMelodyToPolygon(melodyId, state, polygons, melodyDurationMs?): string | null
   // Increments columnCounter (drives left/right alternation)
   // Allocates to target column, fallback to other/middle
 
@@ -68,6 +77,7 @@ releaseMelody(melodyId, state): void
 launchArc(melodyId, pitch, velocity, duration, state): ArcAnimation | null
   // Gets two random edge points from polygon
   // Creates arc with startTime = performance.now()
+  // melodyProgBlend normalized to clip duration (ms)
 
 cleanupCompletedArcs(state, currentTime): void
   // Called each frame, removes finished arcs
@@ -97,8 +107,10 @@ The main playback execution engine.
 **Key Types**:
 ```typescript
 type MelodyMapOptions = {
-  wrapPlayNote: (basePlayNote: PlayNoteFunc) => PlayNoteFunc
-  // Called right before melody plays, allocates polygon
+  wrapPlayNote: (basePlayNote: PlayNoteFunc, info?: { melodyDurationBeats; ctx }) => PlayNoteFunc
+  // Called right before melody plays, allocates polygon (duration-aware)
+  playSmoothedClip?: (clip: AbletonClip, ctx: TimeContext) => void
+  // Optional: plays generated monophonic MPE melody
 }
 ```
 
@@ -118,17 +130,35 @@ runLineWithDelay(baseClipName, baseTransform, delayTransform, ctx, appState, pla
 **Critical Timing in runLineWithDelay**:
 ```typescript
 // Base melody - allocation happens here (increments counter)
-const basePlayNote = melodyMapOpts?.wrapPlayNote(playNote) ?? playNote
+const basePlayNote = melodyMapOpts?.wrapPlayNote(playNote, { melodyDurationBeats, ctx }) ?? playNote
 playClipSimple(delayRootClip!, ctx, 0, basePlayNote)
 
 await ctx.wait(appState.sliders[DELAY_SLIDER]**2 * 8)  // delay slider
 
 // Delayed melody - allocation happens here (increments counter again)
-const delayPlayNote = melodyMapOpts?.wrapPlayNote(playNote) ?? playNote
+const delayPlayNote = melodyMapOpts?.wrapPlayNote(playNote, { melodyDurationBeats, ctx }) ?? playNote
 runLineClean(delayLine, ctx, 1, ..., delayPlayNote, ...)
+
+// Generated MPE melody (monophonic, optional)
+melodyMapOpts?.playSmoothedClip?.(smoothedClip, ctx)  // scheduled at delay * 0.5
 ```
 
 This ensures left/right column alternation happens only when melodies actually play.
+
+---
+
+## Audio & MIDI
+
+**Playback paths**:
+- **Sampler playback** (default): `getPiano(true)` voices via `note()` for clip notes.
+- **MIDI output**: Optional; sends note on/off to IAC outputs when enabled.
+- **Monophonic MPE synth**: `getFMSynthChain({ monophonic: true })` for generated slide melody.
+
+**Generated MPE**:
+- Smoothed monophonic clip is built from `delayRootClip` (smart smooth).
+- Playback updates FM synth frequency per-frame from pitch curve.
+- Emits MPE start/update/end events into the same handlers used by live MPE input.
+- If a new MPE melody starts, the previous one is canceled (monophonic).
 
 ---
 
@@ -196,12 +226,17 @@ type ArcAnimation = {
   startPoint: Point, endPoint: Point  // polygon edges
   startTime: number, duration: number
   pitch: number, velocity: number
+  melodyRootBlend: number
+  melodyProgBlend: number
 }
 
 type MelodyDrawInfo = {
   melodyId: string
   polygonId: string
   activeArcs: ArcAnimation[]
+  melodyRootBlend: number | null
+  melodyStartTime: number | null
+  melodyDurationMs: number | null
 }
 
 type MelodyMapGlobalState = {
@@ -258,6 +293,9 @@ runLineWithDelay() in playbackUtils.ts
   │         ├─ launchArc() → adds to activeArcs
   │         └─ playNote() → MIDI output
   │
+  ├─ (optional) playSmoothedClip() @ delay * 0.5
+  │    └─ FM synth + synthetic MPE events for visuals
+  │
   ├─ await delay (slider-controlled)
   │
   └─ wrapPlayNote() called again (increments counter, now opposite column)
@@ -304,6 +342,17 @@ MIDI Note Off
   ▼
 releaseVoice() + startReleaseAnimation()
   └─ Ramps fillProgress 1→0 over releaseTime
+```
+
+### Generated MPE Flow (Monophonic)
+```
+runLineWithDelay() → buildSmartSmoothClip(delayRootClip)
+  │
+  └─ playSmoothedClip(smoothedClip) @ delay * 0.5
+       │
+       ├─ FM synth triggers base pitch (Tone.js)
+       ├─ per-frame pitch updates from pitchCurve
+       └─ emits MPE start/update/end → same handlers as live input
 ```
 
 ---
@@ -418,7 +467,7 @@ The melodyMap system uses a two-parameter color scheme that creates visual conti
 **`melodyProgBlend`** (0-1): Time-based position within the melody
 - First note = 0
 - Notes later in the melody approach 1
-- Normalized over `DEFAULT_MELODY_DURATION_MS` (3000ms)
+- Normalized over the **clip duration** (beats → ms via ctx.bpm)
 
 ### Color Function (`mpeColor.ts`)
 
@@ -443,7 +492,7 @@ This creates a 2D color space where:
 ```
 allocateMelodyToPolygon() [melodyMapUtils.ts]
   │
-  └─ Initializes: melodyRootBlend: null, melodyStartTime: null
+  └─ Initializes: melodyRootBlend: null, melodyStartTime: null, melodyDurationMs: clipDurationMs
        │
        ▼
 launchArc() [melodyMapUtils.ts] - First note
@@ -457,7 +506,7 @@ launchArc() [melodyMapUtils.ts] - First note
 launchArc() [melodyMapUtils.ts] - Subsequent notes
   │
   ├─ elapsedMs = currentTime - melodyStartTime
-  └─ melodyProgBlend = min(1, elapsedMs / 3000)
+  └─ melodyProgBlend = min(1, elapsedMs / clipDurationMs)
        │
        ▼
 ArcAnimation stored with both blend values
@@ -499,6 +548,7 @@ type MelodyDrawInfo = {
   // ... existing fields ...
   melodyRootBlend: number | null   // Calculated from first note
   melodyStartTime: number | null   // Timestamp of first note
+  melodyDurationMs: number | null  // Clip duration for normalization
 }
 ```
 

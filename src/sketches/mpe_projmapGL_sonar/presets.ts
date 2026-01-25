@@ -2,6 +2,8 @@ import type { CanvasRuntimeState } from '@/canvas/canvasState'
 import { deserializeCanvasState } from '@/canvas/canvasPersistence'
 import '@/canvas/typographyGuides'
 import { mappingState } from './mappingState'
+import { sliderPresests } from './sliderPresets'
+import { setSliderPresetsState } from './sliderPresetState'
 
 export type PresetCallback = (canvasState: CanvasRuntimeState) => Promise<void>
 
@@ -36,6 +38,7 @@ registerPreset('alphabet', alphabetPreset)
 export const projectionPreset: PresetCallback = async (canvasState: CanvasRuntimeState) => {
   console.log('projection preset')
   deserializeCanvasState(canvasState, JSON.stringify(mappingState))
+  setSliderPresetsState(sliderPresests, true)
 }
 
 registerPreset('projection', projectionPreset)

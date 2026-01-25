@@ -210,7 +210,7 @@ export type MelodyMapOptions = {
    * Should allocate a polygon and return a wrapped playNote that includes visual effects.
    * This is called once for the base melody and once for the delay melody (if not cancelled).
    */
-  wrapPlayNote: (basePlayNote: PlayNoteFunc) => PlayNoteFunc
+  wrapPlayNote: (basePlayNote: PlayNoteFunc, info?: { melodyDurationBeats: number; ctx: TimeContext }) => PlayNoteFunc
   /**
    * Called with a smoothed monophonic clip derived from delayRootClip.
    * Use this to drive MPE visuals/synth.
@@ -320,11 +320,16 @@ export const runLineWithDelay = (
   const smoothedClip = melodyMapOpts?.playSmoothedClip
     ? buildSmartSmoothClip(delayRootClip!, SMART_SMOOTH_CLOSE_THRESHOLD, SMART_SMOOTH_JOIN_PROBABILITY)
     : null
+  const delayGroups = splitTextToGroups(delayLine)
+  const delayClip = delayGroups.length ? buildClipFromLine(delayGroups[0].clipLine, appState.sliders).clip : null
 
   const handle = ctx.branch(async ctx => {
     // Wrap playNote for base melody right before it plays
     // This is when polygon allocation should happen (increments left/right counter)
-    const basePlayNote = melodyMapOpts?.wrapPlayNote(playNote) ?? playNote
+    const basePlayNote = melodyMapOpts?.wrapPlayNote(playNote, {
+      melodyDurationBeats: delayRootClip?.duration ?? 0,
+      ctx
+    }) ?? playNote
     playClipSimple(delayRootClip!, ctx, 0, basePlayNote)
 
     if (melodyMapOpts?.playSmoothedClip && smoothedClip) {
@@ -338,7 +343,10 @@ export const runLineWithDelay = (
 
     // Wrap playNote for delay melody right before it plays (only if we reach here, i.e., not cancelled)
     // This is when polygon allocation should happen for the delay melody
-    const delayPlayNote = melodyMapOpts?.wrapPlayNote(playNote) ?? playNote
+    const delayPlayNote = melodyMapOpts?.wrapPlayNote(playNote, {
+      melodyDurationBeats: delayClip?.duration ?? 0,
+      ctx
+    }) ?? playNote
     runLineClean(delayLine, ctx, 1, appState.sliders, dummyVoices, () => { }, () => { }, delayPlayNote, (() => { }) as any)
   })
 

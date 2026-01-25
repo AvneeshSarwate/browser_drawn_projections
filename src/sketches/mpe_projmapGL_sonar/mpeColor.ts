@@ -94,10 +94,25 @@ function lerpRgb(a: RGB, b: RGB, t: number): RGB {
 }
 
 function sampleGradient(gradient: GradientStop[], s: number): RGB {
-  const stop1 = gradient.find((stop) => stop.s <= s)
-  const stop2 = gradient.find((stop) => stop.s > s)
+  if (!Number.isFinite(s)) return { r: 0, g: 0, b: 0 }
+  const epsilon = 1e-6
+  const clamped = Math.max(0, Math.min(1 - epsilon, s))
+
+  let stop1 = gradient[0]
+  let stop2 = gradient[gradient.length - 1]
+  for (let i = 0; i < gradient.length - 1; i += 1) {
+    const current = gradient[i]
+    const next = gradient[i + 1]
+    if (clamped >= current.s && clamped < next.s) {
+      stop1 = current
+      stop2 = next
+      break
+    }
+  }
+
   if (!stop1 || !stop2) return { r: 0, g: 0, b: 0 }
-  const t = (s - stop1.s) / (stop2.s - stop1.s)
+  const denom = stop2.s - stop1.s
+  const t = denom <= 0 ? 0 : (clamped - stop1.s) / denom
   const rgb1 = {
     r: stop1.rgb[0],
     g: stop1.rgb[1],

@@ -42,6 +42,7 @@ import {
   type VisualNotePlayFunc
 } from './melodyMapUtils'
 import type { ArcRenderData } from './textRegionUtils'
+import { sliderPresetsState, selectedPresetNameState, setSliderPresetsState, type SliderPreset } from './sliderPresetState'
 
 const appState = inject<TemplateAppState>(appStateName)!!
 const canvasRootRef = ref<InstanceType<typeof CanvasRoot> | null>(null)
@@ -78,21 +79,17 @@ let timeLoops: CancelablePromiseProxy<any>[] = []
 let activeSmoothedMpePlayback: LoopHandle | null = null
 
 // Slider presets
-interface SliderPreset {
-  name: string
-  values: number[]
-}
 const PRESETS_STORAGE_KEY = 'mpe-slider-presets'
-const sliderPresets = ref<SliderPreset[]>([])
-const selectedPresetName = ref<string>('')
+const sliderPresets = sliderPresetsState
+const selectedPresetName = selectedPresetNameState
 
 function loadPresetsFromStorage() {
   try {
     const stored = localStorage.getItem(PRESETS_STORAGE_KEY)
     if (stored) {
-      sliderPresets.value = JSON.parse(stored)
+      const parsed = JSON.parse(stored) as SliderPreset[]
+      setSliderPresetsState(parsed, true)
       if (sliderPresets.value.length > 0) {
-        selectedPresetName.value = sliderPresets.value[0].name
         // Auto-load the first preset's values
         sliderPresets.value[0].values.forEach((val, i) => {
           if (i < sliders.length) sliders[i] = val
@@ -186,10 +183,7 @@ function uploadPresets(event: Event) {
     try {
       const data = JSON.parse(e.target?.result as string)
       if (Array.isArray(data)) {
-        sliderPresets.value = data
-        if (sliderPresets.value.length > 0) {
-          selectedPresetName.value = sliderPresets.value[0].name
-        }
+        setSliderPresetsState(data as SliderPreset[], true)
         savePresetsToStorage()
       }
     } catch (err) {
@@ -743,12 +737,21 @@ const delayTransform = 's_tr s8 dR7 : str s9 : rot s10 : rev s11 : orn s12 dR7 :
  */
 function createMelodyMapOpts(): MelodyMapOptions {
   return {
-    wrapPlayNote: (basePlayNote: VisualNotePlayFunc) => {
+    wrapPlayNote: (basePlayNote: VisualNotePlayFunc, info) => {
       // Generate unique melody ID at the moment the melody is about to play
       const melodyId = `melody_${Date.now()}_${crypto.randomUUID()}`
 
       // Allocate polygon (this increments the left/right counter)
-      const polygonId = allocateMelodyToPolygon(melodyId, melodyMapState, appState.polygonRenderData)
+      const durationBeats = info?.melodyDurationBeats ?? 0
+      const durationMs = durationBeats > 0 && info?.ctx
+        ? (durationBeats * 60 / info.ctx.bpm) * 1000
+        : undefined
+      const polygonId = allocateMelodyToPolygon(
+        melodyId,
+        melodyMapState,
+        appState.polygonRenderData,
+        durationMs
+      )
 
       if (polygonId) {
         melodyMapLog(`Melody ${melodyId} allocated to polygon ${polygonId} (counter: ${melodyMapState.columnCounter})`)
