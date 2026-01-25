@@ -56,7 +56,8 @@ export const sketchNames = [
   'power2dTest',
   'power2dTestGL',
   'mpe_projmapGL_sonar',
-  'newPianoRollTest'
+  'newPianoRollTest',
+  'animationEditorDemo'
 ]
 
 const sketchRoutes = sketchNames.map(name => {
