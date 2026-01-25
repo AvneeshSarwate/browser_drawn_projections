@@ -351,7 +351,8 @@ export function scaleTransposeOneNote(clip: AbletonClip, transpose: number, note
     scale = new Scale();
   }
   const newClip = clip.clone();
-  newClip.notes[noteInd].pitch = scale.getByIndex(scale.getIndFromPitch(newClip.notes[noteInd].pitch) + transpose);
+  const sourceIndex = scale.getIndFromPitch(newClip.notes[noteInd].pitch);
+  newClip.notes[noteInd].pitch = scale.getByIndex(Math.round(sourceIndex + transpose));
   return newClip;
 }
 
@@ -1137,4 +1138,3 @@ export const TRANSFORM_REGISTRY: Record<string, ClipTransform> = {
     sliderScale: [n => n] // 0 to 1, where 0.5 is identity
   }
 };
-

@@ -376,7 +376,9 @@ export class AbletonClip {
   scaleTranspose(tranpose: number, scale: Scale): AbletonClip {
     const clone = this.clone();
     clone.notes.forEach(note => {
-      note.pitch = scale.getByIndex(scale.getIndFromPitch(note.pitch) + tranpose)
+      const ind = scale.getIndFromPitch(note.pitch)
+      const rounded = Number.isInteger(ind) ? ind : Math.round(ind)
+      note.pitch = scale.getByIndex(rounded + tranpose)
     });
     return clone;
   }
