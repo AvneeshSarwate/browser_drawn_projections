@@ -1326,155 +1326,131 @@ onUnmounted(() => {
 
   <!-- Teleport sliders to SketchHtml.vue -->
   <Teleport to="#slider-controls-target">
-    <div class="slider-container">
-      <!-- Row 1: Sliders 0-7 (vertical) -->
-      <div class="slider-row">
-        <div class="slider-label-row">Sliders 0-7 (LPD8)</div>
-        <div class="sliders-vertical">
-          <div v-for="i in 8" :key="i-1" class="slider-group">
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.001"
-              :value="sliders[i-1]"
-              @input="sliders[i-1] = parseFloat(($event.target as HTMLInputElement).value)"
-              orient="vertical"
-              class="slider-vertical"
-            />
-            <span class="slider-value">{{ sliders[i-1].toFixed(3) }}</span>
-            <span class="slider-index">{{ i-1 }}</span>
+    <div class="controls-root">
+      <!-- Voice Parameters: Two columns of horizontal sliders -->
+      <div class="voice-params">
+        <!-- Voice 1 -->
+        <div class="voice-column">
+          <div class="voice-header">Voice 1</div>
+          <div class="slider-list">
+            <div v-for="(label, idx) in ['Transpose', 'Stretch', 'Rotate', 'Reverse', 'Ornament', 'Skew', 'Spread', 'Noop']" :key="idx" class="slider-row">
+              <span class="slider-label">{{ idx + 1 }}. {{ label }}</span>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.001"
+                :value="sliders[idx]"
+                @input="sliders[idx] = parseFloat(($event.target as HTMLInputElement).value)"
+                class="slider-h"
+              />
+              <span class="slider-val">{{ sliders[idx].toFixed(2) }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Voice 2 -->
+        <div class="voice-column">
+          <div class="voice-header">Voice 2</div>
+          <div class="slider-list">
+            <div v-for="(label, idx) in ['Transpose', 'Stretch', 'Rotate', 'Reverse', 'Ornament', 'Skew', 'Spread', 'Noop']" :key="idx + 8" class="slider-row">
+              <span class="slider-label">{{ idx + 1 }}. {{ label }}</span>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.001"
+                :value="sliders[idx + 8]"
+                @input="sliders[idx + 8] = parseFloat(($event.target as HTMLInputElement).value)"
+                class="slider-h"
+              />
+              <span class="slider-val">{{ sliders[idx + 8].toFixed(2) }}</span>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- Row 2: Sliders 8-15 (vertical) -->
-      <div class="slider-row">
-        <div class="slider-label-row">Sliders 8-15 (TouchOSC)</div>
-        <div class="sliders-vertical">
-          <div v-for="i in 8" :key="i+7" class="slider-group">
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.001"
-              :value="sliders[i+7]"
-              @input="sliders[i+7] = parseFloat(($event.target as HTMLInputElement).value)"
-              orient="vertical"
-              class="slider-vertical"
-            />
-            <span class="slider-value">{{ sliders[i+7].toFixed(3) }}</span>
-            <span class="slider-index">{{ i+7 }}</span>
-          </div>
-        </div>
+      <!-- Delay Slider -->
+      <div class="delay-row">
+        <span class="delay-label">Delay</span>
+        <input
+          type="range"
+          min="0"
+          max="1"
+          step="0.001"
+          :value="sliders[16]"
+          @input="sliders[16] = parseFloat(($event.target as HTMLInputElement).value)"
+          class="delay-slider"
+        />
+        <span class="slider-val">{{ sliders[16].toFixed(2) }}</span>
       </div>
 
-      <!-- Horizontal slider: Slider 16 -->
-      <div class="slider-row horizontal">
-        <div class="slider-label-row">Slider 16 (Delay)</div>
-        <div class="slider-horizontal-container">
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.001"
-            :value="sliders[16]"
-            @input="sliders[16] = parseFloat(($event.target as HTMLInputElement).value)"
-            class="slider-horizontal"
-          />
-          <span class="slider-value">{{ sliders[16].toFixed(3) }}</span>
-        </div>
-      </div>
-
-      <!-- Slider Presets -->
-      <div class="preset-section">
-        <div class="slider-label-row">Slider Presets</div>
-        <div class="preset-controls">
+      <!-- Presets -->
+      <div class="section">
+        <div class="section-header">Presets</div>
+        <div class="preset-row">
           <select v-model="selectedPresetName" class="preset-select">
-            <option v-for="preset in sliderPresets" :key="preset.name" :value="preset.name">
-              {{ preset.name }}
-            </option>
+            <option v-for="preset in sliderPresets" :key="preset.name" :value="preset.name">{{ preset.name }}</option>
           </select>
-          <button @click="loadPreset" :disabled="!selectedPresetName" class="preset-btn load">Load</button>
-          <button @click="savePreset" class="preset-btn save">Save</button>
-          <button @click="overwritePreset" :disabled="!selectedPresetName" class="preset-btn overwrite">Overwrite</button>
-          <button @click="deletePreset" :disabled="!selectedPresetName" class="preset-btn delete">Delete</button>
+          <button @click="loadPreset" :disabled="!selectedPresetName" class="btn">Load</button>
+          <button @click="savePreset" class="btn">Save</button>
+          <button @click="overwritePreset" :disabled="!selectedPresetName" class="btn">Overwrite</button>
+          <button @click="deletePreset" :disabled="!selectedPresetName" class="btn btn-danger">Delete</button>
         </div>
-        <div class="preset-controls">
-          <button @click="downloadPresets" :disabled="sliderPresets.length === 0" class="preset-btn download">Download JSON</button>
-          <button @click="triggerUpload" class="preset-btn upload">Upload JSON</button>
+        <div class="preset-row">
+          <button @click="downloadPresets" :disabled="sliderPresets.length === 0" class="btn btn-secondary">↓ Presets</button>
+          <button @click="triggerUpload" class="btn btn-secondary">↑ Presets</button>
           <input ref="fileInputRef" type="file" accept=".json" @change="uploadPresets" style="display: none" />
         </div>
       </div>
 
-      <!-- Button Grid -->
-      <div class="button-section">
-        <div class="slider-label-row">Melody Triggers</div>
-        <button
-          v-if="SHOW_CLIP_DATA_DOWNLOAD"
-          class="preset-btn download"
-          @click="downloadClipData"
-        >
-          Download clipData.json
-        </button>
-        <button
-          v-if="SHOW_CLIP_DATA_DOWNLOAD"
-          class="preset-btn upload"
-          @click="triggerClipUpload"
-        >
-          Upload clipData.json
-        </button>
-        <input
-          ref="clipUploadInputRef"
-          type="file"
-          accept=".json"
-          @change="uploadClipData"
-          style="display: none"
-        />
-
-        <!-- Row 1: One-shot buttons (0-3) -->
-        <div class="button-row">
-          <div class="button-row-label">One-Shot</div>
-          <div class="button-grid">
-            <button
-              v-for="i in 4"
-              :key="`oneshot-${i-1}`"
-              @click="triggerOneShotButton(i-1)"
-              class="trigger-button oneshot"
-            >
-              {{ i-1 }}
-            </button>
+      <!-- Melody Triggers -->
+      <div class="section">
+        <div class="section-header">Triggers</div>
+        <div class="triggers-grid">
+          <div class="trigger-group">
+            <span class="trigger-label">One-Shot</span>
+            <div class="trigger-btns">
+              <button
+                v-for="i in 4"
+                :key="`oneshot-${i-1}`"
+                @click="triggerOneShotButton(i-1)"
+                class="trigger-btn"
+              >{{ i }}</button>
+            </div>
+          </div>
+          <div class="trigger-group">
+            <span class="trigger-label">Gate</span>
+            <div class="trigger-btns">
+              <button
+                v-for="i in 4"
+                :key="`gate-${i+3}`"
+                @mousedown="triggerGateButtonDown(i+3)"
+                @mouseup="triggerGateButtonUp(i+3)"
+                @mouseleave="triggerGateButtonUp(i+3)"
+                @touchstart.prevent="triggerGateButtonDown(i+3)"
+                @touchend.prevent="triggerGateButtonUp(i+3)"
+                @touchcancel.prevent="triggerGateButtonUp(i+3)"
+                class="trigger-btn"
+                :class="{ active: gateButtonStates[i+3] }"
+              >{{ i }}</button>
+            </div>
           </div>
         </div>
-
-        <!-- Row 2: Gate buttons (4-7) -->
-        <div class="button-row">
-          <div class="button-row-label">Gate</div>
-          <div class="button-grid">
-            <button
-              v-for="i in 4"
-              :key="`gate-${i+3}`"
-              @mousedown="triggerGateButtonDown(i+3)"
-              @mouseup="triggerGateButtonUp(i+3)"
-              @mouseleave="triggerGateButtonUp(i+3)"
-              @touchstart.prevent="triggerGateButtonDown(i+3)"
-              @touchend.prevent="triggerGateButtonUp(i+3)"
-              @touchcancel.prevent="triggerGateButtonUp(i+3)"
-              class="trigger-button gate"
-              :class="{ active: gateButtonStates[i+3] }"
-            >
-              {{ i+3 }}
-            </button>
-          </div>
+        <div class="clip-actions" v-if="SHOW_CLIP_DATA_DOWNLOAD">
+          <button class="btn btn-secondary" @click="downloadClipData">↓ Clips</button>
+          <button class="btn btn-secondary" @click="triggerClipUpload">↑ Clips</button>
+          <input ref="clipUploadInputRef" type="file" accept=".json" @change="uploadClipData" style="display: none" />
         </div>
       </div>
 
-      <details class="piano-roll-panel">
+      <!-- Melody Editor -->
+      <details class="editor-panel">
         <summary>Melody Editor</summary>
-        <div class="piano-roll-controls">
-          <label>
-            Melody:
-            <select v-model="selectedMelodyClip">
+        <div class="editor-controls">
+          <label class="editor-label">
+            Melody
+            <select v-model="selectedMelodyClip" class="editor-select">
               <option v-for="name in baseClipNames" :key="name" :value="name">{{ name }}</option>
             </select>
           </label>
@@ -1490,306 +1466,312 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.slider-container {
+.controls-root {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 16px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 12px;
   user-select: none;
 }
 
-.slider-row {
+/* Voice Parameters - two column layout */
+.voice-params {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.voice-column {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 6px;
 }
 
-.slider-row.horizontal {
-  flex-direction: column;
-}
-
-.slider-label-row {
+.voice-header {
   font-weight: 600;
-  font-size: 14px;
-  color: #333;
-  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #666;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #e0e0e0;
 }
 
-.sliders-vertical {
-  display: flex;
-  gap: 24px;
-  justify-content: center;
-}
-
-.slider-group {
+.slider-list {
   display: flex;
   flex-direction: column;
+  gap: 4px;
+}
+
+.slider-row {
+  display: grid;
+  grid-template-columns: 80px 1fr 36px;
   align-items: center;
   gap: 8px;
 }
 
-.slider-vertical {
-  writing-mode: bt-lr; /* IE */
-  -webkit-appearance: slider-vertical; /* WebKit */
-  appearance: slider-vertical;
-  width: 8px;
-  height: 150px;
-  padding: 0;
-  margin: 0;
-  cursor: pointer;
-}
-
-.slider-horizontal-container {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.slider-horizontal {
-  flex: 1;
-  height: 8px;
-  cursor: pointer;
-}
-
-.slider-value {
+.slider-label {
   font-size: 11px;
-  color: #666;
-  font-family: 'Courier New', monospace;
-  min-width: 45px;
-  text-align: center;
+  color: #555;
+  white-space: nowrap;
 }
 
-.slider-index {
-  font-size: 10px;
-  color: #999;
-  font-weight: 600;
-}
-
-/* Custom slider styling */
-input[type="range"] {
-  background: #ddd;
-  border-radius: 4px;
-  outline: none;
-}
-
-input[type="range"]::-webkit-slider-thumb {
+.slider-h {
+  width: 100%;
+  height: 4px;
   -webkit-appearance: none;
   appearance: none;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: #4CAF50;
+  background: #e0e0e0;
+  border-radius: 2px;
+  outline: none;
   cursor: pointer;
-  transition: background 0.15s;
 }
 
-input[type="range"]::-webkit-slider-thumb:hover {
-  background: #45a049;
+.slider-h::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #555;
+  cursor: pointer;
 }
 
-input[type="range"]::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
+.slider-h::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
-  background: #4CAF50;
-  cursor: pointer;
+  background: #555;
   border: none;
-  transition: background 0.15s;
+  cursor: pointer;
 }
 
-input[type="range"]::-moz-range-thumb:hover {
-  background: #45a049;
+.slider-val {
+  font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+  font-size: 10px;
+  color: #888;
+  text-align: right;
 }
 
-/* Preset section */
-.preset-section {
+/* Delay */
+.delay-row {
+  display: grid;
+  grid-template-columns: 50px 200px 36px;
+  align-items: center;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.delay-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: #555;
+}
+
+.delay-slider {
+  width: 100%;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: #e0e0e0;
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.delay-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #555;
+  cursor: pointer;
+}
+
+.delay-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #555;
+  border: none;
+  cursor: pointer;
+}
+
+/* Sections */
+.section {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding-top: 10px;
-  border-top: 2px solid #ddd;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid #e0e0e0;
 }
 
-.preset-controls {
+.section-header {
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #666;
+}
+
+/* Buttons */
+.btn {
+  padding: 5px 10px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  background: #fff;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.btn:hover:not(:disabled) {
+  background: #f5f5f5;
+  border-color: #999;
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: #f5f5f5;
+  color: #555;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: #eee;
+}
+
+.btn-danger {
+  color: #c00;
+  border-color: #daa;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #fee;
+  border-color: #c00;
+}
+
+/* Presets */
+.preset-row {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .preset-select {
-  flex: 1;
-  padding: 6px 10px;
+  padding: 5px 8px;
   border: 1px solid #ccc;
-  border-radius: 4px;
-  font-size: 13px;
-  background: white;
-  cursor: pointer;
-  min-width: 120px;
-  max-width: 200px;
+  border-radius: 3px;
+  font-size: 11px;
+  background: #fff;
+  min-width: 100px;
+  max-width: 140px;
 }
 
 .preset-select:focus {
   outline: none;
-  border-color: #4CAF50;
+  border-color: #888;
 }
 
-.preset-btn {
-  padding: 6px 12px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.preset-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.preset-btn.load {
-  background: #e3f2fd;
-  border-color: #2196F3;
-  color: #1565C0;
-}
-
-.preset-btn.load:hover:not(:disabled) {
-  background: #bbdefb;
-}
-
-.preset-btn.save {
-  background: #e8f5e9;
-  border-color: #4CAF50;
-  color: #2E7D32;
-}
-
-.preset-btn.save:hover:not(:disabled) {
-  background: #c8e6c9;
-}
-
-.preset-btn.overwrite {
-  background: #e0f7fa;
-  border-color: #00BCD4;
-  color: #00838F;
-}
-
-.preset-btn.overwrite:hover:not(:disabled) {
-  background: #b2ebf2;
-}
-
-.preset-btn.delete {
-  background: #ffebee;
-  border-color: #f44336;
-  color: #c62828;
-}
-
-.preset-btn.delete:hover:not(:disabled) {
-  background: #ffcdd2;
-}
-
-.preset-btn.download {
-  background: #fff3e0;
-  border-color: #FF9800;
-  color: #E65100;
-}
-
-.preset-btn.download:hover:not(:disabled) {
-  background: #ffe0b2;
-}
-
-.preset-btn.upload {
-  background: #f3e5f5;
-  border-color: #9C27B0;
-  color: #6A1B9A;
-}
-
-.preset-btn.upload:hover:not(:disabled) {
-  background: #e1bee7;
-}
-
-/* Button section */
-.button-section {
+/* Triggers */
+.triggers-grid {
   display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding-top: 10px;
-  border-top: 2px solid #ddd;
+  gap: 24px;
 }
 
-.button-row {
+.trigger-group {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 8px;
 }
 
-.button-row-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: #666;
-  min-width: 70px;
+.trigger-label {
+  font-size: 10px;
+  font-weight: 500;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  min-width: 50px;
 }
 
-.button-grid {
+.trigger-btns {
   display: flex;
-  gap: 12px;
+  gap: 4px;
 }
 
-.trigger-button {
-  width: 60px;
-  height: 60px;
-  border: 2px solid #666;
-  border-radius: 8px;
-  background: linear-gradient(145deg, #ffffff, #e0e0e0);
-  color: #333;
-  font-size: 18px;
-  font-weight: bold;
+.trigger-btn {
+  width: 36px;
+  height: 36px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  color: #444;
   cursor: pointer;
-  transition: all 0.15s;
-  box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
-  user-select: none;
+  transition: background 0.1s, border-color 0.1s;
 }
 
-.trigger-button:hover {
-  background: linear-gradient(145deg, #f0f0f0, #d0d0d0);
-  transform: translateY(-2px);
-  box-shadow: 3px 3px 8px rgba(0, 0, 0, 0.25);
+.trigger-btn:hover {
+  background: #f0f0f0;
+  border-color: #999;
 }
 
-.trigger-button:active {
-  transform: translateY(0);
-  box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.2);
+.trigger-btn:active {
+  background: #e0e0e0;
 }
 
-.trigger-button.oneshot:active {
-  background: linear-gradient(145deg, #FFD54F, #FFC107);
-  border-color: #FF6F00;
+.trigger-btn.active {
+  background: #333;
+  border-color: #333;
+  color: #fff;
 }
 
-.trigger-button.gate.active {
-  background: linear-gradient(145deg, #81C784, #4CAF50);
-  border-color: #2E7D32;
-  box-shadow: inset 2px 2px 5px rgba(0, 0, 0, 0.2);
+.clip-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
 }
 
-.piano-roll-panel {
-  margin-top: 16px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  padding: 8px 12px;
+/* Editor Panel */
+.editor-panel {
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  padding: 8px 10px;
   background: #fafafa;
 }
 
-.piano-roll-panel summary {
+.editor-panel summary {
   cursor: pointer;
+  font-size: 11px;
   font-weight: 600;
-  color: #333;
-  margin-bottom: 8px;
+  color: #555;
 }
 
-.piano-roll-controls {
+.editor-controls {
+  display: flex;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.editor-label {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin: 8px 0 12px;
+  gap: 6px;
+  font-size: 11px;
+  color: #666;
+}
+
+.editor-select {
+  padding: 4px 6px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  font-size: 11px;
+  background: #fff;
 }
 </style>
