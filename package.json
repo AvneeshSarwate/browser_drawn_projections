@@ -54,6 +54,7 @@
     "matter-js": "^0.20.0",
     "mermaid": "^11.12.1",
     "meshline": "^3.1.6",
+    "mitt": "^3.0.1",
     "monaco-editor": "^0.44.0",
     "node-osc": "^9.1.4",
     "p5": "^1.7.0",

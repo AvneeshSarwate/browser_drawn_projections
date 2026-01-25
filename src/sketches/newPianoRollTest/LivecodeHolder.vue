@@ -28,6 +28,8 @@ const initialNotes: Array<[string, NoteData]> = [
 ]
 type PianoRollRootInstance = InstanceType<typeof PianoRollRoot> & {
   setNotes(notes: NoteDataInput[]): void
+  setLivePlayheadPosition(position: number): void
+  getPlayStartPosition(): number
 }
 
 const pianoRollRef = ref<PianoRollRootInstance | null>(null)
@@ -56,6 +58,29 @@ const clearDrawFuncs = () => {
 
 const handleNotesUpdate = (notes: Array<[string, NoteData]>) => {
   latestNotes.value = notes
+}
+
+const getQueuePlayheadPosition = () => pianoRollRef.value?.getPlayStartPosition?.() ?? 0
+
+const setLivePlayheadPosition = (position: number) => {
+  pianoRollRef.value?.setLivePlayheadPosition(position)
+}
+
+const resetLivePlayheadPosition = () => {
+  setLivePlayheadPosition(getQueuePlayheadPosition())
+}
+
+const startPlayheadProgress = (ctx: TimeContext, durationBeats?: number, startPosition = 0) => {
+  setLivePlayheadPosition(startPosition)
+  return ctx.branch(async (branchCtx) => {
+    const stepSec = 1 / 60
+    while (true) {
+      const position = startPosition + branchCtx.progBeats
+      setLivePlayheadPosition(position)
+      if (durationBeats !== undefined && branchCtx.progBeats >= durationBeats) break
+      await branchCtx.waitSec(stepSec)
+    }
+  }, 'playhead')
 }
 
 const refreshMidiOutputs = () => {
@@ -105,6 +130,7 @@ const stopPianoRollPlayback = () => {
   activePlaybackContext.value?.cancel()
   activePlayback.value = null
   activePlaybackContext.value = null
+  resetLivePlayheadPosition()
 }
 
 const stopSynthPlayback = () => {
@@ -123,6 +149,7 @@ const stopSynthPlayback = () => {
   } catch (err) {
     console.warn('Failed to stop synth playback', err)
   }
+  resetLivePlayheadPosition()
 }
 
 const stopAllPlayback = () => {
@@ -227,13 +254,23 @@ const playPianoRollSlidesSynth = async () => {
   }
 
   activeSynthPlayback.value = launch(async (ctx) => {
-    for (const note of sortedNotes) {
-      const currentBeats = ctx.progBeats
-      const noteStart = note.position ?? 0
-      if (noteStart > currentBeats) {
-        await ctx.wait(noteStart - currentBeats)
+    const durationBeats = sortedNotes.reduce((maxEnd, note) => {
+      const end = (note.position ?? 0) + (note.duration ?? 0)
+      return Math.max(maxEnd, end)
+    }, 0)
+    const playheadTask = startPlayheadProgress(ctx, durationBeats)
+    try {
+      for (const note of sortedNotes) {
+        const currentBeats = ctx.progBeats
+        const noteStart = note.position ?? 0
+        if (noteStart > currentBeats) {
+          await ctx.wait(noteStart - currentBeats)
+        }
+        await playSlideNoteOnSynth(ctx, note)
       }
-      await playSlideNoteOnSynth(ctx, note)
+    } finally {
+      playheadTask.cancel()
+      resetLivePlayheadPosition()
     }
   })
 }
@@ -267,10 +304,16 @@ const playPianoRoll = async () => {
   }
 
   const context = launch(async (ctx) => {
+    const playheadTask = startPlayheadProgress(ctx, clip.duration)
     const handle = playMPEClip(clip, ctx, device, { pitchBendRange: 48 })
     activePlayback.value = { handle, context }
-    await handle.promise
-    activePlayback.value = null
+    try {
+      await handle.promise
+    } finally {
+      playheadTask.cancel()
+      resetLivePlayheadPosition()
+      activePlayback.value = null
+    }
   })
   activePlaybackContext.value = context
 }

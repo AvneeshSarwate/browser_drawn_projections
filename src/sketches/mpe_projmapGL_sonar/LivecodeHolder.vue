@@ -15,11 +15,13 @@ import { runAllTimingTests } from '@/channels/timing_tests'
 // MPE imports
 import { MIDI_READY, getMPEInput, midiInputs, midiOutputs, type MPENoteStart, type MPENoteUpdate, type MPENoteEnd } from '@/io/midi'
 import type { MIDIValOutput } from '@midival/core'
+import mitt from 'mitt'
 import * as Tone from 'tone'
 import { m2f } from '@/music/mpeSynth'
 import { note } from '@/music/clipPlayback'
-import { getPiano, TONE_AUDIO_START } from '@/music/synths'
-import { INITIALIZE_ABLETON_CLIPS } from '@/io/abletonClips'
+import { getFMSynthChain, getPiano, TONE_AUDIO_START } from '@/music/synths'
+import { INITIALIZE_ABLETON_CLIPS, type AbletonClip, type AbletonNote } from '@/io/abletonClips'
+import { curve2val } from '@/io/curveInterpolation'
 import { clipData as staticClipData } from '../sonar_sketch/clipData'
 import { TimeContext, launchBrowser, CancelablePromiseProxy } from '@/channels/offline_time_context'
 import { runLineWithDelay, type MelodyMapOptions } from './utils/playbackUtils'
@@ -54,6 +56,12 @@ const channelToPolygon = new Map<number, string>()
 const mpeRenderStates = new Map<string, RenderState>()
 let mpeInput: MPEInput | null = null
 const voiceRotation: VoiceRotationState = { nextIndex: 0 }
+const ENABLE_LIVE_MPE_INPUT = false
+const SYNTH_MPE_PITCH_BEND_RANGE = 48
+const SYNTH_MPE_CHANNEL_START = 2
+const SYNTH_MPE_CHANNEL_END = 16
+const SYNTH_MPE_TIMBRE = 0
+const SYNTH_MPE_UPDATE_SEC = 1 / 60
 
 // MelodyMap state
 const melodyMapState: MelodyMapGlobalState = createMelodyMapState()
@@ -66,6 +74,7 @@ let playNote: (pitch: number, velocity: number, ctx: TimeContext, noteDur: numbe
 const useMidiOutput = ref(false)
 const sliders = reactive<number[]>(Array(17).fill(0.5)) // Local slider state for LPD8/TouchOSC
 let timeLoops: CancelablePromiseProxy<any>[] = []
+let activeSmoothedMpePlayback: LoopHandle | null = null
 
 // Slider presets
 interface SliderPreset {
@@ -198,6 +207,14 @@ const immediateLaunchQueue: Array<(ctx: TimeContext) => Promise<void>> = []
 const gateButtonStates = ref<Record<number, boolean>>({})
 const gateButtonMelodiesUI: Record<number, LoopHandle> = {}
 
+type MPEEventMap = {
+  noteStart: MPENoteStart
+  noteUpdate: MPENoteUpdate
+  noteEnd: MPENoteEnd
+}
+
+const mpeEventBus = mitt<MPEEventMap>()
+
 // Note-off protector: tracks active notes per channel/pitch to prevent premature note-offs
 const activeNotes = new Map<string, Set<symbol>>() // key: "channel-pitch", value: set of note IDs
 
@@ -262,6 +279,137 @@ const playNoteSampler = (pitch: number, velocity: number, _ctx: TimeContext, not
   const sampler = samplerVoices[voiceIdx % samplerVoices.length]
   const normalizedVelocity = velocity > 1 ? velocity / 127 : velocity
   note(sampler, pitch, noteDur, normalizedVelocity)
+}
+
+const fmChain = getFMSynthChain({ monophonic: true })
+const fmSynth = fmChain.instrument as Tone.FMSynth
+
+const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
+
+const nextSynthChannel = (() => {
+  let channel = SYNTH_MPE_CHANNEL_START
+  return () => {
+    const current = channel
+    channel = channel >= SYNTH_MPE_CHANNEL_END ? SYNTH_MPE_CHANNEL_START : channel + 1
+    return current
+  }
+})()
+
+const stopSmoothedMpePlayback = () => {
+  activeSmoothedMpePlayback?.cancel()
+  activeSmoothedMpePlayback = null
+  try {
+    fmSynth.triggerRelease()
+    const now = Tone.now()
+    if (fmSynth.frequency?.cancelAndHoldAtTime) {
+      fmSynth.frequency.cancelAndHoldAtTime(now)
+    } else if (fmSynth.frequency?.cancelScheduledValues) {
+      fmSynth.frequency.cancelScheduledValues(now)
+    }
+  } catch (err) {
+    console.warn('[MPE] Failed to stop smoothed playback synth', err)
+  }
+}
+
+const playSmoothedMpeNote = async (ctx: TimeContext, note: AbletonNote, channel: number) => {
+  const duration = note.duration ?? 0
+  if (duration <= 0) return
+
+  const velocity = Math.round(note.velocity ?? 100)
+  const pressure = clamp(velocity, 0, 127)
+  const timbre = SYNTH_MPE_TIMBRE
+  const pitchCurve = note.pitchCurve ?? []
+  const basePitch = note.pitch
+  const initialOffset = (pitchCurve.length ? curve2val(0, pitchCurve) : undefined) ?? 0
+  const initialBend = clamp(initialOffset / SYNTH_MPE_PITCH_BEND_RANGE, -1, 1)
+
+  mpeEventBus.emit('noteStart', {
+    channel,
+    noteNum: basePitch,
+    velocity,
+    pressure,
+    timbre,
+    bend: initialBend
+  })
+
+  fmSynth.triggerAttack(m2f(basePitch + initialOffset), Tone.now(), pressure / 127)
+  const now = Tone.now()
+  if (fmSynth.frequency?.cancelAndHoldAtTime) {
+    fmSynth.frequency.cancelAndHoldAtTime(now)
+  } else if (fmSynth.frequency?.cancelScheduledValues) {
+    fmSynth.frequency.cancelScheduledValues(now)
+  }
+
+  const startBeats = ctx.progBeats
+  try {
+    while (true) {
+      const elapsedBeats = ctx.progBeats - startBeats
+      if (elapsedBeats >= duration) break
+      const offset = (pitchCurve.length ? curve2val(elapsedBeats, pitchCurve) : undefined) ?? 0
+      const bend = clamp(offset / SYNTH_MPE_PITCH_BEND_RANGE, -1, 1)
+      fmSynth.frequency.setValueAtTime(m2f(basePitch + offset), Tone.now())
+      mpeEventBus.emit('noteUpdate', {
+        channel,
+        noteNum: basePitch,
+        pressure,
+        timbre,
+        bend
+      })
+      await ctx.waitSec(SYNTH_MPE_UPDATE_SEC)
+    }
+
+    const finalOffset = (pitchCurve.length ? curve2val(duration, pitchCurve) : undefined) ?? 0
+    const finalBend = clamp(finalOffset / SYNTH_MPE_PITCH_BEND_RANGE, -1, 1)
+    fmSynth.frequency.setValueAtTime(m2f(basePitch + finalOffset), Tone.now())
+    mpeEventBus.emit('noteUpdate', {
+      channel,
+      noteNum: basePitch,
+      pressure,
+      timbre,
+      bend: finalBend
+    })
+  } finally {
+    fmSynth.triggerRelease()
+    mpeEventBus.emit('noteEnd', {
+      channel,
+      noteNum: basePitch,
+      velocity
+    })
+  }
+}
+
+const playSmoothedMpeClip = (clip: AbletonClip, ctx: TimeContext) => {
+  stopSmoothedMpePlayback()
+
+  const notes = clip.notes
+    .slice()
+    .sort((a, b) => {
+      const posDelta = a.position - b.position
+      if (posDelta !== 0) return posDelta
+      return a.pitch - b.pitch
+    })
+
+  if (notes.length === 0) return
+
+  const handle = ctx.branch(async (branchCtx) => {
+    await TONE_AUDIO_START
+    for (const note of notes) {
+      const currentBeats = branchCtx.progBeats
+      const noteStart = note.position ?? 0
+      if (noteStart > currentBeats) {
+        await branchCtx.wait(noteStart - currentBeats)
+      }
+      const channel = nextSynthChannel()
+      await playSmoothedMpeNote(branchCtx, note, channel)
+    }
+  }, 'mpe-smooth-playback')
+
+  activeSmoothedMpePlayback = handle
+  handle.finally(() => {
+    if (activeSmoothedMpePlayback === handle) {
+      activeSmoothedMpePlayback = null
+    }
+  })
 }
 
 const launchLoop = (block: (ctx: TimeContext) => Promise<any>): CancelablePromiseProxy<any> => {
@@ -491,6 +639,10 @@ function handleNoteEnd(evt: MPENoteEnd) {
   startReleaseAnimation(bundle, releaseTime, mpeRenderStates)
 }
 
+mpeEventBus.on('noteStart', handleNoteStart)
+mpeEventBus.on('noteUpdate', handleNoteUpdate)
+mpeEventBus.on('noteEnd', handleNoteEnd)
+
 function disposeMPE() {
   // Cancel all animation loops
   for (const bundle of mpeBundles.values()) {
@@ -602,6 +754,9 @@ function createMelodyMapOpts(): MelodyMapOptions {
         melodyMapLog(`No melodyMap polygon available for melody ${melodyId}`)
         return basePlayNote
       }
+    },
+    playSmoothedClip: (clip, ctx) => {
+      playSmoothedMpeClip(clip, ctx)
     }
   }
 }
@@ -961,38 +1116,42 @@ onMounted(async () => {
       })
     }
 
-    // Try to connect to common MPE controllers - adjust device name as needed
-    const mpeDeviceNames = ['IAC Driver Bus 3', 'LinnStrument MIDI', 'IAC Driver Bus 2', 'Sensel Morph', 'Seaboard', 'Continuum']
-    for (const name of mpeDeviceNames) {
-      mpeLog(`  -> Trying to connect to: ${name}`)
-      const input = getMPEInput(name, { zone: 'lower' })
-      if (input) {
-        mpeInput = input
-        mpeInput.onNoteStart(handleNoteStart)
-        mpeInput.onNoteUpdate(handleNoteUpdate)
-        mpeInput.onNoteEnd(handleNoteEnd)
-        mpeLog(`CONNECTED to ${name}`)
-        break
-      }
-    }
-    if (!mpeInput) {
-      mpeLog(`NO MPE CONTROLLER FOUND in preferred list. Trying first available input...`)
-      // Try the first available MIDI input as fallback
-      if (availableInputs.length > 0) {
-        const firstName = availableInputs[0]
-        mpeLog(`  -> Trying fallback: ${firstName}`)
-        const input = getMPEInput(firstName, { zone: 'lower' })
+    if (ENABLE_LIVE_MPE_INPUT) {
+      // Try to connect to common MPE controllers - adjust device name as needed
+      const mpeDeviceNames = ['IAC Driver Bus 3', 'LinnStrument MIDI', 'IAC Driver Bus 2', 'Sensel Morph', 'Seaboard', 'Continuum']
+      for (const name of mpeDeviceNames) {
+        mpeLog(`  -> Trying to connect to: ${name}`)
+        const input = getMPEInput(name, { zone: 'lower' })
         if (input) {
           mpeInput = input
-          mpeInput.onNoteStart(handleNoteStart)
-          mpeInput.onNoteUpdate(handleNoteUpdate)
-          mpeInput.onNoteEnd(handleNoteEnd)
-          mpeLog(`CONNECTED to fallback: ${firstName}`)
+          mpeInput.onNoteStart((evt) => mpeEventBus.emit('noteStart', evt))
+          mpeInput.onNoteUpdate((evt) => mpeEventBus.emit('noteUpdate', evt))
+          mpeInput.onNoteEnd((evt) => mpeEventBus.emit('noteEnd', evt))
+          mpeLog(`CONNECTED to ${name}`)
+          break
         }
       }
-    }
-    if (!mpeInput) {
-      mpeLog(`NO MIDI INPUT AVAILABLE - check browser MIDI permissions`)
+      if (!mpeInput) {
+        mpeLog(`NO MPE CONTROLLER FOUND in preferred list. Trying first available input...`)
+        // Try the first available MIDI input as fallback
+        if (availableInputs.length > 0) {
+          const firstName = availableInputs[0]
+          mpeLog(`  -> Trying fallback: ${firstName}`)
+          const input = getMPEInput(firstName, { zone: 'lower' })
+          if (input) {
+            mpeInput = input
+            mpeInput.onNoteStart((evt) => mpeEventBus.emit('noteStart', evt))
+            mpeInput.onNoteUpdate((evt) => mpeEventBus.emit('noteUpdate', evt))
+            mpeInput.onNoteEnd((evt) => mpeEventBus.emit('noteEnd', evt))
+            mpeLog(`CONNECTED to fallback: ${firstName}`)
+          }
+        }
+      }
+      if (!mpeInput) {
+        mpeLog(`NO MIDI INPUT AVAILABLE - check browser MIDI permissions`)
+      }
+    } else {
+      mpeLog('Live MPE input disabled (using generated MPE melody)')
     }
 
     // Start immediate launch queue processing loop
@@ -1021,6 +1180,7 @@ onUnmounted(() => {
   polygonFxOpts = null
   clearListeners()
   clearDrawFuncs()
+  stopSmoothedMpePlayback()
   // Cancel all time loops
   timeLoops.forEach(tl => tl.cancel())
   timeLoops = []

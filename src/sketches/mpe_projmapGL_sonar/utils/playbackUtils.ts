@@ -1,6 +1,6 @@
 import type { TimeContext } from '@/channels/offline_time_context'
 import type { LoopHandle } from '@/channels/base_time_context'
-import type { AbletonClip } from '@/io/abletonClips'
+import { AbletonClip, type AbletonNote, type PianoRollMpePoint, type PianoRollNoteLike, cloneCurveValue, pianoRollNoteToAbletonNote } from '@/io/abletonClips'
 import { clipMap } from '@/io/abletonClips'
 import { splitTextToGroups, buildClipFromLine, parseRampLine } from './transformHelpers'
 
@@ -22,6 +22,183 @@ export type LaunchRampFunc = (paramName: string, startVal: number, endVal: numbe
 
 export const DELAY_SLIDER = 16
 
+// Smart-smooth parameters (tweak here)
+export const SMART_SMOOTH_CLOSE_THRESHOLD = 0.25
+export const SMART_SMOOTH_JOIN_PROBABILITY = 0.3
+const SMART_SMOOTH_MIN_SLIDE = 0.03
+const SMART_SMOOTH_MAX_SLIDE = 0.25
+const SMART_SMOOTH_FALLBACK_SLIDE = 0.1
+
+const randomInRange = (min: number, max: number) => {
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return min
+  const lo = Math.min(min, max)
+  const hi = Math.max(min, max)
+  return lo + Math.random() * (hi - lo)
+}
+
+const cloneAbletonNote = (note: AbletonNote): AbletonNote => ({
+  ...note,
+  pitchCurve: note.pitchCurve ? note.pitchCurve.map(cloneCurveValue) : undefined,
+  pressureCurve: note.pressureCurve ? note.pressureCurve.map(cloneCurveValue) : undefined,
+  timbreCurve: note.timbreCurve ? note.timbreCurve.map(cloneCurveValue) : undefined
+})
+
+const buildSlideNoteFromSequence = (
+  sequence: AbletonNote[],
+  slideDurations: number[],
+  fallbackSlideDuration = SMART_SMOOTH_FALLBACK_SLIDE
+): AbletonNote => {
+  const baseNote = sequence[0]
+  const baseStart = baseNote.position
+  const basePitch = baseNote.pitch
+  const baseVelocity = baseNote.velocity ?? 100
+  const endTime = sequence.reduce((maxEnd, note) => {
+    const noteEnd = note.position + note.duration
+    return Math.max(maxEnd, noteEnd)
+  }, baseStart + baseNote.duration)
+  const totalDuration = Math.max(endTime - baseStart, baseNote.duration)
+
+  const safeSlideDuration = Math.max(0, fallbackSlideDuration)
+  const epsilon = 1e-6
+  const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
+  const toNormalizedTime = (absoluteTime: number) => {
+    if (totalDuration <= 0) return 0
+    return clamp((absoluteTime - baseStart) / totalDuration, 0, 1)
+  }
+
+  const points: PianoRollMpePoint[] = []
+  points.push({ time: 0, pitchOffset: 0 })
+
+  for (let i = 0; i < sequence.length - 1; i += 1) {
+    const current = sequence[i]
+    const next = sequence[i + 1]
+    const currentStart = current.position
+    const nextStart = next.position
+    const currentOffset = current.pitch - basePitch
+    const nextOffset = next.pitch - basePitch
+    const halfTime = currentStart + (nextStart - currentStart) / 2
+    const slideDuration = slideDurations[i] ?? safeSlideDuration
+    const slideStartAbsolute = Math.max(nextStart - slideDuration, halfTime)
+    const slideStart = toNormalizedTime(slideStartAbsolute)
+    const nextTime = toNormalizedTime(nextStart)
+
+    if (slideStart < nextTime - epsilon) {
+      points.push({ time: slideStart, pitchOffset: currentOffset })
+    }
+    points.push({ time: nextTime, pitchOffset: nextOffset })
+  }
+
+  const lastOffset = sequence[sequence.length - 1].pitch - basePitch
+  const endTimeNormalized = toNormalizedTime(endTime)
+  if (endTimeNormalized > 0) {
+    const lastPoint = points[points.length - 1]
+    if (!lastPoint || Math.abs(lastPoint.time - endTimeNormalized) > epsilon) {
+      points.push({ time: endTimeNormalized, pitchOffset: lastOffset })
+    } else {
+      lastPoint.pitchOffset = lastOffset
+    }
+  }
+
+  const sortedPoints = points
+    .slice()
+    .sort((a, b) => a.time - b.time)
+    .reduce((acc, point) => {
+      const prev = acc[acc.length - 1]
+      if (prev && Math.abs(prev.time - point.time) <= epsilon) {
+        acc[acc.length - 1] = point
+      } else {
+        acc.push(point)
+      }
+      return acc
+    }, [] as PianoRollMpePoint[])
+
+  const pianoNote: PianoRollNoteLike = {
+    pitch: basePitch,
+    position: baseStart,
+    duration: totalDuration,
+    velocity: baseVelocity,
+    mpePitch: { points: sortedPoints },
+    metadata: baseNote.metadata
+  }
+
+  const slideNote = pianoRollNoteToAbletonNote(pianoNote)
+  slideNote.noteId = baseNote.noteId
+  slideNote.offVelocity = baseNote.offVelocity ?? baseVelocity
+  slideNote.probability = baseNote.probability ?? 1
+  slideNote.isEnabled = baseNote.isEnabled ?? true
+  slideNote.velocityDeviation = baseNote.velocityDeviation
+  slideNote.metadata = baseNote.metadata
+  return slideNote
+}
+
+export const buildSmartSmoothClip = (
+  clip: AbletonClip,
+  closeThreshold = SMART_SMOOTH_CLOSE_THRESHOLD,
+  joinProbability = SMART_SMOOTH_JOIN_PROBABILITY
+): AbletonClip => {
+  const sortedNotes = clip.notes
+    .slice()
+    .sort((a, b) => {
+      const posDelta = a.position - b.position
+      if (posDelta !== 0) return posDelta
+      return a.pitch - b.pitch
+    })
+
+  if (sortedNotes.length === 0) {
+    return new AbletonClip(`${clip.name}-smooth`, 0, [])
+  }
+
+  const safeThreshold = Math.max(0, closeThreshold)
+  const safeProbability = Math.max(0, Math.min(1, joinProbability))
+  const closeSlideDuration = randomInRange(
+    SMART_SMOOTH_MIN_SLIDE,
+    Math.max(SMART_SMOOTH_MIN_SLIDE, Math.min(SMART_SMOOTH_MAX_SLIDE, safeThreshold * 0.9))
+  )
+  const randomSlideDuration = () => randomInRange(SMART_SMOOTH_MIN_SLIDE, SMART_SMOOTH_MAX_SLIDE)
+
+  const groups: Array<{ notes: AbletonNote[]; slideDurations: number[] }> = []
+  let currentGroup = { notes: [sortedNotes[0]], slideDurations: [] as number[] }
+
+  for (let i = 0; i < sortedNotes.length - 1; i += 1) {
+    const current = sortedNotes[i]
+    const next = sortedNotes[i + 1]
+    const gap = next.position - current.position
+
+    let join = false
+    let slideDuration = SMART_SMOOTH_FALLBACK_SLIDE
+    if (gap <= safeThreshold) {
+      join = true
+      slideDuration = closeSlideDuration
+    } else if (Math.random() < safeProbability) {
+      join = true
+      slideDuration = randomSlideDuration()
+    }
+
+    if (join) {
+      currentGroup.notes.push(next)
+      currentGroup.slideDurations.push(slideDuration)
+    } else {
+      groups.push(currentGroup)
+      currentGroup = { notes: [next], slideDurations: [] }
+    }
+  }
+  groups.push(currentGroup)
+
+  const newNotes = groups.flatMap(group => {
+    if (group.notes.length === 1) {
+      return [cloneAbletonNote(group.notes[0])]
+    }
+    return [buildSlideNoteFromSequence(group.notes, group.slideDurations, SMART_SMOOTH_FALLBACK_SLIDE)]
+  })
+
+  const duration = newNotes.reduce((maxEnd, note) => {
+    const end = note.position + note.duration
+    return Math.max(maxEnd, end)
+  }, 0)
+
+  return new AbletonClip(`${clip.name}-smooth`, duration, newNotes)
+}
+
 /**
  * Options for melody-to-polygon mapping in runLineWithDelay.
  * The wrapPlayNote callback is called right before each melody plays,
@@ -34,6 +211,11 @@ export type MelodyMapOptions = {
    * This is called once for the base melody and once for the delay melody (if not cancelled).
    */
   wrapPlayNote: (basePlayNote: PlayNoteFunc) => PlayNoteFunc
+  /**
+   * Called with a smoothed monophonic clip derived from delayRootClip.
+   * Use this to drive MPE visuals/synth.
+   */
+  playSmoothedClip?: (clip: AbletonClip, ctx: TimeContext) => void
 }
 
 export const playClipSimple = async (
@@ -134,6 +316,10 @@ export const runLineWithDelay = (
   clipMap.set(delayRootClipName, delayRootClip!)
 
   const dummyVoices = appState.voices.map((v): PlaybackVoiceState => ({...v, isPlaying: true}))
+  const delayBeats = appState.sliders[DELAY_SLIDER]**2 * 8
+  const smoothedClip = melodyMapOpts?.playSmoothedClip
+    ? buildSmartSmoothClip(delayRootClip!, SMART_SMOOTH_CLOSE_THRESHOLD, SMART_SMOOTH_JOIN_PROBABILITY)
+    : null
 
   const handle = ctx.branch(async ctx => {
     // Wrap playNote for base melody right before it plays
@@ -141,7 +327,14 @@ export const runLineWithDelay = (
     const basePlayNote = melodyMapOpts?.wrapPlayNote(playNote) ?? playNote
     playClipSimple(delayRootClip!, ctx, 0, basePlayNote)
 
-    await ctx.wait(appState.sliders[DELAY_SLIDER]**2 * 8)
+    if (melodyMapOpts?.playSmoothedClip && smoothedClip) {
+      ctx.branch(async branchCtx => {
+        await branchCtx.wait(delayBeats * 0.5)
+        melodyMapOpts.playSmoothedClip?.(smoothedClip, branchCtx)
+      }, 'mpe-smooth')
+    }
+
+    await ctx.wait(delayBeats)
 
     // Wrap playNote for delay melody right before it plays (only if we reach here, i.e., not cancelled)
     // This is when polygon allocation should happen for the delay melody
