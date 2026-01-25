@@ -20,9 +20,9 @@ import * as Tone from 'tone'
 import { m2f } from '@/music/mpeSynth'
 import { note } from '@/music/clipPlayback'
 import { getFMSynthChain, getPiano, TONE_AUDIO_START } from '@/music/synths'
-import { INITIALIZE_ABLETON_CLIPS, type AbletonClip, type AbletonNote } from '@/io/abletonClips'
+import { INITIALIZE_ABLETON_CLIPS, createClipDataTsDownloadCallback, type AbletonClip, type AbletonNote } from '@/io/abletonClips'
 import { curve2val } from '@/io/curveInterpolation'
-import { clipData as staticClipData } from '../sonar_sketch/clipData'
+import { clipData as staticClipData } from './clipData'
 import { TimeContext, launchBrowser, CancelablePromiseProxy } from '@/channels/offline_time_context'
 import { runLineWithDelay, type MelodyMapOptions } from './utils/playbackUtils'
 import type { LoopHandle } from '@/channels/base_time_context'
@@ -62,6 +62,7 @@ const SYNTH_MPE_CHANNEL_START = 2
 const SYNTH_MPE_CHANNEL_END = 16
 const SYNTH_MPE_TIMBRE = 0
 const SYNTH_MPE_UPDATE_SEC = 1 / 60
+const SHOW_CLIP_DATA_DOWNLOAD = true
 
 // MelodyMap state
 const melodyMapState: MelodyMapGlobalState = createMelodyMapState()
@@ -202,6 +203,7 @@ function uploadPresets(event: Event) {
 // Load presets on module init
 loadPresetsFromStorage()
 const immediateLaunchQueue: Array<(ctx: TimeContext) => Promise<void>> = []
+const downloadClipData = createClipDataTsDownloadCallback()
 
 // Button state for UI buttons
 const gateButtonStates = ref<Record<number, boolean>>({})
@@ -342,6 +344,7 @@ const playSmoothedMpeNote = async (ctx: TimeContext, note: AbletonNote, channel:
 
   const startBeats = ctx.progBeats
   try {
+    // eslint-disable-next-line no-constant-condition
     while (true) {
       const elapsedBeats = ctx.progBeats - startBeats
       if (elapsedBeats >= duration) break
@@ -1002,7 +1005,7 @@ onMounted(async () => {
     console.log('MIDI outputs configured:', midiOuts.length)
 
     // Initialize Ableton clips
-    await INITIALIZE_ABLETON_CLIPS('src/sketches/sonar_sketch/piano_melodies Project/freeze_loop_setup_sonar.als', staticClipData, false)
+    await INITIALIZE_ABLETON_CLIPS('src/sketches/sonar_sketch/piano_melodies Project/freeze_loop_setup_sonar.als', staticClipData, true)
     console.log('Ableton clips ready')
 
     // Wait for Tone.js audio to be ready
@@ -1287,6 +1290,13 @@ onUnmounted(() => {
       <!-- Button Grid -->
       <div class="button-section">
         <div class="slider-label-row">Melody Triggers</div>
+        <button
+          v-if="SHOW_CLIP_DATA_DOWNLOAD"
+          class="preset-btn download"
+          @click="downloadClipData"
+        >
+          Download clipData.ts
+        </button>
 
         <!-- Row 1: One-shot buttons (0-3) -->
         <div class="button-row">
