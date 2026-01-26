@@ -1193,8 +1193,9 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 20px;
-  padding: 20px;
+  gap: 16px;
+  padding: 16px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 .notification-toast {
@@ -1229,46 +1230,48 @@ onUnmounted(() => {
 }
 
 .control-panel {
-  background: white;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  padding: 10px 15px;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  padding: 8px 12px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  gap: 8px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 11px;
 }
 
 .canvas-wrapper {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 20px;
+  gap: 16px;
 }
 
 .control-panel button {
-  background: #f0f0f0;
+  padding: 4px 8px;
   border: 1px solid #ccc;
-  border-radius: 4px;
-  padding: 5px 15px;
+  border-radius: 3px;
+  background: #fff;
+  font-size: 11px;
   cursor: pointer;
-  font-size: 14px;
-  transition: all 0.2s;
+  transition: background 0.1s, border-color 0.1s;
 }
 
 .control-panel button:hover:not(:disabled) {
-  background: #e0e0e0;
+  background: #f5f5f5;
+  border-color: #999;
 }
 
 .control-panel button.active {
-  background: #0066ff;
-  color: white;
-  border-color: #0066ff;
+  background: #333;
+  color: #fff;
+  border-color: #333;
 }
 
 .control-panel button:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
@@ -1280,23 +1283,23 @@ onUnmounted(() => {
 
 .button-group.vertical button {
   margin: 0;
-  padding: 3px 10px;
-  font-size: 12px;
+  padding: 3px 8px;
+  font-size: 10px;
 }
 
 .radio-button-group {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 
 .radio-button {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px !important;
-  font-size: 13px !important;
-  background: white !important;
+  gap: 5px;
+  padding: 3px 8px !important;
+  font-size: 10px !important;
+  background: #fff !important;
   border: 1px solid #ccc !important;
   text-align: left;
 }
@@ -1307,30 +1310,31 @@ onUnmounted(() => {
 }
 
 .radio-button.active {
-  background: #e8f0fe !important;
-  border-color: #0066ff !important;
-  color: inherit !important;
+  background: #333 !important;
+  border-color: #333 !important;
+  color: #fff !important;
 }
 
 .radio-button.active .radio-indicator {
-  border-color: #0066ff;
-  background: #0066ff;
+  border-color: #fff;
+  background: #fff;
 }
 
 .radio-button.active .radio-indicator::after {
   opacity: 1;
+  background: #333;
 }
 
 .radio-indicator {
   display: inline-block;
-  width: 14px;
-  height: 14px;
-  border: 2px solid #999;
+  width: 10px;
+  height: 10px;
+  border: 1px solid #999;
   border-radius: 50%;
-  background: white;
+  background: #fff;
   position: relative;
   flex-shrink: 0;
-  transition: all 0.2s;
+  transition: all 0.1s;
 }
 
 .radio-indicator::after {
@@ -1339,35 +1343,42 @@ onUnmounted(() => {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 6px;
-  height: 6px;
+  width: 4px;
+  height: 4px;
   border-radius: 50%;
-  background: white;
+  background: #fff;
   opacity: 0;
-  transition: opacity 0.2s;
+  transition: opacity 0.1s;
 }
 
 .tool-dropdown {
-  background: #f0f0f0;
+  padding: 4px 8px;
   border: 1px solid #ccc;
-  border-radius: 4px;
-  padding: 5px 10px;
-  font-size: 14px;
+  border-radius: 3px;
+  background: #fff;
+  font-size: 11px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background 0.1s, border-color 0.1s;
 }
 
 .tool-dropdown:hover {
-  background: #e0e0e0;
+  background: #f5f5f5;
+  border-color: #999;
+}
+
+.tool-dropdown:focus {
+  outline: none;
+  border-color: #888;
 }
 
 .tool-dropdown:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
 .separator {
-  color: #ccc;
+  color: #ddd;
+  font-size: 10px;
 }
 
 .flex-break {
@@ -1383,8 +1394,8 @@ onUnmounted(() => {
 }
 
 .info {
-  color: #666;
-  font-size: 14px;
+  color: #888;
+  font-size: 10px;
 }
 
 .animation-lock-warning {

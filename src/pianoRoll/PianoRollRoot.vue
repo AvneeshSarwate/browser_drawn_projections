@@ -725,6 +725,8 @@ defineExpose({
   flex-direction: column;
   align-items: center;
   padding: 8px 10px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 11px;
 }
 
 .piano-roll-shell {
@@ -732,96 +734,77 @@ defineExpose({
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   margin: 0 auto;
 }
 
 .control-panel {
-  background: white;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  padding: 6px 8px;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  padding: 6px 10px;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  column-gap: 6px;
+  column-gap: 8px;
   row-gap: 6px;
   align-self: stretch;
   box-sizing: border-box;
   justify-content: center;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
 }
 
 .control-panel button {
-  background: #f0f0f0;
+  padding: 4px 8px;
   border: 1px solid #ccc;
-  border-radius: 4px;
-  padding: 4px 10px;
+  border-radius: 3px;
+  background: #fff;
+  font-size: 11px;
   cursor: pointer;
-  font-size: 14px;
-  transition: all 0.2s;
+  transition: background 0.1s, border-color 0.1s;
 }
 
 .control-panel button:hover:not(:disabled) {
-  background: #e0e0e0;
+  background: #f5f5f5;
+  border-color: #999;
 }
 
 .control-panel button:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
 .separator {
-  color: #ccc;
+  color: #ddd;
+  font-size: 10px;
 }
 
-.metadata-toggle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.mpe-point-toggle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
+.metadata-toggle,
+.mpe-point-toggle,
 .mpe-toggle {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
-.metadata-toggle.active {
-  background: #d6eaff;
-  border-color: #6aa8ff;
-  color: #0b5394;
-}
-
-.mpe-point-toggle.active {
-  background: #f3e7ff;
-  border-color: #b78cff;
-  color: #4b2a7a;
-}
-
+.metadata-toggle.active,
+.mpe-point-toggle.active,
 .mpe-toggle.active {
-  background: #ffe7cc;
-  border-color: #ffb14a;
-  color: #8a4b00;
+  background: #333;
+  border-color: #333;
+  color: #fff;
 }
 
 .info {
-  color: #666;
-  font-size: 14px;
+  color: #888;
+  font-size: 10px;
 }
 
 .piano-roll-container {
   background-color: white;
-  border: 1px solid black;
+  border: 1px solid #ccc;
   cursor: default;
   box-sizing: border-box;
-  border-radius: 8px;
+  border-radius: 4px;
 }
 
 .piano-roll-container.is-disabled {
@@ -844,9 +827,9 @@ defineExpose({
 
 .scrollbar {
   position: relative;
-  background: #f5f5f5;
-  border: 1px solid #ccc;
-  border-radius: 10px;
+  background: #f0f0f0;
+  border: 1px solid #ddd;
+  border-radius: 6px;
   box-sizing: border-box;
   user-select: none;
   touch-action: none;
@@ -861,21 +844,21 @@ defineExpose({
 }
 
 .scrollbar.is-disabled {
-  opacity: 0.45;
+  opacity: 0.4;
   pointer-events: none;
 }
 
 .scrollbar-thumb {
   position: absolute;
-  background: rgba(0, 0, 0, 0.18);
-  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   min-width: calc(var(--scrollbar-thickness) * 0.66);
   min-height: calc(var(--scrollbar-thickness) * 0.66);
   cursor: grab;
-  transition: background 0.15s ease;
+  transition: background 0.1s;
   box-sizing: border-box;
 }
 
@@ -894,7 +877,7 @@ defineExpose({
 }
 
 .scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.25);
+  background: rgba(0, 0, 0, 0.22);
 }
 
 .scrollbar-body {
@@ -908,8 +891,8 @@ defineExpose({
 }
 
 .scrollbar-handle {
-  background: rgba(0, 0, 0, 0.35);
-  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 3px;
   flex: 0 0 auto;
 }
 
@@ -930,16 +913,23 @@ defineExpose({
 label {
   display: flex;
   align-items: center;
-  gap: 5px;
-  font-size: 14px;
+  gap: 4px;
+  font-size: 11px;
+  color: #555;
 }
 
 select {
-  padding: 3px 8px;
+  padding: 3px 6px;
   border: 1px solid #ccc;
-  border-radius: 4px;
-  font-size: 14px;
+  border-radius: 3px;
+  font-size: 11px;
+  background: #fff;
   cursor: pointer;
+}
+
+select:focus {
+  outline: none;
+  border-color: #888;
 }
 
 .metadata-editor-wrapper {
